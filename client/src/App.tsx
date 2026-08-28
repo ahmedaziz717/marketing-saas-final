@@ -5,38 +5,34 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import WorkspaceApp from "./pages/WorkspaceApp";
+import BrandPage from "./pages/BrandPage";
+import BriefsPage from "./pages/BriefsPage";
+import CreativesPage from "./pages/CreativesPage";
+import ActivityPage from "./pages/ActivityPage";
+import SettingsPage from "./pages/SettingsPage";
+import InvitePage from "./pages/InvitePage";
+import PublishingPage from "./pages/PublishingPage";
+import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Home} />
+      <Route path="/app" component={WorkspaceApp} />
+      <Route path="/app/briefs" component={BriefsPage} />
+      <Route path="/app/creatives" component={CreativesPage} />
+      <Route path="/app/publishing" component={PublishingPage} />
+      <Route path="/app/brand" component={BrandPage} />
+      <Route path="/app/activity" component={ActivityPage} />
+      <Route path="/app/settings" component={SettingsPage} />
+      <Route path="/invite/:token" component={InvitePage} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
+export default function App() {
+  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster /><GlobalQueryFeedback /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
 }
-
-export default App;

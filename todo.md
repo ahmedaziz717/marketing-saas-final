@@ -1,0 +1,26 @@
+# Project TODO
+
+- [x] Define and document the MVP domain model, organization roles, approval state machines, and Meta publishing invariants.
+- [x] Replace the template landing page with an elegant public SaaS homepage and authenticated application shell.
+- [x] Implement self-serve organization onboarding with workspace name, team role, and initial brand-kit setup.
+- [x] Implement organization membership and role enforcement for owner, admin, creator, reviewer, and publisher roles.
+- [x] Implement brand-kit management for logos, color palettes, fonts, required claims, and prohibited content.
+- [x] Implement a product-asset library with S3-backed image upload metadata, approval states, and organization isolation.
+- [x] Implement campaign briefs for audience, offer, Meta channel placement, formats, creative direction, and approval state.
+- [x] Enforce that only approved campaign briefs and approved brand/product assets can start AI generation.
+- [x] Implement server-side AI copy planning and image-ad variant generation using built-in models and storage.
+- [x] Implement persistent generation jobs and multiple Meta-ready image-ad variants per approved brief.
+- [x] Implement a creative review workspace with side-by-side comparison, comments, approve/reject decisions, and export-ready files.
+- [x] Implement Meta connection configuration and a controlled publish-request workflow with explicit human approval.
+- [x] Enforce that no Meta ad create/update operation can execute without a currently approved creative and publish request.
+- [x] Implement an append-only activity log for onboarding, approvals, generation, reviews, and every publishing action.
+- [x] Prevent application procedures from updating or deleting activity-log records.
+- [x] Add complete loading, empty, validation, permission-denied, and error states across all major screens.
+- [x] Add responsive behavior and accessible keyboard/focus treatment for desktop, tablet, and mobile layouts.
+- [x] Add Vitest coverage for tenant isolation, role permissions, approval gates, generation eligibility, publishing safeguards, and immutable logs.
+- [x] Run database migration, TypeScript checks, Vitest suite, production build, and browser-based visual verification.
+- [x] Create the final project checkpoint and deliver operating guidance.
+- [x] Replace unsupported activity-table triggers with an application append-only API and verified cryptographic event chain.
+- [x] Require the live GPT-5.5 model for creative planning with no non-GPT or older-model fallback.
+- [x] Require the live GPT Image 2 model for image generation with no non-GPT image fallback.
+- [x] Add tests that fail when the required latest GPT text or image model is unavailable.
