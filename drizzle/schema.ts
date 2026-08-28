@@ -82,6 +82,79 @@ export const brandAssets = mysqlTable("brand_assets", {
   createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
 });
 
+export const websiteCrawlJobs = mysqlTable("website_crawl_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull().references(() => organizations.id),
+  sourceUrl: text("sourceUrl").notNull(),
+  sourceOrigin: varchar("sourceOrigin", { length: 500 }).notNull(),
+  status: mysqlEnum("status", ["queued", "discovering", "crawling", "analyzing", "review_ready", "completed", "failed", "cancelled"]).default("queued").notNull(),
+  discoveredUrls: json("discoveredUrls").$type<string[]>().notNull(),
+  cursor: int("cursor").default(0).notNull(),
+  pagesDiscovered: int("pagesDiscovered").default(0).notNull(),
+  pagesProcessed: int("pagesProcessed").default(0).notNull(),
+  maxPages: int("maxPages").default(100).notNull(),
+  brandDraft: json("brandDraft").$type<Record<string, unknown>>(),
+  errorMessage: text("errorMessage"),
+  createdByUserId: int("createdByUserId").notNull().references(() => users.id),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+  updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+  completedAtMs: bigint("completedAtMs", { mode: "number" }),
+});
+
+export const websiteCrawlPages = mysqlTable("website_crawl_pages", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull().references(() => organizations.id),
+  jobId: int("jobId").notNull().references(() => websiteCrawlJobs.id),
+  url: text("url").notNull(),
+  urlHash: varchar("urlHash", { length: 64 }).notNull(),
+  canonicalUrl: text("canonicalUrl"),
+  title: varchar("title", { length: 500 }),
+  pageType: mysqlEnum("pageType", ["home", "product", "collection", "about", "contact", "other"]).default("other").notNull(),
+  textContent: text("textContent"),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  colors: json("colors").$type<string[]>().notNull(),
+  fonts: json("fonts").$type<string[]>().notNull(),
+  imageUrls: json("imageUrls").$type<string[]>().notNull(),
+  contentHash: varchar("contentHash", { length: 64 }),
+  status: mysqlEnum("status", ["fetched", "analyzed", "failed"]).default("fetched").notNull(),
+  errorMessage: text("errorMessage"),
+  fetchedAtMs: bigint("fetchedAtMs", { mode: "number" }).notNull(),
+}, table => ({ pageIdx: uniqueIndex("website_crawl_page_unique").on(table.jobId, table.urlHash) }));
+
+export const products = mysqlTable("products", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull().references(() => organizations.id),
+  crawlJobId: int("crawlJobId").references(() => websiteCrawlJobs.id),
+  sourcePageId: int("sourcePageId").references(() => websiteCrawlPages.id),
+  name: varchar("name", { length: 300 }).notNull(),
+  dedupeKey: varchar("dedupeKey", { length: 64 }).notNull(),
+  sku: varchar("sku", { length: 180 }),
+  category: varchar("category", { length: 240 }),
+  description: text("description"),
+  productUrl: text("productUrl").notNull(),
+  price: varchar("price", { length: 80 }),
+  currency: varchar("currency", { length: 16 }),
+  specifications: json("specifications").$type<Record<string, string>>().notNull(),
+  provenance: json("provenance").$type<Record<string, string>>().notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewedByUserId: int("reviewedByUserId").references(() => users.id),
+  reviewedAtMs: bigint("reviewedAtMs", { mode: "number" }),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+  updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+}, table => ({ productIdx: uniqueIndex("product_organization_dedupe_unique").on(table.organizationId, table.dedupeKey) }));
+
+export const productImages = mysqlTable("product_images", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull().references(() => organizations.id),
+  productId: int("productId").notNull().references(() => products.id),
+  sourceUrl: text("sourceUrl").notNull(),
+  storageKey: varchar("storageKey", { length: 500 }).notNull(),
+  url: text("url").notNull(),
+  altText: varchar("altText", { length: 500 }),
+  isPrimary: int("isPrimary").default(0).notNull(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+});
+
 export const campaignBriefs = mysqlTable("campaign_briefs", {
   id: int("id").autoincrement().primaryKey(),
   organizationId: int("organizationId").notNull().references(() => organizations.id),
@@ -95,6 +168,7 @@ export const campaignBriefs = mysqlTable("campaign_briefs", {
   destinationUrl: text("destinationUrl"),
   requiredClaims: text("requiredClaims"),
   assetIds: json("assetIds").$type<number[]>().notNull(),
+  productIds: json("productIds").$type<number[]>(),
   status: mysqlEnum("status", ["draft", "in_review", "approved", "rejected"]).default("draft").notNull(),
   createdByUserId: int("createdByUserId").notNull().references(() => users.id),
   approvedByUserId: int("approvedByUserId").references(() => users.id),

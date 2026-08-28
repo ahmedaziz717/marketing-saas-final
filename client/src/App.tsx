@@ -14,6 +14,8 @@ import SettingsPage from "./pages/SettingsPage";
 import InvitePage from "./pages/InvitePage";
 import PublishingPage from "./pages/PublishingPage";
 import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
+import CatalogPage from "./pages/CatalogPage";
+import WebsiteImportPage from "./pages/WebsiteImportPage";
 
 function Router() {
   return (
@@ -24,6 +26,8 @@ function Router() {
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/publishing" component={PublishingPage} />
       <Route path="/app/brand" component={BrandPage} />
+      <Route path="/app/catalog" component={CatalogPage} />
+      <Route path="/app/import" component={WebsiteImportPage} />
       <Route path="/app/activity" component={ActivityPage} />
       <Route path="/app/settings" component={SettingsPage} />
       <Route path="/invite/:token" component={InvitePage} />

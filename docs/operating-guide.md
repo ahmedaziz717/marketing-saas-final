@@ -10,13 +10,17 @@ The production path is fixed:
 
 ## Workspace Setup
 
-The first authenticated user creates an organization and becomes its **owner**. Onboarding then activates the initial brand kit and optionally creates a role-bound invite for an administrator, creator, reviewer, or publisher. Invite links are bound to the invited email and expire after seven days.
+The first authenticated user creates an organization and becomes its **owner**. Onboarding then asks for the company's public website, processes a sitemap-driven crawl in resumable batches, and prepares an editable brand-kit draft plus a product catalog. The user reviews colors, fonts, identity, voice, claims, prohibited-content guidance, logos, product records, images, and specifications before explicit activation. Onboarding finishes with an optional role-bound invite for an administrator, creator, reviewer, or publisher. Invite links are bound to the invited email and expire after seven days.
 
 The brand kit stores the approved palette, font names, voice guidance, required claims, and prohibited content. Uploaded logos, product images, and references enter a **pending** state and cannot be used in a campaign brief until an owner, administrator, or reviewer approves them.
 
+The website importer accepts only public HTTP(S) sites. It blocks private and reserved networks, embedded credentials, nonstandard ports, unsafe cross-site redirects, unsupported content types, oversized responses, and excessive redirect chains. It discovers pages from robots.txt, sitemap files and indexes, then same-site links. Each small crawl and GPT-5.5 analysis batch persists progress so an interrupted import can resume without restarting.
+
+Products are deduplicated by stable SKU when available, otherwise by source URL and normalized name. Every extracted field retains source provenance; direct edits replace that field's provenance with a user-and-time marker and return the product to pending review. Imported product images are copied into organization-scoped storage rather than depending on remote URLs.
+
 ## Creative Generation
 
-Only approved campaign briefs with approved organization-owned assets are eligible. The server re-checks every status before creating a generation job and stores a snapshot plus deterministic input hash.
+Only approved campaign briefs with approved organization-owned assets and approved selected catalog products are eligible. The server re-checks every status before creating a generation job and stores a snapshot plus deterministic input hash. Verified product names, descriptions, prices, specifications, source URLs, and stored imagery are included in the GPT-5.5 planning context and GPT Image 2 source set.
 
 Frame requires the current approved GPT stack without fallback:
 
@@ -56,4 +60,3 @@ The application exposes insert and read operations only. Each organization event
 ## Verification Status
 
 The project includes unit tests for tenant isolation, role authorization, GPT-only model enforcement, generation eligibility, exact-payload publish approval, and activity-chain tamper detection. TypeScript validation, the full Vitest suite, production bundling, desktop screenshots, mobile screenshots, and runtime log review were completed before the delivery checkpoint.
-

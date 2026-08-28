@@ -1,0 +1,95 @@
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { brandAssets, brandKits, productImages, products, websiteCrawlJobs } from "../../drizzle/schema";
+import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { requireOrganizationRole } from "../lib/access";
+import { appendActivity } from "../lib/activity";
+import { editedProductProvenance, productDedupeKey } from "../lib/brandImport";
+import { safeFetchImage } from "../lib/websiteCrawler";
+import { storagePut } from "../storage";
+
+const organizationInput = z.object({ organizationId: z.number().int().positive() });
+const editableProduct = z.object({
+  name: z.string().min(1).max(300), sku: z.string().max(180).nullable().optional(), category: z.string().max(240).nullable().optional(),
+  description: z.string().max(10000).nullable().optional(), productUrl: z.string().url(), price: z.string().max(80).nullable().optional(), currency: z.string().max(16).nullable().optional(),
+  specifications: z.record(z.string(), z.string().max(1000)),
+});
+
+export const catalogRouter = router({
+  overview: protectedProcedure.input(organizationInput).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [catalog, images, jobs] = await Promise.all([
+      db.select().from(products).where(eq(products.organizationId, input.organizationId)).orderBy(desc(products.updatedAtMs)).limit(750),
+      db.select().from(productImages).where(eq(productImages.organizationId, input.organizationId)),
+      db.select().from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(1),
+    ]);
+    return { products: catalog.map(product => ({ ...product, images: images.filter(image => image.productId === product.id) })), latestJob: jobs[0] ?? null };
+  }),
+
+  updateProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive(), product: editableProduct })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "creator"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const existing = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, input.organizationId))).limit(1))[0];
+    if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+    const dedupeKey = productDedupeKey({ sku: input.product.sku, productUrl: input.product.productUrl, name: input.product.name });
+    const now = Date.now();
+    await db.update(products).set({ ...input.product, dedupeKey, provenance: editedProductProvenance(existing.provenance, ctx.user.id, now), status: "pending", reviewedByUserId: null, reviewedAtMs: null, updatedAtMs: now }).where(eq(products.id, input.productId));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.product_edited", entityType: "product", entityId: input.productId, payload: { priorStatus: existing.status, sourcePageId: existing.sourcePageId } });
+    return { success: true };
+  }),
+
+  reviewProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive(), decision: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "reviewer"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, input.organizationId))).limit(1))[0];
+    if (!product) throw new TRPCError({ code: "NOT_FOUND" });
+    await db.update(products).set({ status: input.decision, reviewedByUserId: ctx.user.id, reviewedAtMs: Date.now(), updatedAtMs: Date.now() }).where(eq(products.id, input.productId));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `catalog.product_${input.decision}`, entityType: "product", entityId: input.productId, payload: { sourcePageId: product.sourcePageId, productUrl: product.productUrl } });
+    return { success: true };
+  }),
+
+  bulkReview: protectedProcedure.input(organizationInput.extend({ productIds: z.array(z.number().int().positive()).min(1).max(200), decision: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "reviewer"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const owned = await db.select({ id: products.id }).from(products).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, input.productIds)));
+    if (owned.length !== new Set(input.productIds).size) throw new TRPCError({ code: "FORBIDDEN", message: "One or more products do not belong to this workspace" });
+    await db.update(products).set({ status: input.decision, reviewedByUserId: ctx.user.id, reviewedAtMs: Date.now(), updatedAtMs: Date.now() }).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, input.productIds)));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `catalog.bulk_${input.decision}`, entityType: "product_batch", entityId: input.productIds.join(","), payload: { count: input.productIds.length } });
+    return { updated: input.productIds.length };
+  }),
+
+  applyBrandDraft: protectedProcedure.input(organizationInput.extend({
+    jobId: z.number().int().positive(),
+    draft: z.object({ companyName: z.string().min(1).max(160), summary: z.string().max(4000), voice: z.string().max(4000), colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).max(24), fonts: z.array(z.string().max(180)).max(16), requiredClaims: z.array(z.string().max(1000)).max(40), prohibitedContent: z.array(z.string().max(1000)).max(40), selectedLogoUrls: z.array(z.string().url()).max(10) }),
+    activate: z.boolean(),
+  })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const job = (await db.select().from(websiteCrawlJobs).where(and(eq(websiteCrawlJobs.id, input.jobId), eq(websiteCrawlJobs.organizationId, input.organizationId))).limit(1))[0];
+    const kit = (await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1))[0];
+    if (!job || !kit || !["review_ready", "completed"].includes(job.status)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The website analysis must be ready for review" });
+    const allowedLogos = new Set(((job.brandDraft as { logoUrls?: string[] } | null)?.logoUrls ?? []));
+    if (input.draft.selectedLogoUrls.some(url => !allowedLogos.has(url))) throw new TRPCError({ code: "BAD_REQUEST", message: "A selected logo was not found in the analyzed website evidence" });
+    const now = Date.now();
+    await db.update(brandKits).set({ name: input.draft.companyName, voice: [input.draft.voice, input.draft.summary].filter(Boolean).join("\n\n"), colors: input.draft.colors, fonts: input.draft.fonts, requiredClaims: input.draft.requiredClaims.join("\n"), prohibitedContent: input.draft.prohibitedContent.join("\n"), status: input.activate ? "active" : "draft", updatedByUserId: ctx.user.id, updatedAtMs: now }).where(eq(brandKits.id, kit.id));
+    const existingAssets = await db.select().from(brandAssets).where(eq(brandAssets.organizationId, input.organizationId));
+    const existingSources = new Set(existingAssets.map(asset => String((asset.metadata as { sourceUrl?: string } | null)?.sourceUrl ?? "")));
+    let importedLogos = 0;
+    for (const sourceUrl of input.draft.selectedLogoUrls.filter(url => !existingSources.has(url))) {
+      try {
+        const image = await safeFetchImage(sourceUrl);
+        const extension = image.contentType === "image/png" ? "png" : image.contentType === "image/webp" ? "webp" : image.contentType === "image/gif" ? "gif" : "jpg";
+        const stored = await storagePut(`organizations/${input.organizationId}/brand/imported-logo.${extension}`, image.data, image.contentType);
+        const insertedAsset = await db.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: `Imported logo ${importedLogos + 1}`, type: "logo", storageKey: stored.key, url: stored.url, mimeType: image.contentType, status: "pending", metadata: { sourceUrl, crawlJobId: job.id }, uploadedByUserId: ctx.user.id, createdAtMs: Date.now() });
+        await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "website_import.logo_stored", entityType: "brand_asset", entityId: Number(insertedAsset[0].insertId), payload: { sourceUrl, storageKey: stored.key, status: "pending" } });
+        importedLogos++;
+      } catch { /* unavailable source assets remain unselected rather than blocking the brand draft */ }
+    }
+    await db.update(websiteCrawlJobs).set({ status: "completed", brandDraft: { ...job.brandDraft, ...input.draft }, updatedAtMs: now, completedAtMs: now }).where(eq(websiteCrawlJobs.id, job.id));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: input.activate ? "website_import.brand_activated" : "website_import.draft_applied", entityType: "website_crawl_job", entityId: job.id, payload: { importedLogos, selectedColors: input.draft.colors.length, selectedFonts: input.draft.fonts.length } });
+    return { success: true, importedLogos, status: input.activate ? "active" as const : "draft" as const };
+  }),
+});

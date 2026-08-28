@@ -22,6 +22,13 @@
       "when": 1787878275892,
       "tag": "0002_charming_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1787880869259,
+      "tag": "0003_lowly_human_robot",
+      "breakpoints": true
     }
   ]
 }

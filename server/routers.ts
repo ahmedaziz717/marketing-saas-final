@@ -8,6 +8,8 @@ import { briefsRouter } from "./routers/briefs";
 import { activityRouter } from "./routers/activity";
 import { creativesRouter } from "./routers/creatives";
 import { metaRouter } from "./routers/meta";
+import { crawlRouter } from "./routers/crawl";
+import { catalogRouter } from "./routers/catalog";
 
 export const appRouter = router({
   system: systemRouter,
@@ -25,6 +27,8 @@ export const appRouter = router({
   activity: activityRouter,
   creatives: creativesRouter,
   meta: metaRouter,
+  crawl: crawlRouter,
+  catalog: catalogRouter,
 });
 
 export type AppRouter = typeof appRouter;

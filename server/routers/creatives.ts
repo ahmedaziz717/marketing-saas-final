@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { brandAssets, brandKits, campaignBriefs, creativeJobs, creativeVariants, reviewComments } from "../../drizzle/schema";
+import { brandAssets, brandKits, campaignBriefs, creativeJobs, creativeVariants, productImages, products, reviewComments } from "../../drizzle/schema";
 import { generateImage, listImageModels } from "../_core/imageGeneration";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -11,6 +11,7 @@ import { appendActivity } from "../lib/activity";
 import { generationBlockReason, stableHash } from "../lib/policy";
 import { requireLatestGptImageModel, requireLatestGptTextModel } from "../lib/models";
 import { storageGetSignedUrl } from "../storage";
+import { importedProductCanBeUsed } from "../lib/brandImport";
 
 const conceptSchema = {
   type: "object",
@@ -65,10 +66,15 @@ export const creativesRouter = router({
     const kit = (await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1))[0];
     if (!brief || !kit) throw new TRPCError({ code: "NOT_FOUND", message: "Brief or brand kit not found" });
     const assets = brief.assetIds.length ? await db.select().from(brandAssets).where(and(eq(brandAssets.organizationId, input.organizationId), inArray(brandAssets.id, brief.assetIds))) : [];
+    const productIds = brief.productIds ?? [];
+    const selectedProducts = productIds.length ? await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, productIds))) : [];
+    const selectedProductImages = selectedProducts.length ? await db.select().from(productImages).where(and(eq(productImages.organizationId, input.organizationId), inArray(productImages.productId, selectedProducts.map(product => product.id)))) : [];
     const block = generationBlockReason({ briefStatus: brief.status, brandKitStatus: kit.status, assetStatuses: assets.map(asset => asset.status) });
     if (block || assets.length !== brief.assetIds.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: block ?? "One or more source assets are unavailable" });
+    if (selectedProducts.length !== productIds.length || selectedProducts.some(product => !importedProductCanBeUsed(product.status))) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Every selected product must remain approved before generation" });
 
-    const briefSnapshot = { ...brief, brand: { name: kit.name, voice: kit.voice, colors: kit.colors, fonts: kit.fonts, requiredClaims: kit.requiredClaims, prohibitedContent: kit.prohibitedContent } };
+    const productSnapshot = selectedProducts.map(product => ({ id: product.id, name: product.name, sku: product.sku, category: product.category, description: product.description, price: product.price, currency: product.currency, specifications: product.specifications, productUrl: product.productUrl, status: product.status, images: selectedProductImages.filter(image => image.productId === product.id).map(image => ({ storageKey: image.storageKey, url: image.url, isPrimary: image.isPrimary })) }));
+    const briefSnapshot = { ...brief, brand: { name: kit.name, voice: kit.voice, colors: kit.colors, fonts: kit.fonts, requiredClaims: kit.requiredClaims, prohibitedContent: kit.prohibitedContent }, products: productSnapshot };
     const assetSnapshot = assets.map(asset => ({ id: asset.id, name: asset.name, type: asset.type, url: asset.url, mimeType: asset.mimeType, storageKey: asset.storageKey, status: asset.status }));
     const inputHash = stableHash({ briefSnapshot, assetSnapshot });
     const inserted = await db.insert(creativeJobs).values({ organizationId: input.organizationId, briefId: brief.id, status: "queued", inputHash, briefSnapshot, assetSnapshot, requestedByUserId: ctx.user.id, createdAtMs: Date.now() });
@@ -80,14 +86,16 @@ export const creativesRouter = router({
       const { data: languageModels } = await listLLMModels();
       const languageModel = requireLatestGptTextModel(languageModels);
       const policyText = [kit.requiredClaims, brief.requiredClaims].filter(Boolean).join("\n");
-      const prompt = `Create exactly ${input.count} distinct Meta image-ad concepts from this approved campaign brief.\n\nBRAND\nName: ${kit.name}\nVoice: ${kit.voice || "Clear and confident"}\nColors: ${kit.colors.join(", ")}\nFonts: ${kit.fonts.join(", ")}\nRequired claims (use only when relevant, reproduce accurately): ${policyText || "None"}\nProhibited content: ${kit.prohibitedContent || "None"}\n\nAPPROVED BRIEF\nAudience: ${brief.audience}\nOffer: ${brief.offer}\nPlacements: ${brief.placements.join(", ")}\nFormats: ${brief.formats.join(", ")}\nCreative direction: ${brief.creativeDirection}\nDestination: ${brief.destinationUrl || "Not provided"}\n\nAPPROVED ASSETS\n${assets.map(asset => `- ${asset.name} (${asset.type})`).join("\n")}\n\nWrite concise Meta-ready primary text and headlines. Each imagePrompt must describe a polished advertising visual based only on the approved assets and direction. Do not invent products, certifications, prices, performance facts, logos, or claims. Ask the image model for no rendered text; the copy remains editable ad copy outside the image.`;
+      const prompt = `Create exactly ${input.count} distinct Meta image-ad concepts from this approved campaign brief.\n\nBRAND\nName: ${kit.name}\nVoice: ${kit.voice || "Clear and confident"}\nColors: ${kit.colors.join(", ")}\nFonts: ${kit.fonts.join(", ")}\nRequired claims (use only when relevant, reproduce accurately): ${policyText || "None"}\nProhibited content: ${kit.prohibitedContent || "None"}\n\nAPPROVED BRIEF\nAudience: ${brief.audience}\nOffer: ${brief.offer}\nPlacements: ${brief.placements.join(", ")}\nFormats: ${brief.formats.join(", ")}\nCreative direction: ${brief.creativeDirection}\nDestination: ${brief.destinationUrl || "Not provided"}\n\nAPPROVED BRAND ASSETS\n${assets.map(asset => `- ${asset.name} (${asset.type})`).join("\n")}\n\nAPPROVED CATALOG PRODUCTS\n${productSnapshot.length ? JSON.stringify(productSnapshot.map(product => ({ name: product.name, sku: product.sku, category: product.category, description: product.description, price: product.price, currency: product.currency, specifications: product.specifications, productUrl: product.productUrl }))) : "No catalog product selected"}\n\nWrite concise Meta-ready primary text and headlines. Use only the verified catalog specifications and approved claims above. Each imagePrompt must describe a polished advertising visual based only on approved assets, approved product imagery, and the direction. Do not invent products, certifications, prices, performance facts, logos, or claims. Ask the image model for no rendered text; the copy remains editable ad copy outside the image.`;
       const response = await invokeLLM({ model: languageModel, messages: [{ role: "system", content: "You are a senior performance creative director. Follow the brand and policy boundaries exactly and return only schema-valid JSON." }, { role: "user", content: prompt }], response_format: { type: "json_schema", json_schema: { name: "meta_creative_plan", strict: true, schema: conceptSchema } } });
       const rawContent = response.choices[0]?.message?.content;
       const plan = JSON.parse(typeof rawContent === "string" ? rawContent : "{}") as ConceptPlan;
       if (!Array.isArray(plan.concepts) || plan.concepts.length < 2) throw new Error("The creative plan did not contain enough concepts");
       const { models: imageModels } = await listImageModels();
       const imageModel = requireLatestGptImageModel(imageModels);
-      const sourceImages = await Promise.all(assets.filter(asset => asset.mimeType.startsWith("image/")).slice(0, 4).map(async asset => ({ url: await storageGetSignedUrl(asset.storageKey), mimeType: asset.mimeType })));
+      const brandSources = assets.filter(asset => asset.mimeType.startsWith("image/")).slice(0, 3).map(asset => ({ storageKey: asset.storageKey, mimeType: asset.mimeType }));
+      const productSources = selectedProductImages.sort((a, b) => b.isPrimary - a.isPrimary).slice(0, 3).map(image => ({ storageKey: image.storageKey, mimeType: image.storageKey.endsWith(".png") ? "image/png" : image.storageKey.endsWith(".webp") ? "image/webp" : "image/jpeg" }));
+      const sourceImages = await Promise.all([...brandSources, ...productSources].slice(0, 5).map(async asset => ({ url: await storageGetSignedUrl(asset.storageKey), mimeType: asset.mimeType })));
       const generated = await Promise.all(plan.concepts.slice(0, input.count).map(async (concept, index) => {
         const image = await generateImage({ model: imageModel, quality: "medium", originalImages: sourceImages, prompt: `${concept.imagePrompt}\n\nCreate a premium Meta advertising image for ${kit.name}. Preserve the supplied product and logo assets accurately. Use the approved palette ${kit.colors.join(", ")}. The intended output format is ${brief.formats[index % brief.formats.length]}. Render no words, letters, prices, badges, or invented marks in the image. No prohibited content: ${kit.prohibitedContent || "none specified"}.` });
         if (!image.url) throw new Error(`Image generation failed for ${concept.name}`);

@@ -1,11 +1,12 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { brandAssets, campaignBriefs } from "../../drizzle/schema";
+import { brandAssets, campaignBriefs, products } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { appendActivity } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
 import { protectedProcedure, router } from "../_core/trpc";
+import { importedProductCanBeUsed } from "../lib/brandImport";
 
 const briefFields = z.object({
   organizationId: z.number().int().positive(),
@@ -18,6 +19,7 @@ const briefFields = z.object({
   destinationUrl: z.string().url().or(z.literal("")).optional().default(""),
   requiredClaims: z.string().max(5000).optional().default(""),
   assetIds: z.array(z.number().int().positive()).min(1),
+  productIds: z.array(z.number().int().positive()).max(50).default([]),
 });
 
 export const briefsRouter = router({
@@ -66,6 +68,9 @@ export const briefsRouter = router({
     if (!brief || !["draft", "rejected"].includes(brief.status)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only draft or rejected briefs can be submitted" });
     const assets = await db.select().from(brandAssets).where(and(eq(brandAssets.organizationId, input.organizationId), inArray(brandAssets.id, brief.assetIds)));
     if (assets.length !== brief.assetIds.length || assets.some(asset => asset.status !== "approved")) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Every selected brand asset must be approved before brief review" });
+    const productIds = brief.productIds ?? [];
+    const selectedProducts = productIds.length ? await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, productIds))) : [];
+    if (selectedProducts.length !== productIds.length || selectedProducts.some(product => !importedProductCanBeUsed(product.status))) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Every selected catalog product must remain approved before brief review" });
     await db.update(campaignBriefs).set({ status: "in_review", updatedAtMs: Date.now() }).where(eq(campaignBriefs.id, input.briefId));
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "brief.submitted", entityType: "campaign_brief", entityId: input.briefId });
     return { success: true };
@@ -82,4 +87,3 @@ export const briefsRouter = router({
     return { success: true };
   }),
 });
-

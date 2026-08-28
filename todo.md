@@ -24,3 +24,23 @@
 - [x] Require the live GPT-5.5 model for creative planning with no non-GPT or older-model fallback.
 - [x] Require the live GPT Image 2 model for image generation with no non-GPT image fallback.
 - [x] Add tests that fail when the required latest GPT text or image model is unavailable.
+- [x] Add a website URL intake flow to organization onboarding and the Brand workspace.
+- [x] Enforce SSRF-safe URL validation that blocks private, loopback, link-local, credentialed, and non-HTTP(S) targets before website retrieval.
+- [x] Retrieve bounded public homepage HTML and linked stylesheets with timeouts, redirect validation, content-type checks, and response-size limits.
+- [x] Extract deterministic brand evidence including company name candidates, metadata, colors, font families, logos, product images, and visible messaging.
+- [x] Use the required GPT-5.5 model to convert retrieved evidence into a structured brand-kit draft without non-GPT fallback.
+- [x] Present imported brand identity, voice, claims, prohibited-content suggestions, colors, fonts, and source assets as fully editable selections.
+- [x] Keep imported assets pending and require explicit user activation before the imported brand kit becomes active.
+- [x] Store selected remote assets in organization-scoped S3 storage rather than relying on external image URLs.
+- [x] Record website analysis, draft application, asset import, and activation events in the tamper-evident activity ledger.
+- [x] Add Vitest coverage for URL safety, extraction normalization, GPT-5.5 enforcement, editability, and import approval boundaries.
+- [x] Run TypeScript, tests, production build, desktop/mobile visual verification, and create the delivery checkpoint for the website importer.
+- [x] Add organization-scoped crawl jobs, discovered pages, products, product specifications, and product image records to the database schema.
+- [x] Discover same-domain pages from robots.txt, XML sitemaps, sitemap indexes, and bounded internal-link fallback crawling.
+- [x] Process full-site crawling as resumable request-sized batches with persisted cursor, progress, retry, failure, and cancellation states.
+- [x] Identify product and collection pages, deduplicate canonical products, and preserve source-page provenance for every extracted field.
+- [x] Build an editable Product Catalog section with search, categories, specifications, images, source URLs, pending/approved/rejected states, and bulk review actions.
+- [x] Store imported product images in organization-scoped S3 storage and keep all products pending until explicit review.
+- [x] Make website URL entry, crawl progress, brand-draft review, product review, and brand activation part of the onboarding sequence.
+- [x] Allow approved campaign briefs to select approved catalog products and include their verified specifications and imagery in GPT-5.5 planning and GPT Image 2 generation.
+- [x] Add tests for sitemap parsing, same-domain enforcement, resumable batching, product deduplication, provenance, product approval gates, and catalog tenant isolation.

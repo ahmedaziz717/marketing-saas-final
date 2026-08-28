@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BookOpenText, Boxes, Images, LayoutDashboard, LogOut, PanelLeft, Send, Settings } from "lucide-react";
+import { Activity, BookOpenText, Boxes, Images, LayoutDashboard, LogOut, PackageSearch, PanelLeft, Send, Settings } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -16,6 +16,7 @@ const menuItems = [
   { icon: Images, label: "Creatives", path: "/app/creatives" },
   { icon: Send, label: "Publish", path: "/app/publishing" },
   { icon: Boxes, label: "Brand", path: "/app/brand" },
+  { icon: PackageSearch, label: "Catalog", path: "/app/catalog" },
   { icon: Activity, label: "Activity", path: "/app/activity" },
   { icon: Settings, label: "Settings", path: "/app/settings" },
 ];
