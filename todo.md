@@ -44,3 +44,12 @@
 - [x] Make website URL entry, crawl progress, brand-draft review, product review, and brand activation part of the onboarding sequence.
 - [x] Allow approved campaign briefs to select approved catalog products and include their verified specifications and imagery in GPT-5.5 planning and GPT Image 2 generation.
 - [x] Add tests for sitemap parsing, same-domain enforcement, resumable batching, product deduplication, provenance, product approval gates, and catalog tenant isolation.
+- [x] Restrict product discovery seeds to explicit Products, Shop, Store, Catalog, Collection, Category, and product sitemap sections.
+- [x] Exclude support, help, documentation, knowledge-base, blog, news, policy, legal, account, login, cart, checkout, contact, careers, and service pages from product candidates.
+- [x] Require deterministic commerce evidence before a page can enter GPT product extraction, such as Product schema, SKU, price, add-to-cart controls, product commerce metadata, or a product-path plus product imagery.
+- [x] Send GPT-5.5 only product-candidate pages rather than every crawled company page when extracting catalog records.
+- [x] Revalidate every GPT-returned product and its SKU, price, currency, and specifications against source-page commerce evidence before catalog persistence.
+- [x] Prevent collection, category, support, and general content pages from being stored as individual products.
+- [x] Add a governed delete action so incorrectly imported catalog records can be removed with tenant checks and an activity event.
+- [x] Add regression fixtures proving support, documentation, blog, service, collection, and policy pages are rejected while genuine product detail pages are accepted.
+- [x] Run TypeScript, full tests, production build, responsive catalog verification, and save the corrected importer checkpoint.

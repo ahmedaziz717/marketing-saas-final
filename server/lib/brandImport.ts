@@ -46,3 +46,26 @@ export function editedProductProvenance(previous: Record<string, string>, userId
   const marker = `user:${userId}@${now}`;
   return { ...previous, name: marker, sku: marker, category: marker, description: marker, price: marker, specifications: marker };
 }
+
+function normalizeEvidence(value: string) {
+  return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function evidenceContains(haystack: string, value: string) {
+  const needle = normalizeEvidence(value);
+  if (!needle) return false;
+  return normalizeEvidence(haystack).includes(needle);
+}
+
+export function validateExtractedProduct(input: {
+  candidate: { name: string; sku?: string | null; price?: string | null; currency?: string | null; specifications: Array<{ name: string; value: string }> };
+  page: { pageType: string; productCandidate: boolean; productEvidence: string[]; text: string; structuredProducts: unknown[] };
+}) {
+  const source = `${input.page.text}\n${JSON.stringify(input.page.structuredProducts)}`;
+  const eligible = input.page.pageType === "product" && input.page.productCandidate && input.page.productEvidence.length > 0 && evidenceContains(source, input.candidate.name);
+  if (!eligible) return { eligible: false, sku: null, price: null, currency: null, specifications: [] as Array<{ name: string; value: string }> };
+  const sku = input.candidate.sku && evidenceContains(source, input.candidate.sku) ? input.candidate.sku : null;
+  const price = input.candidate.price && evidenceContains(source, input.candidate.price) ? input.candidate.price : null;
+  const specifications = input.candidate.specifications.filter(item => evidenceContains(source, item.name) && evidenceContains(source, item.value));
+  return { eligible: true, sku, price, currency: price ? input.candidate.currency ?? null : null, specifications };
+}

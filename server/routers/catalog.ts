@@ -1,13 +1,13 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { brandAssets, brandKits, productImages, products, websiteCrawlJobs } from "../../drizzle/schema";
+import { brandAssets, brandKits, productImages, products, websiteCrawlJobs, websiteCrawlPages } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
 import { appendActivity } from "../lib/activity";
 import { editedProductProvenance, productDedupeKey } from "../lib/brandImport";
-import { safeFetchImage } from "../lib/websiteCrawler";
+import { isExcludedProductUrl, safeFetchImage } from "../lib/websiteCrawler";
 import { storagePut } from "../storage";
 
 const organizationInput = z.object({ organizationId: z.number().int().positive() });
@@ -59,6 +59,34 @@ export const catalogRouter = router({
     await db.update(products).set({ status: input.decision, reviewedByUserId: ctx.user.id, reviewedAtMs: Date.now(), updatedAtMs: Date.now() }).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, input.productIds)));
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `catalog.bulk_${input.decision}`, entityType: "product_batch", entityId: input.productIds.join(","), payload: { count: input.productIds.length } });
     return { updated: input.productIds.length };
+  }),
+
+  deleteProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const product = (await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), eq(products.id, input.productId))).limit(1))[0];
+    if (!product) throw new TRPCError({ code: "NOT_FOUND" });
+    await db.delete(products).where(and(eq(products.organizationId, input.organizationId), eq(products.id, input.productId)));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.product_deleted", entityType: "product", entityId: product.id, payload: { name: product.name, productUrl: product.productUrl, priorStatus: product.status } });
+    return { success: true };
+  }),
+
+  cleanupNonProducts: protectedProcedure.input(organizationInput).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [catalog, pages] = await Promise.all([
+      db.select().from(products).where(eq(products.organizationId, input.organizationId)),
+      db.select().from(websiteCrawlPages).where(eq(websiteCrawlPages.organizationId, input.organizationId)),
+    ]);
+    const pagesById = new Map(pages.map(page => [page.id, page]));
+    const invalidIds = catalog.filter(product => {
+      if (product.status === "approved") return false;
+      const page = product.sourcePageId ? pagesById.get(product.sourcePageId) : undefined;
+      return isExcludedProductUrl(product.productUrl) || !page || page.pageType !== "product" || !Boolean((page.metadata as { productCandidate?: boolean } | null)?.productCandidate);
+    }).map(product => product.id);
+    if (invalidIds.length) await db.delete(products).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, invalidIds)));
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.non_products_cleaned", entityType: "product_batch", entityId: invalidIds.join(",") || "none", payload: { removed: invalidIds.length, approvedProductsPreserved: true } });
+    return { removed: invalidIds.length };
   }),
 
   applyBrandDraft: protectedProcedure.input(organizationInput.extend({

@@ -26,7 +26,37 @@ export type PageEvidence = {
   stylesheetUrls: string[];
   internalLinks: string[];
   structuredProducts: Array<Record<string, unknown>>;
+  productCandidate: boolean;
+  productEvidence: string[];
 };
+
+const NON_PRODUCT_PATH = /\/(?:support|help|help-center|docs?|documentation|knowledge-base|kb|blog|blogs|news|articles?|resources?|guides?|faqs?|polic(?:y|ies)|legal|privacy|terms|account|login|sign-in|register|cart|checkout|contact|careers?|jobs?|services?|repairs?|returns?|shipping|warranty)(?:\/|$)/i;
+const NON_PRODUCT_HOST = /^(?:forum|community|support|help|docs?|documentation|kb|blog|news|careers?|status)\./i;
+const COMMERCE_HOST = /^(?:(?:[a-z]{2}\.)?(?:shop|store)|[a-z]{2}\.store)\./i;
+const PRODUCT_SECTION_PATH = /\/(?:products?|shop|store|catalog|collections?|categories?)(?:\/|$)/i;
+const PRODUCT_DETAIL_PATH = /\/(?:products?|product|p)\/[^/?#]+(?:\/|$)/i;
+
+export function isExcludedProductUrl(value: string) {
+  const url = new URL(value);
+  return NON_PRODUCT_HOST.test(url.hostname.replace(/^www\./, "")) || NON_PRODUCT_PATH.test(url.pathname);
+}
+
+export function isProductSectionUrl(value: string) {
+  const url = new URL(value);
+  return !isExcludedProductUrl(value) && (PRODUCT_SECTION_PATH.test(url.pathname) || COMMERCE_HOST.test(url.hostname.replace(/^www\./, "")) || /(?:^|[._-])products?(?:[._-]|$)/i.test(url.hostname));
+}
+
+export function productCandidateFromEvidence(input: { url: string; hasStructuredProduct: boolean; hasSku: boolean; hasPrice: boolean; hasAddToCart: boolean; hasProductMeta: boolean; productImageCount: number }) {
+  if (isExcludedProductUrl(input.url)) return { eligible: false, reasons: ["excluded_path"] };
+  const path = new URL(input.url).pathname;
+  const detailPath = PRODUCT_DETAIL_PATH.test(path);
+  const collectionPath = PRODUCT_SECTION_PATH.test(path) && !detailPath;
+  if (collectionPath) return { eligible: false, reasons: ["collection_or_product_index"] };
+  const reasons = [input.hasStructuredProduct && "product_schema", input.hasSku && "sku", input.hasPrice && "price", input.hasAddToCart && "add_to_cart", input.hasProductMeta && "product_meta", input.productImageCount > 0 && "product_image", detailPath && "product_detail_path"].filter((value): value is string => Boolean(value));
+  const commerceFacts = [input.hasStructuredProduct, input.hasSku, input.hasPrice, input.hasAddToCart, input.hasProductMeta].filter(Boolean).length;
+  const eligible = input.hasStructuredProduct || (detailPath && input.productImageCount > 0 && commerceFacts >= 1) || (input.hasAddToCart && input.hasPrice && input.productImageCount > 0);
+  return { eligible, reasons };
+}
 
 export function normalizeWebsiteUrl(value: string) {
   const prepared = /^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`;
@@ -175,6 +205,10 @@ function extractFonts(source: string) {
 export function extractPageEvidence(html: string, pageUrl: string, linkedStyles = ""): PageEvidence {
   const $ = cheerio.load(html);
   const structuredProducts = collectJsonLdProducts($);
+  const hasSku = $('[itemprop="sku"], [data-sku], meta[property="product:retailer_item_id"]').length > 0 || /\bSKU\s*[:#]/i.test($("body").text());
+  const hasPrice = $('[itemprop="price"], meta[property="product:price:amount"], meta[name="twitter:data1"], [data-price]').length > 0;
+  const hasAddToCart = $('button, input[type="submit"], [role="button"], form[action]').toArray().some(element => /add\s+to\s+(?:cart|bag)|buy\s+now|purchase/i.test(`${$(element).text()} ${$(element).attr("value") || ""} ${$(element).attr("aria-label") || ""} ${$(element).attr("action") || ""}`));
+  const hasProductMeta = /product/i.test($('meta[property="og:type"]').attr("content") || "") || $('[itemtype*="schema.org/Product"]').length > 0;
   const title = $('meta[property="og:title"]').attr("content") || $("title").first().text().trim();
   const description = $('meta[name="description"]').attr("content") || $('meta[property="og:description"]').attr("content") || "";
   const siteName = $('meta[property="og:site_name"]').attr("content") || "";
@@ -198,8 +232,9 @@ export function extractPageEvidence(html: string, pageUrl: string, linkedStyles 
   $('script,style,noscript,svg,nav,footer').remove();
   const text = $('body').text().replace(/\s+/g, " ").trim().slice(0, 18_000);
   const pathname = new URL(pageUrl).pathname.toLowerCase();
-  const pageType: PageEvidence['pageType'] = structuredProducts.length || /\/(product|products|p)\//.test(pathname) ? "product" : /\/(collection|collections|category|shop)(\/|$)/.test(pathname) ? "collection" : /\/about(\/|$)/.test(pathname) ? "about" : /\/(contact|support)(\/|$)/.test(pathname) ? "contact" : pathname === "/" ? "home" : "other";
-  return { url: canonicalizeUrl(pageUrl), canonicalUrl, title: title.slice(0, 500), description: description.slice(0, 2000), siteName: siteName.slice(0, 300), pageType, text, colors: extractColors(styleSource), fonts: extractFonts(styleSource), imageUrls: Array.from(imageUrls).slice(0, 40), logoUrls: Array.from(logoUrls).slice(0, 10), stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12), internalLinks: Array.from(internalLinks).slice(0, 300), structuredProducts };
+  const productResult = productCandidateFromEvidence({ url: pageUrl, hasStructuredProduct: structuredProducts.length > 0, hasSku, hasPrice, hasAddToCart, hasProductMeta, productImageCount: imageUrls.size });
+  const pageType: PageEvidence['pageType'] = isExcludedProductUrl(pageUrl) ? (/\/(contact|support|help)(\/|$)/.test(pathname) ? "contact" : "other") : PRODUCT_SECTION_PATH.test(pathname) && !PRODUCT_DETAIL_PATH.test(pathname) ? "collection" : productResult.eligible ? "product" : /\/about(\/|$)/.test(pathname) ? "about" : /\/contact(\/|$)/.test(pathname) ? "contact" : pathname === "/" ? "home" : "other";
+  return { url: canonicalizeUrl(pageUrl), canonicalUrl, title: title.slice(0, 500), description: description.slice(0, 2000), siteName: siteName.slice(0, 300), pageType, text, colors: extractColors(styleSource), fonts: extractFonts(styleSource), imageUrls: Array.from(imageUrls).slice(0, 40), logoUrls: Array.from(logoUrls).slice(0, 10), stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12), internalLinks: Array.from(internalLinks).slice(0, 300), structuredProducts, productCandidate: productResult.eligible, productEvidence: productResult.reasons };
 }
 
 export function parseSitemap(xml: string) {
@@ -223,11 +258,23 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
   const source = normalizeWebsiteUrl(sourceUrl);
   const origin = new URL(source).origin;
   const pages = new Set<string>([source]);
+  const productPages = new Set<string>();
+  const otherPages = new Set<string>();
   const sitemapQueue = new Set<string>([`${origin}/sitemap.xml`]);
   try {
     const robots = await safeFetchText(`${origin}/robots.txt`);
     for (const match of Array.from(robots.text.matchAll(/^sitemap:\s*(.+)$/gim))) { const value = absoluteUrl(match[1]?.trim(), source); if (value && sameSite(value, source)) sitemapQueue.add(value); }
   } catch { /* robots is optional */ }
+  try {
+    const homepage = await safeFetchText(source);
+    if (homepage.status < 400) {
+      for (const link of extractPageEvidence(homepage.text, homepage.finalUrl).internalLinks) {
+        if (isProductSectionUrl(link)) productPages.add(link); else otherPages.add(link);
+        const linkUrl = new URL(link);
+        if (COMMERCE_HOST.test(linkUrl.hostname.replace(/^www\./, ""))) sitemapQueue.add(`${linkUrl.origin}/sitemap.xml`);
+      }
+    }
+  } catch { /* homepage evidence is retried during crawl processing */ }
   const visitedSitemaps = new Set<string>();
   while (sitemapQueue.size && visitedSitemaps.size < 20 && pages.size < maxPages) {
     const batch = Array.from(sitemapQueue).filter(url => !visitedSitemaps.has(url)).slice(0, 4);
@@ -238,19 +285,19 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
       if (result.status !== "fulfilled" || result.value.status >= 400) return;
       const parsed = parseSitemap(result.value.text);
       for (const sitemap of parsed.sitemapLocs) { const value = absoluteUrl(sitemap, source); if (value && sameSite(value, source) && visitedSitemaps.size + sitemapQueue.size < 40) sitemapQueue.add(value); }
-      for (const page of parsed.pageLocs) { const value = absoluteUrl(page, source); if (value && sameSite(value, source) && !BLOCKED_EXTENSIONS.test(new URL(value).pathname) && pages.size < maxPages) pages.add(value); }
+      for (const page of parsed.pageLocs) { const value = absoluteUrl(page, source); if (!value || !sameSite(value, source) || BLOCKED_EXTENSIONS.test(new URL(value).pathname)) continue; if (isProductSectionUrl(value)) productPages.add(value); else otherPages.add(value); }
     });
   }
-  if (pages.size === 1) {
-    const homepage = await safeFetchText(source);
-    if (homepage.status < 400) for (const link of extractPageEvidence(homepage.text, homepage.finalUrl).internalLinks) { if (pages.size < maxPages) pages.add(link); }
-  }
+  for (const value of Array.from(productPages)) { if (pages.size >= maxPages) break; pages.add(value); }
+  const otherBudget = Math.max(8, Math.min(30, Math.floor(maxPages * 0.25)));
+  for (const value of Array.from(otherPages).slice(0, otherBudget)) { if (pages.size >= maxPages) break; pages.add(value); }
   return Array.from(pages).slice(0, maxPages);
 }
 
 export function mergeDiscoveredUrls(existing: string[], discovered: string[], source: string, maxPages: number) {
   const merged = new Set(existing.map(canonicalizeUrl));
-  for (const candidate of discovered) {
+  const prioritized = [...discovered.filter(candidate => { try { return isProductSectionUrl(candidate); } catch { return false; } }), ...discovered.filter(candidate => { try { return !isProductSectionUrl(candidate); } catch { return true; } })];
+  for (const candidate of prioritized) {
     try {
       const normalized = canonicalizeUrl(candidate);
       if (sameSite(normalized, source) && !BLOCKED_EXTENSIONS.test(new URL(normalized).pathname) && merged.size < maxPages) merged.add(normalized);
