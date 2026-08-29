@@ -27,7 +27,22 @@ export function mergeBrandDraft(current: Partial<BrandImportDraft> | null | unde
 
 export function productDedupeKey(input: { sku?: string | null; productUrl: string; name: string }) {
   const sku = input.sku?.trim().toLowerCase();
-  return sku ? stableHash({ sku }) : stableHash({ productUrl: input.productUrl.trim().toLowerCase(), name: input.name.trim().toLowerCase() });
+  return sku ? stableHash({ sku }) : stableHash({ productUrl: canonicalProductIdentityUrl(input.productUrl) });
+}
+
+export function canonicalProductIdentityUrl(value: string) {
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return url.toString().toLowerCase();
+}
+
+export const ACTIVE_CRAWL_STATUSES = ["queued", "discovering", "crawling", "analyzing"] as const;
+
+export function canStartNewCrawl(latestStatus: string | null | undefined) {
+  return !latestStatus || !ACTIVE_CRAWL_STATUSES.includes(latestStatus as (typeof ACTIVE_CRAWL_STATUSES)[number]);
 }
 
 export function approvedProductsOnly<T extends { status: string }>(products: T[]) {
@@ -45,6 +60,11 @@ export function nextCrawlResumeStatus(cursor: number, discoveredCount: number) {
 export function editedProductProvenance(previous: Record<string, string>, userId: number, now: number) {
   const marker = `user:${userId}@${now}`;
   return { ...previous, name: marker, sku: marker, category: marker, description: marker, price: marker, specifications: marker };
+}
+
+export function pruneDeletedProductIds(current: number[] | null | undefined, deletedIds: number[]) {
+  const removed = new Set(deletedIds);
+  return (current ?? []).filter(id => !removed.has(id));
 }
 
 function normalizeEvidence(value: string) {

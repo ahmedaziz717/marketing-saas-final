@@ -1,0 +1,1 @@
+ALTER TABLE `website_crawl_jobs` ADD `scanMode` enum('brand_and_products','products_only') DEFAULT 'brand_and_products' NOT NULL;

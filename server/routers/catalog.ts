@@ -1,12 +1,12 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { brandAssets, brandKits, productImages, products, websiteCrawlJobs, websiteCrawlPages } from "../../drizzle/schema";
+import { brandAssets, brandKits, campaignBriefs, productImages, products, websiteCrawlJobs, websiteCrawlPages } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
 import { appendActivity } from "../lib/activity";
-import { editedProductProvenance, productDedupeKey } from "../lib/brandImport";
+import { editedProductProvenance, productDedupeKey, pruneDeletedProductIds } from "../lib/brandImport";
 import { isExcludedProductUrl, safeFetchImage } from "../lib/websiteCrawler";
 import { storagePut } from "../storage";
 
@@ -16,6 +16,31 @@ const editableProduct = z.object({
   description: z.string().max(10000).nullable().optional(), productUrl: z.string().url(), price: z.string().max(80).nullable().optional(), currency: z.string().max(16).nullable().optional(),
   specifications: z.record(z.string(), z.string().max(1000)),
 });
+
+type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+export async function removeCatalogProducts(db: Database, organizationId: number, productIds: number[], hooks?: { beforeProductDelete?: () => void | Promise<void> }) {
+  const uniqueIds = Array.from(new Set(productIds));
+  if (!uniqueIds.length) return { removed: 0, briefsUpdated: 0 };
+  return db.transaction(async tx => {
+    const owned = await tx.select({ id: products.id }).from(products).where(and(eq(products.organizationId, organizationId), inArray(products.id, uniqueIds)));
+    const ownedIds = owned.map(item => item.id);
+    if (!ownedIds.length) return { removed: 0, briefsUpdated: 0 };
+    const briefs = await tx.select().from(campaignBriefs).where(eq(campaignBriefs.organizationId, organizationId));
+    let briefsUpdated = 0;
+    for (const brief of briefs) {
+      const nextProductIds = pruneDeletedProductIds(brief.productIds, ownedIds);
+      if (nextProductIds.length !== (brief.productIds ?? []).length) {
+        await tx.update(campaignBriefs).set({ productIds: nextProductIds, status: "draft", approvedByUserId: null, approvedAtMs: null, updatedAtMs: Date.now() }).where(and(eq(campaignBriefs.organizationId, organizationId), eq(campaignBriefs.id, brief.id)));
+        briefsUpdated++;
+      }
+    }
+    await tx.delete(productImages).where(and(eq(productImages.organizationId, organizationId), inArray(productImages.productId, ownedIds)));
+    await hooks?.beforeProductDelete?.();
+    await tx.delete(products).where(and(eq(products.organizationId, organizationId), inArray(products.id, ownedIds)));
+    return { removed: ownedIds.length, briefsUpdated };
+  });
+}
 
 export const catalogRouter = router({
   overview: protectedProcedure.input(organizationInput).query(async ({ ctx, input }) => {
@@ -66,9 +91,9 @@ export const catalogRouter = router({
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const product = (await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), eq(products.id, input.productId))).limit(1))[0];
     if (!product) throw new TRPCError({ code: "NOT_FOUND" });
-    await db.delete(products).where(and(eq(products.organizationId, input.organizationId), eq(products.id, input.productId)));
-    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.product_deleted", entityType: "product", entityId: product.id, payload: { name: product.name, productUrl: product.productUrl, priorStatus: product.status } });
-    return { success: true };
+    const result = await removeCatalogProducts(db, input.organizationId, [product.id]);
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.product_deleted", entityType: "product", entityId: product.id, payload: { name: product.name, productUrl: product.productUrl, priorStatus: product.status, briefsUpdated: result.briefsUpdated } });
+    return { success: true, ...result };
   }),
 
   cleanupNonProducts: protectedProcedure.input(organizationInput).mutation(async ({ ctx, input }) => {
@@ -84,9 +109,9 @@ export const catalogRouter = router({
       const page = product.sourcePageId ? pagesById.get(product.sourcePageId) : undefined;
       return isExcludedProductUrl(product.productUrl) || !page || page.pageType !== "product" || !Boolean((page.metadata as { productCandidate?: boolean } | null)?.productCandidate);
     }).map(product => product.id);
-    if (invalidIds.length) await db.delete(products).where(and(eq(products.organizationId, input.organizationId), inArray(products.id, invalidIds)));
-    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.non_products_cleaned", entityType: "product_batch", entityId: invalidIds.join(",") || "none", payload: { removed: invalidIds.length, approvedProductsPreserved: true } });
-    return { removed: invalidIds.length };
+    const result = await removeCatalogProducts(db, input.organizationId, invalidIds);
+    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.non_products_cleaned", entityType: "product_batch", entityId: invalidIds.join(",") || "none", payload: { removed: result.removed, briefsUpdated: result.briefsUpdated, approvedProductsPreserved: true } });
+    return result;
   }),
 
   applyBrandDraft: protectedProcedure.input(organizationInput.extend({
@@ -98,7 +123,7 @@ export const catalogRouter = router({
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const job = (await db.select().from(websiteCrawlJobs).where(and(eq(websiteCrawlJobs.id, input.jobId), eq(websiteCrawlJobs.organizationId, input.organizationId))).limit(1))[0];
     const kit = (await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1))[0];
-    if (!job || !kit || !["review_ready", "completed"].includes(job.status)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The website analysis must be ready for review" });
+    if (!job || !kit || job.scanMode !== "brand_and_products" || !["review_ready", "completed"].includes(job.status)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A full brand-and-product analysis must be ready for review" });
     const allowedLogos = new Set(((job.brandDraft as { logoUrls?: string[] } | null)?.logoUrls ?? []));
     if (input.draft.selectedLogoUrls.some(url => !allowedLogos.has(url))) throw new TRPCError({ code: "BAD_REQUEST", message: "A selected logo was not found in the analyzed website evidence" });
     const now = Date.now();

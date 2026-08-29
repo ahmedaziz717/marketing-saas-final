@@ -7,7 +7,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
 import { appendActivity } from "../lib/activity";
-import { mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, validateExtractedProduct, type BrandImportDraft } from "../lib/brandImport";
+import { canStartNewCrawl, canonicalProductIdentityUrl, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, validateExtractedProduct, type BrandImportDraft } from "../lib/brandImport";
 import { requireLatestGptTextModel } from "../lib/models";
 import { stableHash } from "../lib/policy";
 import { discoverSiteUrls, extractPageEvidence, isExcludedProductUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, safeFetchImage, safeFetchText, urlHash } from "../lib/websiteCrawler";
@@ -37,7 +37,8 @@ export const crawlRouter = router({
   latest: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return (await db.select().from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(1))[0] ?? null;
+    const recent = await db.select().from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(20);
+    return recent.find(job => ["queued", "discovering", "crawling", "analyzing"].includes(job.status)) ?? recent.find(job => job.pagesDiscovered > 1) ?? recent[0] ?? null;
   }),
 
   resume: protectedProcedure.input(jobInput).mutation(async ({ ctx, input }) => {
@@ -52,16 +53,18 @@ export const crawlRouter = router({
     return { status: nextStatus };
   }),
 
-  start: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), websiteUrl: z.string().min(4).max(2000), maxPages: z.number().int().min(10).max(250).default(100) })).mutation(async ({ ctx, input }) => {
+  start: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), websiteUrl: z.string().min(4).max(2000), maxPages: z.number().int().min(10).max(250).default(100), scanMode: z.enum(["brand_and_products", "products_only"]).default("brand_and_products") })).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const latestJob = (await db.select({ status: websiteCrawlJobs.status }).from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(1))[0];
+    if (!canStartNewCrawl(latestJob?.status)) throw new TRPCError({ code: "CONFLICT", message: "A website scan is already running. Resume or cancel it before starting another." });
     const sourceUrl = normalizeWebsiteUrl(input.websiteUrl);
     try {
       const discoveredUrls = await discoverSiteUrls(sourceUrl, input.maxPages);
       const now = Date.now();
-      const inserted = await db.insert(websiteCrawlJobs).values({ organizationId: input.organizationId, sourceUrl, sourceOrigin: new URL(sourceUrl).origin, status: "crawling", discoveredUrls, cursor: 0, pagesDiscovered: discoveredUrls.length, pagesProcessed: 0, maxPages: input.maxPages, createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now });
+      const inserted = await db.insert(websiteCrawlJobs).values({ organizationId: input.organizationId, sourceUrl, sourceOrigin: new URL(sourceUrl).origin, scanMode: input.scanMode, status: "crawling", discoveredUrls, cursor: 0, pagesDiscovered: discoveredUrls.length, pagesProcessed: 0, maxPages: input.maxPages, createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now });
       const jobId = Number(inserted[0].insertId);
-      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "website_crawl.started", entityType: "website_crawl_job", entityId: jobId, payload: { sourceUrl, pagesDiscovered: discoveredUrls.length, maxPages: input.maxPages } });
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: input.scanMode === "products_only" ? "product_scan.started" : "website_crawl.started", entityType: "website_crawl_job", entityId: jobId, payload: { sourceUrl, scanMode: input.scanMode, pagesDiscovered: discoveredUrls.length, maxPages: input.maxPages } });
       return { jobId, pagesDiscovered: discoveredUrls.length };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Website discovery failed";
@@ -143,7 +146,10 @@ export const crawlRouter = router({
       const analysis = JSON.parse(typeof content === "string" ? content : "{}") as AnalysisResult;
       const currentDraft = job.brandDraft as Partial<BrandImportDraft> | null;
       const incomingBrand: BrandImportDraft = { ...analysis.brand, colors: analysis.brand.colors.filter(value => /^#[0-9a-f]{6}$/i.test(value)), logoUrls: analysis.brand.logoUrls.filter(url => allowedImages.has(url) || allowedLogos.has(url)) };
-      const brandDraft = mergeBrandDraft(currentDraft, incomingBrand);
+      const brandDraft = job.scanMode === "products_only" ? currentDraft : mergeBrandDraft(currentDraft, incomingBrand);
+      const existingCatalog = await db.select().from(products).where(eq(products.organizationId, input.organizationId));
+      const existingBySku = new Map(existingCatalog.filter(product => product.sku).map(product => [product.sku!.trim().toLowerCase(), product]));
+      const existingByUrl = new Map(existingCatalog.map(product => [canonicalProductIdentityUrl(product.productUrl), product]));
       let productsFound = 0;
       for (const candidate of analysis.products.slice(0, 30)) {
         if (!allowedPageIds.has(candidate.sourcePageId)) continue;
@@ -156,9 +162,16 @@ export const crawlRouter = router({
         const dedupeKey = productDedupeKey({ sku: validated.sku, productUrl, name: candidate.name });
         const specifications = Object.fromEntries(validated.specifications.filter(item => item.name.trim() && item.value.trim()).slice(0, 80).map(item => [item.name.trim().slice(0, 180), item.value.trim().slice(0, 1000)]));
         const now = Date.now();
-        await db.insert(products).values({ organizationId: input.organizationId, crawlJobId: job.id, sourcePageId: candidate.sourcePageId, name: candidate.name.slice(0, 300), dedupeKey, sku: validated.sku?.slice(0, 180) || null, category: candidate.category?.slice(0, 240) || null, description: candidate.description?.slice(0, 10000) || null, productUrl, price: validated.price?.slice(0, 80) || null, currency: validated.currency?.slice(0, 16) || null, specifications, provenance: { name: productUrl, sku: productUrl, category: productUrl, description: productUrl, price: productUrl, specifications: productUrl, images: productUrl }, status: "pending", createdAtMs: now, updatedAtMs: now }).onDuplicateKeyUpdate({ set: { sourcePageId: candidate.sourcePageId, name: candidate.name.slice(0, 300), sku: validated.sku?.slice(0, 180) || null, category: candidate.category?.slice(0, 240) || null, description: candidate.description?.slice(0, 10000) || null, productUrl, price: validated.price?.slice(0, 80) || null, currency: validated.currency?.slice(0, 16) || null, specifications, provenance: { name: productUrl, sku: productUrl, category: productUrl, description: productUrl, price: productUrl, specifications: productUrl, images: productUrl }, updatedAtMs: now } });
-        const product = (await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), eq(products.dedupeKey, dedupeKey))).limit(1))[0];
+        const existing = (validated.sku ? existingBySku.get(validated.sku.trim().toLowerCase()) : undefined) ?? existingByUrl.get(canonicalProductIdentityUrl(productUrl));
+        if (existing) {
+          await db.update(products).set({ crawlJobId: job.id, sourcePageId: candidate.sourcePageId, name: candidate.name.slice(0, 300), dedupeKey, sku: validated.sku?.slice(0, 180) || null, category: candidate.category?.slice(0, 240) || null, description: candidate.description?.slice(0, 10000) || null, productUrl, price: validated.price?.slice(0, 80) || null, currency: validated.currency?.slice(0, 16) || null, specifications, provenance: { name: productUrl, sku: productUrl, category: productUrl, description: productUrl, price: productUrl, specifications: productUrl, images: productUrl }, updatedAtMs: now }).where(and(eq(products.organizationId, input.organizationId), eq(products.id, existing.id)));
+        } else {
+          await db.insert(products).values({ organizationId: input.organizationId, crawlJobId: job.id, sourcePageId: candidate.sourcePageId, name: candidate.name.slice(0, 300), dedupeKey, sku: validated.sku?.slice(0, 180) || null, category: candidate.category?.slice(0, 240) || null, description: candidate.description?.slice(0, 10000) || null, productUrl, price: validated.price?.slice(0, 80) || null, currency: validated.currency?.slice(0, 16) || null, specifications, provenance: { name: productUrl, sku: productUrl, category: productUrl, description: productUrl, price: productUrl, specifications: productUrl, images: productUrl }, status: "pending", createdAtMs: now, updatedAtMs: now }).onDuplicateKeyUpdate({ set: { crawlJobId: job.id, sourcePageId: candidate.sourcePageId, name: candidate.name.slice(0, 300), sku: validated.sku?.slice(0, 180) || null, category: candidate.category?.slice(0, 240) || null, description: candidate.description?.slice(0, 10000) || null, productUrl, price: validated.price?.slice(0, 80) || null, currency: validated.currency?.slice(0, 16) || null, specifications, updatedAtMs: now } });
+        }
+        const product = existing ?? (await db.select().from(products).where(and(eq(products.organizationId, input.organizationId), eq(products.dedupeKey, dedupeKey))).limit(1))[0];
         if (!product) continue;
+        existingByUrl.set(canonicalProductIdentityUrl(productUrl), product);
+        if (validated.sku) existingBySku.set(validated.sku.trim().toLowerCase(), product);
         const existingImages = await db.select().from(productImages).where(and(eq(productImages.organizationId, input.organizationId), eq(productImages.productId, product.id)));
         const existingSources = new Set(existingImages.map(image => image.sourceUrl));
         const selectedImages = productsFound < 8 ? candidate.imageUrls.filter(url => allowedImages.has(url) && !existingSources.has(url)).slice(0, 1) : [];

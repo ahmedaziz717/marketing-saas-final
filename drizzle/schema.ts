@@ -87,6 +87,7 @@ export const websiteCrawlJobs = mysqlTable("website_crawl_jobs", {
   organizationId: int("organizationId").notNull().references(() => organizations.id),
   sourceUrl: text("sourceUrl").notNull(),
   sourceOrigin: varchar("sourceOrigin", { length: 500 }).notNull(),
+  scanMode: mysqlEnum("scanMode", ["brand_and_products", "products_only"]).default("brand_and_products").notNull(),
   status: mysqlEnum("status", ["queued", "discovering", "crawling", "analyzing", "review_ready", "completed", "failed", "cancelled"]).default("queued").notNull(),
   discoveredUrls: json("discoveredUrls").$type<string[]>().notNull(),
   cursor: int("cursor").default(0).notNull(),

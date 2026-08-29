@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approvedProductsOnly, editedProductProvenance, importedProductCanBeUsed, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, validateExtractedProduct } from "./lib/brandImport";
+import { approvedProductsOnly, canStartNewCrawl, canonicalProductIdentityUrl, editedProductProvenance, importedProductCanBeUsed, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, pruneDeletedProductIds, validateExtractedProduct } from "./lib/brandImport";
 
 describe("website import normalization", () => {
   it("merges evidence without duplicates while preserving user-editable primary fields", () => {
@@ -15,6 +15,8 @@ describe("website import normalization", () => {
     expect(importedProductCanBeUsed("pending")).toBe(false);
     expect(importedProductCanBeUsed("rejected")).toBe(false);
     expect(importedProductCanBeUsed("approved")).toBe(true);
+    expect(productDedupeKey({ productUrl: "https://WWW.Example.com/products/apex/?utm_source=ad", name: "Old name" })).toBe(productDedupeKey({ productUrl: "https://example.com/products/apex", name: "Renamed product" }));
+    expect(canonicalProductIdentityUrl("https://WWW.Example.com/products/apex/?x=1#details")).toBe("https://example.com/products/apex");
   });
 
   it("resumes persisted crawl work at the correct phase and records user-edit provenance", () => {
@@ -29,5 +31,18 @@ describe("website import normalization", () => {
     expect(validated).toEqual({ eligible: true, sku: null, price: null, currency: null, specifications: [{ name: "Build volume", value: "300 x 300 x 300 mm" }] });
     expect(validateExtractedProduct({ page: { ...page, pageType: "other", productCandidate: false }, candidate: { name: "Apex H2", specifications: [] } }).eligible).toBe(false);
     expect(validateExtractedProduct({ page, candidate: { name: "Invented Support Bundle", specifications: [] } }).eligible).toBe(false);
+  });
+
+  it("prunes deleted products from campaign brief selections", () => {
+    expect(pruneDeletedProductIds([1, 2, 3, 5], [2, 5])).toEqual([1, 3]);
+    expect(pruneDeletedProductIds(null, [2])).toEqual([]);
+  });
+
+  it("allows completed rescans but prevents overlapping active scans", () => {
+    expect(canStartNewCrawl("completed")).toBe(true);
+    expect(canStartNewCrawl("review_ready")).toBe(true);
+    expect(canStartNewCrawl("failed")).toBe(true);
+    expect(canStartNewCrawl("crawling")).toBe(false);
+    expect(canStartNewCrawl("analyzing")).toBe(false);
   });
 });

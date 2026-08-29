@@ -53,3 +53,14 @@
 - [x] Add a governed delete action so incorrectly imported catalog records can be removed with tenant checks and an activity event.
 - [x] Add regression fixtures proving support, documentation, blog, service, collection, and policy pages are rejected while genuine product detail pages are accepted.
 - [x] Run TypeScript, full tests, production build, responsive catalog verification, and save the corrected importer checkpoint.
+- [x] Fix individual product deletion by removing or detaching dependent product-image and brief-selection records in one transaction before deleting the product.
+- [x] Fix bulk non-product cleanup with the same tenant-scoped transactional dependency handling and append one immutable cleanup event.
+- [x] Add a product-only rescan action that can run after brand onboarding without reapplying or replacing the active brand kit.
+- [x] Permit a new crawl job after an earlier job reaches review-ready or completed state while preventing overlapping active scans.
+- [x] Upsert rescanned products by organization-scoped canonical product URL and SKU identity, preserve approved records safely, and prevent duplicate catalog rows.
+- [x] Add regression tests for foreign-key-safe deletion, cleanup, repeat product scans, active-scan blocking, and rescan deduplication.
+- [x] Run TypeScript, full tests, production build, responsive verification, log review, and save the catalog-rescan fix checkpoint.
+- [x] Add router-level catalog deletion tests covering product-image dependencies, campaign-brief selection pruning, transaction ordering, and activity events.
+- [x] Add router-level product-rescan tests covering active-job conflicts, completed-job eligibility, canonical URL and SKU upsert, approved-status preservation, and duplicate prevention.
+- [x] Add an integration rollback assertion proving product rows, images, and brief selections remain intact if transactional catalog deletion aborts.
+- [x] Add a router rescan assertion proving canonical URL variants update one existing product before separately proving SKU-based identity across a changed product URL.
