@@ -89,3 +89,16 @@
 - [x] Add router-level regressions for the 250-page boundary, continuation coverage, canonical URL and SKU duplicate prevention, approval preservation, and active-job conflicts.
 - [x] Run migration if required, TypeScript, full tests, production build, responsive scan-control verification, and save the scan-more checkpoint.
 - [x] Save and auto-publish a new checkpoint containing the page-limit validation, continuation windows, cross-pass deduplication, and final validation.
+- [x] Reproduce the silently disabled Save draft state and identify every frontend condition and backend schema rule that can block brief creation.
+- [x] Normalize destination domains such as bambulab.com to a valid HTTPS URL without changing already complete HTTP(S) URLs.
+- [x] Replace the permanently disabled save action with explicit field-level validation and a clear summary of missing or invalid requirements.
+- [x] Preserve optional campaign claims, products, and approved brand-asset selections without making optional inputs accidental blockers.
+- [x] Add frontend and server regressions for complete brief saves, bare-domain URLs, full URLs, empty optional fields, placements, formats, selected products, and selected assets.
+- [x] Run TypeScript, full tests, production build, desktop/mobile brief-dialog verification, log review, and save the campaign-brief fix checkpoint.
+- [x] Add a frontend brief-form state regression for active draft saving, bare-domain normalization, invalid URL messaging, and optional asset and product selections.
+- [x] Reconfirm authenticated desktop and mobile brief-dialog rendering and isolate unrelated unauthenticated browser-session 401 logs.
+- [x] Save and auto-publish a new checkpoint containing the campaign brief draft-save and validation fix.
+- [x] Include client-side campaign brief regressions in the Vitest test discovery configuration and confirm they execute in the full suite.
+- [x] Verify the authenticated brief dialog through the managed preview and confirm the post-fix log window contains no authentication or save errors.
+- [x] Keep the active Save draft action visibly available in the scrollable dialog so an authenticated managed-preview capture can verify the corrected control state.
+- [x] Re-run the authenticated brief-dialog screenshot and immediate post-walkthrough log review before checkpointing.

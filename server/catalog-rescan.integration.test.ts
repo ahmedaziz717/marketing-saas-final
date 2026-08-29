@@ -179,3 +179,14 @@ describe.sequential("crawl router repeat product scans", () => {
     expect(afterSkuRescan[0]!.dedupeKey).toBe(productDedupeKey({ sku: "APX-1", productUrl: thirdPage.url, name: "any" }));
   }, 30000);
 });
+
+describe.sequential("campaign brief draft saves", () => {
+  it("saves the reported short populated form, normalizes its bare domain, and keeps products and assets optional", async () => {
+    const db = await getDb(); if (!db) throw new Error("Database unavailable");
+    const created = await caller.briefs.create({ organizationId, name: "Test", audience: "Test", offer: "Test", creativeDirection: "Test", destinationUrl: "bambulab.com", requiredClaims: "Test", placements: ["facebook_feed", "instagram_feed"], formats: ["square_1_1", "portrait_4_5"], assetIds: [], productIds: [] });
+    const brief = (await db.select().from(campaignBriefs).where(eq(campaignBriefs.id, created.briefId)).limit(1))[0];
+    expect(brief).toMatchObject({ name: "Test", audience: "Test", offer: "Test", creativeDirection: "Test", destinationUrl: "https://bambulab.com/", requiredClaims: "Test", assetIds: [], productIds: [], status: "draft" });
+    await expect(caller.briefs.submit({ organizationId, briefId: created.briefId })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("Audience must contain at least 10 characters") });
+    await db.delete(campaignBriefs).where(eq(campaignBriefs.id, created.briefId));
+  });
+});

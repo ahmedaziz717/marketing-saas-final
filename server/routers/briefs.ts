@@ -7,18 +7,19 @@ import { appendActivity } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
 import { protectedProcedure, router } from "../_core/trpc";
 import { importedProductCanBeUsed } from "../lib/brandImport";
+import { briefSubmissionIssues, normalizeDestinationUrl } from "../../shared/briefValidation";
 
 const briefFields = z.object({
   organizationId: z.number().int().positive(),
   name: z.string().min(3).max(200),
-  audience: z.string().min(10).max(5000),
-  offer: z.string().min(3).max(5000),
-  placements: z.array(z.enum(["facebook_feed", "instagram_feed", "instagram_story", "instagram_reels"])).min(1),
-  formats: z.array(z.enum(["square_1_1", "portrait_4_5", "story_9_16", "landscape_1_91_1"])).min(1),
-  creativeDirection: z.string().min(10).max(8000),
-  destinationUrl: z.string().url().or(z.literal("")).optional().default(""),
+  audience: z.string().max(5000).default(""),
+  offer: z.string().max(5000).default(""),
+  placements: z.array(z.enum(["facebook_feed", "instagram_feed", "instagram_story", "instagram_reels"])).default([]),
+  formats: z.array(z.enum(["square_1_1", "portrait_4_5", "story_9_16", "landscape_1_91_1"])).default([]),
+  creativeDirection: z.string().max(8000).default(""),
+  destinationUrl: z.string().max(2000).optional().default("").transform((value, context) => { const normalized = normalizeDestinationUrl(value); if (normalized === null) { context.addIssue({ code: "custom", message: "Destination URL must be a valid web address" }); return z.NEVER; } return normalized; }),
   requiredClaims: z.string().max(5000).optional().default(""),
-  assetIds: z.array(z.number().int().positive()).min(1),
+  assetIds: z.array(z.number().int().positive()).default([]),
   productIds: z.array(z.number().int().positive()).max(50).default([]),
 });
 
@@ -66,6 +67,8 @@ export const briefsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const brief = (await db.select().from(campaignBriefs).where(and(eq(campaignBriefs.id, input.briefId), eq(campaignBriefs.organizationId, input.organizationId))).limit(1))[0];
     if (!brief || !["draft", "rejected"].includes(brief.status)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only draft or rejected briefs can be submitted" });
+    const issues = briefSubmissionIssues(brief);
+    if (issues.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Complete the brief before review: ${issues.join("; ")}` });
     const assets = await db.select().from(brandAssets).where(and(eq(brandAssets.organizationId, input.organizationId), inArray(brandAssets.id, brief.assetIds)));
     if (assets.length !== brief.assetIds.length || assets.some(asset => asset.status !== "approved")) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Every selected brand asset must be approved before brief review" });
     const productIds = brief.productIds ?? [];
