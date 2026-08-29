@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approvedProductsOnly, canStartNewCrawl, canonicalProductIdentityUrl, editedProductProvenance, importedProductCanBeUsed, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, pruneDeletedProductIds, validateExtractedProduct } from "./lib/brandImport";
+import { approvedProductsOnly, canStartNewCrawl, canonicalProductIdentityUrl, deterministicProductFromPage, editedProductProvenance, importedProductCanBeUsed, inferProductCategory, inferProductRecordType, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, pruneDeletedProductIds, validateExtractedProduct } from "./lib/brandImport";
 
 describe("website import normalization", () => {
   it("merges evidence without duplicates while preserving user-editable primary fields", () => {
@@ -31,6 +31,33 @@ describe("website import normalization", () => {
     expect(validated).toEqual({ eligible: true, sku: null, price: null, currency: null, specifications: [{ name: "Build volume", value: "300 x 300 x 300 mm" }] });
     expect(validateExtractedProduct({ page: { ...page, pageType: "other", productCandidate: false }, candidate: { name: "Apex H2", specifications: [] } }).eligible).toBe(false);
     expect(validateExtractedProduct({ page, candidate: { name: "Invented Support Bundle", specifications: [] } }).eligible).toBe(false);
+  });
+
+  it("normalizes a ProductGroup into one product family with verified variants and prices", () => {
+    const product = deterministicProductFromPage({
+      url: "https://shop.example.com/products/apex-h2",
+      title: "Apex H2",
+      description: "Fallback",
+      specifications: { "Build volume": "300 mm" },
+      imageUrls: ["https://cdn.example.com/fallback.jpg"],
+      structuredProducts: [{
+        "@type": "ProductGroup",
+        name: "Apex H2",
+        description: "Manufacturing platform",
+        url: "https://shop.example.com/products/apex-h2",
+        hasVariant: [
+          { "@type": "Product", name: "Apex H2 Standard", sku: "APX-1", image: "https://cdn.example.com/standard.jpg", offers: { price: 1499, priceCurrency: "USD", availability: "https://schema.org/InStock" } },
+          { "@type": "Product", name: "Apex H2 Combo", sku: "APX-2", offers: { price: 1799, priceCurrency: "USD" } },
+        ],
+      }],
+    });
+    expect(product).toMatchObject({ name: "Apex H2", category: "Products", description: "Manufacturing platform", price: "1499", currency: "USD", variantCount: 2 });
+    expect(product?.specifications).toMatchObject({ "Build volume": "300 mm", "Available variants": "Apex H2 Standard; Apex H2 Combo", Availability: "InStock" });
+    expect(product?.specifications["Variant SKUs"]).toContain("APX-1");
+    expect(product?.imageUrls).toContain("https://cdn.example.com/standard.jpg");
+    expect(inferProductCategory("Apex 3D Printer", "https://shop.example.com/products/apex")).toBe("3D Printers");
+    expect(inferProductCategory("PLA Basic", "https://shop.example.com/products/pla-basic")).toBe("Filaments & Materials");
+    expect(inferProductRecordType("Apex 3D Printer", "https://shop.example.com/products/apex", "Uses multiple filament materials", 3)).toBe("family");
   });
 
   it("prunes deleted products from campaign brief selections", () => {

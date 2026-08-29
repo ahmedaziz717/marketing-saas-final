@@ -89,3 +89,65 @@ export function validateExtractedProduct(input: {
   const specifications = input.candidate.specifications.filter(item => evidenceContains(source, item.name) && evidenceContains(source, item.value));
   return { eligible: true, sku, price, currency: price ? input.candidate.currency ?? null : null, specifications };
 }
+
+type SchemaOffer = { url?: string; price?: string | number; priceCurrency?: string; availability?: string };
+type SchemaVariant = { name?: string; sku?: string; image?: string | string[]; offers?: SchemaOffer | SchemaOffer[] };
+
+function schemaValues<T = unknown>(value: T | T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : value == null ? [] : [value];
+}
+
+function schemaTypes(record: Record<string, unknown>) {
+  return schemaValues(record["@type"]).map(String).map(value => value.toLowerCase());
+}
+
+export function deterministicProductFromPage(input: { url: string; title: string | null; description: string; structuredProducts: Array<Record<string, unknown>>; specifications: Record<string, string>; imageUrls: string[]; commerceMeta?: { sku: string | null; price: string | null; currency: string | null; availability: string | null } }) {
+  const root = input.structuredProducts.find(record => schemaTypes(record).some(type => type === "productgroup" || type === "product")) ?? (input.commerceMeta && (input.commerceMeta.sku || input.commerceMeta.price) ? { "@type": "Product", name: input.title, description: input.description, sku: input.commerceMeta.sku, image: input.imageUrls[0], offers: { price: input.commerceMeta.price, priceCurrency: input.commerceMeta.currency, availability: input.commerceMeta.availability }, url: input.url } : null);
+  if (!root) return null;
+  const variants = schemaTypes(root).includes("productgroup")
+    ? schemaValues(root.hasVariant).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") as SchemaVariant[]
+    : [root as SchemaVariant];
+  const offers = variants.flatMap(variant => schemaValues(variant.offers).filter((item): item is SchemaOffer => Boolean(item) && typeof item === "object"));
+  const prices = offers.map(offer => Number(offer.price)).filter(price => Number.isFinite(price) && price > 0);
+  const variantNames = variants.map(variant => String(variant.name ?? "").trim()).filter(Boolean);
+  const variantSkus = variants.map(variant => ({ name: String(variant.name ?? "Variant").trim(), sku: String(variant.sku ?? "").trim() })).filter(item => item.sku);
+  const variantPrices = variants.flatMap(variant => schemaValues(variant.offers).filter((item): item is SchemaOffer => Boolean(item) && typeof item === "object").map(offer => ({ name: String(variant.name ?? "Variant").trim(), offer }))).filter(item => item.offer.price != null);
+  const imageUrls = Array.from(new Set([...variants.flatMap(variant => schemaValues(variant.image).map(String)), ...input.imageUrls])).filter(value => /^https?:\/\//i.test(value));
+  const name = String(root.name ?? input.title ?? "").trim();
+  if (!name) return null;
+  const specifications: Record<string, string> = { ...input.specifications };
+  if (variantNames.length > 1) specifications["Available variants"] = variantNames.join("; ");
+  if (variantSkus.length) specifications["Variant SKUs"] = variantSkus.map(item => `${item.name}: ${item.sku}`).join("; ");
+  if (variantPrices.length) specifications["Variant prices"] = variantPrices.map(item => `${item.name}: ${item.offer.priceCurrency ?? ""} ${item.offer.price}`.trim()).join("; ");
+  const availability = Array.from(new Set(offers.map(offer => String(offer.availability ?? "").split("/").pop()).filter(Boolean)));
+  if (availability.length) specifications.Availability = availability.join(", ");
+  const description = String(root.description ?? input.description ?? "").trim() || null;
+  const normalizedVariants = variants.map(variant => {
+    const offer = schemaValues(variant.offers).find((item): item is SchemaOffer => Boolean(item) && typeof item === "object");
+    return { name: String(variant.name ?? name), sku: variant.sku ? String(variant.sku) : null, price: offer?.price != null && Number(offer.price) > 0 ? String(offer.price) : null, currency: offer?.priceCurrency ?? null, availability: offer?.availability ? String(offer.availability).split("/").pop() ?? null : null, imageSourceUrl: schemaValues(variant.image).map(String).find(value => /^https?:\/\//i.test(value)) ?? null, productUrl: offer?.url ?? input.url };
+  });
+  return { name, sku: variants.length === 1 && variants[0]?.sku ? String(variants[0].sku) : null, category: inferProductCategory(name, input.url, description ?? ""), recordType: inferProductRecordType(name, input.url, description ?? "", variants.length), description, productUrl: String(root.url ?? input.url), price: prices.length ? String(Math.min(...prices)) : null, currency: prices.length ? offers.find(offer => Number(offer.price) > 0 && offer.priceCurrency)?.priceCurrency ?? null : null, specifications, imageUrls, variants: normalizedVariants, variantCount: variants.length };
+}
+
+export function inferProductCategory(name: string, url: string, description = "") {
+  const marker = `${name} ${new URL(url).pathname} ${description}`.toLowerCase();
+  if (/\b3d[ -]?printer\b|\bprinter\b|\b3d printing\b/.test(marker)) return "3D Printers";
+  if (/\bams\b|automatic material system/.test(marker)) return "Material Systems";
+  if (/\bfilament\b|\bpla\b|\bpetg\b|\babs\b|\basa\b|\btpu\b|\bpaht\b/.test(marker)) return "Filaments & Materials";
+  if (/\bsoftware\b|\bapp\b|\bstudio\b|\bfirmware\b/.test(marker)) return "Software";
+  if (/\bnozzle\b|\bhotend\b|\bplate\b|\bkit\b|\bcable\b|\bassembly\b|\bunit\b|\breplacement\b|\bspare\b/.test(marker)) return "Accessories & Parts";
+  return "Products";
+}
+
+export function inferProductRecordType(name: string, url: string, description = "", variantCount = 1): "family" | "standalone" | "accessory" | "material" | "software" | "service" | "bundle" {
+  const marker = `${name} ${new URL(url).pathname} ${description}`.toLowerCase();
+  if (/\bsoftware\b|\bapp\b|\bfirmware\b/.test(marker)) return "software";
+  if (/\bservice\b|\bsupport plan\b|\bconsulting\b/.test(marker)) return "service";
+  if (/\b3d[ -]?printer\b|\bprinter\b|\b3d printing\b/.test(marker)) return variantCount > 1 ? "family" : "standalone";
+  if (/\bams\b|automatic material system/.test(marker)) return variantCount > 1 ? "family" : "standalone";
+  if (/\bbundle\b|\bcombo\b/.test(marker) && variantCount <= 1) return "bundle";
+  if (/\bfilament\b|\bpla\b|\bpetg\b|\babs\b|\basa\b|\btpu\b|\bpaht\b|\bmaterial\b/.test(marker)) return "material";
+  if (/\bnozzle\b|\bhotend\b|\bplate\b|\bkit\b|\bcable\b|\bassembly\b|\bunit\b|\breplacement\b|\bspare\b|\baccessor/.test(marker)) return "accessory";
+  if (variantCount > 1) return "family";
+  return "standalone";
+}

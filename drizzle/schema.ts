@@ -131,6 +131,8 @@ export const products = mysqlTable("products", {
   dedupeKey: varchar("dedupeKey", { length: 64 }).notNull(),
   sku: varchar("sku", { length: 180 }),
   category: varchar("category", { length: 240 }),
+  recordType: mysqlEnum("recordType", ["family", "standalone", "accessory", "material", "software", "service", "bundle"]).default("standalone").notNull(),
+  variantCount: int("variantCount").default(0).notNull(),
   description: text("description"),
   productUrl: text("productUrl").notNull(),
   price: varchar("price", { length: 80 }),
@@ -143,6 +145,23 @@ export const products = mysqlTable("products", {
   createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
   updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
 }, table => ({ productIdx: uniqueIndex("product_organization_dedupe_unique").on(table.organizationId, table.dedupeKey) }));
+
+export const productVariants = mysqlTable("product_variants", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull().references(() => organizations.id),
+  productId: int("productId").notNull().references(() => products.id),
+  sourceKey: varchar("sourceKey", { length: 64 }).notNull(),
+  name: varchar("name", { length: 500 }).notNull(),
+  sku: varchar("sku", { length: 180 }),
+  price: varchar("price", { length: 80 }),
+  currency: varchar("currency", { length: 16 }),
+  availability: varchar("availability", { length: 120 }),
+  imageSourceUrl: text("imageSourceUrl"),
+  productUrl: text("productUrl"),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+  updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+}, table => ({ variantIdx: uniqueIndex("product_variant_source_unique").on(table.organizationId, table.productId, table.sourceKey) }));
 
 export const productImages = mysqlTable("product_images", {
   id: int("id").autoincrement().primaryKey(),

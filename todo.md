@@ -64,3 +64,18 @@
 - [x] Add router-level product-rescan tests covering active-job conflicts, completed-job eligibility, canonical URL and SKU upsert, approved-status preservation, and duplicate prevention.
 - [x] Add an integration rollback assertion proving product rows, images, and brief selections remain intact if transactional catalog deletion aborts.
 - [x] Add a router rescan assertion proving canonical URL variants update one existing product before separately proving SKU-based identity across a changed product URL.
+- [x] Audit the latest crawl job, imported products, source pages, evidence scores, field provenance, and discarded candidate pages against the source commerce site.
+- [x] Compare the imported catalog with the source site’s official product navigation, product sitemaps, collection pages, and product-detail structured data.
+- [x] Identify whether missing or inaccurate records result from discovery ceilings, cross-domain storefronts, locale routing, variant pages, product-family grouping, commerce evidence thresholds, or GPT field extraction.
+- [x] Extract deterministic Product JSON-LD, Open Graph commerce metadata, SKU, price, availability, images, variants, and specification tables before invoking GPT-5.5.
+- [x] Normalize product families, variants, accessories, bundles, software, and services into explicit catalog record types instead of flattening every page into one generic product shape.
+- [x] Preserve complete field-level provenance and confidence so unsupported or conflicting product facts remain pending rather than being silently persisted.
+- [x] Repair the current organization catalog using verified source product pages while preserving user-approved records unless their source evidence is invalid.
+- [x] Add real-site and router-level regression coverage for the exact latest-scan failures, including expected product counts, names, variants, specifications, and deduplication.
+- [x] Run TypeScript, full tests, production build, responsive catalog verification, runtime log review, and save the corrected product-extraction checkpoint.
+- [x] Add explicit catalog record types and first-class product-family and variant relationships rather than storing variant data only inside generic specifications.
+- [x] Persist verified variant names, SKUs, prices, currencies, availability, images, and source URLs as organization-scoped variant records.
+- [x] Keep a repeatable real-site validation harness in the repository that asserts expected flagship names, variants, specifications, and canonical deduplication without running in the default test suite.
+- [x] Re-run migration, TypeScript, full tests, production build, responsive catalog verification, and save the final corrected extraction checkpoint.
+- [x] Strengthen the retained live-site harness with exact flagship product-name assertions and canonical duplicate-collapse assertions.
+- [x] Save and auto-publish a new checkpoint containing the explicit product types, variant model, repaired catalog, retained live-site validation, and final checks.

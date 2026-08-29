@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { brandAssets, brandKits, campaignBriefs, productImages, products, websiteCrawlJobs, websiteCrawlPages } from "../../drizzle/schema";
+import { brandAssets, brandKits, campaignBriefs, productImages, products, productVariants, websiteCrawlJobs, websiteCrawlPages } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
@@ -36,6 +36,7 @@ export async function removeCatalogProducts(db: Database, organizationId: number
       }
     }
     await tx.delete(productImages).where(and(eq(productImages.organizationId, organizationId), inArray(productImages.productId, ownedIds)));
+    await tx.delete(productVariants).where(and(eq(productVariants.organizationId, organizationId), inArray(productVariants.productId, ownedIds)));
     await hooks?.beforeProductDelete?.();
     await tx.delete(products).where(and(eq(products.organizationId, organizationId), inArray(products.id, ownedIds)));
     return { removed: ownedIds.length, briefsUpdated };
@@ -46,12 +47,13 @@ export const catalogRouter = router({
   overview: protectedProcedure.input(organizationInput).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [catalog, images, jobs] = await Promise.all([
+    const [catalog, images, variants, jobs] = await Promise.all([
       db.select().from(products).where(eq(products.organizationId, input.organizationId)).orderBy(desc(products.updatedAtMs)).limit(750),
       db.select().from(productImages).where(eq(productImages.organizationId, input.organizationId)),
+      db.select().from(productVariants).where(eq(productVariants.organizationId, input.organizationId)).orderBy(productVariants.name),
       db.select().from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(1),
     ]);
-    return { products: catalog.map(product => ({ ...product, images: images.filter(image => image.productId === product.id) })), latestJob: jobs[0] ?? null };
+    return { products: catalog.map(product => ({ ...product, images: images.filter(image => image.productId === product.id), variants: variants.filter(variant => variant.productId === product.id) })), latestJob: jobs[0] ?? null };
   }),
 
   updateProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive(), product: editableProduct })).mutation(async ({ ctx, input }) => {

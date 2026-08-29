@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeUrl, extractPageEvidence, isExcludedProductUrl, isForbiddenIp, isProductSectionUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, parseSitemap, productCandidateFromEvidence, sameSite } from "./lib/websiteCrawler";
+import { canonicalizeUrl, extractPageEvidence, isExcludedProductUrl, isForbiddenIp, isProductDetailUrl, isProductSectionUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, parseSitemap, productCandidateFromEvidence, productSitemapPriority, sameSite } from "./lib/websiteCrawler";
 
 describe("crawl URL safety", () => {
   it("normalizes public web addresses and removes tracking parameters", () => {
@@ -22,12 +22,22 @@ describe("crawl URL safety", () => {
   it("merges resumable discoveries without duplicates, foreign hosts, or overflow", () => {
     expect(mergeDiscoveredUrls(["https://example.com/"], ["https://example.com/a", "https://example.com/a#top", "https://foreign.test/x", "https://shop.example.com/b"], "https://example.com/", 3)).toEqual(["https://example.com/", "https://shop.example.com/b", "https://example.com/a"]);
   });
+
+  it("ranks purchasable product-detail pages ahead of collection and general pages", () => {
+    expect(mergeDiscoveredUrls([], ["https://example.com/collections/printers", "https://example.com/about", "https://example.com/products/apex"], "https://example.com", 3)).toEqual(["https://example.com/products/apex", "https://example.com/collections/printers", "https://example.com/about"]);
+    expect(isProductDetailUrl("https://example.com/products/apex?variant=1")).toBe(true);
+    expect(isProductDetailUrl("https://example.com/collections/printers")).toBe(false);
+  });
 });
 
 describe("site evidence extraction", () => {
   it("parses sitemap indexes and URL sets", () => {
     expect(parseSitemap(`<sitemapindex><sitemap><loc>https://example.com/products.xml</loc></sitemap></sitemapindex>`).sitemapLocs).toEqual(["https://example.com/products.xml"]);
     expect(parseSitemap(`<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://example.com/b</loc></url></urlset>`).pageLocs).toEqual(["https://example.com/a", "https://example.com/b"]);
+  });
+
+  it("prioritizes brand product families over low-level replacement parts in bounded scans", () => {
+    expect(productSitemapPriority({ loc: "https://us.store.bambulab.com/products/h2d", title: "Bambu Lab H2D", lastmod: "2026-08-01" })).toBeGreaterThan(productSitemapPriority({ loc: "https://us.store.bambulab.com/products/replacement-control-board-fan", title: "Replacement Control Board Fan", lastmod: "2026-08-01" }));
   });
 
   it("extracts editable brand evidence and structured product provenance", () => {
@@ -40,6 +50,19 @@ describe("site evidence extraction", () => {
     expect(evidence.stylesheetUrls).toEqual(["https://example.com/brand.css"]);
     expect(evidence.logoUrls).toEqual(["https://example.com/logo.png"]);
     expect(evidence.structuredProducts[0]).toMatchObject({ name: "Acme One", sku: "A1" });
+    expect(evidence.commerceMeta.sku).toBeNull();
+  });
+
+  it("captures deterministic Open Graph commerce fallback fields", () => {
+    const evidence = extractPageEvidence(`<html><head><title>Apex Printer</title><meta property="og:type" content="product"><meta property="product:retailer_item_id" content="APX-1"><meta property="product:price:amount" content="1299"><meta property="product:price:currency" content="USD"><meta property="product:availability" content="in stock"><meta property="og:image" content="/apex.jpg"></head><body><button>Add to cart</button></body></html>`, "https://shop.example.com/products/apex");
+    expect(evidence.commerceMeta).toEqual({ sku: "APX-1", price: "1299", currency: "USD", availability: "in stock" });
+  });
+
+  it("recognizes ProductGroup variants and extracts deterministic specification tables", () => {
+    const evidence = extractPageEvidence(`<html><head><title>Apex H2</title><script id="product-jsonld" type="application/ld+json">{"@type":"ProductGroup","name":"Apex H2","description":"A manufacturing platform","url":"https://shop.example.com/products/apex-h2","hasVariant":[{"@type":"Product","name":"Apex H2 Standard","sku":"APX-1","image":"https://cdn.example.com/apex.jpg","offers":{"price":"1499","priceCurrency":"USD","availability":"https://schema.org/InStock"}},{"@type":"Product","name":"Apex H2 Combo","sku":"APX-2","offers":{"price":"1799","priceCurrency":"USD"}}]}</script></head><body><button>Add to cart</button><table><tr><th>Build volume</th><td>300 × 300 × 300 mm</td></tr></table></body></html>`, "https://shop.example.com/products/apex-h2");
+    expect(evidence.pageType).toBe("product");
+    expect(evidence.structuredProducts[0]).toMatchObject({ "@type": "ProductGroup", name: "Apex H2" });
+    expect(evidence.specifications).toMatchObject({ "Build volume": "300 × 300 × 300 mm" });
   });
 
   it("accepts genuine product detail evidence and rejects support, editorial, service, policy, and collection pages", () => {

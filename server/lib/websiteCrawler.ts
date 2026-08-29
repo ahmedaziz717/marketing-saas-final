@@ -26,6 +26,8 @@ export type PageEvidence = {
   stylesheetUrls: string[];
   internalLinks: string[];
   structuredProducts: Array<Record<string, unknown>>;
+  specifications: Record<string, string>;
+  commerceMeta: { sku: string | null; price: string | null; currency: string | null; availability: string | null };
   productCandidate: boolean;
   productEvidence: string[];
 };
@@ -44,6 +46,11 @@ export function isExcludedProductUrl(value: string) {
 export function isProductSectionUrl(value: string) {
   const url = new URL(value);
   return !isExcludedProductUrl(value) && (PRODUCT_SECTION_PATH.test(url.pathname) || COMMERCE_HOST.test(url.hostname.replace(/^www\./, "")) || /(?:^|[._-])products?(?:[._-]|$)/i.test(url.hostname));
+}
+
+export function isProductDetailUrl(value: string) {
+  const url = new URL(value);
+  return !isExcludedProductUrl(value) && PRODUCT_DETAIL_PATH.test(url.pathname);
 }
 
 export function productCandidateFromEvidence(input: { url: string; hasStructuredProduct: boolean; hasSku: boolean; hasPrice: boolean; hasAddToCart: boolean; hasProductMeta: boolean; productImageCount: number }) {
@@ -178,11 +185,28 @@ function collectJsonLdProducts($: cheerio.CheerioAPI) {
         if (item['@graph']) queue.push(...(Array.isArray(item['@graph']) ? item['@graph'] : [item['@graph']]));
         if (item.itemListElement) queue.push(...(Array.isArray(item.itemListElement) ? item.itemListElement.map((entry: Record<string, unknown>) => entry.item ?? entry) : []));
         const type = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
-        if (type.some((value: unknown) => String(value).toLowerCase() === "product")) products.push(item as Record<string, unknown>);
+        if (type.some((value: unknown) => ["product", "productgroup"].includes(String(value).toLowerCase()))) products.push(item as Record<string, unknown>);
       }
     } catch { /* malformed website data is ignored */ }
   });
   return products.slice(0, 30);
+}
+
+function extractSpecifications($: cheerio.CheerioAPI) {
+  const pairs = new Map<string, string>();
+  $("table tr").each((_, row) => {
+    const cells = $(row).find("th,td").toArray().map(cell => $(cell).text().replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (cells.length < 2) return;
+    const key = cells.length === 2 ? cells[0]! : `${cells[0]} · ${cells[1]}`;
+    const value = cells.length === 2 ? cells[1]! : cells.slice(2).join(" · ");
+    if (key && value && key.length <= 180 && value.length <= 1200 && !pairs.has(key)) pairs.set(key, value);
+  });
+  $("li").each((_, item) => {
+    const text = $(item).text().replace(/\s+/g, " ").trim();
+    const match = text.match(/^([^:]{2,100}):\s*(.{2,1000})$/);
+    if (match && !pairs.has(match[1]!)) pairs.set(match[1]!, match[2]!);
+  });
+  return Object.fromEntries(Array.from(pairs).slice(0, 120));
 }
 
 function extractColors(source: string) {
@@ -209,6 +233,12 @@ export function extractPageEvidence(html: string, pageUrl: string, linkedStyles 
   const hasPrice = $('[itemprop="price"], meta[property="product:price:amount"], meta[name="twitter:data1"], [data-price]').length > 0;
   const hasAddToCart = $('button, input[type="submit"], [role="button"], form[action]').toArray().some(element => /add\s+to\s+(?:cart|bag)|buy\s+now|purchase/i.test(`${$(element).text()} ${$(element).attr("value") || ""} ${$(element).attr("aria-label") || ""} ${$(element).attr("action") || ""}`));
   const hasProductMeta = /product/i.test($('meta[property="og:type"]').attr("content") || "") || $('[itemtype*="schema.org/Product"]').length > 0;
+  const commerceMeta = {
+    sku: $('meta[property="product:retailer_item_id"]').attr("content") || $('[itemprop="sku"]').attr("content") || $('[itemprop="sku"]').first().text().trim() || null,
+    price: $('meta[property="product:price:amount"]').attr("content") || $('[itemprop="price"]').attr("content") || null,
+    currency: $('meta[property="product:price:currency"]').attr("content") || $('[itemprop="priceCurrency"]').attr("content") || null,
+    availability: $('meta[property="product:availability"]').attr("content") || $('[itemprop="availability"]').attr("content") || null,
+  };
   const title = $('meta[property="og:title"]').attr("content") || $("title").first().text().trim();
   const description = $('meta[name="description"]').attr("content") || $('meta[property="og:description"]').attr("content") || "";
   const siteName = $('meta[property="og:site_name"]').attr("content") || "";
@@ -234,7 +264,7 @@ export function extractPageEvidence(html: string, pageUrl: string, linkedStyles 
   const pathname = new URL(pageUrl).pathname.toLowerCase();
   const productResult = productCandidateFromEvidence({ url: pageUrl, hasStructuredProduct: structuredProducts.length > 0, hasSku, hasPrice, hasAddToCart, hasProductMeta, productImageCount: imageUrls.size });
   const pageType: PageEvidence['pageType'] = isExcludedProductUrl(pageUrl) ? (/\/(contact|support|help)(\/|$)/.test(pathname) ? "contact" : "other") : PRODUCT_SECTION_PATH.test(pathname) && !PRODUCT_DETAIL_PATH.test(pathname) ? "collection" : productResult.eligible ? "product" : /\/about(\/|$)/.test(pathname) ? "about" : /\/contact(\/|$)/.test(pathname) ? "contact" : pathname === "/" ? "home" : "other";
-  return { url: canonicalizeUrl(pageUrl), canonicalUrl, title: title.slice(0, 500), description: description.slice(0, 2000), siteName: siteName.slice(0, 300), pageType, text, colors: extractColors(styleSource), fonts: extractFonts(styleSource), imageUrls: Array.from(imageUrls).slice(0, 40), logoUrls: Array.from(logoUrls).slice(0, 10), stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12), internalLinks: Array.from(internalLinks).slice(0, 300), structuredProducts, productCandidate: productResult.eligible, productEvidence: productResult.reasons };
+  return { url: canonicalizeUrl(pageUrl), canonicalUrl, title: title.slice(0, 500), description: description.slice(0, 2000), siteName: siteName.slice(0, 300), pageType, text, colors: extractColors(styleSource), fonts: extractFonts(styleSource), imageUrls: Array.from(imageUrls).slice(0, 40), logoUrls: Array.from(logoUrls).slice(0, 10), stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12), internalLinks: Array.from(internalLinks).slice(0, 1500), structuredProducts, specifications: extractSpecifications($), commerceMeta, productCandidate: productResult.eligible, productEvidence: productResult.reasons };
 }
 
 export function parseSitemap(xml: string) {
@@ -251,15 +281,45 @@ export function parseSitemap(xml: string) {
   };
   const sitemapLocs = readLocs(parsed.sitemapindex);
   const pageLocs = readLocs(parsed.urlset);
-  return { sitemapLocs: Array.from(new Set(sitemapLocs)), pageLocs: Array.from(new Set(pageLocs)) };
+  const rawEntries = parsed.urlset && typeof parsed.urlset === "object" ? schemaArray((parsed.urlset as Record<string, unknown>).url) : [];
+  const pageEntries = rawEntries.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object").map(entry => {
+    const image = entry["image:image"] && typeof entry["image:image"] === "object" ? entry["image:image"] as Record<string, unknown> : {};
+    return { loc: typeof entry.loc === "string" ? entry.loc : "", lastmod: typeof entry.lastmod === "string" ? entry.lastmod : "", title: typeof image["image:title"] === "string" ? image["image:title"] : typeof image["image:caption"] === "string" ? image["image:caption"] : "" };
+  }).filter(entry => entry.loc);
+  return { sitemapLocs: Array.from(new Set(sitemapLocs)), pageLocs: Array.from(new Set(pageLocs)), pageEntries };
+}
+
+function schemaArray<T = unknown>(value: T | T[] | undefined): T[] { return Array.isArray(value) ? value : value == null ? [] : [value]; }
+
+export function productSitemapPriority(input: { loc: string; title: string; lastmod: string }) {
+  const parsedUrl = new URL(input.loc);
+  const marker = `${input.title} ${parsedUrl.pathname}`.toLowerCase();
+  const hostLabels = parsedUrl.hostname.replace(/^www\./, "").split(".");
+  const brandToken = (hostLabels.at(-2) ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const normalizedTitle = input.title.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const slug = parsedUrl.pathname.split("/").filter(Boolean).at(-1) ?? "";
+  let score = 0;
+  if (brandToken.length >= 4 && normalizedTitle.includes(brandToken)) score += 120;
+  if (slug.length > 0 && slug.length <= 12) score += 55;
+  if (/\b3d[ -]?printer\b|\bprinter\b|\bmanufacturing (?:hub|platform)\b/.test(marker)) score += 140;
+  if (/\bfilaments?\b|\bpla\b|\bpetg\b|\babs\b|\basa\b|\btpu\b|\bpaht\b/.test(marker)) score += 45;
+  if (/\bams\b|automatic material|\bcombo\b|\bbundle\b|\bkit\b/.test(marker)) score += 70;
+  if (/\bplate\b|\bhotend\b|\bnozzle\b|\bmaterial\b/.test(marker)) score += 35;
+  if (/assembly|cable|board|fan|belt|motor|sensor|panel|housing|replacement|thermistor|heater|tube|connector|gear|wiper|screw|bearing|shaft/.test(marker)) score -= 100;
+  const year = Number(input.lastmod.slice(0, 4));
+  if (Number.isFinite(year)) score += Math.max(0, year - 2020);
+  return score;
 }
 
 export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
   const source = normalizeWebsiteUrl(sourceUrl);
   const origin = new URL(source).origin;
   const pages = new Set<string>([source]);
-  const productPages = new Set<string>();
+  const featuredProductPages = new Set<string>();
+  const productDetailPages = new Map<string, number>();
+  const productIndexPages = new Set<string>();
   const otherPages = new Set<string>();
+  const commerceOrigins = new Set<string>();
   const sitemapQueue = new Set<string>([`${origin}/sitemap.xml`]);
   try {
     const robots = await safeFetchText(`${origin}/robots.txt`);
@@ -269,12 +329,21 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
     const homepage = await safeFetchText(source);
     if (homepage.status < 400) {
       for (const link of extractPageEvidence(homepage.text, homepage.finalUrl).internalLinks) {
-        if (isProductSectionUrl(link)) productPages.add(link); else otherPages.add(link);
+        if (isProductDetailUrl(link)) featuredProductPages.add(link); else if (isProductSectionUrl(link)) productIndexPages.add(link); else otherPages.add(link);
         const linkUrl = new URL(link);
-        if (COMMERCE_HOST.test(linkUrl.hostname.replace(/^www\./, ""))) sitemapQueue.add(`${linkUrl.origin}/sitemap.xml`);
+        if (COMMERCE_HOST.test(linkUrl.hostname.replace(/^www\./, ""))) { commerceOrigins.add(linkUrl.origin); sitemapQueue.add(`${linkUrl.origin}/sitemap.xml`); }
       }
     }
   } catch { /* homepage evidence is retried during crawl processing */ }
+  for (const commerceOrigin of Array.from(commerceOrigins)) {
+    for (const catalogPath of ["/all-products", "/collections/all"]) {
+      try {
+        const catalog = await safeFetchText(`${commerceOrigin}${catalogPath}`);
+        if (catalog.status >= 400) continue;
+        for (const link of extractPageEvidence(catalog.text, catalog.finalUrl).internalLinks) if (isProductDetailUrl(link)) featuredProductPages.add(link);
+      } catch { /* optional commerce catalog probe */ }
+    }
+  }
   const visitedSitemaps = new Set<string>();
   while (sitemapQueue.size && visitedSitemaps.size < 20 && pages.size < maxPages) {
     const batch = Array.from(sitemapQueue).filter(url => !visitedSitemaps.has(url)).slice(0, 4);
@@ -285,10 +354,19 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
       if (result.status !== "fulfilled" || result.value.status >= 400) return;
       const parsed = parseSitemap(result.value.text);
       for (const sitemap of parsed.sitemapLocs) { const value = absoluteUrl(sitemap, source); if (value && sameSite(value, source) && visitedSitemaps.size + sitemapQueue.size < 40) sitemapQueue.add(value); }
-      for (const page of parsed.pageLocs) { const value = absoluteUrl(page, source); if (!value || !sameSite(value, source) || BLOCKED_EXTENSIONS.test(new URL(value).pathname)) continue; if (isProductSectionUrl(value)) productPages.add(value); else otherPages.add(value); }
+      const entryByLoc = new Map(parsed.pageEntries.map(entry => [canonicalizeUrl(entry.loc), entry]));
+      for (const page of parsed.pageLocs) {
+        const value = absoluteUrl(page, source);
+        if (!value || !sameSite(value, source) || BLOCKED_EXTENSIONS.test(new URL(value).pathname)) continue;
+        if (isProductDetailUrl(value)) {
+          const entry = entryByLoc.get(value);
+          productDetailPages.set(value, entry ? productSitemapPriority(entry) : 0);
+        } else if (isProductSectionUrl(value)) productIndexPages.add(value); else otherPages.add(value);
+      }
     });
   }
-  for (const value of Array.from(productPages)) { if (pages.size >= maxPages) break; pages.add(value); }
+  const rankedSitemapProducts = Array.from(productDetailPages.entries()).sort((a, b) => b[1] - a[1]).map(([url]) => url);
+  for (const value of [...Array.from(featuredProductPages), ...rankedSitemapProducts, ...Array.from(productIndexPages)]) { if (pages.size >= maxPages) break; pages.add(value); }
   const otherBudget = Math.max(8, Math.min(30, Math.floor(maxPages * 0.25)));
   for (const value of Array.from(otherPages).slice(0, otherBudget)) { if (pages.size >= maxPages) break; pages.add(value); }
   return Array.from(pages).slice(0, maxPages);
@@ -296,7 +374,7 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
 
 export function mergeDiscoveredUrls(existing: string[], discovered: string[], source: string, maxPages: number) {
   const merged = new Set(existing.map(canonicalizeUrl));
-  const prioritized = [...discovered.filter(candidate => { try { return isProductSectionUrl(candidate); } catch { return false; } }), ...discovered.filter(candidate => { try { return !isProductSectionUrl(candidate); } catch { return true; } })];
+  const prioritized = [...discovered.filter(candidate => { try { return isProductDetailUrl(candidate); } catch { return false; } }), ...discovered.filter(candidate => { try { return isProductSectionUrl(candidate) && !isProductDetailUrl(candidate); } catch { return false; } }), ...discovered.filter(candidate => { try { return !isProductSectionUrl(candidate); } catch { return true; } })];
   for (const candidate of prioritized) {
     try {
       const normalized = canonicalizeUrl(candidate);
