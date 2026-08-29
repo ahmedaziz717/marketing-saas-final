@@ -10,7 +10,7 @@ import { appendActivity } from "../lib/activity";
 import { canStartNewCrawl, canonicalProductIdentityUrl, deterministicProductFromPage, inferProductRecordType, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, validateExtractedProduct, type BrandImportDraft } from "../lib/brandImport";
 import { requireLatestGptTextModel } from "../lib/models";
 import { stableHash } from "../lib/policy";
-import { discoverSiteUrls, extractPageEvidence, isExcludedProductUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, safeFetchImage, safeFetchText, urlHash } from "../lib/websiteCrawler";
+import { discoverSiteUrls, extractPageEvidence, isExcludedProductUrl, isProductDetailUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, safeFetchImage, safeFetchText, urlHash } from "../lib/websiteCrawler";
 import { storagePut } from "../storage";
 
 const jobInput = z.object({ organizationId: z.number().int().positive(), jobId: z.number().int().positive() });
@@ -56,16 +56,19 @@ export const crawlRouter = router({
   start: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), websiteUrl: z.string().min(4).max(2000), maxPages: z.number().int().min(10).max(250).default(100), scanMode: z.enum(["brand_and_products", "products_only"]).default("brand_and_products") })).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const latestJob = (await db.select({ status: websiteCrawlJobs.status }).from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs)).limit(1))[0];
-    if (!canStartNewCrawl(latestJob?.status)) throw new TRPCError({ code: "CONFLICT", message: "A website scan is already running. Resume or cancel it before starting another." });
+    const priorJobs = await db.select().from(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, input.organizationId)).orderBy(desc(websiteCrawlJobs.createdAtMs));
+    const activeJob = priorJobs.find(job => !canStartNewCrawl(job.status));
+    if (activeJob) throw new TRPCError({ code: "CONFLICT", message: "A website scan is already running. Resume or cancel it before starting another." });
     const sourceUrl = normalizeWebsiteUrl(input.websiteUrl);
     try {
-      const discoveredUrls = await discoverSiteUrls(sourceUrl, input.maxPages);
+      const sourceOrigin = new URL(sourceUrl).origin;
+      const previouslyCovered = input.scanMode === "products_only" ? priorJobs.filter(job => job.sourceOrigin === sourceOrigin && ["review_ready", "completed"].includes(job.status)).flatMap(job => job.discoveredUrls.filter(url => { try { return isProductDetailUrl(url); } catch { return false; } })) : [];
+      const discoveredUrls = await discoverSiteUrls(sourceUrl, input.maxPages, previouslyCovered);
       const now = Date.now();
       const inserted = await db.insert(websiteCrawlJobs).values({ organizationId: input.organizationId, sourceUrl, sourceOrigin: new URL(sourceUrl).origin, scanMode: input.scanMode, status: "crawling", discoveredUrls, cursor: 0, pagesDiscovered: discoveredUrls.length, pagesProcessed: 0, maxPages: input.maxPages, createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now });
       const jobId = Number(inserted[0].insertId);
-      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: input.scanMode === "products_only" ? "product_scan.started" : "website_crawl.started", entityType: "website_crawl_job", entityId: jobId, payload: { sourceUrl, scanMode: input.scanMode, pagesDiscovered: discoveredUrls.length, maxPages: input.maxPages } });
-      return { jobId, pagesDiscovered: discoveredUrls.length };
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: input.scanMode === "products_only" ? "product_scan.started" : "website_crawl.started", entityType: "website_crawl_job", entityId: jobId, payload: { sourceUrl, scanMode: input.scanMode, pagesDiscovered: discoveredUrls.length, maxPages: input.maxPages, previouslyCovered: new Set(previouslyCovered.map(canonicalProductIdentityUrl)).size } });
+      return { jobId, pagesDiscovered: discoveredUrls.length, previouslyCovered: new Set(previouslyCovered.map(canonicalProductIdentityUrl)).size };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Website discovery failed";
       await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "website_crawl.discovery_failed", entityType: "website", entityId: stableHash(sourceUrl).slice(0, 16), outcome: "failure", payload: { sourceUrl, message } });

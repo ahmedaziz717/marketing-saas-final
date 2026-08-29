@@ -79,3 +79,13 @@
 - [x] Re-run migration, TypeScript, full tests, production build, responsive catalog verification, and save the final corrected extraction checkpoint.
 - [x] Strengthen the retained live-site harness with exact flagship product-name assertions and canonical duplicate-collapse assertions.
 - [x] Save and auto-publish a new checkpoint containing the explicit product types, variant model, repaired catalog, retained live-site validation, and final checks.
+- [x] Align the website importer page-limit control with backend validation so values above the supported per-job ceiling cannot submit a raw schema error.
+- [x] Replace raw validation payloads with a clear user-facing explanation and actionable scan-more guidance.
+- [x] Add a scan-more continuation mode that begins after product URLs covered by prior completed jobs instead of rescanning only the same first page window.
+- [x] Persist continuation scope and prior coverage so subsequent product-only jobs advance through large product sitemaps in bounded request-sized batches.
+- [x] Continue deduplicating by organization-scoped canonical product URL and verified SKU across initial scans and all continuation jobs.
+- [x] Preserve approved product states and merge verified updated fields and first-class variants when a continuation job encounters an existing product.
+- [x] Prevent overlapping active continuation jobs while allowing repeated completed scan-more cycles.
+- [x] Add router-level regressions for the 250-page boundary, continuation coverage, canonical URL and SKU duplicate prevention, approval preservation, and active-job conflicts.
+- [x] Run migration if required, TypeScript, full tests, production build, responsive scan-control verification, and save the scan-more checkpoint.
+- [x] Save and auto-publish a new checkpoint containing the page-limit validation, continuation windows, cross-pass deduplication, and final validation.

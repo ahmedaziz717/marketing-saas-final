@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeUrl, extractPageEvidence, isExcludedProductUrl, isForbiddenIp, isProductDetailUrl, isProductSectionUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, parseSitemap, productCandidateFromEvidence, productSitemapPriority, sameSite } from "./lib/websiteCrawler";
+import { canonicalizeUrl, extractPageEvidence, isExcludedProductUrl, isForbiddenIp, isProductDetailUrl, isProductSectionUrl, mergeDiscoveredUrls, nextProductCatalogWindow, normalizeWebsiteUrl, parseSitemap, productCandidateFromEvidence, productCoverageIdentity, productSitemapPriority, sameSite } from "./lib/websiteCrawler";
 
 describe("crawl URL safety", () => {
   it("normalizes public web addresses and removes tracking parameters", () => {
@@ -38,6 +38,18 @@ describe("site evidence extraction", () => {
 
   it("prioritizes brand product families over low-level replacement parts in bounded scans", () => {
     expect(productSitemapPriority({ loc: "https://us.store.bambulab.com/products/h2d", title: "Bambu Lab H2D", lastmod: "2026-08-01" })).toBeGreaterThan(productSitemapPriority({ loc: "https://us.store.bambulab.com/products/replacement-control-board-fan", title: "Replacement Control Board Fan", lastmod: "2026-08-01" }));
+  });
+
+  it("advances through product catalogs in bounded 250-page windows without repeating canonical product URLs", () => {
+    const candidates = Array.from({ length: 520 }, (_, index) => `https://shop.example.com/products/item-${index + 1}`);
+    const first = nextProductCatalogWindow(candidates, [], 250);
+    const second = nextProductCatalogWindow(candidates, first, 250);
+    const third = nextProductCatalogWindow(candidates, [...first, ...second], 250);
+    expect(first).toHaveLength(250);
+    expect(second).toHaveLength(250);
+    expect(third).toHaveLength(20);
+    expect(new Set([...first, ...second, ...third].map(productCoverageIdentity)).size).toBe(520);
+    expect(nextProductCatalogWindow([`${candidates[0]}/?variant=1`, `${candidates[0]}?variant=2`], [candidates[0]!], 10)).toEqual([]);
   });
 
   it("extracts editable brand evidence and structured product provenance", () => {

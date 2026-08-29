@@ -41,6 +41,7 @@ import { invokeLLM } from "./_core/llm";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";
 import { productDedupeKey } from "./lib/brandImport";
+import { discoverSiteUrls } from "./lib/websiteCrawler";
 import { removeCatalogProducts } from "./routers/catalog";
 import { appRouter } from "./routers";
 
@@ -137,6 +138,7 @@ describe.sequential("crawl router repeat product scans", () => {
     const db = await getDb(); if (!db) throw new Error("Database unavailable");
     mockState.productUrl = "https://shop.router-test.example/products/apex?variant=first";
     mockState.productName = "Apex Printer";
+    await expect(caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 251, scanMode: "products_only" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const first = await caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" });
     await expect(caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" })).rejects.toMatchObject({ code: "CONFLICT" });
     await caller.crawl.processBatch({ organizationId, jobId: first.jobId, batchSize: 4 });
@@ -150,6 +152,8 @@ describe.sequential("crawl router repeat product scans", () => {
     mockState.productUrl = "https://shop.router-test.example/products/apex/?variant=second";
     mockState.productName = "Apex Printer Updated";
     const second = await caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" });
+    const secondDiscoveryCall = vi.mocked(discoverSiteUrls).mock.calls.at(-1);
+    expect(secondDiscoveryCall?.[2]).toContain(mockState.productUrl.replace("/?variant=second", "?variant=first"));
     await caller.crawl.processBatch({ organizationId, jobId: second.jobId, batchSize: 4 });
     const secondPage = (await db.select().from(websiteCrawlPages).where(and(eq(websiteCrawlPages.organizationId, organizationId), eq(websiteCrawlPages.jobId, second.jobId))).limit(1))[0]!;
     expect(secondPage.url).toContain("variant=second");

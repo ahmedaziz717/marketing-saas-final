@@ -311,10 +311,11 @@ export function productSitemapPriority(input: { loc: string; title: string; last
   return score;
 }
 
-export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
+export async function discoverSiteUrls(sourceUrl: string, maxPages: number, previouslyCovered: string[] = []) {
   const source = normalizeWebsiteUrl(sourceUrl);
   const origin = new URL(source).origin;
   const pages = new Set<string>([source]);
+  const covered = new Set(previouslyCovered.map(productCoverageIdentity));
   const featuredProductPages = new Set<string>();
   const productDetailPages = new Map<string, number>();
   const productIndexPages = new Set<string>();
@@ -366,10 +367,30 @@ export async function discoverSiteUrls(sourceUrl: string, maxPages: number) {
     });
   }
   const rankedSitemapProducts = Array.from(productDetailPages.entries()).sort((a, b) => b[1] - a[1]).map(([url]) => url);
-  for (const value of [...Array.from(featuredProductPages), ...rankedSitemapProducts, ...Array.from(productIndexPages)]) { if (pages.size >= maxPages) break; pages.add(value); }
+  for (const value of nextProductCatalogWindow([...Array.from(featuredProductPages), ...rankedSitemapProducts, ...Array.from(productIndexPages)], previouslyCovered, maxPages - pages.size)) { if (pages.size >= maxPages) break; pages.add(value); }
   const otherBudget = Math.max(8, Math.min(30, Math.floor(maxPages * 0.25)));
-  for (const value of Array.from(otherPages).slice(0, otherBudget)) { if (pages.size >= maxPages) break; pages.add(value); }
+  for (const value of Array.from(otherPages).slice(0, otherBudget)) { if (pages.size >= maxPages) break; if (!covered.has(canonicalizeUrl(value))) pages.add(value); }
   return Array.from(pages).slice(0, maxPages);
+}
+
+export function productCoverageIdentity(value: string) {
+  const url = new URL(canonicalizeUrl(value));
+  if (isProductDetailUrl(url.toString())) { url.search = ""; url.hash = ""; }
+  return url.toString().replace(/\/$/, "");
+}
+
+export function nextProductCatalogWindow(candidates: string[], previouslyCovered: string[], limit: number) {
+  const covered = new Set(previouslyCovered.map(productCoverageIdentity));
+  const selected: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const identity = productCoverageIdentity(candidate);
+    if (covered.has(identity) || seen.has(identity)) continue;
+    selected.push(canonicalizeUrl(candidate));
+    seen.add(identity);
+    if (selected.length >= Math.max(0, limit)) break;
+  }
+  return selected;
 }
 
 export function mergeDiscoveredUrls(existing: string[], discovered: string[], source: string, maxPages: number) {
