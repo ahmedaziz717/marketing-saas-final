@@ -95,3 +95,14 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const { url } = (await resp.json()) as { url: string };
   return url;
 }
+
+export async function storageGetBase64(relKey: string, maxBytes = 15 * 1024 * 1024): Promise<string> {
+  const url = await storageGetSignedUrl(relKey);
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Stored source image could not be read (${resp.status})`);
+  const contentLength = Number(resp.headers.get("content-length") ?? "0");
+  if (contentLength > maxBytes) throw new Error("Stored source image exceeds the generation input limit");
+  const bytes = Buffer.from(await resp.arrayBuffer());
+  if (bytes.length > maxBytes) throw new Error("Stored source image exceeds the generation input limit");
+  return bytes.toString("base64");
+}

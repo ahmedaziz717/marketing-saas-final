@@ -10,8 +10,9 @@ import { requireOrganizationRole } from "../lib/access";
 import { appendActivity } from "../lib/activity";
 import { generationBlockReason, stableHash } from "../lib/policy";
 import { requireLatestGptImageModel, requireLatestGptTextModel } from "../lib/models";
-import { storageGetSignedUrl } from "../storage";
+import { storageGetBase64 } from "../storage";
 import { importedProductCanBeUsed } from "../lib/brandImport";
+import { categorizeGenerationError, selectGenerationSources } from "../lib/generation";
 
 const conceptSchema = {
   type: "object",
@@ -55,7 +56,15 @@ export const creativesRouter = router({
       db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, input.organizationId)).orderBy(desc(creativeVariants.createdAtMs)),
       db.select().from(reviewComments).where(eq(reviewComments.organizationId, input.organizationId)).orderBy(desc(reviewComments.createdAtMs)),
     ]);
-    return { briefs, jobs, variants, comments };
+    return {
+      briefs,
+      jobs: jobs.map(job => ({
+        ...job,
+        errorMessage: job.errorMessage ? categorizeGenerationError(job.errorMessage).userMessage : null,
+      })),
+      variants,
+      comments,
+    };
   }),
 
   generate: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), briefId: z.number().int().positive(), count: z.number().int().min(2).max(4).default(3) })).mutation(async ({ ctx, input }) => {
@@ -93,9 +102,17 @@ export const creativesRouter = router({
       if (!Array.isArray(plan.concepts) || plan.concepts.length < 2) throw new Error("The creative plan did not contain enough concepts");
       const { models: imageModels } = await listImageModels();
       const imageModel = requireLatestGptImageModel(imageModels);
-      const brandSources = assets.filter(asset => asset.mimeType.startsWith("image/")).slice(0, 3).map(asset => ({ storageKey: asset.storageKey, mimeType: asset.mimeType }));
-      const productSources = selectedProductImages.sort((a, b) => b.isPrimary - a.isPrimary).slice(0, 3).map(image => ({ storageKey: image.storageKey, mimeType: image.storageKey.endsWith(".png") ? "image/png" : image.storageKey.endsWith(".webp") ? "image/webp" : "image/jpeg" }));
-      const sourceImages = await Promise.all([...brandSources, ...productSources].slice(0, 5).map(async asset => ({ url: await storageGetSignedUrl(asset.storageKey), mimeType: asset.mimeType })));
+      const brandSources = assets.map(asset => ({ storageKey: asset.storageKey, mimeType: asset.mimeType, kind: "brand" as const }));
+      const productSources = selectedProductImages.sort((a, b) => b.isPrimary - a.isPrimary).map(image => ({ storageKey: image.storageKey, mimeType: image.storageKey.endsWith(".png") ? "image/png" : image.storageKey.endsWith(".webp") ? "image/webp" : image.storageKey.endsWith(".gif") ? "image/gif" : "image/jpeg", kind: "product" as const }));
+      const selectedSources = selectGenerationSources(brandSources, productSources);
+      const sourceImages = (await Promise.all(selectedSources.supported.map(async source => {
+        try {
+          return { b64Json: await storageGetBase64(source.storageKey), mimeType: source.mimeType };
+        } catch {
+          return null;
+        }
+      }))).filter((source): source is { b64Json: string; mimeType: string } => source !== null);
+      if (!sourceImages.length) throw new Error("No readable raster source images were available");
       const generated = await Promise.all(plan.concepts.slice(0, input.count).map(async (concept, index) => {
         const image = await generateImage({ model: imageModel, quality: "medium", originalImages: sourceImages, prompt: `${concept.imagePrompt}\n\nCreate a premium Meta advertising image for ${kit.name}. Preserve the supplied product and logo assets accurately. Use the approved palette ${kit.colors.join(", ")}. The intended output format is ${brief.formats[index % brief.formats.length]}. Render no words, letters, prices, badges, or invented marks in the image. No prohibited content: ${kit.prohibitedContent || "none specified"}.` });
         if (!image.url) throw new Error(`Image generation failed for ${concept.name}`);
@@ -105,13 +122,14 @@ export const creativesRouter = router({
         await db.insert(creativeVariants).values({ organizationId: input.organizationId, jobId, briefId: brief.id, name: item.concept.name, concept: item.concept.concept, primaryText: item.concept.primaryText, headline: item.concept.headline, description: item.concept.description, callToAction: item.concept.callToAction, format: item.format, imageUrl: item.imageUrl, status: "pending", createdAtMs: Date.now() });
       }
       await db.update(creativeJobs).set({ status: "completed", completedAtMs: Date.now() }).where(eq(creativeJobs.id, jobId));
-      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.completed", entityType: "creative_job", entityId: jobId, payload: { variantCount: generated.length, languageModel, imageModel } });
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.completed", entityType: "creative_job", entityId: jobId, payload: { variantCount: generated.length, languageModel, imageModel, rasterSourceCount: sourceImages.length, unsupportedSourceCount: selectedSources.unsupportedCount } });
       return { jobId, variantCount: generated.length };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Creative generation failed";
+      const diagnostic = categorizeGenerationError(message);
       await db.update(creativeJobs).set({ status: "failed", errorMessage: message, completedAtMs: Date.now() }).where(eq(creativeJobs.id, jobId));
-      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.failed", entityType: "creative_job", entityId: jobId, outcome: "failure", payload: { message } });
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Generation failed safely. No creative was approved or published." });
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.failed", entityType: "creative_job", entityId: jobId, outcome: "failure", payload: { category: diagnostic.category } });
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${diagnostic.userMessage} No creative was approved or published.` });
     }
   }),
 

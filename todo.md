@@ -102,3 +102,17 @@
 - [x] Verify the authenticated brief dialog through the managed preview and confirm the post-fix log window contains no authentication or save errors.
 - [x] Keep the active Save draft action visibly available in the scrollable dialog so an authenticated managed-preview capture can verify the corrected control state.
 - [x] Re-run the authenticated brief-dialog screenshot and immediate post-walkthrough log review before checkpointing.
+- [x] Inspect the latest failed creative job’s persisted error, approved brief snapshot, selected products, selected assets, model identifiers, and runtime request logs.
+- [x] Confirm GPT-5.5 and GPT Image 2 remain available through the server-side platform gateway without requiring a user OpenAI API key.
+- [x] Fix the specific planning, structured-response, source-image, image-generation, timeout, or persistence failure causing the live generation job to fail.
+- [x] Preserve approved-input eligibility gates and ensure no failed or partial variant can become approved or publishable.
+- [x] Replace the generic generation failure with a safe actionable error category and retry guidance while keeping credentials and provider internals private.
+- [x] Add retry support that creates a new immutable job attempt while preserving the failed job and activity history.
+- [x] Add regressions for the exact live failure, model availability, partial-output safety, error categorization, and successful retry behavior.
+- [x] Run a real approved-brief generation attempt, TypeScript, full tests, production build, responsive studio verification, log review, and save the generation-fix checkpoint.
+- [x] Add a server regression proving a failed multi-variant attempt persists no partial creative variants and cannot create an approvable or publishable output.
+- [x] Add a generation retry regression proving a fresh job and activity record are created while the original failed job remains immutable.
+- [x] Execute and reference strict GPT-5.5 and GPT Image 2 availability regressions in the final generation-fix suite.
+- [x] Capture authenticated desktop and mobile Creative Review evidence showing the two variants from the successful retried job.
+- [x] Review only the post-generation walkthrough log window and confirm no current authentication, generation, network, or server errors.
+- [x] Save and auto-publish a new checkpoint containing the base64 raster-source fix, safe diagnostics, retry UX, and generation regressions.
