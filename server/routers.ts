@@ -10,6 +10,7 @@ import { creativesRouter } from "./routers/creatives";
 import { metaRouter } from "./routers/meta";
 import { crawlRouter } from "./routers/crawl";
 import { catalogRouter } from "./routers/catalog";
+import { creativeBuilderRouter } from "./routers/creativeBuilder";
 
 export const appRouter = router({
   system: systemRouter,
@@ -26,6 +27,7 @@ export const appRouter = router({
   briefs: briefsRouter,
   activity: activityRouter,
   creatives: creativesRouter,
+  creativeBuilder: creativeBuilderRouter,
   meta: metaRouter,
   crawl: crawlRouter,
   catalog: catalogRouter,

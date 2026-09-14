@@ -25,7 +25,7 @@ export const metaRouter = router({
     const [connection, requests, variants] = await Promise.all([
       db.select({ id: metaConnections.id, organizationId: metaConnections.organizationId, adAccountId: metaConnections.adAccountId, pageId: metaConnections.pageId, instagramActorId: metaConnections.instagramActorId, status: metaConnections.status, connectedAtMs: metaConnections.connectedAtMs, updatedAtMs: metaConnections.updatedAtMs }).from(metaConnections).where(eq(metaConnections.organizationId, input.organizationId)).limit(1),
       db.select().from(publishRequests).where(eq(publishRequests.organizationId, input.organizationId)).orderBy(desc(publishRequests.createdAtMs)),
-      db.select().from(creativeVariants).where(and(eq(creativeVariants.organizationId, input.organizationId), eq(creativeVariants.status, "approved"))).orderBy(desc(creativeVariants.reviewedAtMs)),
+      db.select().from(creativeVariants).where(and(eq(creativeVariants.organizationId, input.organizationId), eq(creativeVariants.status, "approved"), eq(creativeVariants.channel, "meta"))).orderBy(desc(creativeVariants.reviewedAtMs)),
     ]);
     return { connection: connection[0] ?? null, requests, variants };
   }),
@@ -52,6 +52,7 @@ export const metaRouter = router({
     const variant = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.id, input.variantId), eq(creativeVariants.organizationId, input.organizationId))).limit(1))[0];
     const connection = (await db.select().from(metaConnections).where(eq(metaConnections.organizationId, input.organizationId)).limit(1))[0];
     if (!variant || variant.status !== "approved") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The creative must be approved before a publish request can be created" });
+    if (variant.channel !== "meta") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Choose a Meta creative for Meta publishing. Other channels can be exported from Results." });
     if (!connection || connection.status !== "connected") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Connect a Meta ad account first" });
     if (input.action === "create" && !input.payload.adSetId) throw new TRPCError({ code: "BAD_REQUEST", message: "An ad set ID is required to create an ad" });
     if (input.action === "update" && !input.payload.adId) throw new TRPCError({ code: "BAD_REQUEST", message: "An ad ID is required to update an ad" });
@@ -84,6 +85,7 @@ export const metaRouter = router({
     const variant = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.id, request.variantId), eq(creativeVariants.organizationId, input.organizationId))).limit(1))[0];
     const connection = (await db.select().from(metaConnections).where(and(eq(metaConnections.id, request.connectionId), eq(metaConnections.organizationId, input.organizationId))).limit(1))[0];
     if (!variant || !connection) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Publishing dependencies are unavailable" });
+    if (variant.channel !== "meta") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This creative is not intended for Meta." });
     const currentHash = stableHash(request.payload);
     if (!canExecutePublish({ requestStatus: request.status, creativeStatus: variant.status, payloadHash: currentHash, approvedHash: request.approvedHash, connectionStatus: connection.status })) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Publishing is blocked because approval, creative status, connection status, or the frozen payload no longer matches" });
     if (!connection.accessTokenCiphertext || !connection.tokenIv || !connection.tokenTag || !connection.pageId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The Meta connection is incomplete" });

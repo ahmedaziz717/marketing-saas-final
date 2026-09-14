@@ -1,0 +1,233 @@
+import { z } from "zod";
+
+export const CREATIVE_CHANNELS = [
+  { id: "meta", name: "Meta" },
+  { id: "google_display", name: "Google Display" },
+  { id: "microsoft", name: "Microsoft Ads" },
+] as const;
+export type CreativeChannel = (typeof CREATIVE_CHANNELS)[number]["id"];
+
+export const CREATIVE_FORMATS = [
+  {
+    id: "square_1_1",
+    channel: "meta",
+    name: "Square",
+    width: 1080,
+    height: 1080,
+  },
+  {
+    id: "portrait_4_5",
+    channel: "meta",
+    name: "Portrait",
+    width: 1080,
+    height: 1350,
+  },
+  {
+    id: "story_9_16",
+    channel: "meta",
+    name: "Stories",
+    width: 1080,
+    height: 1920,
+  },
+  {
+    id: "google_rectangle",
+    channel: "google_display",
+    name: "Medium rectangle",
+    width: 300,
+    height: 250,
+  },
+  {
+    id: "google_large_rectangle",
+    channel: "google_display",
+    name: "Large rectangle",
+    width: 336,
+    height: 280,
+  },
+  {
+    id: "google_leaderboard",
+    channel: "google_display",
+    name: "Leaderboard",
+    width: 728,
+    height: 90,
+  },
+  {
+    id: "google_skyscraper",
+    channel: "google_display",
+    name: "Wide skyscraper",
+    width: 160,
+    height: 600,
+  },
+  {
+    id: "google_half_page",
+    channel: "google_display",
+    name: "Half page",
+    width: 300,
+    height: 600,
+  },
+  {
+    id: "microsoft_landscape",
+    channel: "microsoft",
+    name: "Landscape",
+    width: 1200,
+    height: 628,
+  },
+  {
+    id: "microsoft_square",
+    channel: "microsoft",
+    name: "Square",
+    width: 1200,
+    height: 1200,
+  },
+] as const;
+
+export const CREATIVE_THEMES = {
+  spotlight: {
+    name: "Product spotlight",
+    direction:
+      "Refined studio lighting, a clean background, and the product as the focal point.",
+    headline: "Your next favorite starts here",
+    subheadline: "Discover the details that make a difference.",
+    cta: "Explore",
+  },
+  holiday: {
+    name: "Holiday",
+    direction:
+      "Warm festive lighting and understated seasonal accents. Keep the product clearly recognizable.",
+    headline: "Make this season yours",
+    subheadline: "Find something special for the season.",
+    cta: "Shop now",
+  },
+  weekend: {
+    name: "Weekend",
+    direction:
+      "An inviting lifestyle atmosphere with confident color accents and a clear product focus.",
+    headline: "Make room for your weekend",
+    subheadline: "Discover something for your next chapter.",
+    cta: "Shop now",
+  },
+  launch: {
+    name: "New arrival",
+    direction:
+      "A bold reveal with deliberate negative space, crisp product detail, and a confident editorial composition.",
+    headline: "Meet what's next",
+    subheadline: "Take a closer look at our featured collection.",
+    cta: "Explore",
+  },
+} as const;
+
+export const SHOT_DIRECTIONS = {
+  product: "Product only. No people.",
+  female:
+    "Lifestyle setting with an adult female model using the product naturally.",
+  male: "Lifestyle setting with an adult male model using the product naturally.",
+} as const;
+
+export const creativeCopySchema = z.object({
+  headline: z.string().max(180),
+  subheadline: z.string().max(400),
+  cta: z.string().max(60),
+});
+export const creativeSetupSchema = z
+  .object({
+    version: z.literal(1),
+    name: z.string().trim().min(1).max(180),
+    theme: z.enum(["spotlight", "holiday", "weekend", "launch"]),
+    channels: z.array(z.enum(["meta", "google_display", "microsoft"])).max(3),
+    formatIds: z.array(z.string()).max(CREATIVE_FORMATS.length),
+    products: z
+      .array(
+        z.object({
+          productId: z.number().int().positive(),
+          imageId: z.number().int().positive(),
+          featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
+          includePrice: z.boolean().default(false),
+        })
+      )
+      .max(12),
+    productMode: z.enum(["separate", "together"]),
+    shot: z.enum(["product", "female", "male"]),
+    placement: z.enum(["auto", "left", "center", "right"]),
+    logoAssetId: z.number().int().positive().nullable(),
+    extraDirection: z.string().max(4000),
+    copy: creativeCopySchema,
+  })
+  .superRefine((setup, ctx) => {
+    if (
+      new Set(setup.channels).size !== setup.channels.length ||
+      new Set(setup.formatIds).size !== setup.formatIds.length ||
+      new Set(setup.products.map(p => p.productId)).size !==
+        setup.products.length
+    ) {
+      ctx.addIssue({ code: "custom", message: "Selections must be unique." });
+    }
+    for (const id of setup.formatIds) {
+      const format = CREATIVE_FORMATS.find(f => f.id === id);
+      if (!format || !setup.channels.includes(format.channel))
+        ctx.addIssue({
+          code: "custom",
+          path: ["formatIds"],
+          message: "Choose a supported size for a selected channel.",
+        });
+    }
+    if (setup.productMode === "together" && setup.products.length > 3)
+      ctx.addIssue({
+        code: "custom",
+        path: ["products"],
+        message:
+          "Combine up to three products in one image, or create separate sets.",
+      });
+  });
+export type CreativeSetup = z.infer<typeof creativeSetupSchema>;
+export type CreativeCopy = z.infer<typeof creativeCopySchema>;
+
+export function defaultCreativeSetup(): CreativeSetup {
+  const theme = CREATIVE_THEMES.spotlight;
+  return {
+    version: 1,
+    name: "Product spotlight",
+    theme: "spotlight",
+    channels: ["meta"],
+    formatIds: ["square_1_1", "portrait_4_5", "story_9_16"],
+    products: [],
+    productMode: "separate",
+    shot: "product",
+    placement: "auto",
+    logoAssetId: null,
+    extraDirection: "",
+    copy: {
+      headline: theme.headline,
+      subheadline: theme.subheadline,
+      cta: theme.cta,
+    },
+  };
+}
+export function outputCount(setup: CreativeSetup) {
+  return (
+    setup.formatIds.length *
+    (setup.productMode === "together"
+      ? Math.min(1, setup.products.length)
+      : setup.products.length)
+  );
+}
+export function generationSetupIssues(setup: CreativeSetup) {
+  const issues: string[] = [];
+  if (!setup.products.length) issues.push("Select at least one product.");
+  if (!setup.formatIds.length) issues.push("Select at least one size.");
+  if (!setup.copy.headline.trim() || !setup.copy.cta.trim())
+    issues.push("Add a headline and call to action.");
+  if (outputCount(setup) > 24)
+    issues.push(
+      "Create up to 24 images per set. Reduce the selected products or sizes."
+    );
+  return issues;
+}
+export function formatDetails(id: string) {
+  return CREATIVE_FORMATS.find(format => format.id === id);
+}
+export function metaCallToAction(label: string) {
+  const text = label.trim().toLowerCase();
+  if (/sign|register|join/.test(text)) return "SIGN_UP";
+  if (/offer|deal/.test(text)) return "GET_OFFER";
+  if (/shop|buy|order/.test(text)) return "SHOP_NOW";
+  return "LEARN_MORE";
+}

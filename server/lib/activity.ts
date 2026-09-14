@@ -1,26 +1,46 @@
 import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
-import { activityEvents } from "../../drizzle/schema";
+import { activityEvents, organizations } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { stableHash } from "./policy";
 
-export async function appendActivity(input: {
-  organizationId: number;
-  actorUserId: number;
-  action: string;
-  entityType: string;
-  entityId: string | number;
-  outcome?: "success" | "failure";
-  payload?: Record<string, unknown>;
-  correlationId?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database unavailable");
-  const previous = (await db.select({ eventHash: activityEvents.eventHash })
-    .from(activityEvents)
-    .where(eq(activityEvents.organizationId, input.organizationId))
-    .orderBy(desc(activityEvents.id))
-    .limit(1))[0];
+type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+type ActivityDatabase = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+export async function appendActivity(
+  input: {
+    organizationId: number;
+    actorUserId: number;
+    action: string;
+    entityType: string;
+    entityId: string | number;
+    outcome?: "success" | "failure";
+    payload?: Record<string, unknown>;
+    correlationId?: string;
+  },
+  transaction?: ActivityDatabase
+): Promise<void> {
+  if (!transaction) {
+    const database = await getDb();
+    if (!database) throw new Error("Database unavailable");
+    return database.transaction(tx => appendActivity(input, tx));
+  }
+  const db = transaction;
+  // Serialize the chain per company, including simultaneous background jobs.
+  await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.id, input.organizationId))
+    .limit(1)
+    .for("update");
+  const previous = (
+    await db
+      .select({ eventHash: activityEvents.eventHash })
+      .from(activityEvents)
+      .where(eq(activityEvents.organizationId, input.organizationId))
+      .orderBy(desc(activityEvents.id))
+      .limit(1)
+  )[0];
   const correlationId = input.correlationId ?? randomUUID();
   const createdAtMs = Date.now();
   const event = {
@@ -35,32 +55,38 @@ export async function appendActivity(input: {
     previousHash: previous?.eventHash ?? null,
     createdAtMs,
   } as const;
-  await db.insert(activityEvents).values({ ...event, eventHash: stableHash(event) });
+  await db
+    .insert(activityEvents)
+    .values({ ...event, eventHash: stableHash(event) });
 }
 
 export async function listActivity(organizationId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  return db.select().from(activityEvents)
+  return db
+    .select()
+    .from(activityEvents)
     .where(eq(activityEvents.organizationId, organizationId))
     .orderBy(desc(activityEvents.id))
     .limit(250);
 }
 
-export function verifyActivityChain(events: Array<{
-  id: number;
-  organizationId: number;
-  actorUserId: number;
-  action: string;
-  entityType: string;
-  entityId: string;
-  outcome: "success" | "failure";
-  payload: Record<string, unknown> | null;
-  correlationId: string;
-  previousHash: string | null;
-  eventHash: string;
-  createdAtMs: number;
-}>) {
+export function verifyActivityChain(
+  events: Array<{
+    id: number;
+    organizationId: number;
+    actorUserId: number;
+    action: string;
+    entityType: string;
+    entityId: string;
+    outcome: "success" | "failure";
+    payload: Record<string, unknown> | null;
+    correlationId: string;
+    previousHash: string | null;
+    eventHash: string;
+    createdAtMs: number;
+  }>
+) {
   const ordered = [...events].sort((a, b) => a.id - b.id);
   return ordered.every((event, index) => {
     const expectedPrevious = index === 0 ? null : ordered[index - 1]!.eventHash;
@@ -76,6 +102,9 @@ export function verifyActivityChain(events: Array<{
       previousHash: event.previousHash,
       createdAtMs: event.createdAtMs,
     };
-    return event.previousHash === expectedPrevious && stableHash(hashInput) === event.eventHash;
+    return (
+      event.previousHash === expectedPrevious &&
+      stableHash(hashInput) === event.eventHash
+    );
   });
 }

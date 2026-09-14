@@ -14,7 +14,7 @@ vi.mock("./_core/llm", () => ({
 }));
 
 vi.mock("./_core/imageGeneration", () => ({
-  listImageModels: vi.fn(async () => ({ models: [{ model: "MODEL_GPT_IMAGE_2", id: "gpt-image-2" }] })),
+  listImageModels: vi.fn(async () => ({ models: [{ model: "provider-advertised-value", id: "gpt-image-2.5-sunburst" }] })),
   generateImage: vi.fn(async () => {
     generationState.calls += 1;
     if (generationState.failSecond && generationState.calls === 2) throw new Error("HTTP 403: Forbidden for source image");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  REQUIRED_IMAGE_MODEL_ENUM,
+  REQUIRED_IMAGE_MODEL_ID,
   REQUIRED_TEXT_MODEL_ID,
   requireLatestGptImageModel,
   requireLatestGptTextModel,
@@ -12,8 +12,8 @@ describe("GPT-only model policy", () => {
     expect(() => requireLatestGptTextModel([{ id: "gpt-5-mini" }, { id: "gemini-3-flash-preview" }])).toThrow(REQUIRED_TEXT_MODEL_ID);
   });
 
-  it("requires GPT Image 2 rather than falling back to a different image model", () => {
-    expect(requireLatestGptImageModel([{ model: "MODEL_GEMINI_2_5_FLASH_IMAGE" }, { model: REQUIRED_IMAGE_MODEL_ENUM }])).toBe(REQUIRED_IMAGE_MODEL_ENUM);
-    expect(() => requireLatestGptImageModel([{ model: "MODEL_GEMINI_2_5_FLASH_IMAGE" }])).toThrow(REQUIRED_IMAGE_MODEL_ENUM);
+  it("requires the exact requested image model rather than falling back to a different image model", () => {
+    expect(requireLatestGptImageModel([{ model: "old-enum", id: "gpt-image-2" }, { model: "provider-advertised-value", id: REQUIRED_IMAGE_MODEL_ID }])).toBe("provider-advertised-value");
+    expect(() => requireLatestGptImageModel([{ model: "MODEL_GEMINI_2_5_FLASH_IMAGE" }])).toThrow(REQUIRED_IMAGE_MODEL_ID);
   });
 });

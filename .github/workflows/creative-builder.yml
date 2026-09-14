@@ -1,0 +1,34 @@
+name: Creative Builder checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ephemeral-test-password
+          MYSQL_DATABASE: creative_builder_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pephemeral-test-password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: mysql://root:ephemeral-test-password@127.0.0.1:3306/creative_builder_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec drizzle-kit migrate
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build

@@ -1,3 +1,4 @@
+import { recoverExpiredBuilderJobs } from "../lib/creativeJobs";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -46,10 +47,29 @@ type ConceptPlan = {
 };
 
 export const creativesRouter = router({
+  download: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), variantId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const variant = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.id, input.variantId), eq(creativeVariants.organizationId, input.organizationId))).limit(1))[0];
+    if (!variant) throw new TRPCError({ code: "NOT_FOUND", message: "Creative not found." });
+    const key = variant.imageStorageKey ?? (variant.imageUrl.startsWith("/manus-storage/") ? variant.imageUrl.slice("/manus-storage/".length) : null);
+    if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This image is not available for download." });
+    try {
+      const base64 = await storageGetBase64(key);
+      const bytes = Buffer.from(base64, "base64");
+      const extension = bytes.subarray(1, 4).toString() === "PNG" ? "png" : bytes[0] === 0xff && bytes[1] === 0xd8 ? "jpg" : bytes.subarray(8, 12).toString() === "WEBP" ? "webp" : null;
+      if (!extension) throw new Error("Unsupported export image");
+      return { base64, mimeType: extension === "jpg" ? "image/jpeg" : "image/" + extension, fileName: (variant.name.replace(/[^a-z0-9]+/gi, "-").slice(0, 100) || "creative") + "." + extension };
+    } catch {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "The image could not be downloaded. Please try again." });
+    }
+  }),
   overview: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await recoverExpiredBuilderJobs(db, input.organizationId);
     const [briefs, jobs, variants, comments] = await Promise.all([
       db.select().from(campaignBriefs).where(and(eq(campaignBriefs.organizationId, input.organizationId), eq(campaignBriefs.status, "approved"))).orderBy(desc(campaignBriefs.updatedAtMs)),
       db.select().from(creativeJobs).where(eq(creativeJobs.organizationId, input.organizationId)).orderBy(desc(creativeJobs.createdAtMs)),

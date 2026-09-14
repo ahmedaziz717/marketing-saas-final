@@ -15,13 +15,10 @@
  *     }]
  *   });
  */
-import { storagePut } from "server/storage";
+import { storagePut } from "../storage";
 import { ENV } from "./env";
-
-// Default model for generated sites. "MODEL_GPT_IMAGE_2" is the forge images.v1
-// enum for GPT Image 2 (id: gpt-image-2). If omitted, forge falls back to Gemini 2.5 Flash.
-const DEFAULT_IMAGE_MODEL = "MODEL_GPT_IMAGE_2";
-const DEFAULT_IMAGE_QUALITY = "medium";
+import { requireLatestGptImageModel } from "../lib/models";
+import { prepareCreativeOutput } from "../lib/creativeImages";
 
 export type GenerateImageOptions = {
   prompt: string;
@@ -30,14 +27,17 @@ export type GenerateImageOptions = {
     b64Json?: string;
     mimeType?: string;
   }>;
-  /** Forge image model enum, e.g. "MODEL_GPT_IMAGE_2". Defaults to GPT Image 2. */
+  /** Server-resolved Forge model enum. Never supplied by the browser. */
   model?: string;
-  /** Generation quality, e.g. "medium" | "high". Defaults to "medium" for GPT Image 2. */
+  /** Generation quality. Defaults to medium. */
   quality?: string;
+  outputSize?: { width: number; height: number; background: string };
+  storagePrefix?: string;
 };
 
 export type GenerateImageResponse = {
   url?: string;
+  storageKey?: string;
 };
 
 export async function generateImage(
@@ -59,12 +59,14 @@ export async function generateImage(
     baseUrl
   ).toString();
 
-  const model = options.model ?? DEFAULT_IMAGE_MODEL;
-  const quality =
-    options.quality ?? (model === DEFAULT_IMAGE_MODEL ? DEFAULT_IMAGE_QUALITY : undefined);
+  const model =
+    options.model ??
+    requireLatestGptImageModel((await listImageModels()).models);
+  const quality = options.quality ?? "medium";
 
   const response = await fetch(fullUrl, {
     method: "POST",
+    signal: AbortSignal.timeout(300_000),
     headers: {
       accept: "application/json",
       "content-type": "application/json",
@@ -92,24 +94,35 @@ export async function generateImage(
       mimeType: string;
     };
   };
-  const base64Data = result.image.b64Json;
-  const buffer = Buffer.from(base64Data, "base64");
-
-  // Save to S3
-  const { url } = await storagePut(
-    `generated/${Date.now()}.png`,
+  if (
+    !result.image?.b64Json ||
+    !["image/png", "image/jpeg", "image/webp"].includes(result.image.mimeType)
+  ) {
+    throw new Error("Image generation returned an invalid image");
+  }
+  const rawBytes = Buffer.from(result.image.b64Json, "base64");
+  const buffer = options.outputSize
+    ? await prepareCreativeOutput(rawBytes, options.outputSize)
+    : rawBytes;
+  const mimeType = options.outputSize ? "image/png" : result.image.mimeType;
+  const extension =
+    mimeType === "image/jpeg"
+      ? "jpg"
+      : mimeType === "image/webp"
+        ? "webp"
+        : "png";
+  const stored = await storagePut(
+    (options.storagePrefix || "generated") + "/" + Date.now() + "." + extension,
     buffer,
-    result.image.mimeType
+    mimeType
   );
-  return {
-    url,
-  };
+  return { url: stored.url, storageKey: stored.key };
 }
 
 export type ImageModelInfo = {
-  /** Forge model enum, e.g. "MODEL_GPT_IMAGE_2". Pass into generateImage({ model }). */
+  /** Provider-advertised enum. Pass into generateImage({ model }). */
   model?: string;
-  /** Stable model id, e.g. "gpt-image-2". */
+  /** Stable public model ID used for exact server-side resolution. */
   id?: string;
 };
 
@@ -146,6 +159,7 @@ export async function listImageModels(): Promise<ListImageModelsResponse> {
       authorization: `Bearer ${ENV.forgeApiKey}`,
     },
     body: "{}",
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
