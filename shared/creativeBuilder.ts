@@ -1,4 +1,20 @@
 import { z } from "zod";
+import {
+  CREATIVE_THEMES,
+  DEFAULT_CREATIVE_BASE_PROMPT,
+  getCreativeTheme,
+  type CreativeThemeId,
+} from "./creativeThemes";
+
+export {
+  CREATIVE_THEME_GROUPS,
+  CREATIVE_THEME_LIST,
+  CREATIVE_THEMES,
+  DEFAULT_CREATIVE_BASE_PROMPT,
+  getCreativeTheme,
+  getCreativeThemeGroup,
+} from "./creativeThemes";
+export type { CreativeTheme, CreativeThemeIcon, CreativeThemeId } from "./creativeThemes";
 
 export const CREATIVE_CHANNELS = [
   { id: "meta", name: "Meta" },
@@ -80,41 +96,6 @@ export const CREATIVE_FORMATS = [
   },
 ] as const;
 
-export const CREATIVE_THEMES = {
-  spotlight: {
-    name: "Product spotlight",
-    direction:
-      "Refined studio lighting, a clean background, and the product as the focal point.",
-    headline: "Your next favorite starts here",
-    subheadline: "Discover the details that make a difference.",
-    cta: "Explore",
-  },
-  holiday: {
-    name: "Holiday",
-    direction:
-      "Warm festive lighting and understated seasonal accents. Keep the product clearly recognizable.",
-    headline: "Make this season yours",
-    subheadline: "Find something special for the season.",
-    cta: "Shop now",
-  },
-  weekend: {
-    name: "Weekend",
-    direction:
-      "An inviting lifestyle atmosphere with confident color accents and a clear product focus.",
-    headline: "Make room for your weekend",
-    subheadline: "Discover something for your next chapter.",
-    cta: "Shop now",
-  },
-  launch: {
-    name: "New arrival",
-    direction:
-      "A bold reveal with deliberate negative space, crisp product detail, and a confident editorial composition.",
-    headline: "Meet what's next",
-    subheadline: "Take a closer look at our featured collection.",
-    cta: "Explore",
-  },
-} as const;
-
 export const SHOT_DIRECTIONS = {
   product: "Product only. No people.",
   female:
@@ -131,7 +112,12 @@ export const creativeSetupSchema = z
   .object({
     version: z.literal(1),
     name: z.string().trim().min(1).max(180),
-    theme: z.enum(["spotlight", "holiday", "weekend", "launch"]),
+    theme: z.custom<CreativeThemeId>(
+      value => typeof value === "string" && Boolean(CREATIVE_THEMES[value]),
+      { message: "Choose a supported creative theme." }
+    ),
+    basePrompt: z.string().trim().min(20).max(8000).default(DEFAULT_CREATIVE_BASE_PROMPT),
+    themePrompt: z.string().trim().min(10).max(4000).optional(),
     channels: z.array(z.enum(["meta", "google_display", "microsoft"])).max(3),
     formatIds: z.array(z.string()).max(CREATIVE_FORMATS.length),
     products: z
@@ -152,6 +138,7 @@ export const creativeSetupSchema = z
     copy: creativeCopySchema,
   })
   .superRefine((setup, ctx) => {
+    if (!setup.themePrompt) setup.themePrompt = getCreativeTheme(setup.theme).direction;
     if (
       new Set(setup.channels).size !== setup.channels.length ||
       new Set(setup.formatIds).size !== setup.formatIds.length ||
@@ -181,11 +168,13 @@ export type CreativeSetup = z.infer<typeof creativeSetupSchema>;
 export type CreativeCopy = z.infer<typeof creativeCopySchema>;
 
 export function defaultCreativeSetup(): CreativeSetup {
-  const theme = CREATIVE_THEMES.spotlight;
+  const theme = getCreativeTheme("spotlight");
   return {
     version: 1,
     name: "Product spotlight",
     theme: "spotlight",
+    basePrompt: DEFAULT_CREATIVE_BASE_PROMPT,
+    themePrompt: theme.direction,
     channels: ["meta"],
     formatIds: ["square_1_1", "portrait_4_5", "story_9_16"],
     products: [],

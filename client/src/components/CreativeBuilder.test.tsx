@@ -7,7 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CREATIVE_THEMES } from "@shared/creativeBuilder";
+import {
+  CREATIVE_THEMES,
+  DEFAULT_CREATIVE_BASE_PROMPT,
+  defaultCreativeSetup,
+} from "@shared/creativeBuilder";
 
 const api = vi.hoisted(() => ({
   role: "owner",
@@ -80,6 +84,61 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Creative Builder controls", () => {
+  it("searches monthly themes and saves editable main and theme prompt layers", async () => {
+    render(<CreativeBuilder onGenerated={vi.fn()} />);
+    expect(screen.getByText(/100 directions/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Search creative themes"), {
+      target: { value: "Cyber Monday" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cyber Monday" }));
+    expect((screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value).toContain("Digital deal atmosphere");
+    fireEvent.change(screen.getByLabelText("Main prompt"), {
+      target: { value: "Create a precise premium commerce composition with generous safe space." },
+    });
+    fireEvent.change(screen.getByLabelText("Theme prompt"), {
+      target: { value: "Use electric cyan data light with a restrained violet retail-event atmosphere." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+    await waitFor(() => expect(api.save.mutateAsync).toHaveBeenCalled());
+    expect(api.save.mutateAsync.mock.calls[0][0]).toMatchObject({
+      setup: {
+        theme: "cyber-monday",
+        basePrompt: "Create a precise premium commerce composition with generous safe space.",
+        themePrompt: "Use electric cyan data light with a restrained violet retail-event atmosphere.",
+      },
+    });
+  });
+
+  it("resets both prompt layers and restores saved prompt overrides", async () => {
+    const savedSetup = {
+      ...defaultCreativeSetup(),
+      theme: "cyber-monday" as const,
+      basePrompt: "Saved main prompt for a premium retail composition.",
+      themePrompt: "Saved theme prompt with cyan data light and restrained violet depth.",
+    };
+    api.options.drafts = [
+      { id: 44, name: "Saved Cyber", setup: savedSetup, updatedAtMs: 55 },
+    ];
+    render(<CreativeBuilder onGenerated={vi.fn()} />);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Main prompt") as HTMLTextAreaElement).value
+      ).toBe(savedSetup.basePrompt)
+    );
+    expect(
+      (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
+    ).toBe(savedSetup.themePrompt);
+    const resetButtons = screen.getAllByRole("button", { name: "Reset" });
+    fireEvent.click(resetButtons[0]);
+    fireEvent.click(resetButtons[1]);
+    expect(
+      (screen.getByLabelText("Main prompt") as HTMLTextAreaElement).value
+    ).toBe(DEFAULT_CREATIVE_BASE_PROMPT);
+    expect(
+      (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
+    ).toBe(CREATIVE_THEMES["cyber-monday"].direction);
+  });
+
   it("shows sizes after a channel is selected and preserves manually edited copy when changing themes", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.queryByText("300 × 250")).toBeNull();

@@ -116,3 +116,21 @@
 - [x] Capture authenticated desktop and mobile Creative Review evidence showing the two variants from the successful retried job.
 - [x] Review only the post-generation walkthrough log window and confirm no current authentication, generation, network, or server errors.
 - [x] Save and auto-publish a new checkpoint containing the base64 raster-source fix, safe diagnostics, retry UX, and generation regressions.
+- [x] Inspect `drizzle/0006_theme_first_creative_builder.sql` and confirm it contains only the reviewed additive and enum-expansion changes.
+- [x] Inspect the actual published database column definitions, campaign channel enum, table record counts, and Drizzle migration ledger without exposing credentials.
+- [x] Reproduce and capture the underlying database error codes for missing `campaign_briefs.creativeSetup` and `creative_jobs.leaseExpiresAtMs`.
+- [x] Determine whether migration 0006 is wholly unapplied, partially applied, or absent from a consistent Drizzle ledger.
+- [x] Apply migration 0006 through the ledger when consistent, otherwise reconcile only missing reviewed non-destructive changes in dependency-safe order.
+- [x] Verify `campaign_briefs.creativeSetup`, `creative_jobs.leaseExpiresAtMs`, `creative_variants.channel`, and `creative_variants.renderMetadata` exist with the reviewed types and defaults.
+- [x] Verify the `campaign_briefs.channel` enum includes `meta`, `google_display`, `microsoft`, and `multi_channel` while preserving all existing records and permissions.
+- [x] Verify authenticated `creativeBuilder.options` and `creatives.overview` succeed against the published app without invoking paid generation or advertising actions.
+- [x] Reload the published `/app/creatives` route and confirm both Create and Results render without current SQL, browser, network, or server errors.
+- [x] Report the exact migration path, SQL changes applied, database error code, preserved record counts, and published verification result.
+- [x] Audit the current Frame Creative Builder theme definitions, saved setup schema, prompt composition, and read-only MSCC theme taxonomy without modifying MSCC.
+- [x] Define approximately 100 icon-led themes grouped into Always On, General/Evergreen, and January through December, with stable IDs and production-ready theme prompts.
+- [x] Add searchable and collapsible grouped theme selection to the Creative Builder with clear selected-state and keyboard-accessible controls.
+- [x] Expose the editable main/base prompt and selected theme prompt before generation, with reset-to-default actions and clear prompt-layer labels.
+- [x] Persist selected theme ID, base prompt override, and theme prompt override in campaign brief creativeSetup and saved setup controls.
+- [x] Compose generation input from approved product facts, editable base prompt, editable theme prompt, format guidance, and existing policy safeguards without changing models.
+- [x] Add regressions for theme count and groups, unique stable IDs, icon coverage, prompt editing and reset, saved setup restoration, and final prompt composition.
+- [x] Run TypeScript, full tests, production build, authenticated desktop/mobile Creative Builder verification, runtime log review, and save the theme-library checkpoint.

@@ -202,6 +202,11 @@ afterAll(async () => {
 describe.sequential("persistent creative builder", () => {
   it("round-trips setup fields and rejects stale edits", async () => {
     const draft = setup();
+    draft.theme = "cyber-monday";
+    draft.basePrompt =
+      "Create a premium product-led commerce composition with clear hierarchy and generous safe space.";
+    draft.themePrompt =
+      "Use electric cyan data light, restrained violet depth, and a polished digital retail-event atmosphere.";
     draft.extraDirection = "Warm evening light";
     const saved = await caller.creativeBuilder.save({
       organizationId,
@@ -211,6 +216,11 @@ describe.sequential("persistent creative builder", () => {
       await caller.creativeBuilder.options({ organizationId })
     ).drafts.find(item => item.id === saved.briefId);
     expect(loaded?.setup).toEqual(draft);
+    expect(loaded?.setup).toMatchObject({
+      theme: "cyber-monday",
+      basePrompt: draft.basePrompt,
+      themePrompt: draft.themePrompt,
+    });
     await expect(
       caller.creativeBuilder.save({
         organizationId,

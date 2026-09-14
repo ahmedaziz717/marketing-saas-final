@@ -14,6 +14,7 @@ import {
   CREATIVE_THEMES,
   creativeCopySchema,
   creativeSetupSchema,
+  getCreativeTheme,
   formatDetails,
   generationSetupIssues,
   metaCallToAction,
@@ -371,8 +372,10 @@ export const creativeBuilderRouter = router({
         placements: input.setup.channels,
         formats: input.setup.formatIds,
         creativeDirection:
-          CREATIVE_THEMES[input.setup.theme].direction +
-          "\n" +
+          input.setup.basePrompt +
+          "\n\n" +
+          (input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction) +
+          "\n\n" +
           input.setup.extraDirection,
         assetIds: input.setup.logoAssetId ? [input.setup.logoAssetId] : [],
         productIds: input.setup.products.map(product => product.productId),
@@ -457,7 +460,11 @@ export const creativeBuilderRouter = router({
             {
               role: "user",
               content: JSON.stringify({
-                theme: CREATIVE_THEMES[input.setup.theme],
+                theme: {
+                  ...getCreativeTheme(input.setup.theme),
+                  prompt: input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction,
+                },
+                basePrompt: input.setup.basePrompt,
                 shot: input.setup.shot,
                 placement: input.setup.placement,
                 extraDirection: input.setup.extraDirection,

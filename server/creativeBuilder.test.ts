@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CREATIVE_THEME_GROUPS,
+  CREATIVE_THEME_LIST,
   CREATIVE_THEMES,
+  DEFAULT_CREATIVE_BASE_PROMPT,
   creativeSetupSchema,
   defaultCreativeSetup,
   generationSetupIssues,
@@ -64,6 +67,37 @@ const setup = () => ({
 });
 
 describe("creative setup and trusted catalog inputs", () => {
+  it("provides exactly 100 uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
+    expect(CREATIVE_THEME_LIST).toHaveLength(100);
+    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(100);
+    expect(CREATIVE_THEME_GROUPS.map(group => group.name)).toEqual([
+      "Always On",
+      "General / Evergreen",
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ]);
+    expect(CREATIVE_THEME_LIST.every(theme => theme.icon && theme.direction.length >= 20)).toBe(true);
+  });
+
+  it("restores legacy saved setups with default prompt layers", () => {
+    const legacy = defaultCreativeSetup() as Record<string, unknown>;
+    delete legacy.basePrompt;
+    delete legacy.themePrompt;
+    const parsed = creativeSetupSchema.parse(legacy);
+    expect(parsed.basePrompt).toBe(DEFAULT_CREATIVE_BASE_PROMPT);
+    expect(parsed.themePrompt).toBe(CREATIVE_THEMES.spotlight.direction);
+  });
+
   it("accepts incomplete saved setups but blocks generation until product and size selections are complete", () => {
     expect(creativeSetupSchema.safeParse(defaultCreativeSetup()).success).toBe(
       true
@@ -172,6 +206,8 @@ describe("creative setup and trusted catalog inputs", () => {
     const selection = {
       ...setup(),
       theme: "weekend" as const,
+      basePrompt: "Use an editorial product-ad composition with confident whitespace and premium lighting.",
+      themePrompt: "Use warm weekend sunlight, relaxed energy, and a welcoming lifestyle setting.",
       shot: "female" as const,
       placement: "right" as const,
       extraDirection: "Warm window light",
@@ -195,6 +231,8 @@ describe("creative setup and trusted catalog inputs", () => {
       "FIRST reference is the master",
       "1080 by 1920",
       CREATIVE_THEMES.weekend.name,
+      selection.basePrompt,
+      selection.themePrompt,
       "adult",
       "right",
       "Warm window light",

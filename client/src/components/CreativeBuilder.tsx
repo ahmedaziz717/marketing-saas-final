@@ -16,11 +16,12 @@ import { toast } from "sonner";
 import {
   CREATIVE_CHANNELS,
   CREATIVE_FORMATS,
-  CREATIVE_THEMES,
+  DEFAULT_CREATIVE_BASE_PROMPT,
   creativeSetupSchema,
   defaultCreativeSetup,
   formatDetails,
   generationSetupIssues,
+  getCreativeTheme,
   outputCount,
   type CreativeCopy,
   type CreativeSetup,
@@ -28,6 +29,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "./ui/button";
+import { CreativeThemeLibrary } from "./CreativeThemeLibrary";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import {
@@ -382,43 +384,73 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <h2 className="mb-3 mt-6 text-base font-semibold">
               1. Choose a theme
             </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {Object.entries(CREATIVE_THEMES).map(([id, theme]) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={setup.theme === id}
-                  className={
-                    "rounded-xl border px-3 py-4 text-left text-sm transition " +
-                    (setup.theme === id
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border hover:bg-muted/50")
-                  }
-                  onClick={() => {
-                    const copy = { ...setup.copy };
-                    (["headline", "subheadline", "cta"] as const).forEach(
-                      key => {
-                        if (!copyEdited[key]) copy[key] = theme[key];
-                      }
-                    );
-                    setUndoCopy(null);
-                    change({
-                      ...setup,
-                      theme: id as CreativeSetup["theme"],
-                      copy,
-                    });
-                  }}
-                >
-                  <span className="mb-3 flex h-5 items-center">
-                    {setup.theme === id && <Check className="h-4 w-4" />}
-                  </span>
-                  {theme.name}
-                </button>
-              ))}
+            <CreativeThemeLibrary
+              selectedTheme={setup.theme}
+              onSelect={theme => {
+                const copy = { ...setup.copy };
+                (["headline", "subheadline", "cta"] as const).forEach(key => {
+                  if (!copyEdited[key]) copy[key] = theme[key];
+                });
+                setUndoCopy(null);
+                change({
+                  ...setup,
+                  theme: theme.id,
+                  themePrompt: theme.direction,
+                  copy,
+                });
+              }}
+            />
+            <div className="mt-5 grid gap-4 rounded-2xl border border-border bg-muted/25 p-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <label className="text-sm font-medium" htmlFor="creative-base-prompt">Main prompt</label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Applied to every creative in this setup.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => change({ ...setup, basePrompt: DEFAULT_CREATIVE_BASE_PROMPT })}
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reset
+                  </Button>
+                </div>
+                <Textarea
+                  id="creative-base-prompt"
+                  value={setup.basePrompt}
+                  maxLength={8000}
+                  rows={6}
+                  onChange={event => change({ ...setup, basePrompt: event.target.value })}
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <label className="text-sm font-medium" htmlFor="creative-theme-prompt">Theme prompt</label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Starts from the selected theme and remains fully editable.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => change({ ...setup, themePrompt: getCreativeTheme(setup.theme).direction })}
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reset
+                  </Button>
+                </div>
+                <Textarea
+                  id="creative-theme-prompt"
+                  value={setup.themePrompt ?? getCreativeTheme(setup.theme).direction}
+                  maxLength={4000}
+                  rows={4}
+                  onChange={event => change({ ...setup, themePrompt: event.target.value })}
+                />
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Prompt edits guide styling and composition only. Approved product facts, claims, logo rules, and publishing safeguards remain authoritative.
+              </p>
             </div>
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              {CREATIVE_THEMES[setup.theme].direction}
-            </p>
           </section>
           <section className={sectionClass}>
             <h2 className="mb-3 text-base font-semibold">
@@ -1070,7 +1102,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
             </DialogTitle>
             <DialogDescription>
               {count} images using{" "}
-              {CREATIVE_THEMES[setup.theme].name.toLowerCase()} direction. All
+              {getCreativeTheme(setup.theme).name.toLowerCase()} direction. All
               results start pending review.
             </DialogDescription>
           </DialogHeader>
@@ -1118,6 +1150,19 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <p className="mt-2 text-sm">{setup.copy.subheadline}</p>
             <p className="mt-2 text-sm font-medium">{setup.copy.cta}</p>
           </div>
+          <details className="rounded-xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Prompt layers used for generation</summary>
+            <div className="mt-4 space-y-4 text-xs leading-5 text-muted-foreground">
+              <div>
+                <p className="font-semibold text-foreground">Main prompt</p>
+                <p className="mt-1 whitespace-pre-wrap">{setup.basePrompt}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Theme prompt</p>
+                <p className="mt-1 whitespace-pre-wrap">{setup.themePrompt || getCreativeTheme(setup.theme).direction}</p>
+              </div>
+            </div>
+          </details>
           <p className="text-xs leading-5 text-muted-foreground">
             {setup.formatIds
               .map(id => {
