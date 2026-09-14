@@ -59,7 +59,7 @@ export const brandRouter = router({
     if (bytes.length > 8 * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Assets must be 8 MB or smaller" });
     const extension = input.mimeType.split("/")[1]?.replace("jpeg", "jpg") || "png";
     const stored = await storagePut(`org-${input.organizationId}/brand/${Date.now()}-${input.name}.${extension}`, bytes, input.mimeType);
-    const inserted = await db.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: input.name, type: input.type, storageKey: stored.key, url: stored.url, mimeType: input.mimeType, status: "pending", uploadedByUserId: ctx.user.id, createdAtMs: Date.now() });
+    const inserted = await db.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: input.name, type: input.type, storageKey: stored.key, url: stored.url, mimeType: input.mimeType, status: "pending", uploadedByUserId: ctx.user.id, createdAtMs: Date.now() }).returning({ insertId: brandAssets.id });
     const assetId = Number(inserted[0].insertId);
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "brand_asset.uploaded", entityType: "brand_asset", entityId: assetId, payload: { name: input.name, type: input.type } });
     return { assetId, url: stored.url };

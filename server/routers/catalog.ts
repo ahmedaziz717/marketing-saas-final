@@ -138,7 +138,7 @@ export const catalogRouter = router({
         const image = await safeFetchImage(sourceUrl);
         const extension = image.contentType === "image/png" ? "png" : image.contentType === "image/webp" ? "webp" : image.contentType === "image/gif" ? "gif" : "jpg";
         const stored = await storagePut(`organizations/${input.organizationId}/brand/imported-logo.${extension}`, image.data, image.contentType);
-        const insertedAsset = await db.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: `Imported logo ${importedLogos + 1}`, type: "logo", storageKey: stored.key, url: stored.url, mimeType: image.contentType, status: "pending", metadata: { sourceUrl, crawlJobId: job.id }, uploadedByUserId: ctx.user.id, createdAtMs: Date.now() });
+        const insertedAsset = await db.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: `Imported logo ${importedLogos + 1}`, type: "logo", storageKey: stored.key, url: stored.url, mimeType: image.contentType, status: "pending", metadata: { sourceUrl, crawlJobId: job.id }, uploadedByUserId: ctx.user.id, createdAtMs: Date.now() }).returning({ insertId: brandAssets.id });
         await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "website_import.logo_stored", entityType: "brand_asset", entityId: Number(insertedAsset[0].insertId), payload: { sourceUrl, storageKey: stored.key, status: "pending" } });
         importedLogos++;
       } catch { /* unavailable source assets remain unselected rather than blocking the brand draft */ }

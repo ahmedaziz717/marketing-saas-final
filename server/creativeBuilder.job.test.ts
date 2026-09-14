@@ -38,16 +38,17 @@ function fixture() {
       }),
     }),
     insert: () => ({
-      values: async (rows: any) => {
+      values: (rows: any) => ({ returning: async () => {
         written.push(rows);
         return [{ insertId: 1 }];
-      },
+      }}),
     }),
     update: () => ({
       set: (values: any) => ({
-        where: async () => {
+        where: () => {
           updates.push(values);
-          return [{ affectedRows: 1 }];
+          const rows = [{ id: 1 }];
+          return Object.assign(Promise.resolve(rows), { returning: async () => rows });
         },
       }),
     }),

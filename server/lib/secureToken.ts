@@ -2,8 +2,9 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { ENV } from "../_core/env";
 
 function encryptionKey() {
-  if (!ENV.cookieSecret) throw new Error("Server encryption secret is unavailable");
-  return createHash("sha256").update(ENV.cookieSecret).digest();
+  const secret = process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET || ENV.cookieSecret;
+  if (!secret) throw new Error("Server encryption secret is unavailable");
+  return createHash("sha256").update(secret).digest();
 }
 
 export function encryptToken(token: string) {
