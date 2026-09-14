@@ -14,6 +14,8 @@ import {
   CREATIVE_THEMES,
   creativeCopySchema,
   creativeSetupSchema,
+  getCreativeArtStyle,
+  getCreativeMood,
   getCreativeTheme,
   formatDetails,
   generationSetupIssues,
@@ -373,6 +375,10 @@ export const creativeBuilderRouter = router({
           "\n\n" +
           (input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction) +
           "\n\n" +
+          "Mood: " + getCreativeMood(input.setup.mood).name + " — " + getCreativeMood(input.setup.mood).direction +
+          "\n\n" +
+          "Art style: " + getCreativeArtStyle(input.setup.artStyle).name + " — " + getCreativeArtStyle(input.setup.artStyle).direction +
+          "\n\n" +
           input.setup.extraDirection,
         assetIds: input.setup.logoAssetId ? [input.setup.logoAssetId] : [],
         productIds: input.setup.products.map(product => product.productId),
@@ -425,7 +431,12 @@ export const creativeBuilderRouter = router({
               action: "creative_setup.saved",
               entityType: "campaign_brief",
               entityId: briefId,
-              payload: { name: input.setup.name, theme: input.setup.theme },
+              payload: {
+                name: input.setup.name,
+                theme: input.setup.theme,
+                mood: input.setup.mood,
+                artStyle: input.setup.artStyle,
+              },
             },
             tx
           );
@@ -462,6 +473,8 @@ export const creativeBuilderRouter = router({
                   prompt: input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction,
                 },
                 basePrompt: input.setup.basePrompt,
+                mood: getCreativeMood(input.setup.mood),
+                artStyle: getCreativeArtStyle(input.setup.artStyle),
                 shot: input.setup.shot,
                 placement: input.setup.placement,
                 extraDirection: input.setup.extraDirection,

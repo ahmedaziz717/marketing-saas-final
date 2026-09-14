@@ -203,6 +203,24 @@ export const creativeSetupSchema = z
 export type CreativeSetup = z.infer<typeof creativeSetupSchema>;
 export type CreativeCopy = z.infer<typeof creativeCopySchema>;
 
+export function applyCreativeTheme(
+  setup: CreativeSetup,
+  themeId: CreativeThemeId
+): CreativeSetup {
+  if (themeId === setup.theme) return setup;
+  const theme = getCreativeTheme(themeId);
+  return {
+    ...setup,
+    theme: theme.id,
+    themePrompt: theme.direction,
+    copy: {
+      headline: theme.headline,
+      subheadline: theme.subheadline,
+      cta: theme.cta,
+    },
+  };
+}
+
 export function defaultCreativeSetup(): CreativeSetup {
   const theme = getCreativeTheme("spotlight");
   return {

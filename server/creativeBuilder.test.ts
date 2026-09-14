@@ -6,6 +6,7 @@ import {
   CREATIVE_THEME_LIST,
   CREATIVE_THEMES,
   DEFAULT_CREATIVE_BASE_PROMPT,
+  applyCreativeTheme,
   creativeSetupSchema,
   defaultCreativeSetup,
   generationSetupIssues,
@@ -99,6 +100,28 @@ describe("creative setup and trusted catalog inputs", () => {
       "Realistic", "Animation", "Illustration", "3D Render", "Editorial", "Cinematic", "Collage", "Technical",
     ]);
     expect([...CREATIVE_MOODS, ...CREATIVE_ART_STYLES].every(option => option.icon && option.direction.length >= 20)).toBe(true);
+  });
+
+  it("replaces all theme-owned copy for a different theme and preserves edits for the current theme", () => {
+    const edited = {
+      ...setup(),
+      copy: {
+        headline: "My edited headline",
+        subheadline: "My edited subheadline",
+        cta: "My edited CTA",
+      },
+      themePrompt: "My edited theme prompt with enough detail to remain valid.",
+    };
+    expect(applyCreativeTheme(edited, edited.theme)).toBe(edited);
+    expect(applyCreativeTheme(edited, "holiday")).toMatchObject({
+      theme: "holiday",
+      themePrompt: CREATIVE_THEMES.holiday.direction,
+      copy: {
+        headline: CREATIVE_THEMES.holiday.headline,
+        subheadline: CREATIVE_THEMES.holiday.subheadline,
+        cta: CREATIVE_THEMES.holiday.cta,
+      },
+    });
   });
 
   it("restores legacy saved setups with default prompt layers", () => {
@@ -254,8 +277,11 @@ describe("creative setup and trusted catalog inputs", () => {
       CREATIVE_THEMES.weekend.name,
       selection.basePrompt,
       selection.themePrompt,
-      "Selected mood: Dark",
-      "Selected art style: Cinematic",
+      "MANDATORY MOOD — Dark",
+      "MANDATORY ART STYLE — Cinematic",
+      "immediately recognizable",
+      "visibly unmistakable",
+      "Do not silently revert to a generic studio-ad aesthetic",
       "no people, hands, faces, silhouettes, or human figures",
       "right",
       "Warm window light",

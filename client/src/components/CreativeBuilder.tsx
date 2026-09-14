@@ -35,6 +35,7 @@ import {
   CREATIVE_FORMATS,
   CREATIVE_MOODS,
   DEFAULT_CREATIVE_BASE_PROMPT,
+  applyCreativeTheme,
   creativeSetupSchema,
   defaultCreativeSetup,
   formatDetails,
@@ -455,18 +456,10 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <CreativeThemeLibrary
               selectedTheme={setup.theme}
               onSelect={theme => {
-                if (theme.id === setup.theme) return;
+                const next = applyCreativeTheme(setupRef.current, theme.id);
+                if (next === setupRef.current) return;
                 setUndoCopy(null);
-                change({
-                  ...setup,
-                  theme: theme.id,
-                  themePrompt: theme.direction,
-                  copy: {
-                    headline: theme.headline,
-                    subheadline: theme.subheadline,
-                    cta: theme.cta,
-                  },
-                });
+                change(next);
               }}
             />
             <div className="mt-5 grid gap-4 rounded-2xl border border-border bg-muted/25 p-4">
@@ -766,13 +759,13 @@ export function CreativeBuilder({ onGenerated }: Props) {
                 label="Mood"
                 value={setup.mood}
                 options={CREATIVE_MOODS}
-                onChange={mood => change({ ...setup, mood })}
+                onChange={mood => change({ ...setupRef.current, mood })}
               />
               <VisualDirectionOptions
                 label="Art style"
                 value={setup.artStyle}
                 options={CREATIVE_ART_STYLES}
-                onChange={artStyle => change({ ...setup, artStyle })}
+                onChange={artStyle => change({ ...setupRef.current, artStyle })}
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -783,7 +776,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
                   value={setup.shot}
                   onChange={event =>
                     change({
-                      ...setup,
+                      ...setupRef.current,
                       shot: event.target.value as CreativeSetup["shot"],
                     })
                   }
@@ -801,7 +794,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
                   value={setup.placement}
                   onChange={event =>
                     change({
-                      ...setup,
+                      ...setupRef.current,
                       placement: event.target
                         .value as CreativeSetup["placement"],
                     })

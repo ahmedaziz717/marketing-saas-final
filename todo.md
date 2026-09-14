@@ -167,3 +167,9 @@
 - [x] Include mood, art style, and no-person lifestyle instructions in the final Sunburst prompt while preserving product truth, prompt overrides, dimensions, and approval safeguards.
 - [x] Add regressions for option definitions, icons, backward-compatible existing staging values, saved setup round trips, control interactions, and prompt composition.
 - [x] Run TypeScript, targeted and full tests, production build, authenticated desktop/mobile Creative Builder verification, runtime log review, and save the visual-direction checkpoint.
+- [x] Reproduce theme changes from new, saved, and manually edited setups and identify why headline, subheadline, CTA, or theme prompt can remain stale.
+- [x] Verify selected mood and art style survive UI state, saved setup persistence, job snapshots, master prompts, and adapted-format prompts.
+- [x] Make a different theme deterministically replace headline, subheadline, CTA, and theme prompt while selecting the current theme preserves edits.
+- [x] Strengthen mood and art-style instructions as explicit visual requirements in Sunburst prompts without overriding product truth, copy, dimensions, or brand safeguards.
+- [x] Add frontend, database round-trip, prompt-composition, and job-snapshot regressions for theme, mood, and art style behavior.
+- [x] Run TypeScript, full tests, production build, authenticated desktop/mobile behavior verification, runtime log review, and save the corrective checkpoint.
