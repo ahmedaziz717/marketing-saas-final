@@ -147,3 +147,9 @@
 - [x] Add regressions proving the verified Sunburst identifier is selected and all non-Sunburst catalogs fail closed with specific safe guidance.
 - [x] Run one controlled Sunburst generation, then validate TypeScript, full tests, production build, authenticated Results UI, and isolated runtime logs.
 - [x] Save and auto-publish the Sunburst-only repair, or report the exact external provisioning blocker if the verified model remains inaccessible.
+- [ ] Sync merged GitHub `main` commit `9319972cf7a695399e6d186fee42db79652f34ab` into this existing Frame workspace while preserving unrelated local work.
+- [ ] Verify the synchronized diff is limited to the requested theme-copy frontend behavior and customer helper text, with no database, credential, model, generation, save, or advertising changes.
+- [ ] Verify selecting a different theme immediately replaces headline, subheadline, CTA, and theme prompt after new, loaded, or manually edited states, while selecting the current theme preserves edits.
+- [ ] Verify products, assets, channels, sizes, AI refresh and undo, and stale-response protection remain unchanged.
+- [ ] Run the targeted eight Creative Builder interaction tests, TypeScript validation, and production build on the synchronized code.
+- [ ] Save and auto-publish the exact synchronized theme-copy fix and report the resulting Frame version.
