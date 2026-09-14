@@ -25,7 +25,7 @@ import { generateImage, listImageModels } from "../_core/imageGeneration";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
-import { appendActivity } from "../lib/activity";
+import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import {
   buildCreativePrompt,
   resolveBuilderInputs,
@@ -195,7 +195,7 @@ export async function runBuilderJob(
         });
       }
     }
-    await db.transaction(async tx => {
+    await withOrganizationTransaction(db, organizationId, async tx => {
       const active = (
         await tx
           .select()
@@ -242,7 +242,7 @@ export async function runBuilderJob(
     const message =
       error instanceof Error ? error.message : "Creative generation failed";
     const diagnostic = categorizeGenerationError(message);
-    await db.transaction(async tx => {
+    await withOrganizationTransaction(db, organizationId, async tx => {
       const changed = await tx
         .update(creativeJobs)
         .set({
@@ -381,55 +381,57 @@ export const creativeBuilderRouter = router({
         approvedByUserId: null,
         updatedAtMs: now,
       };
-      const briefId = await db.transaction(async tx => {
-        let briefId = input.briefId;
-        if (briefId) {
-          if (input.expectedUpdatedAtMs === undefined)
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Reload the saved setup before updating it.",
-            });
-          const changed = await tx
-            .update(campaignBriefs)
-            .set(fields)
-            .where(
-              and(
-                eq(campaignBriefs.id, briefId),
-                eq(campaignBriefs.organizationId, input.organizationId),
-                isNotNull(campaignBriefs.creativeSetup),
-                eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
-              )
-            );
-          if (!changed[0].affectedRows)
-            throw new TRPCError({
-              code: "CONFLICT",
-              message:
-                "This setup changed in another session. Reload it before saving.",
-            });
-        } else {
-          const inserted = await tx
-            .insert(campaignBriefs)
-            .values({
+      const briefId = await withOrganizationTransaction(
+        db,
+        input.organizationId,
+        async tx => {
+          let briefId = input.briefId;
+          if (briefId) {
+            if (input.expectedUpdatedAtMs === undefined)
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Reload the saved setup before updating it.",
+              });
+            const changed = await tx
+              .update(campaignBriefs)
+              .set(fields)
+              .where(
+                and(
+                  eq(campaignBriefs.id, briefId),
+                  eq(campaignBriefs.organizationId, input.organizationId),
+                  isNotNull(campaignBriefs.creativeSetup),
+                  eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
+                )
+              );
+            if (!changed[0].affectedRows)
+              throw new TRPCError({
+                code: "CONFLICT",
+                message:
+                  "This setup changed in another session. Reload it before saving.",
+              });
+          } else {
+            const inserted = await tx.insert(campaignBriefs).values({
               ...fields,
               organizationId: input.organizationId,
               createdByUserId: ctx.user.id,
               createdAtMs: now,
             });
-          briefId = Number(inserted[0].insertId);
+            briefId = Number(inserted[0].insertId);
+          }
+          await appendActivity(
+            {
+              organizationId: input.organizationId,
+              actorUserId: ctx.user.id,
+              action: "creative_setup.saved",
+              entityType: "campaign_brief",
+              entityId: briefId,
+              payload: { name: input.setup.name, theme: input.setup.theme },
+            },
+            tx
+          );
+          return briefId;
         }
-        await appendActivity(
-          {
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            action: "creative_setup.saved",
-            entityType: "campaign_brief",
-            entityId: briefId,
-            payload: { name: input.setup.name, theme: input.setup.theme },
-          },
-          tx
-        );
-        return briefId;
-      });
+      );
       return { briefId, updatedAtMs: now };
     }),
 
@@ -583,77 +585,81 @@ export const creativeBuilderRouter = router({
           : []),
       ];
       await recoverExpiredBuilderJobs(db, input.organizationId);
-      const insertedJob = await db.transaction(async tx => {
-        const locked = (
-          await tx
+      const insertedJob = await withOrganizationTransaction(
+        db,
+        input.organizationId,
+        async tx => {
+          const locked = (
+            await tx
+              .select()
+              .from(campaignBriefs)
+              .where(
+                and(
+                  eq(campaignBriefs.id, brief.id),
+                  eq(campaignBriefs.organizationId, input.organizationId)
+                )
+              )
+              .limit(1)
+              .for("update")
+          )[0];
+          if (locked?.updatedAtMs !== input.expectedUpdatedAtMs)
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "The setup changed. Review and save it again.",
+            });
+          const previous = await tx
             .select()
-            .from(campaignBriefs)
+            .from(creativeJobs)
             .where(
               and(
-                eq(campaignBriefs.id, brief.id),
-                eq(campaignBriefs.organizationId, input.organizationId)
+                eq(creativeJobs.organizationId, input.organizationId),
+                eq(creativeJobs.briefId, brief.id)
               )
             )
-            .limit(1)
-            .for("update")
-        )[0];
-        if (locked?.updatedAtMs !== input.expectedUpdatedAtMs)
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "The setup changed. Review and save it again.",
-          });
-        const previous = await tx
-          .select()
-          .from(creativeJobs)
-          .where(
-            and(
-              eq(creativeJobs.organizationId, input.organizationId),
-              eq(creativeJobs.briefId, brief.id)
+            .orderBy(desc(creativeJobs.id))
+            .limit(100);
+          const replay = previous.find(
+            job => job.briefSnapshot.requestId === input.requestId
+          );
+          if (replay?.status === "completed")
+            return { jobId: replay.id, replay: true };
+          if (
+            replay ||
+            previous.some(
+              job => job.status === "running" || job.status === "queued"
             )
           )
-          .orderBy(desc(creativeJobs.id))
-          .limit(100);
-        const replay = previous.find(
-          job => job.briefSnapshot.requestId === input.requestId
-        );
-        if (replay?.status === "completed")
-          return { jobId: replay.id, replay: true };
-        if (
-          replay ||
-          previous.some(
-            job => job.status === "running" || job.status === "queued"
-          )
-        )
-          throw new TRPCError({
-            code: "CONFLICT",
-            message:
-              "An attempt already exists for this setup. Check its status in Results.",
-          });
-        const result = await tx.insert(creativeJobs).values({
-          organizationId: input.organizationId,
-          briefId: brief.id,
-          status: "running",
-          inputHash: stableHash({ snapshot, assetSnapshot }),
-          briefSnapshot: snapshot,
-          assetSnapshot,
-          requestedByUserId: ctx.user.id,
-          createdAtMs: Date.now(),
-          leaseExpiresAtMs: Date.now() + CREATIVE_JOB_LEASE_MS,
-        });
-        const jobId = Number(result[0].insertId);
-        await appendActivity(
-          {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message:
+                "An attempt already exists for this setup. Check its status in Results.",
+            });
+          const result = await tx.insert(creativeJobs).values({
             organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            action: "creative_generation.requested",
-            entityType: "creative_job",
-            entityId: jobId,
-            payload: { briefId: brief.id, outputCount: outputCount(setup) },
-          },
-          tx
-        );
-        return { jobId, replay: false };
-      });
+            briefId: brief.id,
+            status: "running",
+            inputHash: stableHash({ snapshot, assetSnapshot }),
+            briefSnapshot: snapshot,
+            assetSnapshot,
+            requestedByUserId: ctx.user.id,
+            createdAtMs: Date.now(),
+            leaseExpiresAtMs: Date.now() + CREATIVE_JOB_LEASE_MS,
+          });
+          const jobId = Number(result[0].insertId);
+          await appendActivity(
+            {
+              organizationId: input.organizationId,
+              actorUserId: ctx.user.id,
+              action: "creative_generation.requested",
+              entityType: "creative_job",
+              entityId: jobId,
+              payload: { briefId: brief.id, outputCount: outputCount(setup) },
+            },
+            tx
+          );
+          return { jobId, replay: false };
+        }
+      );
       const { jobId } = insertedJob;
       if (!insertedJob.replay)
         setImmediate(() => {

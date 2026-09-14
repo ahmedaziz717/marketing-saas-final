@@ -1,7 +1,7 @@
 import { and, eq, lt } from "drizzle-orm";
 import { creativeJobs } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { appendActivity } from "./activity";
+import { appendActivity, withOrganizationTransaction } from "./activity";
 
 export const CREATIVE_JOB_LEASE_MS = 10 * 60 * 1000;
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -11,7 +11,7 @@ export async function recoverExpiredBuilderJobs(
   db: Database,
   organizationId: number
 ) {
-  await db.transaction(async tx => {
+  await withOrganizationTransaction(db, organizationId, async tx => {
     const expired = await tx
       .select()
       .from(creativeJobs)

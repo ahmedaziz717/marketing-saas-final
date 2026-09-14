@@ -88,103 +88,90 @@ beforeAll(async () => {
   ).toString("base64");
   userId = Number(
     (
-      await db
-        .insert(users)
-        .values({
-          openId: "builder-" + suffix,
-          name: "Builder integration",
-          email: "builder@example.test",
-          loginMethod: "test",
-        })
+      await db.insert(users).values({
+        openId: "builder-" + suffix,
+        name: "Builder integration",
+        email: "builder@example.test",
+        loginMethod: "test",
+      })
     )[0].insertId
   );
   organizationId = Number(
     (
-      await db
-        .insert(organizations)
-        .values({
-          name: "Builder integration",
-          slug: "builder-" + suffix,
-          createdByUserId: userId,
-          createdAtMs: now,
-        })
+      await db.insert(organizations).values({
+        name: "Builder integration",
+        slug: "builder-" + suffix,
+        createdByUserId: userId,
+        createdAtMs: now,
+      })
     )[0].insertId
   );
-  await db
-    .insert(organizationMemberships)
-    .values({
-      userId,
-      organizationId,
-      role: "owner",
-      status: "active",
-      createdAtMs: now,
-    });
+  await db.insert(organizationMemberships).values({
+    userId,
+    organizationId,
+    role: "owner",
+    status: "active",
+    createdAtMs: now,
+  });
   const kitId = Number(
     (
-      await db
-        .insert(brandKits)
-        .values({
-          organizationId,
-          name: "Studio",
-          colors: ["#ffffff"],
-          fonts: ["Inter"],
-          voice: "Clear",
-          requiredClaims: "",
-          prohibitedContent: "",
-          status: "active",
-          updatedByUserId: userId,
-          updatedAtMs: now,
-        })
+      await db.insert(brandKits).values({
+        organizationId,
+        name: "Studio",
+        colors: ["#ffffff"],
+        fonts: ["Inter"],
+        voice: "Clear",
+        requiredClaims: "",
+        prohibitedContent: "",
+        status: "active",
+        updatedByUserId: userId,
+        updatedAtMs: now,
+      })
     )[0].insertId
   );
   logoAssetId = Number(
     (
-      await db
-        .insert(brandAssets)
-        .values({
-          organizationId,
-          brandKitId: kitId,
-          name: "Studio mark",
-          type: "logo",
-          storageKey: "test/logo.png",
-          url: "/manus-storage/test/logo.png",
-          mimeType: "image/png",
-          status: "approved",
-          uploadedByUserId: userId,
-          createdAtMs: now,
-        })
+      await db.insert(brandAssets).values({
+        organizationId,
+        brandKitId: kitId,
+        name: "Studio mark",
+        type: "logo",
+        storageKey: "test/logo.png",
+        url: "/manus-storage/test/logo.png",
+        mimeType: "image/png",
+        status: "approved",
+        uploadedByUserId: userId,
+        createdAtMs: now,
+      })
     )[0].insertId
   );
   productId = Number(
     (
-      await db
-        .insert(products)
-        .values({
-          organizationId,
-          name: "Studio lamp",
-          dedupeKey: "lamp-" + suffix,
-          price: "89.00",
-          currency: "USD",
-          specifications: { Power: "12 W", Material: "Aluminum" },
-          provenance: {},
-          status: "approved",
-          createdAtMs: now,
-          updatedAtMs: now,
-        })
+      await db.insert(products).values({
+        organizationId,
+        name: "Studio lamp",
+        dedupeKey: "lamp-" + suffix,
+        productUrl: "https://example.test/products/studio-lamp",
+        price: "89.00",
+        currency: "USD",
+        specifications: { Power: "12 W", Material: "Aluminum" },
+        provenance: {},
+        status: "approved",
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
     )[0].insertId
   );
   imageId = Number(
     (
-      await db
-        .insert(productImages)
-        .values({
-          organizationId,
-          productId,
-          sourceUrl: "https://example.test/lamp.png",
-          storageKey: "test/lamp.png",
-          url: "/manus-storage/test/lamp.png",
-          createdAtMs: now,
-        })
+      await db.insert(productImages).values({
+        organizationId,
+        productId,
+        sourceUrl: "https://example.test/lamp.png",
+        storageKey: "test/lamp.png",
+        url: "/manus-storage/test/lamp.png",
+        createdAtMs: now,
+      })
     )[0].insertId
   );
   const user = (
@@ -262,6 +249,21 @@ describe.sequential("persistent creative builder", () => {
           eq(organizationMemberships.userId, userId)
         )
       );
+  });
+
+  it("preserves a single audit chain across simultaneous setup saves", async () => {
+    const saved = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        caller.creativeBuilder.save({
+          organizationId,
+          setup: { ...setup(), name: "Concurrent setup " + index },
+        })
+      )
+    );
+    expect(new Set(saved.map(item => item.briefId)).size).toBe(6);
+    expect((await caller.activity.list({ organizationId })).verified).toBe(
+      true
+    );
   });
 
   it("starts asynchronously, persists pending results, deduplicates retries and provides an authenticated download", async () => {

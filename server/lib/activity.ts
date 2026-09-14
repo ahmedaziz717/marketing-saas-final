@@ -7,6 +7,27 @@ import { stableHash } from "./policy";
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type ActivityDatabase = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
+export async function withOrganizationTransaction<T>(
+  database: Database,
+  organizationId: number,
+  operation: (transaction: ActivityDatabase) => Promise<T>
+) {
+  return database.transaction(
+    async transaction => {
+      // Lock before child inserts acquire foreign-key locks, avoiding lock upgrades
+      // between simultaneous saves. Read committed keeps the next audit hash current.
+      await transaction
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .limit(1)
+        .for("update");
+      return operation(transaction);
+    },
+    { isolationLevel: "read committed" }
+  );
+}
+
 export async function appendActivity(
   input: {
     organizationId: number;
@@ -23,16 +44,12 @@ export async function appendActivity(
   if (!transaction) {
     const database = await getDb();
     if (!database) throw new Error("Database unavailable");
-    return database.transaction(tx => appendActivity(input, tx));
+    return withOrganizationTransaction(database, input.organizationId, tx =>
+      appendActivity(input, tx)
+    );
   }
   const db = transaction;
-  // Serialize the chain per company, including simultaneous background jobs.
-  await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(eq(organizations.id, input.organizationId))
-    .limit(1)
-    .for("update");
+  // Caller-provided transactions are created by withOrganizationTransaction.
   const previous = (
     await db
       .select({ eventHash: activityEvents.eventHash })

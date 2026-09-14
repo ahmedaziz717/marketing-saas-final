@@ -20,7 +20,10 @@ vi.mock("./lib/creativeImages", () => ({
     mimeType: "image/png",
   }),
 }));
-vi.mock("./lib/activity", () => ({ appendActivity: mocked.activity }));
+vi.mock("./lib/activity", () => ({
+  appendActivity: mocked.activity,
+  withOrganizationTransaction: (db: any, _organizationId: number, operation: any) => db.transaction(operation),
+}));
 vi.mock("./lib/creativeJobs", () => ({
   renewBuilderJob: mocked.renew,
   CREATIVE_JOB_LEASE_MS: 600_000,
