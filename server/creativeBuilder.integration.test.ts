@@ -1,3 +1,4 @@
+import { processNextBuilderJob } from "./jobs/creativeWorker";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { and, eq } from "drizzle-orm";
@@ -90,7 +91,7 @@ beforeAll(async () => {
         name: "Builder integration",
         email: "builder@example.test",
         loginMethod: "test",
-      })
+      }).returning({ insertId: users.id })
     )[0].insertId
   );
   organizationId = Number(
@@ -100,7 +101,7 @@ beforeAll(async () => {
         slug: "builder-" + suffix,
         createdByUserId: userId,
         createdAtMs: now,
-      })
+      }).returning({ insertId: organizations.id })
     )[0].insertId
   );
   await db.insert(organizationMemberships).values({
@@ -109,7 +110,7 @@ beforeAll(async () => {
     role: "owner",
     status: "active",
     createdAtMs: now,
-  });
+  }).returning({ insertId: organizationMemberships.id });
   const kitId = Number(
     (
       await db.insert(brandKits).values({
@@ -123,7 +124,7 @@ beforeAll(async () => {
         status: "active",
         updatedByUserId: userId,
         updatedAtMs: now,
-      })
+      }).returning({ insertId: brandKits.id })
     )[0].insertId
   );
   logoAssetId = Number(
@@ -139,7 +140,7 @@ beforeAll(async () => {
         status: "approved",
         uploadedByUserId: userId,
         createdAtMs: now,
-      })
+      }).returning({ insertId: brandAssets.id })
     )[0].insertId
   );
   productId = Number(
@@ -156,7 +157,7 @@ beforeAll(async () => {
         status: "approved",
         createdAtMs: now,
         updatedAtMs: now,
-      })
+      }).returning({ insertId: products.id })
     )[0].insertId
   );
   imageId = Number(
@@ -168,7 +169,7 @@ beforeAll(async () => {
         storageKey: "test/lamp.png",
         url: "/manus-storage/test/lamp.png",
         createdAtMs: now,
-      })
+      }).returning({ insertId: productImages.id })
     )[0].insertId
   );
   const user = (
@@ -303,7 +304,8 @@ describe.sequential("persistent creative builder", () => {
       requestId: randomUUID(),
     };
     const started = await caller.creativeBuilder.generate(request);
-    expect(started.status).toBe("running");
+    expect(started.status).toBe("queued");
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () => {
         const state = await caller.creatives.overview({ organizationId });
@@ -364,6 +366,7 @@ describe.sequential("persistent creative builder", () => {
       expectedUpdatedAtMs: saved.updatedAtMs,
       requestId: randomUUID(),
     });
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () => {
         const state = await caller.creatives.overview({ organizationId });
@@ -384,6 +387,7 @@ describe.sequential("persistent creative builder", () => {
       requestId: randomUUID(),
     });
     expect(retry.jobId).not.toBe(started.jobId);
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () =>
         expect(

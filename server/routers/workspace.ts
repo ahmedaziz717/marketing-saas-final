@@ -31,10 +31,10 @@ export const workspaceRouter = router({
     const base = slugify(input.name) || "workspace";
     const slug = `${base}-${randomBytes(3).toString("hex")}`;
     const result = await db.transaction(async tx => {
-      const inserted = await tx.insert(organizations).values({ name: input.name.trim(), slug, createdByUserId: ctx.user.id, createdAtMs: now });
+      const inserted = await tx.insert(organizations).values({ name: input.name.trim(), slug, createdByUserId: ctx.user.id, createdAtMs: now }).returning({ insertId: organizations.id });
       const organizationId = Number(inserted[0].insertId);
-      await tx.insert(organizationMemberships).values({ organizationId, userId: ctx.user.id, role: "owner", status: "active", createdAtMs: now });
-      await tx.insert(brandKits).values({ organizationId, name: `${input.name.trim()} Brand`, colors: ["#15141A", "#F4F1EA"], fonts: ["Manrope"], status: "draft", updatedByUserId: ctx.user.id, updatedAtMs: now });
+      await tx.insert(organizationMemberships).values({ organizationId, userId: ctx.user.id, role: "owner", status: "active", createdAtMs: now }).returning({ insertId: organizationMemberships.id });
+      await tx.insert(brandKits).values({ organizationId, name: `${input.name.trim()} Brand`, colors: ["#15141A", "#F4F1EA"], fonts: ["Manrope"], status: "draft", updatedByUserId: ctx.user.id, updatedAtMs: now }).returning({ insertId: brandKits.id });
       return { organizationId, slug };
     });
     await appendActivity({ organizationId: result.organizationId, actorUserId: ctx.user.id, action: "workspace.created", entityType: "organization", entityId: result.organizationId, payload: { name: input.name.trim() } });
@@ -61,7 +61,7 @@ export const workspaceRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const token = randomBytes(32).toString("hex");
     const now = Date.now();
-    await db.insert(organizationInvites).values({ organizationId: input.organizationId, email: input.email.toLowerCase(), role: input.role, token, status: "pending", invitedByUserId: ctx.user.id, expiresAtMs: now + 7 * 24 * 60 * 60 * 1000, createdAtMs: now });
+    await db.insert(organizationInvites).values({ organizationId: input.organizationId, email: input.email.toLowerCase(), role: input.role, token, status: "pending", invitedByUserId: ctx.user.id, expiresAtMs: now + 7 * 24 * 60 * 60 * 1000, createdAtMs: now }).returning({ insertId: organizationInvites.id });
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "member.invited", entityType: "invite", entityId: token.slice(0, 12), payload: { email: input.email.toLowerCase(), role: input.role } });
     return { inviteUrl: `${input.origin}/invite/${token}` };
   }),
@@ -73,7 +73,7 @@ export const workspaceRouter = router({
     if (!invite || invite.status !== "pending" || invite.expiresAtMs < Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "This invitation is invalid or expired" });
     if (ctx.user.email && ctx.user.email.toLowerCase() !== invite.email.toLowerCase()) throw new TRPCError({ code: "FORBIDDEN", message: "Sign in with the invited email address" });
     await db.transaction(async tx => {
-      await tx.insert(organizationMemberships).values({ organizationId: invite.organizationId, userId: ctx.user.id, role: invite.role, status: "active", createdAtMs: Date.now() }).onDuplicateKeyUpdate({ set: { role: invite.role, status: "active" } });
+      await tx.insert(organizationMemberships).values({ organizationId: invite.organizationId, userId: ctx.user.id, role: invite.role, status: "active", createdAtMs: Date.now() }).returning({ insertId: organizationMemberships.id }).onConflictDoUpdate({ target: [organizationMemberships.organizationId, organizationMemberships.userId], set: { role: invite.role, status: "active" } });
       await tx.update(organizationInvites).set({ status: "accepted" }).where(eq(organizationInvites.id, invite.id));
     });
     await appendActivity({ organizationId: invite.organizationId, actorUserId: ctx.user.id, action: "member.joined", entityType: "membership", entityId: ctx.user.id, payload: { role: invite.role } });

@@ -16,11 +16,13 @@ import PublishingPage from "./pages/PublishingPage";
 import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
 import CatalogPage from "./pages/CatalogPage";
 import WebsiteImportPage from "./pages/WebsiteImportPage";
+import LoginPage from "./pages/LoginPage";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={LoginPage} />
       <Route path="/app" component={WorkspaceApp} />
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />

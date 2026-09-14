@@ -49,7 +49,7 @@ const organizationInput = z.object({
 const editorRoles = ["owner", "admin", "creator"] as const;
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-async function loadInputs(
+export async function loadInputs(
   db: Database,
   organizationId: number,
   setup: CreativeSetup
@@ -211,7 +211,7 @@ export async function runBuilderJob(
       )[0];
       if (active?.status !== "running")
         throw new Error("Generation attempt was interrupted");
-      await tx.insert(creativeVariants).values(generated);
+      await tx.insert(creativeVariants).values(generated).returning({ insertId: creativeVariants.id });
       await tx
         .update(creativeJobs)
         .set({
@@ -257,8 +257,8 @@ export async function runBuilderJob(
             eq(creativeJobs.organizationId, organizationId),
             eq(creativeJobs.status, "running")
           )
-        );
-      if (changed[0].affectedRows)
+        ).returning({ id: creativeJobs.id });
+      if (changed.length)
         await appendActivity(
           {
             organizationId,
@@ -408,8 +408,8 @@ export const creativeBuilderRouter = router({
                   isNotNull(campaignBriefs.creativeSetup),
                   eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
                 )
-              );
-            if (!changed[0].affectedRows)
+              ).returning({ id: campaignBriefs.id });
+            if (!changed.length)
               throw new TRPCError({
                 code: "CONFLICT",
                 message:
@@ -421,7 +421,7 @@ export const creativeBuilderRouter = router({
               organizationId: input.organizationId,
               createdByUserId: ctx.user.id,
               createdAtMs: now,
-            });
+            }).returning({ insertId: campaignBriefs.id });
             briefId = Number(inserted[0].insertId);
           }
           await appendActivity(
@@ -578,6 +578,8 @@ export const creativeBuilderRouter = router({
           message: "Activate your Brand Kit before generating creatives.",
         });
       const snapshot = {
+        kind: "builder_v1",
+        resolved,
         setup,
         brand: resolved.brand,
         products: resolved.products,
@@ -654,14 +656,14 @@ export const creativeBuilderRouter = router({
           const result = await tx.insert(creativeJobs).values({
             organizationId: input.organizationId,
             briefId: brief.id,
-            status: "running",
+            status: "queued",
             inputHash: stableHash({ snapshot, assetSnapshot }),
             briefSnapshot: snapshot,
             assetSnapshot,
             requestedByUserId: ctx.user.id,
             createdAtMs: Date.now(),
-            leaseExpiresAtMs: Date.now() + CREATIVE_JOB_LEASE_MS,
-          });
+            leaseExpiresAtMs: null,
+          }).returning({ insertId: creativeJobs.id });
           const jobId = Number(result[0].insertId);
           await appendActivity(
             {
@@ -678,24 +680,11 @@ export const creativeBuilderRouter = router({
         }
       );
       const { jobId } = insertedJob;
-      if (!insertedJob.replay)
-        setImmediate(() => {
-          void runBuilderJob(db, {
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            briefId: brief.id,
-            jobId,
-            setup,
-            resolved,
-          }).catch(() =>
-            console.error("Creative job persistence failed", { jobId })
-          );
-        });
       return {
         jobId,
         status: insertedJob.replay
           ? ("completed" as const)
-          : ("running" as const),
+          : ("queued" as const),
       };
     }),
 });

@@ -43,7 +43,7 @@ export const briefsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const now = Date.now();
-    const inserted = await db.insert(campaignBriefs).values({ ...input, channel: "meta", status: "draft", createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now });
+    const inserted = await db.insert(campaignBriefs).values({ ...input, channel: "meta", status: "draft", createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now }).returning({ insertId: campaignBriefs.id });
     const briefId = Number(inserted[0].insertId);
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "brief.created", entityType: "campaign_brief", entityId: briefId, payload: { name: input.name } });
     return { briefId };

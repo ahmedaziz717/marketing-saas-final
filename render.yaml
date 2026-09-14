@@ -1,0 +1,47 @@
+# Staging only. Review plans and supply secrets in Render before creating services.
+services:
+  - type: web
+    name: frame-staging
+    runtime: node
+    plan: 0.5c-512mb
+    region: ohio
+    repo: https://github.com/ahmedaziz717/marketing-saas-final
+    branch: codex/render-supabase-migration
+    autoDeployTrigger: "off"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    preDeployCommand: pnpm db:migrate
+    startCommand: pnpm start
+    healthCheckPath: /healthz
+    envVars:
+      - fromGroup: frame-staging
+      - fromGroup: frame-staging-secrets
+  - type: worker
+    name: frame-staging-creatives
+    runtime: node
+    plan: 1c-2g
+    region: ohio
+    repo: https://github.com/ahmedaziz717/marketing-saas-final
+    branch: codex/render-supabase-migration
+    autoDeployTrigger: "off"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    maxShutdownDelaySeconds: 300
+    startCommand: pnpm start:worker
+    envVars:
+      - fromGroup: frame-staging
+      - fromGroup: frame-staging-secrets
+
+envVarGroups:
+  - name: frame-staging
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_STORAGE_BUCKET
+        value: frame-assets
+      - key: AUTH_SIGNUP_ENABLED
+        value: "false"
+      - key: CREATIVE_WORKER_ENABLED
+        value: "false"
+      - key: LIVE_AD_ACTIONS_ENABLED
+        value: "false"
