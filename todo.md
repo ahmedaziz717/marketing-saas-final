@@ -147,9 +147,15 @@
 - [x] Add regressions proving the verified Sunburst identifier is selected and all non-Sunburst catalogs fail closed with specific safe guidance.
 - [x] Run one controlled Sunburst generation, then validate TypeScript, full tests, production build, authenticated Results UI, and isolated runtime logs.
 - [x] Save and auto-publish the Sunburst-only repair, or report the exact external provisioning blocker if the verified model remains inaccessible.
-- [ ] Sync merged GitHub `main` commit `9319972cf7a695399e6d186fee42db79652f34ab` into this existing Frame workspace while preserving unrelated local work.
-- [ ] Verify the synchronized diff is limited to the requested theme-copy frontend behavior and customer helper text, with no database, credential, model, generation, save, or advertising changes.
-- [ ] Verify selecting a different theme immediately replaces headline, subheadline, CTA, and theme prompt after new, loaded, or manually edited states, while selecting the current theme preserves edits.
-- [ ] Verify products, assets, channels, sizes, AI refresh and undo, and stale-response protection remain unchanged.
-- [ ] Run the targeted eight Creative Builder interaction tests, TypeScript validation, and production build on the synchronized code.
-- [ ] Save and auto-publish the exact synchronized theme-copy fix and report the resulting Frame version.
+- [x] Sync merged GitHub `main` commit `9319972cf7a695399e6d186fee42db79652f34ab` into this existing Frame workspace while preserving unrelated local work.
+- [x] Verify the synchronized diff is limited to the requested theme-copy frontend behavior and customer helper text, with no database, credential, model, generation, save, or advertising changes.
+- [x] Verify selecting a different theme immediately replaces headline, subheadline, CTA, and theme prompt after new, loaded, or manually edited states, while selecting the current theme preserves edits.
+- [x] Verify products, assets, channels, sizes, AI refresh and undo, and stale-response protection remain unchanged.
+- [x] Run the targeted eight Creative Builder interaction tests, TypeScript validation, and production build on the synchronized code.
+- [x] Save and auto-publish the exact synchronized theme-copy fix and report the resulting Frame version.
+- [x] Inspect the current Product Catalog review mutation, role checks, approval activity events, card actions, and existing catalog tests.
+- [x] Add a tenant-scoped authorized transition from approved back to pending without deleting or changing product data.
+- [x] Change the product card approval action into an Approve/Unapprove toggle with a distinct approved color, label, icon, loading state, and accessible name.
+- [x] Preserve reject, edit, delete, bulk review, brief eligibility, and generation safeguards when a product is unapproved.
+- [x] Add regressions for pending-to-approved and approved-to-pending transitions, authorization, activity history, and UI state.
+- [x] Run TypeScript, targeted tests, full tests, production build, responsive catalog verification, and save the catalog approval-toggle checkpoint.
