@@ -115,6 +115,11 @@ describe("Creative Builder controls", () => {
       theme: "cyber-monday" as const,
       basePrompt: "Saved main prompt for a premium retail composition.",
       themePrompt: "Saved theme prompt with cyan data light and restrained violet depth.",
+      copy: {
+        headline: "Saved headline",
+        subheadline: "Saved subheadline",
+        cta: "Saved CTA",
+      },
     };
     api.options.drafts = [
       { id: 44, name: "Saved Cyber", setup: savedSetup, updatedAtMs: 55 },
@@ -137,9 +142,36 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(CREATIVE_THEMES["cyber-monday"].direction);
+    expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
+      savedSetup.copy.headline
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Holiday" }));
+    expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
+      CREATIVE_THEMES.holiday.headline
+    );
+    expect(
+      (screen.getByLabelText("Subheadline") as HTMLInputElement).value
+    ).toBe(CREATIVE_THEMES.holiday.subheadline);
+    expect(
+      (screen.getByLabelText("Call to action") as HTMLInputElement).value
+    ).toBe(CREATIVE_THEMES.holiday.cta);
+    fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+    await waitFor(() => expect(api.save.mutateAsync).toHaveBeenCalled());
+    expect(api.save.mutateAsync.mock.calls[0][0]).toMatchObject({
+      briefId: 44,
+      setup: {
+        theme: "holiday",
+        themePrompt: CREATIVE_THEMES.holiday.direction,
+        copy: {
+          headline: CREATIVE_THEMES.holiday.headline,
+          subheadline: CREATIVE_THEMES.holiday.subheadline,
+          cta: CREATIVE_THEMES.holiday.cta,
+        },
+      },
+    });
   });
 
-  it("shows sizes after a channel is selected and preserves manually edited copy when changing themes", () => {
+  it("shows channel sizes and replaces edited copy when a different theme is selected", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.queryByText("300 × 250")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: "Google Display" }));
@@ -147,15 +179,32 @@ describe("Creative Builder controls", () => {
     fireEvent.change(screen.getByLabelText("Headline"), {
       target: { value: "My exact headline" },
     });
+    fireEvent.change(screen.getByLabelText("Subheadline"), {
+      target: { value: "My exact subheadline" },
+    });
+    fireEvent.change(screen.getByLabelText("Call to action"), {
+      target: { value: "My exact CTA" },
+    });
     fireEvent.click(
-      screen.getByRole("button", { name: CREATIVE_THEMES.holiday.name })
+      screen.getByRole("button", { name: CREATIVE_THEMES.spotlight.name })
     );
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       "My exact headline"
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: CREATIVE_THEMES.holiday.name })
+    );
+    expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
+      CREATIVE_THEMES.holiday.headline
+    );
     expect(
       (screen.getByLabelText("Subheadline") as HTMLInputElement).value
     ).toBe(CREATIVE_THEMES.holiday.subheadline);
+    expect(
+      (screen.getByLabelText("Call to action") as HTMLInputElement).value
+    ).toBe(CREATIVE_THEMES.holiday.cta);
+    expect(api.refresh.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText("300 × 250")).toBeTruthy();
     expect(screen.queryByText(/GPT|Sunburst|OpenAI/i)).toBeNull();
   });
 

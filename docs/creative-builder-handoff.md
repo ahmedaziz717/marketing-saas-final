@@ -6,7 +6,7 @@ This change belongs only to `ahmedaziz717/marketing-saas-final`, the separate Fr
 
 Choose a theme → channels and sizes → products and catalog images → logo, shot type and direction → editable copy → review → generate → review and export results.
 
-- Theme defaults preserve manual copy edits. AI copy refresh has undo and ignores stale responses after edits.
+- Selecting a different theme immediately replaces the headline, subheadline and CTA with that theme's copy, including after loading a saved setup or editing copy. Clicking the already selected theme keeps edits. AI copy refresh has undo and ignores stale responses after setup changes.
 - Product search retains selections. Each product has its own image, visible specification checkboxes and optional catalog price. Unchecked specifications remain factual context.
 - Meta, Google Display and Microsoft formats are available without connecting an ad account. Only Meta outputs enter the existing Meta publishing workflow; other formats are exports.
 - One master is generated per product group, then referenced for each size adaptation. Products together supports three products; separate mode supports up to 12, with 24 total outputs per attempt.

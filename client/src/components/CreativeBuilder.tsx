@@ -61,13 +61,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
   const [dirty, setDirty] = useState(false);
   const [search, setSearch] = useState("");
   const [focusedId, setFocusedId] = useState<number | null>(null);
-  const [copyEdited, setCopyEdited] = useState<
-    Partial<Record<keyof CreativeCopy, boolean>>
-  >({});
-  const [undoCopy, setUndoCopy] = useState<{
-    copy: CreativeCopy;
-    edited: typeof copyEdited;
-  } | null>(null);
+  const [undoCopy, setUndoCopy] = useState<CreativeCopy | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(
     null
   );
@@ -132,7 +126,6 @@ export function CreativeBuilder({ onGenerated }: Props) {
     setSetup(parsed.data);
     setSaved({ briefId: draft.id, updatedAtMs: draft.updatedAtMs });
     setDirty(false);
-    setCopyEdited({ headline: true, subheadline: true, cta: true });
     setUndoCopy(null);
     setFocusedId(parsed.data.products[0]?.productId ?? null);
   }
@@ -151,7 +144,6 @@ export function CreativeBuilder({ onGenerated }: Props) {
       setSetup(next);
       setSaved(null);
       setDirty(false);
-      setCopyEdited({});
       setUndoCopy(null);
       setFocusedId(null);
     }
@@ -252,8 +244,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
         return toast.info(
           "Your setup changed while AI was writing. Refresh again to use the latest direction."
         );
-      setUndoCopy({ copy: before.copy, edited: copyEdited });
-      setCopyEdited({});
+      setUndoCopy(before.copy);
       change({ ...before, copy });
     } catch (error) {
       toast.error(
@@ -329,7 +320,6 @@ export function CreativeBuilder({ onGenerated }: Props) {
               setSetup(next);
               setSaved(null);
               setDirty(false);
-              setCopyEdited({});
               setUndoCopy(null);
             }}
           >
@@ -387,16 +377,17 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <CreativeThemeLibrary
               selectedTheme={setup.theme}
               onSelect={theme => {
-                const copy = { ...setup.copy };
-                (["headline", "subheadline", "cta"] as const).forEach(key => {
-                  if (!copyEdited[key]) copy[key] = theme[key];
-                });
+                if (theme.id === setup.theme) return;
                 setUndoCopy(null);
                 change({
                   ...setup,
                   theme: theme.id,
                   themePrompt: theme.direction,
-                  copy,
+                  copy: {
+                    headline: theme.headline,
+                    subheadline: theme.subheadline,
+                    cta: theme.cta,
+                  },
                 });
               }}
             />
@@ -820,8 +811,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      setCopyEdited(undoCopy.edited);
-                      change({ ...setup, copy: undoCopy.copy });
+                      change({ ...setup, copy: undoCopy });
                       setUndoCopy(null);
                     }}
                   >
@@ -845,9 +835,8 @@ export function CreativeBuilder({ onGenerated }: Props) {
               </div>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              {Object.values(copyEdited).some(Boolean)
-                ? "Your manual edits stay when the theme changes."
-                : "Theme copy · edit it or ask AI for another direction."}
+              Copy updates when you choose a different theme. Edit it or refresh
+              for another direction.
               {setup.products.length > 1 && setup.productMode === "separate"
                 ? " Copy is shared across product sets."
                 : ""}
@@ -868,7 +857,6 @@ export function CreativeBuilder({ onGenerated }: Props) {
                       key === "headline" ? 180 : key === "cta" ? 60 : 400
                     }
                     onChange={event => {
-                      setCopyEdited({ ...copyEdited, [key]: true });
                       change({
                         ...setup,
                         copy: { ...setup.copy, [key]: event.target.value },
