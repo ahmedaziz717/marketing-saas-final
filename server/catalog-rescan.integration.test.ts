@@ -99,7 +99,7 @@ describe.sequential("catalog router deletion safeguards", () => {
   it("toggles approval back to pending, clears reviewer fields, records both events, and rejects creator review access", async () => {
     const db = await getDb(); if (!db) throw new Error("Database unavailable");
     const now = Date.now();
-    const productId = Number((await db.insert(products).values({ organizationId, name: "Approval Toggle Product", dedupeKey: `approval-toggle-${suffix}`, productUrl: "https://router-test.example/products/approval-toggle", specifications: {}, provenance: {}, status: "pending", createdAtMs: now, updatedAtMs: now }))[0].insertId);
+    const productId = Number((await db.insert(products).values({ organizationId, name: "Approval Toggle Product", dedupeKey: `approval-toggle-${suffix}`, productUrl: "https://router-test.example/products/approval-toggle", specifications: {}, provenance: {}, status: "pending", createdAtMs: now, updatedAtMs: now }).returning({ insertId: products.id }))[0].insertId);
 
     await caller.catalog.reviewProduct({ organizationId, productId, decision: "approved" });
     expect((await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]).toMatchObject({ status: "approved", reviewedByUserId: userId });
