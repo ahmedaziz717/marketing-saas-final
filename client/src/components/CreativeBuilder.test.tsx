@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CREATIVE_ART_STYLES,
+  CREATIVE_MOODS,
   CREATIVE_THEMES,
   DEFAULT_CREATIVE_BASE_PROMPT,
   defaultCreativeSetup,
@@ -115,6 +117,8 @@ describe("Creative Builder controls", () => {
       theme: "cyber-monday" as const,
       basePrompt: "Saved main prompt for a premium retail composition.",
       themePrompt: "Saved theme prompt with cyan data light and restrained violet depth.",
+      mood: "premium" as const,
+      artStyle: "editorial" as const,
       copy: {
         headline: "Saved headline",
         subheadline: "Saved subheadline",
@@ -133,6 +137,8 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(savedSetup.themePrompt);
+    expect(screen.getByRole("button", { name: "Premium" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Editorial" }).getAttribute("aria-pressed")).toBe("true");
     const resetButtons = screen.getAllByRole("button", { name: "Reset" });
     fireEvent.click(resetButtons[0]);
     fireEvent.click(resetButtons[1]);
@@ -219,8 +225,17 @@ describe("Creative Builder controls", () => {
     fireEvent.change(screen.getByLabelText(/Extra direction/), {
       target: { value: "Warm window light" },
     });
-    fireEvent.change(screen.getByLabelText("Shot type"), {
-      target: { value: "female" },
+    expect(CREATIVE_MOODS).toHaveLength(8);
+    expect(CREATIVE_ART_STYLES).toHaveLength(8);
+    fireEvent.click(screen.getByRole("button", { name: "Vibrant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Animation" }));
+    const setting = screen.getByLabelText("Product setting");
+    expect(screen.getByRole("option", { name: "Product only" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Lifestyle · female" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Lifestyle · male" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Lifestyle · no person" })).toBeTruthy();
+    fireEvent.change(setting, {
+      target: { value: "lifestyle" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Refresh copy" }));
     await waitFor(() =>
@@ -246,7 +261,9 @@ describe("Creative Builder controls", () => {
           },
         ],
         logoAssetId: 31,
-        shot: "female",
+        mood: "vibrant",
+        artStyle: "animation",
+        shot: "lifestyle",
         extraDirection: "Warm window light",
       },
     });

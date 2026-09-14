@@ -170,7 +170,7 @@ export async function runBuilderJob(
             " · " +
             format.name
           ).slice(0, 180),
-          concept: CREATIVE_THEMES[setup.theme].name + " · " + setup.shot,
+          concept: CREATIVE_THEMES[setup.theme].name + " · " + setup.mood + " · " + setup.artStyle + " · " + setup.shot,
           primaryText: setup.copy.subheadline,
           headline: setup.copy.headline,
           description: setup.copy.subheadline,
@@ -182,6 +182,9 @@ export async function runBuilderJob(
           renderMetadata: {
             productIds: group.map(product => product.id),
             copy: setup.copy,
+            mood: setup.mood,
+            artStyle: setup.artStyle,
+            shot: setup.shot,
             width: format.width,
             height: format.height,
           },

@@ -204,6 +204,9 @@ describe.sequential("persistent creative builder", () => {
       "Create a premium product-led commerce composition with clear hierarchy and generous safe space.";
     draft.themePrompt =
       "Use electric cyan data light, restrained violet depth, and a polished digital retail-event atmosphere.";
+    draft.mood = "premium";
+    draft.artStyle = "editorial";
+    draft.shot = "lifestyle";
     draft.extraDirection = "Warm evening light";
     const saved = await caller.creativeBuilder.save({
       organizationId,
@@ -217,6 +220,9 @@ describe.sequential("persistent creative builder", () => {
       theme: "cyber-monday",
       basePrompt: draft.basePrompt,
       themePrompt: draft.themePrompt,
+      mood: "premium",
+      artStyle: "editorial",
+      shot: "lifestyle",
     });
     await expect(
       caller.creativeBuilder.save({

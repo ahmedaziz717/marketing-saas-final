@@ -228,7 +228,7 @@ export const creativeVariants = mysqlTable("creative_variants", {
   channel: mysqlEnum("channel", ["meta", "google_display", "microsoft"]).default("meta").notNull(),
   imageUrl: text("imageUrl").notNull(),
   imageStorageKey: varchar("imageStorageKey", { length: 500 }),
-  renderMetadata: json("renderMetadata").$type<{ productIds: number[]; copy: import("../shared/creativeBuilder").CreativeCopy; width: number; height: number }>(),
+  renderMetadata: json("renderMetadata").$type<{ productIds: number[]; copy: import("../shared/creativeBuilder").CreativeCopy; mood?: import("../shared/creativeBuilder").CreativeMood; artStyle?: import("../shared/creativeBuilder").CreativeArtStyle; shot?: import("../shared/creativeBuilder").CreativeSetup["shot"]; width: number; height: number }>(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
   reviewedByUserId: int("reviewedByUserId").references(() => users.id),
   reviewedAtMs: bigint("reviewedAtMs", { mode: "number" }),

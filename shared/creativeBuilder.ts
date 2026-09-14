@@ -23,6 +23,38 @@ export const CREATIVE_CHANNELS = [
 ] as const;
 export type CreativeChannel = (typeof CREATIVE_CHANNELS)[number]["id"];
 
+export const CREATIVE_MOODS = [
+  { id: "clean", name: "Clean", icon: "sparkles", direction: "Use crisp visual hierarchy, balanced whitespace, restrained color, and a polished uncluttered finish." },
+  { id: "vibrant", name: "Vibrant", icon: "zap", direction: "Use energetic color, lively contrast, and confident visual rhythm while keeping the product easy to read." },
+  { id: "dark", name: "Dark", icon: "moon", direction: "Use deep controlled backgrounds, focused highlights, and premium contrast without losing product detail." },
+  { id: "minimal", name: "Minimal", icon: "square", direction: "Use one dominant focal point, generous negative space, and only essential supporting elements." },
+  { id: "bold", name: "Bold", icon: "flame", direction: "Use assertive scale, strong graphic contrast, and an immediate high-impact composition." },
+  { id: "warm", name: "Warm", icon: "sun", direction: "Use inviting warm tones, soft natural light, and an approachable optimistic atmosphere." },
+  { id: "playful", name: "Playful", icon: "party", direction: "Use expressive color, buoyant shapes, and light visual energy while retaining brand polish." },
+  { id: "premium", name: "Premium", icon: "gem", direction: "Use refined materials, controlled highlights, elegant spacing, and quiet luxury restraint." },
+] as const;
+export type CreativeMood = (typeof CREATIVE_MOODS)[number]["id"];
+
+export const CREATIVE_ART_STYLES = [
+  { id: "realistic", name: "Realistic", icon: "camera", direction: "Create photorealistic commercial product photography with accurate materials, lighting, and physical proportions." },
+  { id: "animation", name: "Animation", icon: "clapperboard", direction: "Use a polished animated-feature visual language for the environment while keeping the supplied product recognizable and physically accurate." },
+  { id: "illustration", name: "Illustration", icon: "brush", direction: "Use sophisticated commercial illustration with clear product geometry and intentional graphic detail." },
+  { id: "three_d", name: "3D Render", icon: "box", direction: "Use a high-end studio 3D-render aesthetic with accurate product geometry, materials, shadows, and reflections." },
+  { id: "editorial", name: "Editorial", icon: "newspaper", direction: "Use art-directed magazine composition, refined typography, and a deliberate editorial crop." },
+  { id: "cinematic", name: "Cinematic", icon: "film", direction: "Use cinematic lighting, depth, atmosphere, and visual storytelling while preserving clear product recognition." },
+  { id: "collage", name: "Collage", icon: "layers", direction: "Use a layered editorial collage with controlled cut-paper depth, graphic framing, and readable hierarchy." },
+  { id: "technical", name: "Technical", icon: "scan", direction: "Use a precise technical-visualization style with measured lines and structured information, without inventing internal parts or features." },
+] as const;
+export type CreativeArtStyle = (typeof CREATIVE_ART_STYLES)[number]["id"];
+
+export function getCreativeMood(id: CreativeMood) {
+  return CREATIVE_MOODS.find(option => option.id === id) ?? CREATIVE_MOODS[0];
+}
+
+export function getCreativeArtStyle(id: CreativeArtStyle) {
+  return CREATIVE_ART_STYLES.find(option => option.id === id) ?? CREATIVE_ART_STYLES[0];
+}
+
 export const CREATIVE_FORMATS = [
   {
     id: "square_1_1",
@@ -101,6 +133,8 @@ export const SHOT_DIRECTIONS = {
   female:
     "Lifestyle setting with an adult female model using the product naturally.",
   male: "Lifestyle setting with an adult male model using the product naturally.",
+  lifestyle:
+    "Lifestyle environment around the product with no people, hands, faces, silhouettes, or human figures. Show believable contextual use through the setting and surrounding objects only.",
 } as const;
 
 export const creativeCopySchema = z.object({
@@ -131,7 +165,9 @@ export const creativeSetupSchema = z
       )
       .max(12),
     productMode: z.enum(["separate", "together"]),
-    shot: z.enum(["product", "female", "male"]),
+    shot: z.enum(["product", "female", "male", "lifestyle"]),
+    mood: z.enum(["clean", "vibrant", "dark", "minimal", "bold", "warm", "playful", "premium"]).default("clean"),
+    artStyle: z.enum(["realistic", "animation", "illustration", "three_d", "editorial", "cinematic", "collage", "technical"]).default("realistic"),
     placement: z.enum(["auto", "left", "center", "right"]),
     logoAssetId: z.number().int().positive().nullable(),
     extraDirection: z.string().max(4000),
@@ -180,6 +216,8 @@ export function defaultCreativeSetup(): CreativeSetup {
     products: [],
     productMode: "separate",
     shot: "product",
+    mood: "clean",
+    artStyle: "realistic",
     placement: "auto",
     logoAssetId: null,
     extraDirection: "",

@@ -159,3 +159,11 @@
 - [x] Preserve reject, edit, delete, bulk review, brief eligibility, and generation safeguards when a product is unapproved.
 - [x] Add regressions for pending-to-approved and approved-to-pending transitions, authorization, activity history, and UI state.
 - [x] Run TypeScript, targeted tests, full tests, production build, responsive catalog verification, and save the catalog approval-toggle checkpoint.
+- [x] Audit the current Creative Builder product staging options, shared setup schema, saved setup restoration, prompt composition, and reference mood-control pattern.
+- [x] Define icon-led Mood options including Clean, Vibrant, Dark, Minimal, Bold, and additional production-ready choices with stable IDs and prompt guidance.
+- [x] Define icon-led Art Style options including Realistic, Animation, Illustration, 3D Render, Editorial, and additional production-ready choices with stable IDs and prompt guidance.
+- [x] Preserve Product only, Lifestyle — Female, and Lifestyle — Male, and add Lifestyle — No person as a fourth staging option with explicit no-human prompt guidance.
+- [x] Persist mood and art style in creativeSetup, restore them from saved setups, and expose clear selected states without automatic saving or generation.
+- [x] Include mood, art style, and no-person lifestyle instructions in the final Sunburst prompt while preserving product truth, prompt overrides, dimensions, and approval safeguards.
+- [x] Add regressions for option definitions, icons, backward-compatible existing staging values, saved setup round trips, control interactions, and prompt composition.
+- [x] Run TypeScript, targeted and full tests, production build, authenticated desktop/mobile Creative Builder verification, runtime log review, and save the visual-direction checkpoint.
