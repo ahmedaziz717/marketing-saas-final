@@ -42,6 +42,7 @@ export async function storagePut(
 
   const presignResp = await fetch(presignUrl, {
     headers: { Authorization: `Bearer ${forgeKey}` },
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!presignResp.ok) {
@@ -60,6 +61,7 @@ export async function storagePut(
 
   const uploadResp = await fetch(s3Url, {
     method: "PUT",
+    signal: AbortSignal.timeout(60_000),
     headers: { "Content-Type": contentType },
     body: blob,
   });
@@ -85,6 +87,7 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
 
   const resp = await fetch(getUrl, {
     headers: { Authorization: `Bearer ${forgeKey}` },
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!resp.ok) {
@@ -98,7 +101,7 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
 
 export async function storageGetBase64(relKey: string, maxBytes = 15 * 1024 * 1024): Promise<string> {
   const url = await storageGetSignedUrl(relKey);
-  const resp = await fetch(url);
+  const resp = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!resp.ok) throw new Error(`Stored source image could not be read (${resp.status})`);
   const contentLength = Number(resp.headers.get("content-length") ?? "0");
   if (contentLength > maxBytes) throw new Error("Stored source image exceeds the generation input limit");

@@ -24,16 +24,16 @@ export type GenerationErrorCategory = "source_image" | "model_unavailable" | "pl
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
   if (/403|forbidden|source image|original image|no readable raster/.test(normalized)) {
-    return { category: "source_image", userMessage: "A selected source image could not be read by the image model. Use approved PNG, JPEG, or WebP assets, then retry." };
+    return { category: "source_image", userMessage: "A selected source image could not be read. Use approved PNG, JPEG, or WebP assets, then retry." };
   }
   if (/required gpt|model.+unavailable|list image models|list llm models/.test(normalized)) {
-    return { category: "model_unavailable", userMessage: "The required GPT model is temporarily unavailable. Retry in a few minutes." };
+    return { category: "model_unavailable", userMessage: "AI generation is temporarily unavailable. Your setup is saved; try again later." };
   }
   if (/json|creative plan|schema|concepts/.test(normalized)) {
     return { category: "planning_response", userMessage: "The creative plan response was incomplete. Retry to create a fresh generation attempt." };
   }
   if (/timeout|timed out|abort/.test(normalized)) {
-    return { category: "timeout", userMessage: "Generation exceeded the request window. Retry with two variants or fewer source images." };
+    return { category: "timeout", userMessage: "Generation took too long. Try again with fewer products or sizes." };
   }
-  return { category: "provider", userMessage: "The generation provider could not complete this attempt. Retry without changing the approved brief." };
+  return { category: "provider", userMessage: "AI could not complete this attempt. Your setup is saved; please try again." };
 }
