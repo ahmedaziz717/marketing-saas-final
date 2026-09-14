@@ -68,13 +68,27 @@ export const catalogRouter = router({
     return { success: true };
   }),
 
-  reviewProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive(), decision: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+  reviewProduct: protectedProcedure.input(organizationInput.extend({ productId: z.number().int().positive(), decision: z.enum(["approved", "rejected", "pending"]) })).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "reviewer"]);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, input.organizationId))).limit(1))[0];
     if (!product) throw new TRPCError({ code: "NOT_FOUND" });
-    await db.update(products).set({ status: input.decision, reviewedByUserId: ctx.user.id, reviewedAtMs: Date.now(), updatedAtMs: Date.now() }).where(eq(products.id, input.productId));
-    await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `catalog.product_${input.decision}`, entityType: "product", entityId: input.productId, payload: { sourcePageId: product.sourcePageId, productUrl: product.productUrl } });
+    const now = Date.now();
+    const isUnapproval = input.decision === "pending";
+    await db.update(products).set({
+      status: input.decision,
+      reviewedByUserId: isUnapproval ? null : ctx.user.id,
+      reviewedAtMs: isUnapproval ? null : now,
+      updatedAtMs: now,
+    }).where(eq(products.id, input.productId));
+    await appendActivity({
+      organizationId: input.organizationId,
+      actorUserId: ctx.user.id,
+      action: isUnapproval ? "catalog.product_unapproved" : `catalog.product_${input.decision}`,
+      entityType: "product",
+      entityId: input.productId,
+      payload: { priorStatus: product.status, nextStatus: input.decision, sourcePageId: product.sourcePageId, productUrl: product.productUrl },
+    });
     return { success: true };
   }),
 

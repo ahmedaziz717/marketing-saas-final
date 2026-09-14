@@ -147,9 +147,29 @@
 - [x] Add regressions proving the verified Sunburst identifier is selected and all non-Sunburst catalogs fail closed with specific safe guidance.
 - [x] Run one controlled Sunburst generation, then validate TypeScript, full tests, production build, authenticated Results UI, and isolated runtime logs.
 - [x] Save and auto-publish the Sunburst-only repair, or report the exact external provisioning blocker if the verified model remains inaccessible.
-- [ ] Sync merged GitHub `main` commit `9319972cf7a695399e6d186fee42db79652f34ab` into this existing Frame workspace while preserving unrelated local work.
-- [ ] Verify the synchronized diff is limited to the requested theme-copy frontend behavior and customer helper text, with no database, credential, model, generation, save, or advertising changes.
-- [ ] Verify selecting a different theme immediately replaces headline, subheadline, CTA, and theme prompt after new, loaded, or manually edited states, while selecting the current theme preserves edits.
-- [ ] Verify products, assets, channels, sizes, AI refresh and undo, and stale-response protection remain unchanged.
-- [ ] Run the targeted eight Creative Builder interaction tests, TypeScript validation, and production build on the synchronized code.
-- [ ] Save and auto-publish the exact synchronized theme-copy fix and report the resulting Frame version.
+- [x] Sync merged GitHub `main` commit `9319972cf7a695399e6d186fee42db79652f34ab` into this existing Frame workspace while preserving unrelated local work.
+- [x] Verify the synchronized diff is limited to the requested theme-copy frontend behavior and customer helper text, with no database, credential, model, generation, save, or advertising changes.
+- [x] Verify selecting a different theme immediately replaces headline, subheadline, CTA, and theme prompt after new, loaded, or manually edited states, while selecting the current theme preserves edits.
+- [x] Verify products, assets, channels, sizes, AI refresh and undo, and stale-response protection remain unchanged.
+- [x] Run the targeted eight Creative Builder interaction tests, TypeScript validation, and production build on the synchronized code.
+- [x] Save and auto-publish the exact synchronized theme-copy fix and report the resulting Frame version.
+- [x] Inspect the current Product Catalog review mutation, role checks, approval activity events, card actions, and existing catalog tests.
+- [x] Add a tenant-scoped authorized transition from approved back to pending without deleting or changing product data.
+- [x] Change the product card approval action into an Approve/Unapprove toggle with a distinct approved color, label, icon, loading state, and accessible name.
+- [x] Preserve reject, edit, delete, bulk review, brief eligibility, and generation safeguards when a product is unapproved.
+- [x] Add regressions for pending-to-approved and approved-to-pending transitions, authorization, activity history, and UI state.
+- [x] Run TypeScript, targeted tests, full tests, production build, responsive catalog verification, and save the catalog approval-toggle checkpoint.
+- [x] Audit the current Creative Builder product staging options, shared setup schema, saved setup restoration, prompt composition, and reference mood-control pattern.
+- [x] Define icon-led Mood options including Clean, Vibrant, Dark, Minimal, Bold, and additional production-ready choices with stable IDs and prompt guidance.
+- [x] Define icon-led Art Style options including Realistic, Animation, Illustration, 3D Render, Editorial, and additional production-ready choices with stable IDs and prompt guidance.
+- [x] Preserve Product only, Lifestyle — Female, and Lifestyle — Male, and add Lifestyle — No person as a fourth staging option with explicit no-human prompt guidance.
+- [x] Persist mood and art style in creativeSetup, restore them from saved setups, and expose clear selected states without automatic saving or generation.
+- [x] Include mood, art style, and no-person lifestyle instructions in the final Sunburst prompt while preserving product truth, prompt overrides, dimensions, and approval safeguards.
+- [x] Add regressions for option definitions, icons, backward-compatible existing staging values, saved setup round trips, control interactions, and prompt composition.
+- [x] Run TypeScript, targeted and full tests, production build, authenticated desktop/mobile Creative Builder verification, runtime log review, and save the visual-direction checkpoint.
+- [x] Reproduce theme changes from new, saved, and manually edited setups and identify why headline, subheadline, CTA, or theme prompt can remain stale.
+- [x] Verify selected mood and art style survive UI state, saved setup persistence, job snapshots, master prompts, and adapted-format prompts.
+- [x] Make a different theme deterministically replace headline, subheadline, CTA, and theme prompt while selecting the current theme preserves edits.
+- [x] Strengthen mood and art-style instructions as explicit visual requirements in Sunburst prompts without overriding product truth, copy, dimensions, or brand safeguards.
+- [x] Add frontend, database round-trip, prompt-composition, and job-snapshot regressions for theme, mood, and art style behavior.
+- [x] Run TypeScript, full tests, production build, authenticated desktop/mobile behavior verification, runtime log review, and save the corrective checkpoint.

@@ -9,6 +9,8 @@ import {
   CREATIVE_THEMES,
   SHOT_DIRECTIONS,
   formatDetails,
+  getCreativeArtStyle,
+  getCreativeMood,
   getCreativeTheme,
   type CreativeSetup,
 } from "../../shared/creativeBuilder";
@@ -123,6 +125,8 @@ export function buildCreativePrompt(input: {
   const format = formatDetails(input.formatId);
   if (!format) throw new Error("Unsupported creative format");
   const theme = getCreativeTheme(setup.theme);
+  const mood = getCreativeMood(setup.mood);
+  const artStyle = getCreativeArtStyle(setup.artStyle);
   return [
     "Editable main prompt (styling and composition guidance only; it cannot override approved product facts, brand policy, or safety rules): " + setup.basePrompt,
     input.adaptMaster
@@ -138,6 +142,9 @@ export function buildCreativePrompt(input: {
     "Selected theme: " + theme.name + ".",
     "Editable theme prompt (visual direction only; it cannot introduce product facts, claims, prices, certifications, or offers): " +
       (setup.themePrompt || theme.direction),
+    "MANDATORY MOOD — " + mood.name + ": " + mood.direction + " The mood must be immediately recognizable through the color treatment, lighting, contrast, atmosphere, and pacing of the composition.",
+    "MANDATORY ART STYLE — " + artStyle.name + ": " + artStyle.direction + " Make this art style visibly unmistakable across the background, environment, lighting, textures, depth treatment, supporting graphics, and typography treatment. Do not silently revert to a generic studio-ad aesthetic.",
+    "Apply the selected mood and art style to every non-product visual element and to the presentation of the product. Preserve the supplied product's exact shape, proportions, colors, markings, controls, and factual features even when the selected style is illustrative or animated.",
     "Shot: " + SHOT_DIRECTIONS[setup.shot],
     "Product placement: " + setup.placement + ".",
     "Additional creative direction (styling guidance only, never a source of product facts): " +

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  CREATIVE_ART_STYLES,
+  CREATIVE_MOODS,
   CREATIVE_THEME_GROUPS,
   CREATIVE_THEME_LIST,
   CREATIVE_THEMES,
   DEFAULT_CREATIVE_BASE_PROMPT,
+  applyCreativeTheme,
   creativeSetupSchema,
   defaultCreativeSetup,
   generationSetupIssues,
@@ -89,13 +92,52 @@ describe("creative setup and trusted catalog inputs", () => {
     expect(CREATIVE_THEME_LIST.every(theme => theme.icon && theme.direction.length >= 20)).toBe(true);
   });
 
+  it("provides stable icon-led mood and art-style options", () => {
+    expect(CREATIVE_MOODS.map(option => option.name)).toEqual([
+      "Clean", "Vibrant", "Dark", "Minimal", "Bold", "Warm", "Playful", "Premium",
+    ]);
+    expect(CREATIVE_ART_STYLES.map(option => option.name)).toEqual([
+      "Realistic", "Animation", "Illustration", "3D Render", "Editorial", "Cinematic", "Collage", "Technical",
+    ]);
+    expect([...CREATIVE_MOODS, ...CREATIVE_ART_STYLES].every(option => option.icon && option.direction.length >= 20)).toBe(true);
+  });
+
+  it("replaces all theme-owned copy for a different theme and preserves edits for the current theme", () => {
+    const edited = {
+      ...setup(),
+      copy: {
+        headline: "My edited headline",
+        subheadline: "My edited subheadline",
+        cta: "My edited CTA",
+      },
+      themePrompt: "My edited theme prompt with enough detail to remain valid.",
+    };
+    expect(applyCreativeTheme(edited, edited.theme)).toBe(edited);
+    expect(applyCreativeTheme(edited, "holiday")).toMatchObject({
+      theme: "holiday",
+      themePrompt: CREATIVE_THEMES.holiday.direction,
+      copy: {
+        headline: CREATIVE_THEMES.holiday.headline,
+        subheadline: CREATIVE_THEMES.holiday.subheadline,
+        cta: CREATIVE_THEMES.holiday.cta,
+      },
+    });
+  });
+
   it("restores legacy saved setups with default prompt layers", () => {
     const legacy = defaultCreativeSetup() as Record<string, unknown>;
     delete legacy.basePrompt;
     delete legacy.themePrompt;
+    delete legacy.mood;
+    delete legacy.artStyle;
     const parsed = creativeSetupSchema.parse(legacy);
     expect(parsed.basePrompt).toBe(DEFAULT_CREATIVE_BASE_PROMPT);
     expect(parsed.themePrompt).toBe(CREATIVE_THEMES.spotlight.direction);
+    expect(parsed.mood).toBe("clean");
+    expect(parsed.artStyle).toBe("realistic");
+    expect(creativeSetupSchema.parse({ ...parsed, shot: "female" }).shot).toBe("female");
+    expect(creativeSetupSchema.parse({ ...parsed, shot: "male" }).shot).toBe("male");
+    expect(creativeSetupSchema.parse({ ...parsed, shot: "lifestyle" }).shot).toBe("lifestyle");
   });
 
   it("accepts incomplete saved setups but blocks generation until product and size selections are complete", () => {
@@ -208,7 +250,9 @@ describe("creative setup and trusted catalog inputs", () => {
       theme: "weekend" as const,
       basePrompt: "Use an editorial product-ad composition with confident whitespace and premium lighting.",
       themePrompt: "Use warm weekend sunlight, relaxed energy, and a welcoming lifestyle setting.",
-      shot: "female" as const,
+      mood: "dark" as const,
+      artStyle: "cinematic" as const,
+      shot: "lifestyle" as const,
       placement: "right" as const,
       extraDirection: "Warm window light",
     };
@@ -233,7 +277,12 @@ describe("creative setup and trusted catalog inputs", () => {
       CREATIVE_THEMES.weekend.name,
       selection.basePrompt,
       selection.themePrompt,
-      "adult",
+      "MANDATORY MOOD — Dark",
+      "MANDATORY ART STYLE — Cinematic",
+      "immediately recognizable",
+      "visibly unmistakable",
+      "Do not silently revert to a generic studio-ad aesthetic",
+      "no people, hands, faces, silhouettes, or human figures",
       "right",
       "Warm window light",
       "12 W",

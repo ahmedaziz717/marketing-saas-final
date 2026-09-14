@@ -49,7 +49,7 @@ import {
   products,
   users,
 } from "../drizzle/schema";
-import { defaultCreativeSetup } from "../shared/creativeBuilder";
+import { applyCreativeTheme, defaultCreativeSetup } from "../shared/creativeBuilder";
 import { getDb } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -205,6 +205,9 @@ describe.sequential("persistent creative builder", () => {
       "Create a premium product-led commerce composition with clear hierarchy and generous safe space.";
     draft.themePrompt =
       "Use electric cyan data light, restrained violet depth, and a polished digital retail-event atmosphere.";
+    draft.mood = "premium";
+    draft.artStyle = "editorial";
+    draft.shot = "lifestyle";
     draft.extraDirection = "Warm evening light";
     const saved = await caller.creativeBuilder.save({
       organizationId,
@@ -218,7 +221,18 @@ describe.sequential("persistent creative builder", () => {
       theme: "cyber-monday",
       basePrompt: draft.basePrompt,
       themePrompt: draft.themePrompt,
+      mood: "premium",
+      artStyle: "editorial",
+      shot: "lifestyle",
     });
+    const db = await database();
+    const persisted = await db
+      .select({ creativeDirection: campaignBriefs.creativeDirection })
+      .from(campaignBriefs)
+      .where(eq(campaignBriefs.id, saved.briefId))
+      .limit(1);
+    expect(persisted[0]?.creativeDirection).toContain("Mood: Premium");
+    expect(persisted[0]?.creativeDirection).toContain("Art style: Editorial");
     await expect(
       caller.creativeBuilder.save({
         organizationId,
@@ -275,9 +289,13 @@ describe.sequential("persistent creative builder", () => {
   });
 
   it("starts asynchronously, persists pending results, deduplicates retries and provides an authenticated download", async () => {
+    const generationSetup = applyCreativeTheme(
+      { ...setup(), mood: "dark", artStyle: "animation" },
+      "holiday"
+    );
     const saved = await caller.creativeBuilder.save({
       organizationId,
-      setup: setup(),
+      setup: generationSetup,
     });
     const request = {
       organizationId,
@@ -298,6 +316,14 @@ describe.sequential("persistent creative builder", () => {
       { timeout: 10_000, interval: 30 }
     );
     const state = await caller.creatives.overview({ organizationId });
+    const persistedJob = state.jobs.find(job => job.id === started.jobId);
+    expect(persistedJob?.briefSnapshot.setup).toMatchObject({
+      theme: "holiday",
+      mood: "dark",
+      artStyle: "animation",
+      themePrompt: generationSetup.themePrompt,
+      copy: generationSetup.copy,
+    });
     const variants = state.variants.filter(
       item => item.jobId === started.jobId
     );
@@ -306,7 +332,9 @@ describe.sequential("persistent creative builder", () => {
       variants.every(
         item =>
           item.status === "pending" &&
-          item.renderMetadata?.productIds[0] === productId
+          item.renderMetadata?.productIds[0] === productId &&
+          item.renderMetadata?.mood === "dark" &&
+          item.renderMetadata?.artStyle === "animation"
       )
     ).toBe(true);
     const calls = provider.calls;

@@ -256,7 +256,7 @@ export const creativeVariants = appSchema.table("creative_variants", {
   channel: creativeVariantsChannelEnum("channel").default("meta").notNull(),
   imageUrl: text("imageUrl").notNull(),
   imageStorageKey: varchar("imageStorageKey", { length: 500 }),
-  renderMetadata: json("renderMetadata").$type<{ productIds: number[]; copy: import("../shared/creativeBuilder").CreativeCopy; width: number; height: number }>(),
+  renderMetadata: json("renderMetadata").$type<{ productIds: number[]; copy: import("../shared/creativeBuilder").CreativeCopy; mood?: import("../shared/creativeBuilder").CreativeMood; artStyle?: import("../shared/creativeBuilder").CreativeArtStyle; shot?: import("../shared/creativeBuilder").CreativeSetup["shot"]; width: number; height: number }>(),
   status: creativeVariantsStatusEnum("status").default("pending").notNull(),
   reviewedByUserId: integer("reviewedByUserId").references(() => users.id),
   reviewedAtMs: bigint("reviewedAtMs", { mode: "number" }),

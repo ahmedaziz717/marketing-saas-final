@@ -1,22 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
+  Box,
+  Brush,
+  Camera,
   Check,
+  Clapperboard,
+  Film,
+  Flame,
+  Gem,
   ImageIcon,
+  Layers,
   Loader2,
   Maximize2,
+  Moon,
+  Newspaper,
   PackageSearch,
+  PartyPopper,
   RotateCcw,
   Save,
+  ScanLine,
   Search,
+  Square,
   Sparkles,
+  Sun,
   X,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  CREATIVE_ART_STYLES,
   CREATIVE_CHANNELS,
   CREATIVE_FORMATS,
+  CREATIVE_MOODS,
   DEFAULT_CREATIVE_BASE_PROMPT,
+  applyCreativeTheme,
   creativeSetupSchema,
   defaultCreativeSetup,
   formatDetails,
@@ -45,6 +64,66 @@ const selectClass =
 const labelClass = "mb-2 block text-sm font-medium";
 const sectionClass = "surface p-5 sm:p-6";
 type Props = { onGenerated: () => void };
+
+const visualDirectionIcons: Record<string, LucideIcon> = {
+  sparkles: Sparkles,
+  zap: Zap,
+  moon: Moon,
+  square: Square,
+  flame: Flame,
+  sun: Sun,
+  party: PartyPopper,
+  gem: Gem,
+  camera: Camera,
+  clapperboard: Clapperboard,
+  brush: Brush,
+  box: Box,
+  newspaper: Newspaper,
+  film: Film,
+  layers: Layers,
+  scan: ScanLine,
+};
+
+function VisualDirectionOptions<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ id: T; name: string; icon: string; direction: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div>
+      <span className={labelClass}>{label}</span>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+        {options.map(option => {
+          const Icon = visualDirectionIcons[option.icon] ?? Sparkles;
+          const selected = option.id === value;
+          return (
+            <button
+              type="button"
+              key={option.id}
+              aria-pressed={selected}
+              title={option.direction}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                selected
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5"
+              }`}
+              onClick={() => onChange(option.id)}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {option.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function CreativeBuilder({ onGenerated }: Props) {
   const { organizationId, membership } = useWorkspace();
@@ -377,18 +456,10 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <CreativeThemeLibrary
               selectedTheme={setup.theme}
               onSelect={theme => {
-                if (theme.id === setup.theme) return;
+                const next = applyCreativeTheme(setupRef.current, theme.id);
+                if (next === setupRef.current) return;
                 setUndoCopy(null);
-                change({
-                  ...setup,
-                  theme: theme.id,
-                  themePrompt: theme.direction,
-                  copy: {
-                    headline: theme.headline,
-                    subheadline: theme.subheadline,
-                    cta: theme.cta,
-                  },
-                });
+                change(next);
               }}
             />
             <div className="mt-5 grid gap-4 rounded-2xl border border-border bg-muted/25 p-4">
@@ -683,15 +754,29 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <h2 className="mb-4 text-base font-semibold">
               4. Creative direction
             </h2>
+            <div className="grid gap-5">
+              <VisualDirectionOptions
+                label="Mood"
+                value={setup.mood}
+                options={CREATIVE_MOODS}
+                onChange={mood => change({ ...setupRef.current, mood })}
+              />
+              <VisualDirectionOptions
+                label="Art style"
+                value={setup.artStyle}
+                options={CREATIVE_ART_STYLES}
+                onChange={artStyle => change({ ...setupRef.current, artStyle })}
+              />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label>
-                <span className={labelClass}>Shot type</span>
+                <span className={`${labelClass} mt-5`}>Product setting</span>
                 <select
                   className={selectClass}
                   value={setup.shot}
                   onChange={event =>
                     change({
-                      ...setup,
+                      ...setupRef.current,
                       shot: event.target.value as CreativeSetup["shot"],
                     })
                   }
@@ -699,16 +784,17 @@ export function CreativeBuilder({ onGenerated }: Props) {
                   <option value="product">Product only</option>
                   <option value="female">Lifestyle · female</option>
                   <option value="male">Lifestyle · male</option>
+                  <option value="lifestyle">Lifestyle · no person</option>
                 </select>
               </label>
               <label>
-                <span className={labelClass}>Product placement</span>
+                <span className={`${labelClass} mt-5`}>Product placement</span>
                 <select
                   className={selectClass}
                   value={setup.placement}
                   onChange={event =>
                     change({
-                      ...setup,
+                      ...setupRef.current,
                       placement: event.target
                         .value as CreativeSetup["placement"],
                     })

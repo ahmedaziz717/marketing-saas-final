@@ -47,8 +47,10 @@ import { appRouter } from "./routers";
 
 const suffix = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 let userId = 0;
+let creatorUserId = 0;
 let organizationId = 0;
 let caller: ReturnType<typeof appRouter.createCaller>;
+let creatorCaller: ReturnType<typeof appRouter.createCaller>;
 
 function analysis(name: string) {
   return {
@@ -70,6 +72,7 @@ async function cleanupFixture() {
   await db.delete(websiteCrawlJobs).where(eq(websiteCrawlJobs.organizationId, organizationId));
   await db.delete(organizationMemberships).where(eq(organizationMemberships.organizationId, organizationId));
   await db.delete(organizations).where(eq(organizations.id, organizationId));
+  if (creatorUserId) await db.delete(users).where(eq(users.id, creatorUserId));
   await db.delete(users).where(eq(users.id, userId));
 }
 
@@ -81,13 +84,37 @@ beforeAll(async () => {
   const insertedOrg = await db.insert(organizations).values({ name: "Catalog Router Test", slug: `catalog-router-${suffix}`, createdByUserId: userId, createdAtMs: Date.now() }).returning({ insertId: organizations.id });
   organizationId = Number(insertedOrg[0].insertId);
   await db.insert(organizationMemberships).values({ organizationId, userId, role: "owner", status: "active", createdAtMs: Date.now() }).returning({ insertId: organizationMemberships.id });
+  const insertedCreator = await db.insert(users).values({ openId: `catalog-creator-${suffix}`, email: `catalog-creator-${suffix}@example.test`, name: "Catalog Creator Test", loginMethod: "test" }).returning({ insertId: users.id });
+  creatorUserId = Number(insertedCreator[0].insertId);
+  await db.insert(organizationMemberships).values({ organizationId, userId: creatorUserId, role: "creator", status: "active", createdAtMs: Date.now() }).returning({ insertId: organizationMemberships.id });
   const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]!;
+  const creatorUser = (await db.select().from(users).where(eq(users.id, creatorUserId)).limit(1))[0]!;
   caller = appRouter.createCaller({ user, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+  creatorCaller = appRouter.createCaller({ user: creatorUser, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 });
 
 afterAll(cleanupFixture);
 
 describe.sequential("catalog router deletion safeguards", () => {
+  it("toggles approval back to pending, clears reviewer fields, records both events, and rejects creator review access", async () => {
+    const db = await getDb(); if (!db) throw new Error("Database unavailable");
+    const now = Date.now();
+    const productId = Number((await db.insert(products).values({ organizationId, name: "Approval Toggle Product", dedupeKey: `approval-toggle-${suffix}`, productUrl: "https://router-test.example/products/approval-toggle", specifications: {}, provenance: {}, status: "pending", createdAtMs: now, updatedAtMs: now }))[0].insertId);
+
+    await caller.catalog.reviewProduct({ organizationId, productId, decision: "approved" });
+    expect((await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]).toMatchObject({ status: "approved", reviewedByUserId: userId });
+
+    await expect(creatorCaller.catalog.reviewProduct({ organizationId, productId, decision: "pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await caller.catalog.reviewProduct({ organizationId, productId, decision: "pending" });
+    expect((await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]).toMatchObject({ status: "pending", reviewedByUserId: null, reviewedAtMs: null });
+
+    const actions = (await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityId, String(productId))))).map(event => event.action);
+    expect(actions).toContain("catalog.product_approved");
+    expect(actions).toContain("catalog.product_unapproved");
+    await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityId, String(productId))));
+    await db.delete(products).where(eq(products.id, productId));
+  });
+
   it("removes dependent images, prunes brief selections, and records delete and cleanup events", async () => {
     const db = await getDb(); if (!db) throw new Error("Database unavailable");
     const now = Date.now();
