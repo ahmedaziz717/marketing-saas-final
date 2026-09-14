@@ -6,13 +6,8 @@ const mocked = vi.hoisted(() => ({
   activity: vi.fn(async () => {}),
   renew: vi.fn(async () => {}),
 }));
-vi.mock("./_core/imageGeneration", () => ({
-  listImageModels: async () => ({
-    models: [
-      { id: "gpt-image-2.5-sunburst", model: "advertised-image-engine" },
-    ],
-  }),
-  generateImage: mocked.generate,
+vi.mock("./lib/openaiSunburst", () => ({
+  generateSunburstImage: mocked.generate,
 }));
 vi.mock("./lib/creativeImages", () => ({
   readGenerationSource: async (key: string) => ({
@@ -109,7 +104,6 @@ describe("creative generation orchestration", () => {
     expect(mocked.generate).toHaveBeenCalledTimes(3);
     const requests = mocked.generate.mock.calls.map(call => call[0]);
     expect(requests[0]).toMatchObject({
-      model: "advertised-image-engine",
       outputSize: { width: 1080, height: 1920 },
     });
     expect(

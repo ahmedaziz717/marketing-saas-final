@@ -20,4 +20,14 @@ describe("creative generation source safety", () => {
     expect(result.userMessage).toContain("PNG, JPEG, or WebP");
     expect(result.userMessage).not.toContain("https://signed.example");
   });
+
+  it("explains direct Sunburst access failures without exposing provider details", () => {
+    const result = categorizeGenerationError(
+      "GPT Image 2.5 Sunburst request failed (403): model_not_found: account detail"
+    );
+    expect(result.category).toBe("model_access");
+    expect(result.userMessage).toContain("GPT Image 2.5 Sunburst access");
+    expect(result.userMessage).toContain("owner");
+    expect(result.userMessage).not.toContain("account detail");
+  });
 });

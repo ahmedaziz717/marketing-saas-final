@@ -22,7 +22,6 @@ import {
   type CreativeSetup,
 } from "../../shared/creativeBuilder";
 import { protectedProcedure, router } from "../_core/trpc";
-import { generateImage, listImageModels } from "../_core/imageGeneration";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
@@ -32,10 +31,8 @@ import {
   resolveBuilderInputs,
 } from "../lib/creativeBuilder";
 import { categorizeGenerationError } from "../lib/generation";
-import {
-  requireLatestGptImageModel,
-  requireLatestGptTextModel,
-} from "../lib/models";
+import { REQUIRED_IMAGE_MODEL_ID, requireLatestGptTextModel } from "../lib/models";
+import { generateSunburstImage } from "../lib/openaiSunburst";
 import { stableHash } from "../lib/policy";
 import { readGenerationSource } from "../lib/creativeImages";
 import {
@@ -120,9 +117,7 @@ export async function runBuilderJob(
 ) {
   const { organizationId, actorUserId, briefId, jobId, setup, resolved } = args;
   try {
-    const imageModel = requireLatestGptImageModel(
-      (await listImageModels()).models
-    );
+    const imageModel = REQUIRED_IMAGE_MODEL_ID;
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
       : null;
@@ -145,8 +140,7 @@ export async function runBuilderJob(
         .sort((a, b) => b.width * b.height - a.width * a.height);
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
-        const image = await generateImage({
-          model: imageModel,
+        const image = await generateSunburstImage({
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
           prompt: buildCreativePrompt({

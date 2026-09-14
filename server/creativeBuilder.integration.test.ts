@@ -20,11 +20,8 @@ vi.mock("./_core/llm", () => ({
     ],
   }),
 }));
-vi.mock("./_core/imageGeneration", () => ({
-  listImageModels: async () => ({
-    models: [{ id: "gpt-image-2.5-sunburst", model: "test-image-service" }],
-  }),
-  generateImage: async () => {
+vi.mock("./lib/openaiSunburst", () => ({
+  generateSunburstImage: async () => {
     provider.calls++;
     if (provider.calls === provider.failAt) throw new Error("Provider timeout");
     return {
@@ -324,7 +321,7 @@ describe.sequential("persistent creative builder", () => {
     ).toMatchObject({ mimeType: "image/png", base64: provider.bytes });
     const events = await caller.activity.list({ organizationId });
     expect(events.verified).toBe(true);
-    expect(JSON.stringify(events.events)).not.toContain("test-image-service");
+    expect(JSON.stringify(events.events)).not.toContain("OPENAI_API_KEY");
   });
 
   it("saves failure without partial results and allows a new attempt", async () => {

@@ -19,12 +19,15 @@ export function selectGenerationSources(brand: GenerationSource[], product: Gene
   };
 }
 
-export type GenerationErrorCategory = "source_image" | "model_unavailable" | "planning_response" | "timeout" | "provider";
+export type GenerationErrorCategory = "source_image" | "model_unavailable" | "model_access" | "planning_response" | "timeout" | "provider";
 
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
-  if (/403|forbidden|source image|original image|no readable raster/.test(normalized)) {
+  if (/source image|original image|no readable raster|could not be decoded|for image https?:/.test(normalized)) {
     return { category: "source_image", userMessage: "A selected source image could not be read. Use approved PNG, JPEG, or WebP assets, then retry." };
+  }
+  if (/sunburst credential|invalid_api_key|authentication|model_not_found|does not have access|sunburst request failed \((401|403)\)/.test(normalized)) {
+    return { category: "model_access", userMessage: "GPT Image 2.5 Sunburst access is unavailable for this workspace. Ask an owner to verify the OpenAI connection, then retry." };
   }
   if (/required gpt|model.+unavailable|list image models|list llm models/.test(normalized)) {
     return { category: "model_unavailable", userMessage: "AI generation is temporarily unavailable. Your setup is saved; try again later." };

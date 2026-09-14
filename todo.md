@@ -134,3 +134,16 @@
 - [x] Compose generation input from approved product facts, editable base prompt, editable theme prompt, format guidance, and existing policy safeguards without changing models.
 - [x] Add regressions for theme count and groups, unique stable IDs, icon coverage, prompt editing and reset, saved setup restoration, and final prompt composition.
 - [x] Run TypeScript, full tests, production build, authenticated desktop/mobile Creative Builder verification, runtime log review, and save the theme-library checkpoint.
+- [x] Inspect the newest failed Creative Builder job, stored internal error, error category, approved setup snapshot, selected images, theme prompt lengths, and production runtime logs.
+- [x] Identify whether the failure is caused by model availability, editable prompt size or content, source-image preparation, request timeout, response contract, or persistence.
+- [x] Fix the exact failure without changing required GPT models, approval gates, product-truth rules, or publishing safeguards.
+- [x] Replace generic retry guidance with a safe actionable message for the confirmed failure class while keeping provider internals and credentials private.
+- [x] Add regression coverage for the exact failure, partial-output safety, immutable retry history, and successful completion after correction.
+- [x] Verify the repaired flow with TypeScript, full tests, production build, authenticated Creative Results UI, and isolated post-fix runtime logs without approving or publishing.
+- [x] Save and auto-publish the generation-failure repair checkpoint and report the exact cause.
+- [x] Keep GPT Image 2.5 Sunburst mandatory for Creative Builder and prohibit fallback to GPT Image 2, Gemini, or any other image model.
+- [x] Verify the current server-side gateway identifier or endpoint for GPT Image 2.5 Sunburst and distinguish identifier drift from project-access provisioning.
+- [x] Update strict Sunburst resolution only to the verified current gateway contract and preserve server-side credential isolation.
+- [x] Add regressions proving the verified Sunburst identifier is selected and all non-Sunburst catalogs fail closed with specific safe guidance.
+- [x] Run one controlled Sunburst generation, then validate TypeScript, full tests, production build, authenticated Results UI, and isolated runtime logs.
+- [x] Save and auto-publish the Sunburst-only repair, or report the exact external provisioning blocker if the verified model remains inaccessible.
