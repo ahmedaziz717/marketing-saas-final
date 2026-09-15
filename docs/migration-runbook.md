@@ -4,6 +4,19 @@ This branch targets Render and Supabase. It is not a Manus deployment update.
 The original MSCC application and `Marketing-OS` repository are outside the migration.
 Source: the new `marketing-saas-final` project only.
 
+## Current deployment decision: start fresh
+
+The user confirmed on 2026-09-15 that existing live data does not need to be carried over. The default deployment is a new, empty Supabase database with a fresh owner account. Existing products, creatives, uploads, user mappings and connected-provider credentials are not prerequisites for staging. This does not authorize deleting or resetting the existing Manus application or its data.
+
+1. Confirm the business's Supabase organization and Render workspace, then review the actual service costs before provisioning.
+2. Apply the PostgreSQL schema to the new database and create a private `frame-assets` bucket. Skip all export, import, asset-copy and legacy-user mapping commands below.
+3. Create and verify the owner's Supabase Auth identity. Set `SUPABASE_OWNER_USER_ID` to that identity's UUID for the platform owner; the first successful sign-in creates its application user. Keep public signups disabled during setup.
+4. Supply fresh service configuration and a newly generated integration encryption secret through the cloud services' secret settings. Existing encrypted provider connections are not being imported, so the old Manus encryption secret is unnecessary.
+5. Deploy the migration branch to Render, sign in and create the company through onboarding. Upload the Brand Kit and add the products needed for a controlled creative-generation check.
+6. Verify login, company permissions, private media, saving, approvals and the generation worker. Enable customer signups only when their complete flow and email delivery have been verified.
+
+The older data-transfer instructions below are optional reference material. Data-transfer rehearsal and a final source-data freeze are not release gates for this fresh-start deployment. Hosting, authentication, private storage and generation still need actual cloud verification before release.
+
 ## Development coordination
 
 - Keep Manus developing on `main`. Bring its changes into this migration branch and port new database fields or service calls before staging deploys.
@@ -30,14 +43,14 @@ Before applying the Blueprint, create a Render environment group named `frame-st
 2. Supply `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and the server-only `SUPABASE_SECRET_KEY` through service secret settings.
 3. Set `DATABASE_MIGRATION_URL` to a direct/session connection with schema migration privileges. Set `DATABASE_URL` to the application connection; use a dedicated role with access only to `app_private` for the final production release. Prepared statements are disabled for Supabase pooler compatibility.
 4. Deploy `frame-staging` from this branch; set `APP_ORIGIN` to its HTTPS origin with no trailing slash. Configure Supabase's Site URL and allowed redirect URLs for `/api/auth/callback` on that origin. Render's generated domain is sufficient for staging; no production DNS change is needed.
-5. Create the worker service with `CREATIVE_WORKER_ENABLED=false`. Keep `AUTH_SIGNUP_ENABLED=false` and `LIVE_AD_ACTIONS_ENABLED=false` during the import.
+5. Create the worker service with `CREATIVE_WORKER_ENABLED=false`. Keep `AUTH_SIGNUP_ENABLED=false` and `LIVE_AD_ACTIONS_ENABLED=false` during initial setup and verification.
 6. Configure authentication email delivery. Supabase's default email service has restrictions; use approved SMTP before customer launch. A code email template can include `{{ .Token }}`; the standard link flow is also supported through the callback route.
 7. Transfer the existing direct AI key through service secret settings. Validate required model access before enabling the worker. Do not substitute an alternate model silently.
 8. If importing encrypted Meta connections, securely preserve the old Frame `JWT_SECRET` value as `INTEGRATION_TOKEN_ENCRYPTION_SECRET`: the legacy encryption input must match. This secret is no longer used to authenticate customers. Do not use the unrelated Replit key.
 
 No provider keys, passwords, connection strings, snapshots, or raw logs belong in GitHub or chat. Source credentials belong only in the offline migration environment, never on Render.
 
-## Rehearse the data migration
+## Optional: preserve old data if the decision changes
 
 The source credential should have read-only access. The export starts a read-only consistent transaction. It refuses unexpected source tables or columns and active creative/publishing jobs. If a source permission/dialect does not support that snapshot command, arrange a verified read-only export; do not silently downgrade snapshot consistency.
 
