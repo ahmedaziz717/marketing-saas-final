@@ -9,7 +9,7 @@ services:
     repo: https://github.com/ahmedaziz717/marketing-saas-final
     branch: codex/render-supabase-migration
     autoDeployTrigger: "off"
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
     # Free web services have no pre-deploy command. This single staging web
     # instance applies migrations on startup; the worker starts paused.
     startCommand: pnpm db:migrate && pnpm start
@@ -41,7 +41,7 @@ services:
     repo: https://github.com/ahmedaziz717/marketing-saas-final
     branch: codex/render-supabase-migration
     autoDeployTrigger: "off"
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
     maxShutdownDelaySeconds: 300
     startCommand: pnpm start:worker
     envVars:

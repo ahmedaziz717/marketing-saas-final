@@ -27,7 +27,9 @@ jobs:
         with:
           node-version: 22
       - run: corepack enable
-      - run: pnpm install --frozen-lockfile
+      # Render sets NODE_ENV=production during builds; retain the build and
+      # migration tools explicitly rather than relying on package-manager defaults.
+      - run: NODE_ENV=production pnpm install --frozen-lockfile --prod=false
       - run: pnpm db:migrate
       - run: pnpm check
       - run: pnpm test
