@@ -50,7 +50,8 @@ services:
         fromService:
           name: frame-staging
           type: web
-          envVarKey: APP_ORIGIN
+          # Render does not allow references to another referenced variable.
+          envVarKey: RENDER_EXTERNAL_URL
       - key: DATABASE_URL
         fromService:
           name: frame-staging
