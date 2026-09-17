@@ -129,6 +129,10 @@ function requestPinned(url: URL, address: string, maxBytes: number) {
     }, response => {
       const chunks: Buffer[] = [];
       let bytes = 0;
+      // A remote peer can reset the response after headers have arrived. Handle
+      // the response stream as well as the request so a reset cannot crash Node.
+      response.on("error", reject);
+      response.on("aborted", () => reject(new Error("Website response was interrupted")));
       response.on("data", chunk => {
         bytes += chunk.length;
         if (bytes > maxBytes) { request.destroy(new Error("Website response exceeded the safe size limit")); return; }
@@ -136,6 +140,10 @@ function requestPinned(url: URL, address: string, maxBytes: number) {
       });
       response.on("end", () => resolve({ status: response.statusCode ?? 0, contentType: String(response.headers["content-type"] ?? "").toLowerCase(), body: Buffer.concat(chunks), location: response.headers.location }));
     });
+    // The socket timeout below only measures inactivity. Also bound total time
+    // so a slowly streaming website cannot keep a scan request open indefinitely.
+    const deadline = setTimeout(() => request.destroy(new Error("Website request timed out")), FETCH_TIMEOUT_MS);
+    request.once("close", () => clearTimeout(deadline));
     request.on("timeout", () => request.destroy(new Error("Website request timed out")));
     request.on("error", reject);
     request.end();
@@ -265,6 +273,15 @@ export function extractPageEvidence(html: string, pageUrl: string, linkedStyles 
   const productResult = productCandidateFromEvidence({ url: pageUrl, hasStructuredProduct: structuredProducts.length > 0, hasSku, hasPrice, hasAddToCart, hasProductMeta, productImageCount: imageUrls.size });
   const pageType: PageEvidence['pageType'] = isExcludedProductUrl(pageUrl) ? (/\/(contact|support|help)(\/|$)/.test(pathname) ? "contact" : "other") : PRODUCT_SECTION_PATH.test(pathname) && !PRODUCT_DETAIL_PATH.test(pathname) ? "collection" : productResult.eligible ? "product" : /\/about(\/|$)/.test(pathname) ? "about" : /\/contact(\/|$)/.test(pathname) ? "contact" : pathname === "/" ? "home" : "other";
   return { url: canonicalizeUrl(pageUrl), canonicalUrl, title: title.slice(0, 500), description: description.slice(0, 2000), siteName: siteName.slice(0, 300), pageType, text, colors: extractColors(styleSource), fonts: extractFonts(styleSource), imageUrls: Array.from(imageUrls).slice(0, 40), logoUrls: Array.from(logoUrls).slice(0, 10), stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12), internalLinks: Array.from(internalLinks).slice(0, 1500), structuredProducts, specifications: extractSpecifications($), commerceMeta, productCandidate: productResult.eligible, productEvidence: productResult.reasons };
+}
+
+export function withLinkedStyles(evidence: PageEvidence, linkedStyles: string): PageEvidence {
+  const styles = linkedStyles.slice(0, 500_000);
+  return {
+    ...evidence,
+    colors: Array.from(new Set([...evidence.colors, ...extractColors(styles)])).slice(0, 24),
+    fonts: Array.from(new Set([...evidence.fonts, ...extractFonts(styles)])).slice(0, 16),
+  };
 }
 
 export function parseSitemap(xml: string) {

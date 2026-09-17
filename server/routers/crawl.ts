@@ -10,7 +10,7 @@ import { appendActivity } from "../lib/activity";
 import { canStartNewCrawl, canonicalProductIdentityUrl, deterministicProductFromPage, inferProductRecordType, mergeBrandDraft, nextCrawlResumeStatus, productDedupeKey, validateExtractedProduct, type BrandImportDraft } from "../lib/brandImport";
 import { requireLatestGptTextModel } from "../lib/models";
 import { stableHash } from "../lib/policy";
-import { discoverSiteUrls, extractPageEvidence, isExcludedProductUrl, isProductDetailUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, safeFetchImage, safeFetchText, urlHash } from "../lib/websiteCrawler";
+import { discoverSiteUrls, extractPageEvidence, isExcludedProductUrl, isProductDetailUrl, mergeDiscoveredUrls, normalizeWebsiteUrl, safeFetchImage, safeFetchText, urlHash, withLinkedStyles } from "../lib/websiteCrawler";
 import { storagePut } from "../storage";
 
 const jobInput = z.object({ organizationId: z.number().int().positive(), jobId: z.number().int().positive() });
@@ -83,7 +83,9 @@ export const crawlRouter = router({
     if (!job) throw new TRPCError({ code: "NOT_FOUND" });
     if (job.status === "cancelled") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This crawl was cancelled" });
     if (["review_ready", "completed"].includes(job.status)) return { done: true, status: job.status, pagesProcessed: job.pagesProcessed, pagesDiscovered: job.pagesDiscovered };
-    const batch = job.discoveredUrls.slice(job.cursor, job.cursor + input.batchSize);
+    // Checkpoint one page per request. Concurrent full HTML parses can exhaust
+    // a small web instance and lose the entire in-flight batch on restart.
+    const batch = job.discoveredUrls.slice(job.cursor, job.cursor + 1);
     if (!batch.length) {
       await db.update(websiteCrawlJobs).set({ status: "analyzing", updatedAtMs: Date.now() }).where(eq(websiteCrawlJobs.id, job.id));
       return { done: true, status: "analyzing" as const, pagesProcessed: job.pagesProcessed, pagesDiscovered: job.pagesDiscovered };
@@ -92,9 +94,10 @@ export const crawlRouter = router({
       const response = await safeFetchText(url);
       if (response.status >= 400) throw new Error(`HTTP ${response.status}`);
       const initialEvidence = extractPageEvidence(response.text, response.finalUrl);
+      if (job.scanMode === "products_only") return { url, evidence: initialEvidence };
       const stylesheetResults = await Promise.allSettled(initialEvidence.stylesheetUrls.slice(0, 4).map(stylesheetUrl => safeFetchText(stylesheetUrl)));
       const linkedStyles = stylesheetResults.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof safeFetchText>>> => result.status === "fulfilled" && result.value.status < 400).map(result => result.value.text).join("\n");
-      const evidence = extractPageEvidence(response.text, response.finalUrl, linkedStyles);
+      const evidence = withLinkedStyles(initialEvidence, linkedStyles);
       return { url, evidence };
     }));
     const newLinks: string[] = [];
