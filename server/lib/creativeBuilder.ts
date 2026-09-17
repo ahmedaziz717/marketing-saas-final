@@ -164,6 +164,9 @@ export function buildCreativePrompt(input: {
       " Make this art style visibly unmistakable across the background, environment, lighting, textures, depth treatment, supporting graphics, and typography treatment. Do not silently revert to a generic studio-ad aesthetic.",
     "Apply the selected mood and art style to every non-product visual element and to the presentation of the product. Preserve the supplied product's exact shape, proportions, colors, markings, controls, and factual features even when the selected style is illustrative or animated.",
     "Shot: " + SHOT_DIRECTIONS[setup.shot],
+    setup.person && (setup.shot === "female" || setup.shot === "male")
+      ? "PERSON IDENTITY REFERENCE: The LAST reference image is the selected adult person. Preserve this person's facial features, hair color, hairstyle, skin tone and apparent age across every creative and size. Use only this one person, never reproduce a contact sheet. Person reference controls identity only: adapt clothing, pose, lighting and setting to the creative direction. Do not treat the portrait as a product, logo, testimonial, or proof of endorsement."
+      : "",
     "Product placement: " + setup.placement + ".",
     "Additional creative direction (styling guidance only, never a source of product facts): " +
       setup.extraDirection,

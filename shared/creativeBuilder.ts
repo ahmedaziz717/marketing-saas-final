@@ -1,3 +1,4 @@
+import { findLifestylePerson } from "./lifestylePeople";
 import { z } from "zod";
 import {
   CREATIVE_THEMES,
@@ -274,6 +275,27 @@ export const creativeSetupSchema = z
       .max(12),
     productMode: z.enum(["separate", "together"]),
     shot: z.enum(["product", "female", "male", "lifestyle"]),
+    person: z
+      .discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("library"),
+          id: z
+            .string()
+            .refine(
+              id => !!findLifestylePerson(id),
+              "Choose a supported person"
+            ),
+        }),
+        z.object({
+          kind: z.literal("asset"),
+          assetId: z.number().int().positive(),
+        }),
+      ])
+      .nullable()
+      .optional(),
+    personHair: z
+      .enum(["any", "black", "brown", "blonde", "auburn", "silver"])
+      .optional(),
     mood: z
       .enum([
         "clean",
@@ -304,6 +326,21 @@ export const creativeSetupSchema = z
     copy: creativeCopySchema,
   })
   .superRefine((setup, ctx) => {
+    if (setup.person && setup.shot !== "female" && setup.shot !== "male")
+      ctx.addIssue({
+        code: "custom",
+        path: ["person"],
+        message: "People are only available in lifestyle shots with a person.",
+      });
+    if (
+      setup.person?.kind === "library" &&
+      findLifestylePerson(setup.person.id)?.gender !== setup.shot
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["person"],
+        message: "Choose a person matching this lifestyle setting.",
+      });
     if (!setup.themePrompt)
       setup.themePrompt = getCreativeTheme(setup.theme).direction;
     if (

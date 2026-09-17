@@ -1,3 +1,8 @@
+import sharp from "sharp";
+import { randomUUID } from "node:crypto";
+import { storagePut } from "../storage";
+import { findLifestylePerson } from "../../shared/lifestylePeople";
+import { readLifestylePortrait } from "../lib/lifestylePeople";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -103,7 +108,35 @@ export async function loadInputs(
       code: "PRECONDITION_FAILED",
       message: "Set up your Brand Kit first.",
     });
+  let personAsset: typeof brandAssets.$inferSelect | null = null;
+  if (setup.person?.kind === "asset") {
+    personAsset =
+      (
+        await db
+          .select()
+          .from(brandAssets)
+          .where(
+            and(
+              eq(brandAssets.id, setup.person.assetId),
+              eq(brandAssets.organizationId, organizationId),
+              eq(brandAssets.type, "reference"),
+              eq(brandAssets.status, "approved")
+            )
+          )
+          .limit(1)
+      )[0] ?? null;
+    if (
+      !personAsset ||
+      personAsset.metadata?.kind !== "lifestyle_person" ||
+      personAsset.metadata?.gender !== setup.shot
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Choose an approved person reference from this workspace.",
+      });
+  }
   return {
+    ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
     ...resolveBuilderInputs(organizationId, setup, catalog, images, logos),
   };
@@ -126,6 +159,16 @@ export async function runBuilderJob(
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
       : null;
+    const personSource =
+      setup.person && (setup.shot === "male" || setup.shot === "female")
+        ? setup.person.kind === "library"
+          ? await readLifestylePortrait(setup.person.id)
+          : resolved.personAsset
+            ? await readGenerationSource(resolved.personAsset.storageKey)
+            : null
+        : null;
+    if (setup.person && !personSource)
+      throw new Error("Selected person reference is unavailable");
     const groups =
       setup.productMode === "together"
         ? [resolved.products]
@@ -139,6 +182,7 @@ export async function runBuilderJob(
         )
       );
       if (logoSource) sources.push(logoSource);
+      if (personSource) sources.push(personSource);
       let master: Awaited<ReturnType<typeof readGenerationSource>> | null =
         null;
       // Generate a substantial master before adapting it to compact banner sizes.
@@ -292,6 +336,163 @@ export async function runBuilderJob(
 }
 
 export const creativeBuilderRouter = router({
+  people: protectedProcedure
+    .input(organizationInput)
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const db = (await getDb())!;
+      return (
+        await db
+          .select()
+          .from(brandAssets)
+          .where(
+            and(
+              eq(brandAssets.organizationId, input.organizationId),
+              eq(brandAssets.type, "reference")
+            )
+          )
+          .orderBy(desc(brandAssets.createdAtMs))
+      )
+        .filter(asset => asset.metadata?.kind === "lifestyle_person")
+        .map(asset => ({
+          id: asset.id,
+          name: asset.name,
+          url: asset.url,
+          status: asset.status,
+          gender: asset.metadata?.gender,
+          libraryId: asset.metadata?.libraryId,
+        }));
+    }),
+  savePerson: protectedProcedure
+    .input(
+      organizationInput.extend({
+        libraryId: z.string().optional(),
+        name: z.string().trim().min(2).max(120),
+        gender: z.enum(["male", "female"]),
+        base64: z.string().max(8_500_000).optional(),
+        permissionConfirmed: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editorRoles,
+      ]);
+      const db = (await getDb())!;
+      const kit = (
+        await db
+          .select()
+          .from(brandKits)
+          .where(eq(brandKits.organizationId, input.organizationId))
+          .limit(1)
+      )[0];
+      if (!kit)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your brand first.",
+        });
+      let bytes: Buffer;
+      if (input.libraryId) {
+        const person = findLifestylePerson(input.libraryId);
+        if (!person || person.gender !== input.gender)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose a supported person.",
+          });
+        const existing = (
+          await db
+            .select()
+            .from(brandAssets)
+            .where(
+              and(
+                eq(brandAssets.organizationId, input.organizationId),
+                eq(brandAssets.type, "reference")
+              )
+            )
+        ).find(
+          a =>
+            a.metadata?.libraryId === input.libraryId && a.status !== "rejected"
+        );
+        if (existing) return { assetId: existing.id, status: existing.status };
+        bytes = Buffer.from(
+          (await readLifestylePortrait(input.libraryId)).b64Json,
+          "base64"
+        );
+      } else {
+        if (!input.permissionConfirmed || !input.base64)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Confirm that the reference depicts an adult and you have permission to use it.",
+          });
+        const raw = Buffer.from(
+          input.base64.replace(/^data:[^;]+;base64,/, ""),
+          "base64"
+        );
+        if (raw.length > 6 * 1024 * 1024)
+          throw new TRPCError({
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Choose an image under 6 MB.",
+          });
+        try {
+          bytes = await sharp(raw, { limitInputPixels: 20_000_000 })
+            .rotate()
+            .resize({
+              width: 1200,
+              height: 1200,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .png()
+            .toBuffer();
+        } catch {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose a valid JPG, PNG, or WebP portrait.",
+          });
+        }
+      }
+      const stored = await storagePut(
+        `org-${input.organizationId}/brand/people/${randomUUID()}.png`,
+        bytes,
+        "image/png"
+      );
+      const now = Date.now();
+      const asset = (
+        await db
+          .insert(brandAssets)
+          .values({
+            organizationId: input.organizationId,
+            brandKitId: kit.id,
+            name: input.name,
+            type: "reference",
+            storageKey: stored.key,
+            url: stored.url,
+            mimeType: "image/png",
+            status: input.libraryId ? "approved" : "pending",
+            metadata: {
+              kind: "lifestyle_person",
+              gender: input.gender,
+              libraryId: input.libraryId ?? null,
+              source: input.libraryId ? "curated_ai_library" : "user_upload",
+              permissionConfirmed: input.permissionConfirmed ?? false,
+            },
+            uploadedByUserId: ctx.user.id,
+            createdAtMs: now,
+          })
+          .returning()
+      )[0];
+      await appendActivity({
+        organizationId: input.organizationId,
+        actorUserId: ctx.user.id,
+        action: "person_reference.saved",
+        entityType: "brand_asset",
+        entityId: asset.id,
+        payload: {
+          source: input.libraryId ? "curated_ai_library" : "user_upload",
+        },
+      });
+      return { assetId: asset.id, status: asset.status };
+    }),
   options: protectedProcedure
     .input(organizationInput)
     .query(async ({ ctx, input }) => {
@@ -615,6 +816,20 @@ export const creativeBuilderRouter = router({
         requestId: input.requestId,
       };
       const assetSnapshot = [
+        ...(setup.person
+          ? [
+              {
+                kind: "person",
+                selection: setup.person,
+                ...(resolved.personAsset
+                  ? {
+                      storageKey: resolved.personAsset.storageKey,
+                      id: resolved.personAsset.id,
+                    }
+                  : {}),
+              },
+            ]
+          : []),
         ...resolved.products.map(product => ({
           kind: "product",
           productId: product.id,

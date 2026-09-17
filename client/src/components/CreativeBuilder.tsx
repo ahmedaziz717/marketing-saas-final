@@ -1,3 +1,4 @@
+import { LifestylePersonPicker } from "./LifestylePersonPicker";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -824,6 +825,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
                     change({
                       ...setupRef.current,
                       shot: event.target.value as CreativeSetup["shot"],
+                      person: null,
                     })
                   }
                 >
@@ -853,6 +855,13 @@ export function CreativeBuilder({ onGenerated }: Props) {
                 </select>
               </label>
             </div>
+            {(setup.shot === "male" || setup.shot === "female") && (
+              <LifestylePersonPicker
+                key={setup.shot}
+                setup={setup}
+                onChange={change}
+              />
+            )}
             <div className="mb-3 mt-5 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">
                 Logo from brand assets
