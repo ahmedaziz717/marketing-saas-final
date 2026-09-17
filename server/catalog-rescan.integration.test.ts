@@ -41,7 +41,6 @@ import { invokeLLM } from "./_core/llm";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";
 import { productDedupeKey } from "./lib/brandImport";
-import { discoverSiteUrls } from "./lib/websiteCrawler";
 import { removeCatalogProducts } from "./routers/catalog";
 import { appRouter } from "./routers";
 
@@ -51,6 +50,7 @@ let creatorUserId = 0;
 let organizationId = 0;
 let caller: ReturnType<typeof appRouter.createCaller>;
 let creatorCaller: ReturnType<typeof appRouter.createCaller>;
+let workerCaller: ReturnType<typeof appRouter.createCaller>;
 
 function analysis(name: string) {
   return {
@@ -90,6 +90,7 @@ beforeAll(async () => {
   const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]!;
   const creatorUser = (await db.select().from(users).where(eq(users.id, creatorUserId)).limit(1))[0]!;
   caller = appRouter.createCaller({ user, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+  workerCaller = appRouter.createCaller({ user, catalogWorker: true, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
   creatorCaller = appRouter.createCaller({ user: creatorUser, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 });
 
@@ -165,29 +166,35 @@ describe.sequential("crawl router repeat product scans", () => {
     const db = await getDb(); if (!db) throw new Error("Database unavailable");
     mockState.productUrl = "https://shop.router-test.example/products/apex?variant=first";
     mockState.productName = "Apex Printer";
-    await expect(caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 251, scanMode: "products_only" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 100001, scanMode: "products_only" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const first = await caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" });
     await expect(caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" })).rejects.toMatchObject({ code: "CONFLICT" });
+    // Discovery is background work now. Seed its deterministic output here;
+    // sitemap traversal and >250 page coverage are tested in crawl-recovery.
+    await db.update(websiteCrawlJobs).set({ status: "crawling", discoveredUrls: [mockState.productUrl], pagesDiscovered: 1, discovery: { pending: [], visited: [], failures: [] } }).where(eq(websiteCrawlJobs.id, first.jobId));
     await caller.crawl.processBatch({ organizationId, jobId: first.jobId, batchSize: 4 });
+    expect(await db.select().from(websiteCrawlPages).where(eq(websiteCrawlPages.jobId, first.jobId))).toHaveLength(0);
+    await workerCaller.crawl.processBatch({ organizationId, jobId: first.jobId, batchSize: 4 });
     const firstPage = (await db.select().from(websiteCrawlPages).where(and(eq(websiteCrawlPages.organizationId, organizationId), eq(websiteCrawlPages.jobId, first.jobId))).limit(1))[0]!;
     vi.mocked(invokeLLM).mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ brand: { companyName: "", summary: "", voice: "", requiredClaims: [], prohibitedContent: [], colors: [], fonts: [], logoUrls: [] }, products: [{ sourcePageId: firstPage.id, name: "Apex Printer", sku: null, category: "Printers", description: "Apex Printer description", productUrl: mockState.productUrl, price: "$1,499", currency: "USD", specifications: [{ name: "Build volume", value: "300 mm" }], imageUrls: [] }] }) } }] } as never);
-    await caller.crawl.analyzeBatch({ organizationId, jobId: first.jobId, batchSize: 5 });
-    await caller.crawl.analyzeBatch({ organizationId, jobId: first.jobId, batchSize: 5 });
+    await workerCaller.crawl.analyzeBatch({ organizationId, jobId: first.jobId, batchSize: 5 });
+    await workerCaller.crawl.analyzeBatch({ organizationId, jobId: first.jobId, batchSize: 5 });
     const original = (await db.select().from(products).where(eq(products.organizationId, organizationId)).limit(1))[0]!;
     await db.update(products).set({ status: "approved", reviewedByUserId: userId, reviewedAtMs: Date.now() }).where(eq(products.id, original.id));
 
     mockState.productUrl = "https://shop.router-test.example/products/apex/?variant=second";
     mockState.productName = "Apex Printer Updated";
     const second = await caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" });
-    const secondDiscoveryCall = vi.mocked(discoverSiteUrls).mock.calls.at(-1);
-    expect(secondDiscoveryCall?.[2]).toContain(mockState.productUrl.replace("/?variant=second", "?variant=first"));
-    await caller.crawl.processBatch({ organizationId, jobId: second.jobId, batchSize: 4 });
+    // Discovery is background work now. Seed its deterministic output here;
+    // sitemap traversal and >250 page coverage are tested in crawl-recovery.
+    await db.update(websiteCrawlJobs).set({ status: "crawling", discoveredUrls: [mockState.productUrl], pagesDiscovered: 1, discovery: { pending: [], visited: [], failures: [] } }).where(eq(websiteCrawlJobs.id, second.jobId));
+    await workerCaller.crawl.processBatch({ organizationId, jobId: second.jobId, batchSize: 4 });
     const secondPage = (await db.select().from(websiteCrawlPages).where(and(eq(websiteCrawlPages.organizationId, organizationId), eq(websiteCrawlPages.jobId, second.jobId))).limit(1))[0]!;
     expect(secondPage.url).toContain("variant=second");
     vi.mocked(invokeLLM).mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ brand: { companyName: "", summary: "", voice: "", requiredClaims: [], prohibitedContent: [], colors: [], fonts: [], logoUrls: [] }, products: [{ sourcePageId: secondPage.id, name: "Apex Printer Updated", sku: "APX-1", category: "Printers", description: "Updated description", productUrl: secondPage.url, price: "$1,499", currency: "USD", specifications: [{ name: "Build volume", value: "300 mm" }], imageUrls: [] }] }) } }] } as never);
-    const secondAnalysis = await caller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
+    const secondAnalysis = await workerCaller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
     expect(secondAnalysis.productsFound).toBe(1);
-    await caller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
+    await workerCaller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
     const afterCanonicalUrlRescan = await db.select().from(products).where(eq(products.organizationId, organizationId));
     expect(afterCanonicalUrlRescan).toHaveLength(1);
     expect(afterCanonicalUrlRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Updated", sku: "APX-1", status: "approved" });
@@ -195,11 +202,14 @@ describe.sequential("crawl router repeat product scans", () => {
     mockState.productUrl = "https://shop.router-test.example/products/apex-pro?variant=third";
     mockState.productName = "Apex Printer Pro";
     const third = await caller.crawl.start({ organizationId, websiteUrl: "https://router-test.example", maxPages: 10, scanMode: "products_only" });
-    await caller.crawl.processBatch({ organizationId, jobId: third.jobId, batchSize: 4 });
+    // Discovery is background work now. Seed its deterministic output here;
+    // sitemap traversal and >250 page coverage are tested in crawl-recovery.
+    await db.update(websiteCrawlJobs).set({ status: "crawling", discoveredUrls: [mockState.productUrl], pagesDiscovered: 1, discovery: { pending: [], visited: [], failures: [] } }).where(eq(websiteCrawlJobs.id, third.jobId));
+    await workerCaller.crawl.processBatch({ organizationId, jobId: third.jobId, batchSize: 4 });
     const thirdPage = (await db.select().from(websiteCrawlPages).where(and(eq(websiteCrawlPages.organizationId, organizationId), eq(websiteCrawlPages.jobId, third.jobId))).limit(1))[0]!;
     vi.mocked(invokeLLM).mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ brand: { companyName: "", summary: "", voice: "", requiredClaims: [], prohibitedContent: [], colors: [], fonts: [], logoUrls: [] }, products: [{ sourcePageId: thirdPage.id, name: "Apex Printer Pro", sku: "APX-1", category: "Printers", description: "Apex Printer Pro description", productUrl: thirdPage.url, price: "$1,499", currency: "USD", specifications: [{ name: "Build volume", value: "300 mm" }], imageUrls: [] }] }) } }] } as never);
-    await caller.crawl.analyzeBatch({ organizationId, jobId: third.jobId, batchSize: 5 });
-    await caller.crawl.analyzeBatch({ organizationId, jobId: third.jobId, batchSize: 5 });
+    await workerCaller.crawl.analyzeBatch({ organizationId, jobId: third.jobId, batchSize: 5 });
+    await workerCaller.crawl.analyzeBatch({ organizationId, jobId: third.jobId, batchSize: 5 });
     const afterSkuRescan = await db.select().from(products).where(eq(products.organizationId, organizationId));
     expect(afterSkuRescan).toHaveLength(1);
     expect(afterSkuRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Pro", sku: "APX-1", productUrl: thirdPage.url, status: "approved" });

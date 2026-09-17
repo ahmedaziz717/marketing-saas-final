@@ -730,7 +730,8 @@ export function WebsiteImportWizard({
               Pause scan
             </Button>
           )}
-          {["failed", "cancelled"].includes(job.status) && (
+          {(["failed", "cancelled"].includes(job.status) ||
+            (!job.background && ["crawling", "analyzing"].includes(job.status))) && (
             <Button
               className="mt-4"
               onClick={async () => {
@@ -742,7 +743,7 @@ export function WebsiteImportWizard({
                 }
               }}
             >
-              Resume saved import
+              {job.background ? "Resume saved import" : "Continue scan in background"}
             </Button>
           )}
         </section>
