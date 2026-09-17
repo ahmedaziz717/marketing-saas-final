@@ -14,7 +14,11 @@ export {
   getCreativeTheme,
   getCreativeThemeGroup,
 } from "./creativeThemes";
-export type { CreativeTheme, CreativeThemeIcon, CreativeThemeId } from "./creativeThemes";
+export type {
+  CreativeTheme,
+  CreativeThemeIcon,
+  CreativeThemeId,
+} from "./creativeThemes";
 
 export const CREATIVE_CHANNELS = [
   { id: "meta", name: "Meta" },
@@ -24,26 +28,122 @@ export const CREATIVE_CHANNELS = [
 export type CreativeChannel = (typeof CREATIVE_CHANNELS)[number]["id"];
 
 export const CREATIVE_MOODS = [
-  { id: "clean", name: "Clean", icon: "sparkles", direction: "Use crisp visual hierarchy, balanced whitespace, restrained color, and a polished uncluttered finish." },
-  { id: "vibrant", name: "Vibrant", icon: "zap", direction: "Use energetic color, lively contrast, and confident visual rhythm while keeping the product easy to read." },
-  { id: "dark", name: "Dark", icon: "moon", direction: "Use deep controlled backgrounds, focused highlights, and premium contrast without losing product detail." },
-  { id: "minimal", name: "Minimal", icon: "square", direction: "Use one dominant focal point, generous negative space, and only essential supporting elements." },
-  { id: "bold", name: "Bold", icon: "flame", direction: "Use assertive scale, strong graphic contrast, and an immediate high-impact composition." },
-  { id: "warm", name: "Warm", icon: "sun", direction: "Use inviting warm tones, soft natural light, and an approachable optimistic atmosphere." },
-  { id: "playful", name: "Playful", icon: "party", direction: "Use expressive color, buoyant shapes, and light visual energy while retaining brand polish." },
-  { id: "premium", name: "Premium", icon: "gem", direction: "Use refined materials, controlled highlights, elegant spacing, and quiet luxury restraint." },
+  {
+    id: "clean",
+    name: "Clean",
+    icon: "sparkles",
+    direction:
+      "Use crisp visual hierarchy, balanced whitespace, restrained color, and a polished uncluttered finish.",
+  },
+  {
+    id: "vibrant",
+    name: "Vibrant",
+    icon: "zap",
+    direction:
+      "Use energetic color, lively contrast, and confident visual rhythm while keeping the product easy to read.",
+  },
+  {
+    id: "dark",
+    name: "Dark",
+    icon: "moon",
+    direction:
+      "Use deep controlled backgrounds, focused highlights, and premium contrast without losing product detail.",
+  },
+  {
+    id: "minimal",
+    name: "Minimal",
+    icon: "square",
+    direction:
+      "Use one dominant focal point, generous negative space, and only essential supporting elements.",
+  },
+  {
+    id: "bold",
+    name: "Bold",
+    icon: "flame",
+    direction:
+      "Use assertive scale, strong graphic contrast, and an immediate high-impact composition.",
+  },
+  {
+    id: "warm",
+    name: "Warm",
+    icon: "sun",
+    direction:
+      "Use inviting warm tones, soft natural light, and an approachable optimistic atmosphere.",
+  },
+  {
+    id: "playful",
+    name: "Playful",
+    icon: "party",
+    direction:
+      "Use expressive color, buoyant shapes, and light visual energy while retaining brand polish.",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    icon: "gem",
+    direction:
+      "Use refined materials, controlled highlights, elegant spacing, and quiet luxury restraint.",
+  },
 ] as const;
 export type CreativeMood = (typeof CREATIVE_MOODS)[number]["id"];
 
 export const CREATIVE_ART_STYLES = [
-  { id: "realistic", name: "Realistic", icon: "camera", direction: "Create photorealistic commercial product photography with accurate materials, lighting, and physical proportions." },
-  { id: "animation", name: "Animation", icon: "clapperboard", direction: "Use a polished animated-feature visual language for the environment while keeping the supplied product recognizable and physically accurate." },
-  { id: "illustration", name: "Illustration", icon: "brush", direction: "Use sophisticated commercial illustration with clear product geometry and intentional graphic detail." },
-  { id: "three_d", name: "3D Render", icon: "box", direction: "Use a high-end studio 3D-render aesthetic with accurate product geometry, materials, shadows, and reflections." },
-  { id: "editorial", name: "Editorial", icon: "newspaper", direction: "Use art-directed magazine composition, refined typography, and a deliberate editorial crop." },
-  { id: "cinematic", name: "Cinematic", icon: "film", direction: "Use cinematic lighting, depth, atmosphere, and visual storytelling while preserving clear product recognition." },
-  { id: "collage", name: "Collage", icon: "layers", direction: "Use a layered editorial collage with controlled cut-paper depth, graphic framing, and readable hierarchy." },
-  { id: "technical", name: "Technical", icon: "scan", direction: "Use a precise technical-visualization style with measured lines and structured information, without inventing internal parts or features." },
+  {
+    id: "realistic",
+    name: "Realistic",
+    icon: "camera",
+    direction:
+      "Create photorealistic commercial product photography with accurate materials, lighting, and physical proportions.",
+  },
+  {
+    id: "animation",
+    name: "Animation",
+    icon: "clapperboard",
+    direction:
+      "Use a polished animated-feature visual language for the environment while keeping the supplied product recognizable and physically accurate.",
+  },
+  {
+    id: "illustration",
+    name: "Illustration",
+    icon: "brush",
+    direction:
+      "Use sophisticated commercial illustration with clear product geometry and intentional graphic detail.",
+  },
+  {
+    id: "three_d",
+    name: "3D Render",
+    icon: "box",
+    direction:
+      "Use a high-end studio 3D-render aesthetic with accurate product geometry, materials, shadows, and reflections.",
+  },
+  {
+    id: "editorial",
+    name: "Editorial",
+    icon: "newspaper",
+    direction:
+      "Use art-directed magazine composition, refined typography, and a deliberate editorial crop.",
+  },
+  {
+    id: "cinematic",
+    name: "Cinematic",
+    icon: "film",
+    direction:
+      "Use cinematic lighting, depth, atmosphere, and visual storytelling while preserving clear product recognition.",
+  },
+  {
+    id: "collage",
+    name: "Collage",
+    icon: "layers",
+    direction:
+      "Use a layered editorial collage with controlled cut-paper depth, graphic framing, and readable hierarchy.",
+  },
+  {
+    id: "technical",
+    name: "Technical",
+    icon: "scan",
+    direction:
+      "Use a precise technical-visualization style with measured lines and structured information, without inventing internal parts or features.",
+  },
 ] as const;
 export type CreativeArtStyle = (typeof CREATIVE_ART_STYLES)[number]["id"];
 
@@ -52,7 +152,10 @@ export function getCreativeMood(id: CreativeMood) {
 }
 
 export function getCreativeArtStyle(id: CreativeArtStyle) {
-  return CREATIVE_ART_STYLES.find(option => option.id === id) ?? CREATIVE_ART_STYLES[0];
+  return (
+    CREATIVE_ART_STYLES.find(option => option.id === id) ??
+    CREATIVE_ART_STYLES[0]
+  );
 }
 
 export const CREATIVE_FORMATS = [
@@ -150,7 +253,12 @@ export const creativeSetupSchema = z
       value => typeof value === "string" && Boolean(CREATIVE_THEMES[value]),
       { message: "Choose a supported creative theme." }
     ),
-    basePrompt: z.string().trim().min(20).max(8000).default(DEFAULT_CREATIVE_BASE_PROMPT),
+    basePrompt: z
+      .string()
+      .trim()
+      .min(20)
+      .max(8000)
+      .default(DEFAULT_CREATIVE_BASE_PROMPT),
     themePrompt: z.string().trim().min(10).max(4000).optional(),
     channels: z.array(z.enum(["meta", "google_display", "microsoft"])).max(3),
     formatIds: z.array(z.string()).max(CREATIVE_FORMATS.length),
@@ -158,7 +266,7 @@ export const creativeSetupSchema = z
       .array(
         z.object({
           productId: z.number().int().positive(),
-          imageId: z.number().int().positive(),
+          imageId: z.number().int().positive().nullable(),
           featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
           includePrice: z.boolean().default(false),
         })
@@ -166,15 +274,38 @@ export const creativeSetupSchema = z
       .max(12),
     productMode: z.enum(["separate", "together"]),
     shot: z.enum(["product", "female", "male", "lifestyle"]),
-    mood: z.enum(["clean", "vibrant", "dark", "minimal", "bold", "warm", "playful", "premium"]).default("clean"),
-    artStyle: z.enum(["realistic", "animation", "illustration", "three_d", "editorial", "cinematic", "collage", "technical"]).default("realistic"),
+    mood: z
+      .enum([
+        "clean",
+        "vibrant",
+        "dark",
+        "minimal",
+        "bold",
+        "warm",
+        "playful",
+        "premium",
+      ])
+      .default("clean"),
+    artStyle: z
+      .enum([
+        "realistic",
+        "animation",
+        "illustration",
+        "three_d",
+        "editorial",
+        "cinematic",
+        "collage",
+        "technical",
+      ])
+      .default("realistic"),
     placement: z.enum(["auto", "left", "center", "right"]),
     logoAssetId: z.number().int().positive().nullable(),
     extraDirection: z.string().max(4000),
     copy: creativeCopySchema,
   })
   .superRefine((setup, ctx) => {
-    if (!setup.themePrompt) setup.themePrompt = getCreativeTheme(setup.theme).direction;
+    if (!setup.themePrompt)
+      setup.themePrompt = getCreativeTheme(setup.theme).direction;
     if (
       new Set(setup.channels).size !== setup.channels.length ||
       new Set(setup.formatIds).size !== setup.formatIds.length ||

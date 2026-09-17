@@ -10,6 +10,7 @@ import BrandPage from "./pages/BrandPage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
 import ActivityPage from "./pages/ActivityPage";
+import IntegrationsPage from "./pages/IntegrationsPage";
 import SettingsPage from "./pages/SettingsPage";
 import InvitePage from "./pages/InvitePage";
 import PublishingPage from "./pages/PublishingPage";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/publishing" component={PublishingPage} />
       <Route path="/app/brand" component={BrandPage} />
+      <Route path="/app/integrations" component={IntegrationsPage} />
       <Route path="/app/catalog" component={CatalogPage} />
       <Route path="/app/import" component={WebsiteImportPage} />
       <Route path="/app/activity" component={ActivityPage} />
@@ -40,5 +42,15 @@ function Router() {
 }
 
 export default function App() {
-  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster /><GlobalQueryFeedback /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="light">
+        <TooltipProvider>
+          <Toaster />
+          <GlobalQueryFeedback />
+          <Router />
+        </TooltipProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }

@@ -92,7 +92,12 @@ function VisualDirectionOptions<T extends string>({
 }: {
   label: string;
   value: T;
-  options: ReadonlyArray<{ id: T; name: string; icon: string; direction: string }>;
+  options: ReadonlyArray<{
+    id: T;
+    name: string;
+    icon: string;
+    direction: string;
+  }>;
   onChange: (value: T) => void;
 }) {
   return (
@@ -176,7 +181,10 @@ export function CreativeBuilder({ onGenerated }: Props) {
     selected.some(
       item =>
         !item.product ||
-        !item.product.images.some(image => image.id === item.selection.imageId)
+        (item.product.recordType !== "service" &&
+          !item.product.images.some(
+            image => image.id === item.selection.imageId
+          ))
     )
   )
     issues.push("Review unavailable products or product images.");
@@ -235,7 +243,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
         products: setup.products.filter(item => item.productId !== product.id),
       });
     } else {
-      if (!product.images[0]) return;
+      if (!product.images[0] && product.recordType !== "service") return;
       if (setup.products.length >= 12)
         return toast.error("Choose up to 12 products per setup.");
       if (setup.productMode === "together" && setup.products.length >= 3)
@@ -248,7 +256,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
           ...setup.products,
           {
             productId: product.id,
-            imageId: product.images[0].id,
+            imageId: product.images[0]?.id ?? null,
             featuredSpecKeys: [],
             includePrice: false,
           },
@@ -466,16 +474,29 @@ export function CreativeBuilder({ onGenerated }: Props) {
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <label className="text-sm font-medium" htmlFor="creative-base-prompt">Main prompt</label>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Applied to every creative in this setup.</p>
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="creative-base-prompt"
+                    >
+                      Main prompt
+                    </label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Applied to every creative in this setup.
+                    </p>
                   </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => change({ ...setup, basePrompt: DEFAULT_CREATIVE_BASE_PROMPT })}
+                    onClick={() =>
+                      change({
+                        ...setup,
+                        basePrompt: DEFAULT_CREATIVE_BASE_PROMPT,
+                      })
+                    }
                   >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reset
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    Reset
                   </Button>
                 </div>
                 <Textarea
@@ -483,34 +504,55 @@ export function CreativeBuilder({ onGenerated }: Props) {
                   value={setup.basePrompt}
                   maxLength={8000}
                   rows={6}
-                  onChange={event => change({ ...setup, basePrompt: event.target.value })}
+                  onChange={event =>
+                    change({ ...setup, basePrompt: event.target.value })
+                  }
                 />
               </div>
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <label className="text-sm font-medium" htmlFor="creative-theme-prompt">Theme prompt</label>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Starts from the selected theme and remains fully editable.</p>
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="creative-theme-prompt"
+                    >
+                      Theme prompt
+                    </label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Starts from the selected theme and remains fully editable.
+                    </p>
                   </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => change({ ...setup, themePrompt: getCreativeTheme(setup.theme).direction })}
+                    onClick={() =>
+                      change({
+                        ...setup,
+                        themePrompt: getCreativeTheme(setup.theme).direction,
+                      })
+                    }
                   >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reset
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    Reset
                   </Button>
                 </div>
                 <Textarea
                   id="creative-theme-prompt"
-                  value={setup.themePrompt ?? getCreativeTheme(setup.theme).direction}
+                  value={
+                    setup.themePrompt ?? getCreativeTheme(setup.theme).direction
+                  }
                   maxLength={4000}
                   rows={4}
-                  onChange={event => change({ ...setup, themePrompt: event.target.value })}
+                  onChange={event =>
+                    change({ ...setup, themePrompt: event.target.value })
+                  }
                 />
               </div>
               <p className="text-xs leading-5 text-muted-foreground">
-                Prompt edits guide styling and composition only. Approved product facts, claims, logo rules, and publishing safeguards remain authoritative.
+                Prompt edits guide styling and composition only. Approved
+                product facts, claims, logo rules, and publishing safeguards
+                remain authoritative.
               </p>
             </div>
           </section>
@@ -647,7 +689,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
                     checked={setup.products.some(
                       item => item.productId === product.id
                     )}
-                    disabled={!product.images.length}
+                    disabled={
+                      !product.images.length && product.recordType !== "service"
+                    }
                     onChange={() => toggleProduct(product)}
                   />
                   <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-md bg-white">
@@ -669,7 +713,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
                     <span className="mt-1 block truncate text-xs text-muted-foreground">
                       {product.images.length
                         ? product.sku || "No SKU"
-                        : "Needs a catalog image"}
+                        : product.recordType === "service"
+                          ? "Service · image optional"
+                          : "Needs a catalog image"}
                     </span>
                   </span>
                 </label>
@@ -1225,7 +1271,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
             <p className="mt-2 text-sm font-medium">{setup.copy.cta}</p>
           </div>
           <details className="rounded-xl border border-border p-4">
-            <summary className="cursor-pointer text-sm font-medium">Prompt layers used for generation</summary>
+            <summary className="cursor-pointer text-sm font-medium">
+              Prompt layers used for generation
+            </summary>
             <div className="mt-4 space-y-4 text-xs leading-5 text-muted-foreground">
               <div>
                 <p className="font-semibold text-foreground">Main prompt</p>
@@ -1233,7 +1281,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
               </div>
               <div>
                 <p className="font-semibold text-foreground">Theme prompt</p>
-                <p className="mt-1 whitespace-pre-wrap">{setup.themePrompt || getCreativeTheme(setup.theme).direction}</p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  {setup.themePrompt || getCreativeTheme(setup.theme).direction}
+                </p>
               </div>
             </div>
           </details>

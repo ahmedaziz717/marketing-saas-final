@@ -33,7 +33,10 @@ import {
   resolveBuilderInputs,
 } from "../lib/creativeBuilder";
 import { categorizeGenerationError } from "../lib/generation";
-import { REQUIRED_IMAGE_MODEL_ID, requireLatestGptTextModel } from "../lib/models";
+import {
+  REQUIRED_IMAGE_MODEL_ID,
+  requireLatestGptTextModel,
+} from "../lib/models";
 import { generateSunburstImage } from "../lib/openaiSunburst";
 import { stableHash } from "../lib/policy";
 import { readGenerationSource } from "../lib/creativeImages";
@@ -131,7 +134,9 @@ export async function runBuilderJob(
     for (const group of groups) {
       await renewBuilderJob(db, organizationId, jobId);
       const sources = await Promise.all(
-        group.map(product => readGenerationSource(product.image.storageKey))
+        group.flatMap(product =>
+          product.image ? [readGenerationSource(product.image.storageKey)] : []
+        )
       );
       if (logoSource) sources.push(logoSource);
       let master: Awaited<ReturnType<typeof readGenerationSource>> | null =
@@ -172,7 +177,14 @@ export async function runBuilderJob(
             " · " +
             format.name
           ).slice(0, 180),
-          concept: CREATIVE_THEMES[setup.theme].name + " · " + setup.mood + " · " + setup.artStyle + " · " + setup.shot,
+          concept:
+            CREATIVE_THEMES[setup.theme].name +
+            " · " +
+            setup.mood +
+            " · " +
+            setup.artStyle +
+            " · " +
+            setup.shot,
           primaryText: setup.copy.subheadline,
           headline: setup.copy.headline,
           description: setup.copy.subheadline,
@@ -211,7 +223,10 @@ export async function runBuilderJob(
       )[0];
       if (active?.status !== "running")
         throw new Error("Generation attempt was interrupted");
-      await tx.insert(creativeVariants).values(generated).returning({ insertId: creativeVariants.id });
+      await tx
+        .insert(creativeVariants)
+        .values(generated)
+        .returning({ insertId: creativeVariants.id });
       await tx
         .update(creativeJobs)
         .set({
@@ -257,7 +272,8 @@ export async function runBuilderJob(
             eq(creativeJobs.organizationId, organizationId),
             eq(creativeJobs.status, "running")
           )
-        ).returning({ id: creativeJobs.id });
+        )
+        .returning({ id: creativeJobs.id });
       if (changed.length)
         await appendActivity(
           {
@@ -373,11 +389,18 @@ export const creativeBuilderRouter = router({
         creativeDirection:
           input.setup.basePrompt +
           "\n\n" +
-          (input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction) +
+          (input.setup.themePrompt ||
+            getCreativeTheme(input.setup.theme).direction) +
           "\n\n" +
-          "Mood: " + getCreativeMood(input.setup.mood).name + " — " + getCreativeMood(input.setup.mood).direction +
+          "Mood: " +
+          getCreativeMood(input.setup.mood).name +
+          " — " +
+          getCreativeMood(input.setup.mood).direction +
           "\n\n" +
-          "Art style: " + getCreativeArtStyle(input.setup.artStyle).name + " — " + getCreativeArtStyle(input.setup.artStyle).direction +
+          "Art style: " +
+          getCreativeArtStyle(input.setup.artStyle).name +
+          " — " +
+          getCreativeArtStyle(input.setup.artStyle).direction +
           "\n\n" +
           input.setup.extraDirection,
         assetIds: input.setup.logoAssetId ? [input.setup.logoAssetId] : [],
@@ -408,7 +431,8 @@ export const creativeBuilderRouter = router({
                   isNotNull(campaignBriefs.creativeSetup),
                   eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
                 )
-              ).returning({ id: campaignBriefs.id });
+              )
+              .returning({ id: campaignBriefs.id });
             if (!changed.length)
               throw new TRPCError({
                 code: "CONFLICT",
@@ -416,12 +440,15 @@ export const creativeBuilderRouter = router({
                   "This setup changed in another session. Reload it before saving.",
               });
           } else {
-            const inserted = await tx.insert(campaignBriefs).values({
-              ...fields,
-              organizationId: input.organizationId,
-              createdByUserId: ctx.user.id,
-              createdAtMs: now,
-            }).returning({ insertId: campaignBriefs.id });
+            const inserted = await tx
+              .insert(campaignBriefs)
+              .values({
+                ...fields,
+                organizationId: input.organizationId,
+                createdByUserId: ctx.user.id,
+                createdAtMs: now,
+              })
+              .returning({ insertId: campaignBriefs.id });
             briefId = Number(inserted[0].insertId);
           }
           await appendActivity(
@@ -470,7 +497,9 @@ export const creativeBuilderRouter = router({
               content: JSON.stringify({
                 theme: {
                   ...getCreativeTheme(input.setup.theme),
-                  prompt: input.setup.themePrompt || getCreativeTheme(input.setup.theme).direction,
+                  prompt:
+                    input.setup.themePrompt ||
+                    getCreativeTheme(input.setup.theme).direction,
                 },
                 basePrompt: input.setup.basePrompt,
                 mood: getCreativeMood(input.setup.mood),
@@ -653,17 +682,20 @@ export const creativeBuilderRouter = router({
               message:
                 "An attempt already exists for this setup. Check its status in Results.",
             });
-          const result = await tx.insert(creativeJobs).values({
-            organizationId: input.organizationId,
-            briefId: brief.id,
-            status: "queued",
-            inputHash: stableHash({ snapshot, assetSnapshot }),
-            briefSnapshot: snapshot,
-            assetSnapshot,
-            requestedByUserId: ctx.user.id,
-            createdAtMs: Date.now(),
-            leaseExpiresAtMs: null,
-          }).returning({ insertId: creativeJobs.id });
+          const result = await tx
+            .insert(creativeJobs)
+            .values({
+              organizationId: input.organizationId,
+              briefId: brief.id,
+              status: "queued",
+              inputHash: stableHash({ snapshot, assetSnapshot }),
+              briefSnapshot: snapshot,
+              assetSnapshot,
+              requestedByUserId: ctx.user.id,
+              createdAtMs: Date.now(),
+              leaseExpiresAtMs: null,
+            })
+            .returning({ insertId: creativeJobs.id });
           const jobId = Number(result[0].insertId);
           await appendActivity(
             {

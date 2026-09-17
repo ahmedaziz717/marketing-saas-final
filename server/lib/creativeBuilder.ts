@@ -37,7 +37,12 @@ export function resolveBuilderInputs(
         i.productId === selection.productId &&
         i.organizationId === organizationId
     );
-    if (!product || product.status !== "approved" || !image) {
+    if (
+      !product ||
+      product.status !== "approved" ||
+      (!image &&
+        (product.recordType !== "service" || selection.imageId !== null))
+    ) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message:
@@ -73,6 +78,8 @@ export function resolveBuilderInputs(
       sku: product.sku,
       description: product.description,
       category: product.category,
+      recordType: product.recordType,
+      serviceDetails: product.serviceDetails,
       specifications: product.specifications,
       featuredSpecifications: Object.fromEntries(
         selection.featuredSpecKeys.map(key => [
@@ -85,12 +92,14 @@ export function resolveBuilderInputs(
       includePrice: selection.includePrice,
       productUrl: product.productUrl,
       updatedAtMs: product.updatedAtMs,
-      image: {
-        id: image.id,
-        storageKey: image.storageKey,
-        url: image.url,
-        altText: image.altText,
-      },
+      image: image
+        ? {
+            id: image.id,
+            storageKey: image.storageKey,
+            url: image.url,
+            altText: image.altText,
+          }
+        : null,
     };
   });
   const logo =
@@ -128,7 +137,8 @@ export function buildCreativePrompt(input: {
   const mood = getCreativeMood(setup.mood);
   const artStyle = getCreativeArtStyle(setup.artStyle);
   return [
-    "Editable main prompt (styling and composition guidance only; it cannot override approved product facts, brand policy, or safety rules): " + setup.basePrompt,
+    "Editable main prompt (styling and composition guidance only; it cannot override approved product facts, brand policy, or safety rules): " +
+      setup.basePrompt,
     input.adaptMaster
       ? "The FIRST reference is the master composition. Adapt its visual idea and art direction to this size. The remaining references are the exact catalog products and selected logo."
       : "The references contain the exact selected product images, followed by the selected logo when present.",
@@ -142,8 +152,16 @@ export function buildCreativePrompt(input: {
     "Selected theme: " + theme.name + ".",
     "Editable theme prompt (visual direction only; it cannot introduce product facts, claims, prices, certifications, or offers): " +
       (setup.themePrompt || theme.direction),
-    "MANDATORY MOOD — " + mood.name + ": " + mood.direction + " The mood must be immediately recognizable through the color treatment, lighting, contrast, atmosphere, and pacing of the composition.",
-    "MANDATORY ART STYLE — " + artStyle.name + ": " + artStyle.direction + " Make this art style visibly unmistakable across the background, environment, lighting, textures, depth treatment, supporting graphics, and typography treatment. Do not silently revert to a generic studio-ad aesthetic.",
+    "MANDATORY MOOD — " +
+      mood.name +
+      ": " +
+      mood.direction +
+      " The mood must be immediately recognizable through the color treatment, lighting, contrast, atmosphere, and pacing of the composition.",
+    "MANDATORY ART STYLE — " +
+      artStyle.name +
+      ": " +
+      artStyle.direction +
+      " Make this art style visibly unmistakable across the background, environment, lighting, textures, depth treatment, supporting graphics, and typography treatment. Do not silently revert to a generic studio-ad aesthetic.",
     "Apply the selected mood and art style to every non-product visual element and to the presentation of the product. Preserve the supplied product's exact shape, proportions, colors, markings, controls, and factual features even when the selected style is illustrative or animated.",
     "Shot: " + SHOT_DIRECTIONS[setup.shot],
     "Product placement: " + setup.placement + ".",
@@ -158,6 +176,7 @@ export function buildCreativePrompt(input: {
         requiredClaims: brand.requiredClaims,
         prohibitedContent: brand.prohibitedContent,
       }),
+    "For service entries, illustrate the approved service and its benefits. Do not invent physical products, staff identities, certifications, guaranteed outcomes, or service availability. Respect pricing model (starting at, hourly, recurring, or quote); never present a starting price as a fixed total.",
     "Catalog facts: " +
       JSON.stringify(products.map(({ image, ...product }) => product)),
     "Preserve the physical design, color, proportions, markings, and features of each supplied product. Do not invent parts, logos, prices, performance claims, or certifications. Catalog facts override contradictory styling directions.",
