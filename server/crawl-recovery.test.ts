@@ -270,3 +270,11 @@ it("discovers more than 250 pages in the background and respects pause", async (
     )[0]
   ).toMatchObject({ pagesProcessed: 1, status: "crawling" });
 });
+
+
+it("does not append a normalized copy of a saved URL to its own queue", async () => {
+  const jobId = await createJob("products_only", 1);
+  await state.db.update(websiteCrawlJobs).set({discoveredUrls: ["https://shop.example.test/products/item-0/?variant=one"]}).where(eq(websiteCrawlJobs.id, jobId));
+  const result = await caller.processBatch({organizationId, jobId});
+  expect(result).toMatchObject({pagesProcessed: 1, pagesDiscovered: 1, status: "analyzing"});
+});

@@ -27,7 +27,7 @@ import {
 import { requireLatestGptTextModel } from "../lib/models";
 import { stableHash } from "../lib/policy";
 import {
-  discoverSiteUrls,
+  canonicalizeUrl,
   extractPageEvidence,
   isExcludedProductUrl,
   isProductDetailUrl,
@@ -515,12 +515,13 @@ export const crawlRouter = router({
             });
         }
       }
+      const knownUrls = new Set(job.discoveredUrls.map(canonicalizeUrl));
       const extra = mergeDiscoveredUrls(
         job.discoveredUrls,
         newLinks,
         job.sourceUrl,
         job.maxPages
-      ).filter(url => !job.discoveredUrls.includes(url));
+      ).filter(url => !knownUrls.has(url));
       const discoveredUrls = [...job.discoveredUrls, ...extra];
       if (discoveredUrls.length >= job.maxPages && job.background)
         throw new Error(
