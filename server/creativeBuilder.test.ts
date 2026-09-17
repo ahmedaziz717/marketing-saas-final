@@ -70,9 +70,9 @@ const setup = () => ({
 });
 
 describe("creative setup and trusted catalog inputs", () => {
-  it("provides exactly 100 uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
-    expect(CREATIVE_THEME_LIST).toHaveLength(100);
-    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(100);
+  it("provides an expanded collection of uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
+    expect(CREATIVE_THEME_LIST.length).toBeGreaterThan(100);
+    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(CREATIVE_THEME_LIST.length);
     expect(CREATIVE_THEME_GROUPS.map(group => group.name)).toEqual([
       "Always On",
       "General / Evergreen",
@@ -94,6 +94,21 @@ describe("creative setup and trusted catalog inputs", () => {
         theme => theme.icon && theme.direction.length >= 20
       )
     ).toBe(true);
+  });
+
+  it("offers four distinct Valentine and Memorial Day directions with refreshed copy", () => {
+    for (const prefix of ["valentines", "memorial-day"]) {
+      const variants = CREATIVE_THEME_LIST.filter(t => t.id.startsWith(prefix));
+      expect(variants).toHaveLength(4);
+      expect(new Set(variants.map(t => t.direction)).size).toBe(4);
+      expect(new Set(variants.map(t => t.headline)).size).toBe(4);
+      for (const variant of variants) {
+        const setup = applyCreativeTheme(defaultCreativeSetup(), variant.id);
+        expect(setup.themePrompt).toBe(variant.direction);
+        expect(setup.copy.headline).toBe(variant.headline);
+      }
+    }
+    expect(CREATIVE_THEME_LIST.some(t => /gaming|workstation|women in tech|CES Tech/i.test(t.name))).toBe(false);
   });
 
   it("provides stable icon-led mood and art-style options", () => {

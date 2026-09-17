@@ -88,12 +88,12 @@ afterEach(cleanup);
 describe("Creative Builder controls", () => {
   it("searches monthly themes and saves editable main and theme prompt layers", async () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
-    expect(screen.getByText(/100 directions/)).toBeTruthy();
+    expect(screen.getByText(/124 directions/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search creative themes"), {
       target: { value: "Cyber Monday" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Cyber Monday" }));
-    expect((screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value).toContain("Digital deal atmosphere");
+    expect((screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value).toBe(CREATIVE_THEMES["cyber-monday"].direction);
     fireEvent.change(screen.getByLabelText("Main prompt"), {
       target: { value: "Create a precise premium commerce composition with generous safe space." },
     });
