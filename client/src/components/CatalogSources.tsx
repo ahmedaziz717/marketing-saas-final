@@ -1,6 +1,7 @@
+import { PartnerLogo } from "./PartnerLogo";
 import { useState } from "react";
 import { Link } from "wouter";
-import { Globe, Store, Upload, RefreshCw, Plus, Plug } from "lucide-react";
+import { Globe, Upload, RefreshCw, Plus, Plug } from "lucide-react";
 import { toast } from "sonner";
 import { STORE_PROVIDERS, type StoreProvider } from "@shared/catalog";
 import { parseCatalogCsv } from "@shared/catalogCsv";
@@ -16,7 +17,15 @@ const names = {
   bigcommerce: "BigCommerce",
   woocommerce: "WooCommerce",
 };
-export function CatalogSources({ organizationId }: { organizationId: number }) {
+export function CatalogSources({
+  organizationId,
+  storesOnly = false,
+  search = "",
+}: {
+  organizationId: number;
+  storesOnly?: boolean;
+  search?: string;
+}) {
   const utils = trpc.useUtils();
   const query = trpc.catalogSources.list.useQuery(
     { organizationId },
@@ -24,7 +33,11 @@ export function CatalogSources({ organizationId }: { organizationId: number }) {
   );
   const website = trpc.crawl.latest.useQuery(
     { organizationId },
-    { refetchInterval: 5000 }
+    { enabled: !storesOnly, refetchInterval: storesOnly ? false : 5000 }
+  );
+  const catalog = trpc.catalog.overview.useQuery(
+    { organizationId },
+    { enabled: !storesOnly, refetchInterval: storesOnly ? false : 5000 }
   );
   const [provider, setProvider] = useState<StoreProvider | null>(null);
   const [address, setAddress] = useState("");
@@ -84,208 +97,260 @@ export function CatalogSources({ organizationId }: { organizationId: number }) {
   };
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link href="/app/import" className="surface p-6 hover:border-primary">
-          <Globe className="mb-4 text-primary" />
-          <h3 className="font-semibold">Scan website</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Find products across public pages. Continues in the background.
-          </p>
-        </Link>
-        <button
-          className="surface p-6 text-left hover:border-primary"
-          onClick={() => setManual(true)}
-        >
-          <Plus className="mb-4 text-primary" />
-          <h3 className="font-semibold">Add product or service</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Describe what you sell, with accurate facts and images.
-          </p>
-        </button>
-        <div className="surface p-6">
-          <Upload className="mb-4 text-primary" />
-          <Label htmlFor="catalog-csv" className="font-semibold">
-            Import CSV
-          </Label>
-          <p className="my-2 text-sm text-muted-foreground">
-            Required columns: name, productUrl. Optional: recordType (service or
-            standalone), description, sku, price, currency, imageUrl, category,
-            pricing, duration, area, delivery, packages, cta.
-          </p>
-          <Input
-            id="catalog-csv"
-            type="file"
-            accept=".csv,text/csv"
-            disabled={csvProgress !== null}
-            onChange={e => {
-              const f = e.target.files?.[0];
-              if (f) void upload(f);
-              e.target.value = "";
-            }}
-          />
-          {csvProgress !== null && (
-            <>
-              <Progress className="mt-3" value={csvProgress} />
-              <p className="text-xs">
-                {csvProgress}% · Keep this tab open for CSV upload
-              </p>
-            </>
-          )}
-          {csvErrors.length > 0 && (
-            <div
-              role="alert"
-              className="mt-3 max-h-32 overflow-auto text-xs text-red-700"
-            >
-              {csvErrors.map((e, i) => (
-                <p key={i}>{e}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      {website.data && (
-        <div className="surface p-5">
-          <h3 className="font-semibold">
-            Website · {website.data.sourceOrigin}
-          </h3>
-          <p className="mt-2 text-sm">
-            {website.data.status.replaceAll("_", " ")} ·{" "}
-            {website.data.pagesProcessed} / {website.data.pagesDiscovered} pages
-            read
-          </p>
-          <Progress
-            className="my-3"
-            value={
-              website.data.pagesDiscovered
-                ? (website.data.pagesProcessed / website.data.pagesDiscovered) *
-                  100
-                : 0
-            }
-          />
-          <Link href="/app/import" className="text-sm text-primary">
-            View scan and progress
-          </Link>
-        </div>
-      )}
-      <h3 className="text-xl font-semibold">Connected stores</h3>
-      {query.error && <p role="alert">{query.error.message}</p>}
-      {query.data?.map(source => (
-        <div key={source.id} className="surface p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      {!storesOnly && (
+        <>
+          <div className="surface flex flex-wrap items-center justify-between gap-4 p-5">
             <div>
-              <h4 className="font-semibold">
-                {names[source.provider as StoreProvider] || source.provider}
-              </h4>
-              <p className="text-sm text-muted-foreground">{source.storeUrl}</p>
+              <p className="text-sm text-muted-foreground">
+                Total catalog · All imports and sources
+              </p>
+              <p className="mt-1 text-3xl font-semibold">
+                {catalog.data ? catalog.data.total.toLocaleString() : "…"}
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  products and services
+                </span>
+              </p>
             </div>
-            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary">
-              {source.status}
-            </span>
+            <Link href="/app/catalog" className="text-sm text-primary">
+              View catalog
+            </Link>
           </div>
-          <p className="mt-3 text-sm">
-            {source.processed}
-            {source.total !== null ? ` of ${source.total}` : ""} products
-            processed ·{" "}
-            {source.lastSyncAt
-              ? `Last sync ${new Date(source.lastSyncAt).toLocaleString()}`
-              : "No completed sync yet"}
-          </p>
-          {["queued", "syncing"].includes(source.status) && (
-            <Progress
-              className="mt-3"
-              value={
-                source.total
-                  ? (source.processed / source.total) * 100
-                  : undefined
-              }
-            />
+          <div className="grid gap-4 md:grid-cols-3">
+            <Link
+              href="/app/import"
+              className="surface p-6 hover:border-primary"
+            >
+              <Globe className="mb-4 text-primary" />
+              <h3 className="font-semibold">Scan website</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Find products across public pages. Continues in the background.
+              </p>
+            </Link>
+            <button
+              className="surface p-6 text-left hover:border-primary"
+              onClick={() => setManual(true)}
+            >
+              <Plus className="mb-4 text-primary" />
+              <h3 className="font-semibold">Add product or service</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Describe what you sell, with accurate facts and images.
+              </p>
+            </button>
+            <div className="surface p-6">
+              <Upload className="mb-4 text-primary" />
+              <Label htmlFor="catalog-csv" className="font-semibold">
+                Import CSV
+              </Label>
+              <p className="my-2 text-sm text-muted-foreground">
+                Required columns: name, productUrl. Optional: recordType
+                (service or standalone), description, sku, price, currency,
+                imageUrl, category, pricing, duration, area, delivery, packages,
+                cta.
+              </p>
+              <Input
+                id="catalog-csv"
+                type="file"
+                accept=".csv,text/csv"
+                disabled={csvProgress !== null}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) void upload(f);
+                  e.target.value = "";
+                }}
+              />
+              {csvProgress !== null && (
+                <>
+                  <Progress className="mt-3" value={csvProgress} />
+                  <p className="text-xs">
+                    {csvProgress}% · Keep this tab open for CSV upload
+                  </p>
+                </>
+              )}
+              {csvErrors.length > 0 && (
+                <div
+                  role="alert"
+                  className="mt-3 max-h-32 overflow-auto text-xs text-red-700"
+                >
+                  {csvErrors.map((e, i) => (
+                    <p key={i}>{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {website.data && (
+            <div className="surface p-5">
+              <h3 className="font-semibold">
+                Latest website scan · {website.data.sourceOrigin}
+              </h3>
+              <p className="mt-2 text-sm">
+                {["review_ready", "completed"].includes(website.data.status)
+                  ? "Scan complete — results ready to review"
+                  : website.data.status.replaceAll("_", " ")}{" "}
+                · {website.data.pagesProcessed} / {website.data.pagesDiscovered}{" "}
+                pages read in this scan
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Page counts describe this scan only. Your total catalog includes
+                items saved across all scans and imports; a page may contain
+                multiple products or none.
+              </p>
+              <Progress
+                className="my-3"
+                value={
+                  website.data.pagesDiscovered
+                    ? (website.data.pagesProcessed /
+                        website.data.pagesDiscovered) *
+                      100
+                    : 0
+                }
+              />
+              <Link href="/app/import" className="text-sm text-primary">
+                View scan and progress
+              </Link>
+            </div>
           )}
-          <p className="mt-2 text-xs text-muted-foreground">
-            {source.autoSync
-              ? "Automatic sync every 6 hours"
-              : "Automatic sync off"}
-          </p>
-          {source.error && (
-            <p role="alert" className="mt-2 text-sm text-red-700">
-              {source.error}
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {source.status !== "disconnected" && (
-              <>
-                {["queued", "syncing"].includes(source.status) ? (
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      action.mutate({
-                        organizationId,
-                        sourceId: source.id,
-                        action: "pause",
-                      })
-                    }
-                  >
-                    Pause
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      action.mutate({
-                        organizationId,
-                        sourceId: source.id,
-                        action: ["paused", "error"].includes(source.status)
-                          ? "resume"
-                          : "sync",
-                      })
-                    }
-                  >
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    {["paused", "error"].includes(source.status)
-                      ? "Resume sync"
-                      : "Sync now"}
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    action.mutate({
-                      organizationId,
-                      sourceId: source.id,
-                      action: source.autoSync
-                        ? "automatic_off"
-                        : "automatic_on",
-                    })
+        </>
+      )}
+      {!!query.data?.length && (
+        <h3 className="text-xl font-semibold">Your store connections</h3>
+      )}
+      {query.error && <p role="alert">{query.error.message}</p>}
+      {query.data
+        ?.filter(source =>
+          (names[source.provider as StoreProvider] || source.provider)
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        )
+        .map(source => (
+          <div key={source.id} className="surface p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <PartnerLogo
+                  slug={source.provider}
+                  name={
+                    names[source.provider as StoreProvider] || source.provider
                   }
-                >
-                  {source.autoSync ? "Turn auto-sync off" : "Turn auto-sync on"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Disconnect this store? Imported items will remain in your catalog."
-                      )
-                    )
+                />
+                <h4 className="mt-3 font-semibold">
+                  {names[source.provider as StoreProvider] || source.provider}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  {source.storeUrl}
+                </p>
+              </div>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary">
+                {source.status}
+              </span>
+            </div>
+            <p className="mt-3 text-sm">
+              {source.processed}
+              {source.total !== null ? ` of ${source.total}` : ""} products
+              processed ·{" "}
+              {source.lastSyncAt
+                ? `Last sync ${new Date(source.lastSyncAt).toLocaleString()}`
+                : "No completed sync yet"}
+            </p>
+            {["queued", "syncing"].includes(source.status) && (
+              <Progress
+                className="mt-3"
+                value={
+                  source.total
+                    ? (source.processed / source.total) * 100
+                    : undefined
+                }
+              />
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {source.autoSync
+                ? "Automatic sync every 6 hours"
+                : "Automatic sync off"}
+            </p>
+            {source.error && (
+              <p role="alert" className="mt-2 text-sm text-red-700">
+                {source.error}
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {source.status !== "disconnected" && (
+                <>
+                  {["queued", "syncing"].includes(source.status) ? (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        action.mutate({
+                          organizationId,
+                          sourceId: source.id,
+                          action: "pause",
+                        })
+                      }
+                    >
+                      Pause
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        action.mutate({
+                          organizationId,
+                          sourceId: source.id,
+                          action: ["paused", "error"].includes(source.status)
+                            ? "resume"
+                            : "sync",
+                        })
+                      }
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      {["paused", "error"].includes(source.status)
+                        ? "Resume sync"
+                        : "Sync now"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
                       action.mutate({
                         organizationId,
                         sourceId: source.id,
-                        action: "disconnect",
-                      });
-                  }}
-                >
-                  Disconnect
-                </Button>
-              </>
-            )}
+                        action: source.autoSync
+                          ? "automatic_off"
+                          : "automatic_on",
+                      })
+                    }
+                  >
+                    {source.autoSync
+                      ? "Turn auto-sync off"
+                      : "Turn auto-sync on"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Disconnect this store? Imported items will remain in your catalog."
+                        )
+                      )
+                        action.mutate({
+                          organizationId,
+                          sourceId: source.id,
+                          action: "disconnect",
+                        });
+                    }}
+                  >
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
       <div className="grid gap-4 md:grid-cols-3">
-        {STORE_PROVIDERS.map(p => (
+        {STORE_PROVIDERS.filter(p =>
+          names[p].toLowerCase().includes(search.toLowerCase())
+        ).map(p => (
           <div key={p} className="surface p-6">
-            <Store className="mb-4 text-primary" />
-            <h4 className="font-semibold">{names[p]}</h4>
+            <PartnerLogo slug={p} name={names[p]} />
+            <h4 className="mt-4 font-semibold">{names[p]}</h4>
             <p className="my-3 text-sm text-muted-foreground">
               Import products, variants, pricing, and images using read-only
               store credentials.

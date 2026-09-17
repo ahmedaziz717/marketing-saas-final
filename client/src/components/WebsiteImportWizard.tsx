@@ -677,7 +677,9 @@ export function WebsiteImportWizard({
                   ? "Organizing catalog entries…"
                   : job.status === "cancelled"
                     ? "Scan paused"
-                    : job.status.replaceAll("_", " ")}
+                    : ["review_ready", "completed"].includes(job.status)
+                      ? "Latest scan complete — results ready to review"
+                      : job.status.replaceAll("_", " ")}
             </h4>
             {active && <Loader2 className="h-4 w-4 animate-spin" />}
           </div>
@@ -696,10 +698,16 @@ export function WebsiteImportWizard({
           />
           <p className="mt-2 text-sm">
             {job.pagesProcessed.toLocaleString()} of{" "}
-            {job.pagesDiscovered.toLocaleString()} discovered pages read
+            {job.pagesDiscovered.toLocaleString()} discovered pages read in this
+            scan
             {job.status === "crawling"
               ? " · Total may grow as links are discovered"
               : ""}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {catalog.data?.total.toLocaleString() ?? "…"} products and services
+            in your total catalog across all imports. Scan page counts are
+            separate from catalog item counts.
           </p>
           {job.status === "analyzing" && (
             <p className="mt-2 text-sm">
@@ -731,7 +739,8 @@ export function WebsiteImportWizard({
             </Button>
           )}
           {(["failed", "cancelled"].includes(job.status) ||
-            (!job.background && ["crawling", "analyzing"].includes(job.status))) && (
+            (!job.background &&
+              ["crawling", "analyzing"].includes(job.status))) && (
             <Button
               className="mt-4"
               onClick={async () => {
@@ -743,7 +752,9 @@ export function WebsiteImportWizard({
                 }
               }}
             >
-              {job.background ? "Resume saved import" : "Continue scan in background"}
+              {job.background
+                ? "Resume saved import"
+                : "Continue scan in background"}
             </Button>
           )}
         </section>
