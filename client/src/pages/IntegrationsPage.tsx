@@ -188,7 +188,7 @@ const partners = [
   },
 ];
 type Partner = (typeof partners)[number];
-function Integrations() {
+export function Integrations() {
   const { organizationId } = useWorkspace();
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");

@@ -22,7 +22,6 @@ import {
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  Activity,
   BookOpenText,
   Boxes,
   Images,
@@ -30,7 +29,6 @@ import {
   LogOut,
   PackageSearch,
   PanelLeft,
-  Plug,
   Send,
   Settings,
 } from "lucide-react";
@@ -46,8 +44,6 @@ const menuItems = [
   { icon: Send, label: "Publish", path: "/app/publishing" },
   { icon: Boxes, label: "Brand", path: "/app/brand" },
   { icon: PackageSearch, label: "Catalog", path: "/app/catalog" },
-  { icon: Plug, label: "Integrations", path: "/app/integrations" },
-  { icon: Activity, label: "Activity", path: "/app/activity" },
   { icon: Settings, label: "Settings", path: "/app/settings" },
 ];
 const SIDEBAR_WIDTH_KEY = "frame-sidebar-width";
@@ -174,7 +170,10 @@ function DashboardLayoutContent({
             </div>
             <SidebarMenu className="gap-1 px-2 py-1">
               {menuItems.map(item => {
-                const isActive = location === item.path;
+                const isActive =
+                  location === item.path ||
+                  (item.path === "/app/settings" &&
+                    location.startsWith("/app/settings/"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton

@@ -7,8 +7,11 @@ import { Label } from "@/components/ui/label";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { Integrations } from "./IntegrationsPage";
+import { Activity } from "./ActivityPage";
 import {
+  History,
   Building2,
   Users,
   CreditCard,
@@ -26,6 +29,8 @@ type Role = "admin" | "creator" | "reviewer" | "publisher";
 const sections = [
   { id: "company", label: "Company & brand", icon: Building2 },
   { id: "team", label: "Team & access", icon: Users },
+  { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "activity", label: "Activity & audit log", icon: History },
   { id: "billing", label: "Billing & usage", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
@@ -118,7 +123,12 @@ function RoleSelect({
 }
 function Settings() {
   const { organizationId, organization, membership } = useWorkspace();
-  const [section, setSection] = useState<string>("team");
+  const [location, navigate] = useLocation();
+  const requestedSection = location.split("/").at(-1);
+  const section = sections.some(s => s.id === requestedSection)
+    ? requestedSection!
+    : "team";
+  const setSection = (id: string) => navigate(`/app/settings/${id}`);
   const [teamTab, setTeamTab] = useState("members");
   const [showInvite, setShowInvite] = useState(false);
   const [email, setEmail] = useState("");
@@ -217,16 +227,13 @@ function Settings() {
               {label}
             </button>
           ))}
-          <Link
-            href="~/app/integrations"
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm hover:bg-muted"
-          >
-            <Plug size={18} />
-            Integrations ↗
-          </Link>
         </nav>
         <div className="min-w-0 space-y-6">
-          {section === "team" ? (
+          {section === "integrations" ? (
+            <Integrations />
+          ) : section === "activity" ? (
+            <Activity />
+          ) : section === "team" ? (
             <>
               <section className="surface p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -714,7 +721,7 @@ function Settings() {
               </div>
               {section === "security" && (
                 <Link
-                  href="~/app/activity"
+                  href="~/app/settings/activity"
                   className="mt-6 inline-block text-primary underline"
                 >
                   View workspace activity ↗
