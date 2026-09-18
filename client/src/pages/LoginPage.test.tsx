@@ -68,3 +68,45 @@ it("requires matching new passwords before making a request", async () => {
   );
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("signup asks only for email and routes through separate signup endpoint", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+  vi.stubGlobal("fetch", fetcher);
+  render(<LoginPage signup />);
+  expect(screen.queryByLabelText("Password")).toBeNull();
+  expect(screen.getByRole("link", { name: "Log in" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Work email"), {
+    target: { value: "new@example.test" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Send verification email" })
+  );
+  await screen.findByText("Verify your email");
+  expect(fetcher.mock.calls[0][0]).toBe("/api/auth/signup");
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).password).toBeUndefined();
+});
+it("shows delivery failure instead of the check email screen", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "Email sending is temporarily limited." }),
+      })
+  );
+  render(<LoginPage signup />);
+  fireEvent.change(screen.getByLabelText("Work email"), {
+    target: { value: "new@example.test" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Send verification email" })
+  );
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    "Email sending is temporarily limited."
+  );
+  expect(screen.queryByText("Verify your email")).toBeNull();
+});

@@ -13,6 +13,7 @@ registerAuthRoutes({
 } as any);
 const user = { id: "verified-user", email_confirmed_at: "2026-01-01" };
 const auth = {
+  signInWithOtp: vi.fn(),
   verifyOtp: vi.fn(),
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
@@ -192,4 +193,53 @@ describe("recovery email confirmation", () => {
     expect(resolveAuthUser).not.toHaveBeenCalled();
     expect(res.redirect).toHaveBeenCalledWith(303, "/login?error=expired");
   });
+});
+
+async function emailRequest(path: string, body: any) {
+  const res: any = {
+    status: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    json: vi.fn(),
+  };
+  await handlers.get(path)({ body }, res);
+  return res;
+}
+it("signup requires its feature flag and does not create an account when disabled", async () => {
+  vi.stubEnv("AUTH_SIGNUP_ENABLED", "false");
+  const res = await emailRequest("/api/auth/signup", {
+    email: "new@example.test",
+  });
+  expect(res.status).toHaveBeenCalledWith(403);
+  expect(auth.signInWithOtp).not.toHaveBeenCalled();
+});
+it("signup verifies email then routes directly to password setup preserving the destination", async () => {
+  vi.stubEnv("AUTH_SIGNUP_ENABLED", "true");
+  auth.signInWithOtp.mockResolvedValue({ error: null });
+  await emailRequest("/api/auth/signup", {
+    email: "New@example.test",
+    returnTo: "/invite/abc",
+  });
+  const input = auth.signInWithOtp.mock.calls[0][0];
+  expect(input.email).toBe("new@example.test");
+  expect(input.options.shouldCreateUser).toBe(true);
+  expect(input.password).toBeUndefined();
+  expect(new URL(input.options.emailRedirectTo).searchParams.get("next")).toBe(
+    "/reset-password?next=%2Finvite%2Fabc"
+  );
+  expect(resolveAuthUser).not.toHaveBeenCalled();
+});
+it("email login never silently registers new users", async () => {
+  auth.signInWithOtp.mockResolvedValue({ error: null });
+  await emailRequest("/api/auth/email", { email: "new@example.test" });
+  expect(auth.signInWithOtp.mock.calls[0][0].options.shouldCreateUser).toBe(
+    false
+  );
+});
+it("does not report successful reset delivery when the provider rate limits it", async () => {
+  auth.resetPasswordForEmail.mockResolvedValue({
+    error: { status: 429, code: "over_email_send_rate_limit" },
+  });
+  const res = await request("/reset", { email: "member@example.test" });
+  expect(res.status).toHaveBeenCalledWith(429);
+  expect(res.json).not.toHaveBeenCalledWith({ success: true });
 });

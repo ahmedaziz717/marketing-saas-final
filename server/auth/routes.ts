@@ -73,6 +73,49 @@ export function registerAuthRoutes(app: Express) {
       res.redirect(303, "/login?error=signin");
     }
   });
+  app.post("/api/auth/signup", limiter(), async (req, res) => {
+    if (process.env.AUTH_SIGNUP_ENABLED !== "true")
+      return void res
+        .status(403)
+        .json({ error: "Registration is currently unavailable." });
+    const input = z
+      .object({
+        email: z.string().trim().email(),
+        returnTo: z.string().optional(),
+      })
+      .safeParse(req.body);
+    if (!input.success)
+      return void res.status(400).json({
+        error: "Enter a valid email address.",
+      });
+    try {
+      const callback = new URL("/api/auth/callback", process.env.APP_ORIGIN);
+      callback.searchParams.set(
+        "next",
+        "/reset-password?next=" +
+          encodeURIComponent(safeReturnPath(input.data.returnTo))
+      );
+      const { error } = await authClient(req, res).auth.signInWithOtp({
+        email: input.data.email.toLowerCase(),
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: callback.toString(),
+        },
+      });
+      if (error)
+        return void res.status(error.status === 429 ? 429 : 400).json({
+          error:
+            error.status === 429
+              ? "Email sending is temporarily limited. Please try again later."
+              : "Registration could not be completed. Try logging in if you already have an account, or try again later.",
+        });
+      res.set("Cache-Control", "no-store").json({ success: true });
+    } catch {
+      res.status(503).json({
+        error: "Registration is temporarily unavailable. Please try again.",
+      });
+    }
+  });
   app.post("/api/auth/password", limiter(), async (req, res) => {
     const input = z
       .object({
@@ -130,7 +173,27 @@ export function registerAuthRoutes(app: Express) {
         { redirectTo: callback.toString() }
       );
       // Do not distinguish an unknown email from an existing account.
-      if (error) console.warn("Password reset email request was not accepted");
+      if (error) {
+        console.warn("Authentication email request rejected", {
+          code: error.code,
+          status: error.status,
+        });
+        if (error.status === 429)
+          return void res.status(429).json({
+            error:
+              "Email sending is temporarily limited. Please try again later.",
+          });
+        if (error.status && error.status >= 500)
+          return void res.status(503).json({
+            error:
+              "Email delivery is temporarily unavailable. Please try again later.",
+          });
+        if (error.code === "email_address_not_authorized")
+          return void res.status(503).json({
+            error:
+              "Email delivery is not configured for this address. Please contact support.",
+          });
+      }
       res.set("Cache-Control", "no-store").json({ success: true });
     } catch {
       res.status(503).json({
@@ -197,12 +260,32 @@ export function registerAuthRoutes(app: Express) {
       const { error } = await authClient(req, res).auth.signInWithOtp({
         email: input.data.email.trim().toLowerCase(),
         options: {
-          shouldCreateUser: process.env.AUTH_SIGNUP_ENABLED === "true",
+          shouldCreateUser: false,
           emailRedirectTo: callback.toString(),
         },
       });
       // Do not reveal whether an address already has an account.
-      if (error) console.warn("Sign-in email request was not accepted");
+      if (error) {
+        console.warn("Authentication email request rejected", {
+          code: error.code,
+          status: error.status,
+        });
+        if (error.status === 429)
+          return void res.status(429).json({
+            error:
+              "Email sending is temporarily limited. Please try again later.",
+          });
+        if (error.status && error.status >= 500)
+          return void res.status(503).json({
+            error:
+              "Email delivery is temporarily unavailable. Please try again later.",
+          });
+        if (error.code === "email_address_not_authorized")
+          return void res.status(503).json({
+            error:
+              "Email delivery is not configured for this address. Please contact support.",
+          });
+      }
       res.set("Cache-Control", "no-store").json({ success: true });
     } catch {
       res.status(503).json({

@@ -5,8 +5,10 @@ import { Label } from "@/components/ui/label";
 
 export default function LoginPage({
   resetPassword = false,
+  signup = false,
 }: {
   resetPassword?: boolean;
+  signup?: boolean;
 }) {
   const [method, setMethod] = useState<"password" | "link">("password");
   const [email, setEmail] = useState("");
@@ -40,20 +42,22 @@ export default function LoginPage({
     }
     setBusy(true);
     try {
-      const endpoint = resetPassword
-        ? "/api/auth/password/update"
-        : recovery
-          ? "/api/auth/password/reset"
-          : method === "password"
-            ? "/api/auth/password"
-            : "/api/auth/email";
+      const endpoint = signup
+        ? "/api/auth/signup"
+        : resetPassword
+          ? "/api/auth/password/update"
+          : recovery
+            ? "/api/auth/password/reset"
+            : method === "password"
+              ? "/api/auth/password"
+              : "/api/auth/email";
       const response = await fetch(endpoint, {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          ...(resetPassword || (method === "password" && !recovery)
+          ...(resetPassword || (!signup && method === "password" && !recovery)
             ? { password }
             : {}),
           returnTo: next,
@@ -77,13 +81,17 @@ export default function LoginPage({
       setBusy(false);
     }
   }
-  const title = resetPassword
-    ? "Set your password"
-    : sent
-      ? "Check your email"
-      : recovery
-        ? "Set or reset your password"
-        : "Welcome to Frame";
+  const title = signup
+    ? sent
+      ? "Verify your email"
+      : "Create your Frame account"
+    : resetPassword
+      ? "Set your password"
+      : sent
+        ? "Check your email"
+        : recovery
+          ? "Set or reset your password"
+          : "Log in to Frame";
   return (
     <main className="min-h-screen bg-background flex items-center justify-center p-6">
       <section className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
@@ -92,17 +100,21 @@ export default function LoginPage({
         </a>
         <h1 className="mt-8 text-3xl font-semibold tracking-tight">{title}</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          {resetPassword
-            ? "Choose a strong password with at least 12 characters. You can still sign in with an emailed link."
-            : sent
-              ? recovery
-                ? `If an account exists for ${email}, a password-reset link will arrive shortly. Open it in this browser.`
-                : `If sign-in is available for ${email}, a sign-in link will arrive shortly. Open it in this browser. Check your spam folder too.`
-              : recovery
-                ? "Already use email links? Use this to add a password to the same account, or reset a forgotten password."
-                : "Choose how to sign in to your creative workspace."}
+          {signup
+            ? sent
+              ? `If registration is available for ${email}, open the verification email in this browser to continue. Already registered? Log in below.`
+              : "Verify your email first. Next, choose your password and set up your workspace."
+            : resetPassword
+              ? "Choose a strong password with at least 12 characters. You can still sign in with an emailed link."
+              : sent
+                ? recovery
+                  ? `If an account exists for ${email}, a password-reset link will arrive shortly. Open it in this browser.`
+                  : `If sign-in is available for ${email}, a sign-in link will arrive shortly. Open it in this browser. Check your spam folder too.`
+                : recovery
+                  ? "Already use email links? Use this to add a password to the same account, or reset a forgotten password."
+                  : "Choose how to sign in to your creative workspace."}
         </p>
-        {!resetPassword && !recovery && (
+        {!signup && !resetPassword && !recovery && (
           <div
             className="mt-6 grid grid-cols-2 gap-2"
             role="group"
@@ -143,51 +155,57 @@ export default function LoginPage({
               />
             </div>
           )}
-          {!sent && (resetPassword || (method === "password" && !recovery)) && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="password">
-                  {resetPassword ? "New password" : "Password"}
-                </Label>
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete={
-                    resetPassword ? "new-password" : "current-password"
-                  }
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  minLength={resetPassword ? 12 : undefined}
-                  maxLength={resetPassword ? 128 : 1024}
-                  required
-                  disabled={busy}
-                />
-                <button
-                  type="button"
-                  className="text-xs text-primary"
-                  onClick={() => setShowPassword(v => !v)}
-                >
-                  {showPassword ? "Hide password" : "Show password"}
-                </button>
-              </div>
-              {resetPassword && (
+          {!sent &&
+            (resetPassword ||
+              (!signup && method === "password" && !recovery)) && (
+              <>
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm new password</Label>
+                  <Label htmlFor="password">
+                    {resetPassword ? "New password" : "Password"}
+                  </Label>
                   <Input
-                    id="confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={12}
-                    maxLength={128}
-                    value={confirm}
-                    onChange={e => setConfirm(e.target.value)}
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={
+                      signup || resetPassword
+                        ? "new-password"
+                        : "current-password"
+                    }
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    minLength={signup || resetPassword ? 12 : undefined}
+                    maxLength={signup || resetPassword ? 128 : 1024}
                     required
                     disabled={busy}
                   />
+                  <button
+                    type="button"
+                    className="text-xs text-primary"
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? "Hide password" : "Show password"}
+                  </button>
                 </div>
-              )}
-            </>
-          )}
+                {resetPassword && (
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">
+                      Confirm new password
+                    </Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      maxLength={128}
+                      value={confirm}
+                      onChange={e => setConfirm(e.target.value)}
+                      required
+                      disabled={busy}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -199,11 +217,13 @@ export default function LoginPage({
                 ? "Please wait…"
                 : resetPassword
                   ? "Save password & continue"
-                  : recovery
-                    ? "Email me a password-reset link"
-                    : method === "password"
-                      ? "Sign in with password"
-                      : "Email me a sign-in link"}
+                  : signup
+                    ? "Send verification email"
+                    : recovery
+                      ? "Email me a password-reset link"
+                      : method === "password"
+                        ? "Sign in with password"
+                        : "Email me a sign-in link"}
             </Button>
           )}
           {sent && (
@@ -216,7 +236,7 @@ export default function LoginPage({
               Use another email or request a new link
             </Button>
           )}
-          {!resetPassword && !recovery && method === "password" && (
+          {!signup && !resetPassword && !recovery && method === "password" && (
             <Button
               type="button"
               variant="ghost"
@@ -240,10 +260,15 @@ export default function LoginPage({
               Back to sign in
             </a>
           )}
-          {!sent && !resetPassword && !recovery && method === "link" && (
-            <p className="text-xs text-muted-foreground">
-              New here? Use an email link to verify your address and get
-              started.
+          {!resetPassword && (
+            <p className="text-center text-sm text-muted-foreground">
+              {signup ? "Already have an account? " : "New to Frame? "}
+              <a
+                className="text-primary underline"
+                href={`${signup ? "/login" : "/signup"}?next=${encodeURIComponent(next)}`}
+              >
+                {signup ? "Log in" : "Create an account"}
+              </a>
             </p>
           )}
         </form>

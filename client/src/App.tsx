@@ -24,6 +24,9 @@ function Router() {
       <Route path="/login">
         <LoginPage />
       </Route>
+      <Route path="/signup">
+        <LoginPage signup />
+      </Route>
       <Route path="/reset-password">
         <LoginPage resetPassword />
       </Route>
