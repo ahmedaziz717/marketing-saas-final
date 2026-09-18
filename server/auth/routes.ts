@@ -34,7 +34,7 @@ export function registerAuthRoutes(app: Express) {
   app.get("/api/auth/recovery/confirm", (req, res) => {
     const token = z
       .string()
-      .regex(/^[a-fA-F0-9]{40,128}$/)
+      .regex(/^(?:pkce_)?[a-fA-F0-9]{40,128}$/)
       .safeParse(req.query.token_hash);
     res.set({
       "Cache-Control": "private, no-store",
@@ -53,7 +53,7 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/recovery/confirm", limiter(), async (req, res) => {
     const token = z
       .string()
-      .regex(/^[a-fA-F0-9]{40,128}$/)
+      .regex(/^(?:pkce_)?[a-fA-F0-9]{40,128}$/)
       .safeParse(req.body.token_hash);
     res.set("Cache-Control", "private, no-store");
     if (!token.success) return void res.redirect(303, "/login?error=expired");

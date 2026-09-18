@@ -130,26 +130,29 @@ it("handles expired callback links without starting session refresh", async () =
 });
 
 describe("recovery email confirmation", () => {
-  it("does not consume a token on GET, even after repeated scanner visits", async () => {
-    const res: any = {
-      set: vi.fn().mockReturnThis(),
-      type: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-      redirect: vi.fn(),
-    };
-    for (let i = 0; i < 3; i++)
-      await gets.get("/api/auth/recovery/confirm")(
-        { query: { token_hash: "a".repeat(64) } },
-        res
+  it.each(["a".repeat(64), "pkce_" + "a".repeat(56)])(
+    "does not consume a token on GET, including PKCE: %s",
+    async token => {
+      const res: any = {
+        set: vi.fn().mockReturnThis(),
+        type: vi.fn().mockReturnThis(),
+        send: vi.fn(),
+        redirect: vi.fn(),
+      };
+      for (let i = 0; i < 3; i++)
+        await gets.get("/api/auth/recovery/confirm")(
+          { query: { token_hash: token } },
+          res
+        );
+      expect(authClient).not.toHaveBeenCalled();
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining('method="post"')
       );
-    expect(authClient).not.toHaveBeenCalled();
-    expect(res.send).toHaveBeenCalledWith(
-      expect.stringContaining('method="post"')
-    );
-    expect(res.set).toHaveBeenCalledWith(
-      expect.objectContaining({ "Referrer-Policy": "no-referrer" })
-    );
-  });
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({ "Referrer-Policy": "no-referrer" })
+      );
+    }
+  );
   it("rejects malformed tokens without reflecting them into HTML", async () => {
     const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
     await gets.get("/api/auth/recovery/confirm")(
@@ -159,20 +162,23 @@ describe("recovery email confirmation", () => {
     expect(res.redirect).toHaveBeenCalledWith("/login?error=expired");
     expect(authClient).not.toHaveBeenCalled();
   });
-  it("redeems recovery only after POST and sets the verified session before redirect", async () => {
-    auth.verifyOtp.mockResolvedValue({ data: { user }, error: null });
-    const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
-    await handlers.get("/api/auth/recovery/confirm")(
-      { body: { token_hash: "b".repeat(64) } },
-      res
-    );
-    expect(auth.verifyOtp).toHaveBeenCalledWith({
-      token_hash: "b".repeat(64),
-      type: "recovery",
-    });
-    expect(resolveAuthUser).toHaveBeenCalledWith(user);
-    expect(res.redirect).toHaveBeenCalledWith(303, "/reset-password");
-  });
+  it.each(["b".repeat(64), "pkce_" + "b".repeat(56)])(
+    "redeems recovery after POST preserving the token: %s",
+    async token => {
+      auth.verifyOtp.mockResolvedValue({ data: { user }, error: null });
+      const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+      await handlers.get("/api/auth/recovery/confirm")(
+        { body: { token_hash: token } },
+        res
+      );
+      expect(auth.verifyOtp).toHaveBeenCalledWith({
+        token_hash: token,
+        type: "recovery",
+      });
+      expect(resolveAuthUser).toHaveBeenCalledWith(user);
+      expect(res.redirect).toHaveBeenCalledWith(303, "/reset-password");
+    }
+  );
   it("does not accept an invalid or consumed recovery token", async () => {
     auth.verifyOtp.mockResolvedValue({
       data: { user: null },
