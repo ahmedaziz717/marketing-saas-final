@@ -6,12 +6,14 @@ vi.mock("./supabase", () => ({
   resolveAuthUser: vi.fn(),
 }));
 const handlers = new Map<string, any>();
+const gets = new Map<string, any>();
 registerAuthRoutes({
   post: (path: string, ...h: any[]) => handlers.set(path, h.at(-1)),
-  get: (path: string, ...h: any[]) => handlers.set(path, h.at(-1)),
+  get: (path: string, ...h: any[]) => gets.set(path, h.at(-1)),
 } as any);
 const user = { id: "verified-user", email_confirmed_at: "2026-01-01" };
 const auth = {
+  verifyOtp: vi.fn(),
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   getUser: vi.fn(),
@@ -119,10 +121,69 @@ describe("password authentication", () => {
 
 it("handles expired callback links without starting session refresh", async () => {
   const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
-  await handlers.get("/api/auth/callback")(
+  await gets.get("/api/auth/callback")(
     { query: { error: "access_denied", error_code: "otp_expired" } },
     res
   );
   expect(res.redirect).toHaveBeenCalledWith("/login?error=expired");
   expect(authClient).not.toHaveBeenCalled();
+});
+
+describe("recovery email confirmation", () => {
+  it("does not consume a token on GET, even after repeated scanner visits", async () => {
+    const res: any = {
+      set: vi.fn().mockReturnThis(),
+      type: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+      redirect: vi.fn(),
+    };
+    for (let i = 0; i < 3; i++)
+      await gets.get("/api/auth/recovery/confirm")(
+        { query: { token_hash: "a".repeat(64) } },
+        res
+      );
+    expect(authClient).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalledWith(
+      expect.stringContaining('method="post"')
+    );
+    expect(res.set).toHaveBeenCalledWith(
+      expect.objectContaining({ "Referrer-Policy": "no-referrer" })
+    );
+  });
+  it("rejects malformed tokens without reflecting them into HTML", async () => {
+    const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+    await gets.get("/api/auth/recovery/confirm")(
+      { query: { token_hash: "<script>" } },
+      res
+    );
+    expect(res.redirect).toHaveBeenCalledWith("/login?error=expired");
+    expect(authClient).not.toHaveBeenCalled();
+  });
+  it("redeems recovery only after POST and sets the verified session before redirect", async () => {
+    auth.verifyOtp.mockResolvedValue({ data: { user }, error: null });
+    const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+    await handlers.get("/api/auth/recovery/confirm")(
+      { body: { token_hash: "b".repeat(64) } },
+      res
+    );
+    expect(auth.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "b".repeat(64),
+      type: "recovery",
+    });
+    expect(resolveAuthUser).toHaveBeenCalledWith(user);
+    expect(res.redirect).toHaveBeenCalledWith(303, "/reset-password");
+  });
+  it("does not accept an invalid or consumed recovery token", async () => {
+    auth.verifyOtp.mockResolvedValue({
+      data: { user: null },
+      error: { message: "expired" },
+    });
+    const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+    await handlers.get("/api/auth/recovery/confirm")(
+      { body: { token_hash: "b".repeat(64) } },
+      res
+    );
+    expect(resolveAuthUser).not.toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith(303, "/login?error=expired");
+  });
 });

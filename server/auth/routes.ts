@@ -30,6 +30,49 @@ export function registerAuthRoutes(app: Express) {
       legacyHeaders: false,
       message: { error: "Too many attempts. Please try again in 15 minutes." },
     });
+  // Email scanners may GET links. Only a deliberate form POST redeems recovery.
+  app.get("/api/auth/recovery/confirm", (req, res) => {
+    const token = z
+      .string()
+      .regex(/^[a-fA-F0-9]{40,128}$/)
+      .safeParse(req.query.token_hash);
+    res.set({
+      "Cache-Control": "private, no-store",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "X-Robots-Tag": "noindex, nofollow",
+    });
+    if (!token.success) return void res.redirect("/login?error=expired");
+    res
+      .type("html")
+      .send(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset your Frame password</title><style>body{background:#faf7f2;color:#16121c;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#625c70}button{background:#6331d6;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}a{color:#6331d6}</style></head><body><main><strong>Frame</strong><h1>Reset your password</h1><p>Click below to verify your email link and choose a new password.</p><form method="post" action="/api/auth/recovery/confirm"><input type="hidden" name="token_hash" value="${token.data}"><button type="submit">Continue to set password</button></form><p>If you did not request this, you can close this page.</p></main></body></html>`
+      );
+  });
+  app.post("/api/auth/recovery/confirm", limiter(), async (req, res) => {
+    const token = z
+      .string()
+      .regex(/^[a-fA-F0-9]{40,128}$/)
+      .safeParse(req.body.token_hash);
+    res.set("Cache-Control", "private, no-store");
+    if (!token.success) return void res.redirect(303, "/login?error=expired");
+    try {
+      const { data, error } = await authClient(req, res).auth.verifyOtp({
+        token_hash: token.data,
+        type: "recovery",
+      });
+      if (
+        error ||
+        !data.user?.email_confirmed_at ||
+        !(await resolveAuthUser(data.user))
+      )
+        return void res.redirect(303, "/login?error=expired");
+      res.redirect(303, "/reset-password");
+    } catch {
+      res.redirect(303, "/login?error=signin");
+    }
+  });
   app.post("/api/auth/password", limiter(), async (req, res) => {
     const input = z
       .object({
