@@ -18,7 +18,9 @@ export default function LoginPage({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(
     new URLSearchParams(location.search).has("error")
-      ? "That sign-in link could not be used. Please request a new one in this browser."
+      ? new URLSearchParams(location.search).get("error") === "expired"
+        ? "This email link has expired or was already used. Request a new link below. To set your password, choose ‘Set or forgot password?’."
+        : "That sign-in link could not be used. Please request a new one in this browser."
       : ""
   );
   const next = new URLSearchParams(location.search).get("next") || "/app";

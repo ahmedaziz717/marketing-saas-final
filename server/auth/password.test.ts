@@ -8,7 +8,7 @@ vi.mock("./supabase", () => ({
 const handlers = new Map<string, any>();
 registerAuthRoutes({
   post: (path: string, ...h: any[]) => handlers.set(path, h.at(-1)),
-  get: () => {},
+  get: (path: string, ...h: any[]) => handlers.set(path, h.at(-1)),
 } as any);
 const user = { id: "verified-user", email_confirmed_at: "2026-01-01" };
 const auth = {
@@ -115,4 +115,14 @@ describe("password authentication", () => {
     expect(res.json).toHaveBeenCalledWith({ success: true });
     warn.mockRestore();
   });
+});
+
+it("handles expired callback links without starting session refresh", async () => {
+  const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+  await handlers.get("/api/auth/callback")(
+    { query: { error: "access_denied", error_code: "otp_expired" } },
+    res
+  );
+  expect(res.redirect).toHaveBeenCalledWith("/login?error=expired");
+  expect(authClient).not.toHaveBeenCalled();
 });

@@ -203,6 +203,11 @@ export function registerAuthRoutes(app: Express) {
   });
   app.get("/api/auth/callback", async (req, res) => {
     res.set("Cache-Control", "no-store");
+    if (req.query.error) {
+      const expired = req.query.error_code === "otp_expired";
+      res.redirect(expired ? "/login?error=expired" : "/login?error=signin");
+      return;
+    }
     try {
       if (typeof req.query.code !== "string") throw new Error("Missing code");
       const { data, error } = await authClient(
