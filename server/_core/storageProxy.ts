@@ -1,48 +1,40 @@
-import type { Express } from "express";
-import { ENV } from "./env";
+import type { Express, RequestHandler } from 'express';
+import { and, eq } from 'drizzle-orm';
+import { brandAssets, productImages, creativeVariants, organizationMemberships } from '../../drizzle/schema';
+import { authenticateRequest } from '../auth/supabase';
+import { getDb } from '../db';
+import { normalizeStorageKey, storageGetSignedUrl } from '../storage';
+
+export async function canReadAsset(userId: number, key: string) {
+  const db = await getDb();
+  if (!db) throw new Error('Database unavailable');
+  const owners = [
+    ...await db.select({ organizationId: brandAssets.organizationId }).from(brandAssets).where(eq(brandAssets.storageKey, key)),
+    ...await db.select({ organizationId: productImages.organizationId }).from(productImages).where(eq(productImages.storageKey, key)),
+    ...await db.select({ organizationId: creativeVariants.organizationId }).from(creativeVariants).where(eq(creativeVariants.imageStorageKey, key)),
+  ];
+  for (const { organizationId } of owners) {
+    const membership = await db.select({ id: organizationMemberships.id }).from(organizationMemberships).where(and(
+      eq(organizationMemberships.organizationId, organizationId), eq(organizationMemberships.userId, userId), eq(organizationMemberships.status, 'active'),
+    )).limit(1);
+    if (membership[0]) return true;
+  }
+  return false;
+}
 
 export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req, res) => {
-    const key = (req.params as Record<string, string>)[0];
-    if (!key) {
-      res.status(400).send("Missing storage key");
-      return;
-    }
-
-    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
-      return;
-    }
-
+  const read: RequestHandler = async (req, res) => {
+    res.set('Cache-Control', 'private, no-store');
     try {
-      const forgeUrl = new URL(
-        "v1/storage/presign/get",
-        ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
-      );
-      forgeUrl.searchParams.set("path", key);
-
-      const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
-      });
-
-      if (!forgeResp.ok) {
-        const body = await forgeResp.text().catch(() => "");
-        console.error(`[StorageProxy] forge error: ${forgeResp.status} ${body}`);
-        res.status(502).send("Storage backend error");
-        return;
-      }
-
-      const { url } = (await forgeResp.json()) as { url: string };
-      if (!url) {
-        res.status(502).send("Empty signed URL from backend");
-        return;
-      }
-
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, url);
-    } catch (err) {
-      console.error("[StorageProxy] failed:", err);
-      res.status(502).send("Storage proxy error");
-    }
-  });
+      const user = await authenticateRequest(req, res);
+      if (!user) return void res.status(401).send('Sign in to view this asset.');
+      const key = normalizeStorageKey((req.params as Record<string, string>)[0]);
+      if (!await canReadAsset(user.id, key)) return void res.status(404).send('Asset not found.');
+      res.redirect(307, await storageGetSignedUrl(key));
+    } catch { res.status(503).send('Asset temporarily unavailable.'); }
+  };
+  // Vite owns /assets/ for public application bundles; private media is separate.
+  app.get('/media/*', read);
+  // Preserve historical URLs without changing audit hashes or snapshots.
+  app.get('/manus-storage/*', read);
 }

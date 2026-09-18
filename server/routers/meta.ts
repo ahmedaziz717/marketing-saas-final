@@ -37,7 +37,7 @@ export const metaRouter = router({
       const identity = await validateMetaToken(input.accessToken);
       const encrypted = encryptToken(input.accessToken);
       const now = Date.now();
-      await db.insert(metaConnections).values({ organizationId: input.organizationId, adAccountId: input.adAccountId.replace(/^act_/, ""), pageId: input.pageId, instagramActorId: input.instagramActorId || null, accessTokenCiphertext: encrypted.ciphertext, tokenIv: encrypted.iv, tokenTag: encrypted.tag, status: "connected", connectedByUserId: ctx.user.id, connectedAtMs: now, updatedAtMs: now }).onDuplicateKeyUpdate({ set: { adAccountId: input.adAccountId.replace(/^act_/, ""), pageId: input.pageId, instagramActorId: input.instagramActorId || null, accessTokenCiphertext: encrypted.ciphertext, tokenIv: encrypted.iv, tokenTag: encrypted.tag, status: "connected", connectedByUserId: ctx.user.id, connectedAtMs: now, updatedAtMs: now } });
+      await db.insert(metaConnections).values({ organizationId: input.organizationId, adAccountId: input.adAccountId.replace(/^act_/, ""), pageId: input.pageId, instagramActorId: input.instagramActorId || null, accessTokenCiphertext: encrypted.ciphertext, tokenIv: encrypted.iv, tokenTag: encrypted.tag, status: "connected", connectedByUserId: ctx.user.id, connectedAtMs: now, updatedAtMs: now }).returning({ insertId: metaConnections.id }).onConflictDoUpdate({ target: [metaConnections.organizationId], set: { adAccountId: input.adAccountId.replace(/^act_/, ""), pageId: input.pageId, instagramActorId: input.instagramActorId || null, accessTokenCiphertext: encrypted.ciphertext, tokenIv: encrypted.iv, tokenTag: encrypted.tag, status: "connected", connectedByUserId: ctx.user.id, connectedAtMs: now, updatedAtMs: now } });
       await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "meta.connected", entityType: "meta_connection", entityId: input.adAccountId, payload: { adAccountId: input.adAccountId.replace(/^act_/, ""), pageId: input.pageId, validatedIdentityId: identity.id, validatedIdentityName: identity.name } });
       return { success: true, identityName: identity.name ?? "Meta user" };
     } catch (error) {
@@ -59,7 +59,7 @@ export const metaRouter = router({
     const frozenPayload = { ...input.payload, variant: { id: variant.id, imageUrl: variant.imageUrl, primaryText: variant.primaryText, headline: variant.headline, description: variant.description, callToAction: variant.callToAction, reviewedAtMs: variant.reviewedAtMs } };
     const payloadHash = stableHash(frozenPayload);
     const now = Date.now();
-    const inserted = await db.insert(publishRequests).values({ organizationId: input.organizationId, variantId: variant.id, connectionId: connection.id, action: input.action, payload: frozenPayload, payloadHash, status: "awaiting_approval", createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now });
+    const inserted = await db.insert(publishRequests).values({ organizationId: input.organizationId, variantId: variant.id, connectionId: connection.id, action: input.action, payload: frozenPayload, payloadHash, status: "awaiting_approval", createdByUserId: ctx.user.id, createdAtMs: now, updatedAtMs: now }).returning({ insertId: publishRequests.id });
     const requestId = Number(inserted[0].insertId);
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "publish_request.created", entityType: "publish_request", entityId: requestId, payload: { action: input.action, variantId: variant.id, payloadHash } });
     return { requestId };
@@ -78,6 +78,7 @@ export const metaRouter = router({
   }),
 
   executeRequest: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), requestId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    if (process.env.LIVE_AD_ACTIONS_ENABLED !== "true") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Live advertising changes are disabled in this environment." });
     await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "publisher"]);
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const request = (await db.select().from(publishRequests).where(and(eq(publishRequests.id, input.requestId), eq(publishRequests.organizationId, input.organizationId))).limit(1))[0];
@@ -94,8 +95,9 @@ export const metaRouter = router({
     await db.update(publishRequests).set({ status: "publishing", publishedByUserId: ctx.user.id, updatedAtMs: Date.now() }).where(eq(publishRequests.id, request.id));
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "publish.execution_started", entityType: "publish_request", entityId: request.id, payload: { action: request.action, approvedHash: request.approvedHash } });
     try {
-      const imageKey = variant.imageUrl.replace(/^\/manus-storage\//, "");
-      const imageUrl = variant.imageUrl.startsWith("/manus-storage/") ? await storageGetSignedUrl(imageKey) : variant.imageUrl;
+      const imageKey = variant.imageStorageKey || (variant.imageUrl.startsWith("/manus-storage/") ? variant.imageUrl.slice("/manus-storage/".length) : null);
+      if (!imageKey) throw new Error("Approved creative has no stored source image");
+      const imageUrl = await storageGetSignedUrl(imageKey);
       const imageResponse = await fetch(imageUrl);
       if (!imageResponse.ok) throw new Error("Approved creative image could not be retrieved");
       const imageBytes = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");

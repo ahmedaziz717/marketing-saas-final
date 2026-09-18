@@ -1,3 +1,9 @@
+vi.mock("./lib/lifestylePeople", () => ({
+  readLifestylePortrait: async (id: string) => ({
+    b64Json: "person:" + id,
+    mimeType: "image/png",
+  }),
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultCreativeSetup } from "../shared/creativeBuilder";
 
@@ -17,7 +23,11 @@ vi.mock("./lib/creativeImages", () => ({
 }));
 vi.mock("./lib/activity", () => ({
   appendActivity: mocked.activity,
-  withOrganizationTransaction: (db: any, _organizationId: number, operation: any) => db.transaction(operation),
+  withOrganizationTransaction: (
+    db: any,
+    _organizationId: number,
+    operation: any
+  ) => db.transaction(operation),
 }));
 vi.mock("./lib/creativeJobs", () => ({
   renewBuilderJob: mocked.renew,
@@ -38,16 +48,21 @@ function fixture() {
       }),
     }),
     insert: () => ({
-      values: async (rows: any) => {
-        written.push(rows);
-        return [{ insertId: 1 }];
-      },
+      values: (rows: any) => ({
+        returning: async () => {
+          written.push(rows);
+          return [{ insertId: 1 }];
+        },
+      }),
     }),
     update: () => ({
       set: (values: any) => ({
-        where: async () => {
+        where: () => {
           updates.push(values);
-          return [{ affectedRows: 1 }];
+          const rows = [{ id: 1 }];
+          return Object.assign(Promise.resolve(rows), {
+            returning: async () => rows,
+          });
         },
       }),
     }),
@@ -169,4 +184,25 @@ describe("creative generation orchestration", () => {
     expect(second.prompt).toContain("Oak");
     expect(second.prompt).not.toContain("12 W");
   });
+});
+
+it("sends the selected person as the final image reference for master and every size", async () => {
+  const { db, args } = fixture();
+  args.setup.shot = "female";
+  args.setup.person = { kind: "library", id: "female-brown-3" };
+  await runBuilderJob(db, args);
+  const requests = mocked.generate.mock.calls.map(call => call[0]);
+  expect(requests).toHaveLength(3);
+  for (const request of requests) {
+    expect(request.originalImages.at(-1).b64Json).toBe("person:female-brown-3");
+    expect(request.prompt).toContain(
+      "LAST reference image is the selected adult person"
+    );
+    expect(
+      request.originalImages.some((x: any) => x.b64Json === "lamp.png")
+    ).toBe(true);
+    expect(
+      request.originalImages.some((x: any) => x.b64Json === "logo.png")
+    ).toBe(true);
+  }
 });
