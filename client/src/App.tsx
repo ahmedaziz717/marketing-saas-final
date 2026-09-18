@@ -21,7 +21,12 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/login" component={LoginPage} />
+      <Route path="/login">
+        <LoginPage />
+      </Route>
+      <Route path="/reset-password">
+        <LoginPage resetPassword />
+      </Route>
       <Route path="/app" component={WorkspaceApp} />
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />
