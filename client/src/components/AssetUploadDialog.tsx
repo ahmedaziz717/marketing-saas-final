@@ -26,7 +26,7 @@ export function AssetUploadDialog({ open, onClose, organizationId, role, parent,
   const [disposition, setDisposition] = useState<UploadDisposition>(defaultDisposition);
   const [busy, setBusy] = useState(false), [progress, setProgress] = useState("");
   const upload = trpc.assetLibrary.upload.useMutation();
-  useEffect(() => { if (open) { setFiles([]); setPurpose(parent?.purpose ?? "finished"); setUgc(parent?.isUgc ?? false); setSourceType("other"); setRights(false); setProgress(""); setDisposition(parent ? "draft" : defaultDisposition); } }, [open, parent?.key, defaultDisposition]);
+  useEffect(() => { if (open) { setFiles([]); setPurpose(parent?.purpose ?? "finished"); setUgc(parent?.isUgc ?? false); setSourceType(parent?.sourceType ?? "other"); setRights(false); setProgress(""); setDisposition(parent ? "draft" : defaultDisposition); } }, [open, parent?.key, defaultDisposition]);
   useEffect(() => { const next = files.map(file => ({ file, url: URL.createObjectURL(file) })); setPreviews(next); return () => next.forEach(item => URL.revokeObjectURL(item.url)); }, [files]);
   async function save() {
     if (!files.length || busy) return;

@@ -14,7 +14,8 @@ export type LibraryAsset = {
   state: AssetState; revision: string; fingerprint: string;
   parentKey: AssetKey | null; createdAtMs: number;
   reviewedAtMs: number | null; reviewedByUserId: number | null;
-  headline?: string; primaryText?: string; format?: string;
+  headline?: string; primaryText?: string; format?: string; copyText?: string;
+  sourceType?: "logo" | "product" | "reference" | "other";
 };
 export type WorkflowSnapshot = { id: number; action: string; payload: Record<string, unknown> | null; actorUserId: number; createdAtMs: number };
 export const WORKFLOW_ACTIONS = ["asset_library.submitted", "asset_library.approved", "asset_library.changes_requested", "asset_library.rejected"];
@@ -31,7 +32,6 @@ export function assetState(savedStatus: string, workflow: WorkflowSnapshot | und
     if (workflow.action === "asset_library.rejected") return "rejected";
     if (workflow.action === "asset_library.approved") return savedStatus === "approved" ? "approved" : "draft";
   }
-  // Preserve decisions made before the library existed; pending generations are drafts.
   return savedStatus === "approved" ? "approved" : savedStatus === "rejected" ? "rejected" : "draft";
 }
 export function canSubmitAsset(state: AssetState) { return ["draft", "changes_requested", "rejected"].includes(state); }
