@@ -12,6 +12,10 @@ import CreativesPage from "./pages/CreativesPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
 import SettingsPage from "./pages/SettingsPage";
 import InvitePage from "./pages/InvitePage";
+import SocialMediaPage from './pages/SocialMediaPage';
+import AdvertisingPage from './pages/AdvertisingPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import LegacyPublishingPage from './pages/LegacyPublishingPage';
 import PublishingPage from "./pages/PublishingPage";
 import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
 import CatalogPage from "./pages/CatalogPage";
@@ -29,6 +33,12 @@ function Router() {
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/library" component={AssetLibraryPage} />
+      <Route path="/app/social"><Redirect to="/app/social/facebook" replace /></Route>
+      <Route path="/app/social/facebook" component={SocialMediaPage} />
+      <Route path="/app/advertising"><Redirect to="/app/advertising/meta" replace /></Route>
+      <Route path="/app/advertising/meta/legacy" component={LegacyPublishingPage} />
+      <Route path="/app/advertising/meta" component={AdvertisingPage} />
+      <Route path="/app/analytics" component={AnalyticsPage} />
       <Route path="/app/publishing" component={PublishingPage} />
       <Route path="/app/brand" component={BrandPage} />
       <Route path="/app/integrations"><Redirect to="/app/settings/integrations" replace /></Route>

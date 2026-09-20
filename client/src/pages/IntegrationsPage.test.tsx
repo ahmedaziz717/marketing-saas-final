@@ -18,6 +18,10 @@ vi.mock("@/components/CatalogSources", () => ({
     <div>{storesOnly ? "Store connections only" : "Scan website"}</div>
   ),
 }));
+vi.mock('@/components/ChannelConnections', () => ({
+  ChannelConnectionCard: ({ channel }: any) => <article><h3>{channel === 'facebook' ? 'Facebook Pages' : 'Meta Ads'}</h3><button>Connect account</button></article>,
+  MetaConnectionSelection: () => null,
+}));
 import IntegrationsPage from "./IntegrationsPage";
 afterEach(cleanup);
 it("separates categories and keeps website scanning out of the integrations hub", () => {

@@ -117,3 +117,6 @@ client/public/__manus__/version.json
 migration-data/
 .env.*
 !.env.example
+
+# Local browser regression outputs
+artifacts/

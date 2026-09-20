@@ -6,6 +6,7 @@ import {
   recoverInterruptedJobs,
 } from "./jobs/creativeWorker";
 
+import { publicationTick } from "./lib/publications";
 import { processNextWebsiteJob } from "./jobs/catalogWorker";
 import { processNextStoreJob } from "./jobs/storeWorker";
 
@@ -20,7 +21,14 @@ process.on("SIGINT", () => {
 async function main() {
   const db = await getDb();
   if (!db) throw new Error("Worker requires PostgreSQL");
+  console.info('Publishing worker readiness', { liveSocialEnabled: process.env.LIVE_SOCIAL_ACTIONS_ENABLED === 'true', liveAdsEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === 'true' });
   let lastRecovery = 0;
+  const publishingLoop = (async () => {
+    while (!stopping) {
+      try { await publicationTick(db); } catch { console.error("Publishing worker iteration failed"); }
+      await setTimeout(15000);
+    }
+  })();
   const catalogLoop = (async () => {
     while (!stopping) {
       try {
@@ -49,7 +57,7 @@ async function main() {
       await setTimeout(5000);
     }
   }
-  await catalogLoop;
+  await Promise.all([catalogLoop, publishingLoop]);
   await closeDb();
 }
 

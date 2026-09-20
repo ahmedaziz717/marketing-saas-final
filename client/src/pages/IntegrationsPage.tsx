@@ -1,3 +1,4 @@
+import { ChannelConnectionCard, MetaConnectionSelection } from '@/components/ChannelConnections';
 import { useState } from "react";
 import { Link } from "wouter";
 import { Search, ArrowUpRight, Plug } from "lucide-react";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 
 const groups = [
+  { id: "social", name: "Social Media", description: "Connect social accounts for organic posts and reporting. Facebook first; each channel has its own connection." },
   {
     id: "catalog",
     name: "Catalog",
@@ -43,6 +45,9 @@ const groups = [
   },
 ];
 const partners = [
+  { name: "Facebook Pages", slug: "facebook", group: "social", description: "Organic Page posts and insights", capabilities: [] },
+  { name: "Instagram", slug: "instagram", group: "social", description: "Instagram organic content. Coming after Facebook.", capabilities: ["Connect an Instagram professional account", "Schedule supported organic formats", "Review performance"] },
+  { name: "TikTok", slug: "tiktoksocial", group: "social", description: "TikTok organic content. Coming after Facebook.", capabilities: ["Connect a TikTok account", "Prepare supported video posts", "Review performance"] },
   {
     name: "Meta Ads",
     slug: "meta",
@@ -209,6 +214,7 @@ export function Integrations() {
   );
   return (
     <>
+      <MetaConnectionSelection />
       <PageHeader
         eyebrow="Workspace connections"
         title="Integrations"
@@ -285,7 +291,7 @@ export function Integrations() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {partners
                   .filter(p => p.group === group.id && matches(p))
-                  .map(p => (
+                  .map(p => p.slug === 'facebook' || p.slug === 'meta' ? <ChannelConnectionCard key={p.slug} channel={p.slug === 'facebook' ? 'facebook' : 'meta_ads'} /> : (
                     <article key={p.slug} className="surface flex flex-col p-6">
                       <div className="flex items-center justify-between gap-3">
                         <PartnerLogo slug={p.slug} name={p.name} />
