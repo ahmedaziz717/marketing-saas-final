@@ -37,6 +37,16 @@ jobs:
       - run: node scripts/smoke-build.mjs
       - name: Check dialog layout and approval controls in Chrome
         run: node scripts/check-dialog-layout.mjs
+      - name: Check channel pages and publishing workflow in Chrome
+        run: node scripts/check-channel-layout.mjs
+      - name: Save channel browser regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-layout
+          path: artifacts/channel-layout/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save dialog browser regression screenshots
         if: always()
         uses: actions/upload-artifact@v4

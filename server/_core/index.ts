@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sql } from "drizzle-orm";
+import { registerChannelOAuth } from "../lib/channelConnections";
 import { getDb, closeDb } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -48,6 +49,7 @@ async function startServer() {
   });
   registerStorageProxy(app);
   registerAuthRoutes(app);
+  registerChannelOAuth(app);
   // tRPC API
   app.use(
     "/api/trpc",
