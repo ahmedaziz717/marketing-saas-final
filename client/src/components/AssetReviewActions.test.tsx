@@ -8,7 +8,7 @@ const props = (overrides: Partial<AssetReviewActionsProps> = {}): AssetReviewAct
   state: "draft", canCreate: true, canReview: true, busy: false, note: "",
   onNoteChange: vi.fn(), onSubmit: vi.fn(), onReview: vi.fn(), onComment: vi.fn(), onUploadVersion: vi.fn(), ...overrides,
 });
-const button = (name: string) => screen.getByRole("button", { name, exact: true }) as HTMLButtonElement;
+const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
 
 describe("asset review actions", () => {
   it("shows a disabled Approve on drafts and explains submission", () => {
@@ -43,8 +43,8 @@ describe("asset review actions", () => {
   });
   it("explains creator permissions without exposing reviewer actions", () => {
     render(<AssetReviewActions {...props({ canReview: false, state: "needs_review" })} />);
-    expect(screen.queryByRole("button", { name: "Approve", exact: true })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reject", exact: true })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
     expect(screen.getByText(/Only workspace owners/)).toBeTruthy();
   });
   it("lets a reviewer approve a submitted asset but not upload or submit", () => {
