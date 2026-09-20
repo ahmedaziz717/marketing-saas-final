@@ -90,3 +90,34 @@ describe("closed authentication responses", () => {
     }
   );
 });
+
+it.each([undefined, "null", "https://evil.test"])(
+  "continues rejecting unsafe form origins: %s",
+  origin => {
+    vi.stubEnv("APP_ORIGIN", "https://frame.example.test");
+    const next = vi.fn();
+    const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    requireSameOrigin(
+      { method: "POST", headers: { origin } } as any,
+      res,
+      next
+    );
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  }
+);
+it("accepts the confirmation form's same-origin POST", () => {
+  vi.stubEnv("APP_ORIGIN", "https://frame.example.test");
+  const next = vi.fn();
+  const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+  requireSameOrigin(
+    {
+      method: "POST",
+      headers: { origin: "https://frame.example.test" },
+    } as any,
+    res,
+    next
+  );
+  expect(next).toHaveBeenCalled();
+  expect(res.status).not.toHaveBeenCalled();
+});

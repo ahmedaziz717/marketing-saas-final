@@ -150,7 +150,7 @@ describe("recovery email confirmation", () => {
         expect.stringContaining('method="post"')
       );
       expect(res.set).toHaveBeenCalledWith(
-        expect.objectContaining({ "Referrer-Policy": "no-referrer" })
+        expect.objectContaining({ "Referrer-Policy": "strict-origin" })
       );
     }
   );
@@ -242,4 +242,74 @@ it("does not report successful reset delivery when the provider rate limits it",
   const res = await request("/reset", { email: "member@example.test" });
   expect(res.status).toHaveBeenCalledWith(429);
   expect(res.json).not.toHaveBeenCalledWith({ success: true });
+});
+
+describe("cross-browser email confirmation", () => {
+  it("does not exchange or consume a signup link during GET", async () => {
+    const res: any = {
+      set: vi.fn().mockReturnThis(),
+      type: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+      redirect: vi.fn(),
+    };
+    await gets.get("/api/auth/callback")(
+      {
+        query: {
+          token_hash: "pkce_" + "a".repeat(56),
+          next: "/reset-password?next=%2Fapp",
+        },
+      },
+      res
+    );
+    expect(authClient).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalledWith(
+      expect.stringContaining('action="/api/auth/email/confirm"')
+    );
+  });
+  it.each(["/reset-password?next=%2Fapp", "/app", "https://evil.test"])(
+    "verifies without a cookie and safely redirects: %s",
+    async next => {
+      auth.verifyOtp.mockResolvedValue({ data: { user }, error: null });
+      const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+      await handlers.get("/api/auth/email/confirm")(
+        { body: { token_hash: "pkce_" + "b".repeat(56), next } },
+        res
+      );
+      expect(auth.verifyOtp).toHaveBeenCalledWith({
+        token_hash: "pkce_" + "b".repeat(56),
+        type: "email",
+      });
+      expect(res.redirect).toHaveBeenCalledWith(
+        303,
+        next.startsWith("/") ? next : "/app"
+      );
+    }
+  );
+  it("does not authenticate an invalid token", async () => {
+    auth.verifyOtp.mockResolvedValue({
+      data: { user: null },
+      error: { code: "otp_expired", status: 403 },
+    });
+    const res: any = { set: vi.fn().mockReturnThis(), redirect: vi.fn() };
+    await handlers.get("/api/auth/email/confirm")(
+      { body: { token_hash: "a".repeat(64) } },
+      res
+    );
+    expect(resolveAuthUser).not.toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith(303, "/login?error=expired");
+  });
+  it("escapes a local return path before reflecting it into HTML", async () => {
+    const res: any = {
+      set: vi.fn().mockReturnThis(),
+      type: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    };
+    await gets.get("/api/auth/email/confirm")(
+      { query: { token_hash: "a".repeat(64), next: '/x?value="<tag>&' } },
+      res
+    );
+    expect(res.send).toHaveBeenCalledWith(
+      expect.stringContaining("/x?value=&quot;&lt;tag&gt;&amp;")
+    );
+  });
 });

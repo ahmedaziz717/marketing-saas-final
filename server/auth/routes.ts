@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from "express";
+import type { Express, RequestHandler, Request, Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { authClient, resolveAuthUser } from "./supabase";
@@ -30,6 +30,8 @@ export function registerAuthRoutes(app: Express) {
       legacyHeaders: false,
       message: { error: "Too many attempts. Please try again in 15 minutes." },
     });
+  // strict-origin hides token-bearing paths but preserves Origin on form POSTs.
+  // no-referrer makes browsers send Origin: null, which our CSRF guard rejects.
   // Email scanners may GET links. Only a deliberate form POST redeems recovery.
   app.get("/api/auth/recovery/confirm", (req, res) => {
     const token = z
@@ -38,7 +40,7 @@ export function registerAuthRoutes(app: Express) {
       .safeParse(req.query.token_hash);
     res.set({
       "Cache-Control": "private, no-store",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "strict-origin",
       "Content-Security-Policy":
         "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
       "X-Robots-Tag": "noindex, nofollow",
@@ -69,6 +71,59 @@ export function registerAuthRoutes(app: Express) {
       )
         return void res.redirect(303, "/login?error=expired");
       res.redirect(303, "/reset-password");
+    } catch {
+      res.redirect(303, "/login?error=signin");
+    }
+  });
+  // Token-hash links work in a different browser without the original PKCE cookie.
+  // GET only renders a confirmation; POST performs the one-time verification.
+  const emailConfirmationPage = (req: Request, res: Response) => {
+    const token = z
+      .string()
+      .regex(/^(?:pkce_)?[a-fA-F0-9]{40,128}$/)
+      .safeParse(req.query.token_hash);
+    res.set({
+      "Cache-Control": "private, no-store",
+      "Referrer-Policy": "strict-origin",
+      "X-Robots-Tag": "noindex, nofollow",
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    });
+    if (!token.success) return void res.redirect("/login?error=expired");
+    const next = safeReturnPath(req.query.next)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    res
+      .type("html")
+      .send(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Verify your email · Frame</title><style>body{background:#faf7f2;color:#16121c;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#625c70}button{background:#6331d6;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}</style></head><body><main><strong>Frame</strong><h1>Verify your email</h1><p>Continue to securely sign in or finish setting up your account.</p><form method="post" action="/api/auth/email/confirm"><input type="hidden" name="token_hash" value="${token.data}"><input type="hidden" name="next" value="${next}"><button type="submit">Verify email &amp; continue</button></form><p>If you did not request this, close this page.</p></main></body></html>`
+      );
+  };
+  app.get("/api/auth/email/confirm", emailConfirmationPage);
+  app.post("/api/auth/email/confirm", limiter(), async (req, res) => {
+    const token = z
+      .string()
+      .regex(/^(?:pkce_)?[a-fA-F0-9]{40,128}$/)
+      .safeParse(req.body.token_hash);
+    res.set("Cache-Control", "private, no-store");
+    if (!token.success) return void res.redirect(303, "/login?error=expired");
+    try {
+      const { data, error } = await authClient(req, res).auth.verifyOtp({
+        token_hash: token.data,
+        type: "email",
+      });
+      if (error) {
+        console.warn("Email confirmation rejected", {
+          code: error.code,
+          status: error.status,
+        });
+        return void res.redirect(303, "/login?error=expired");
+      }
+      if (!data.user?.email_confirmed_at || !(await resolveAuthUser(data.user)))
+        return void res.redirect(303, "/login?error=signin");
+      res.redirect(303, safeReturnPath(req.body.next));
     } catch {
       res.redirect(303, "/login?error=signin");
     }
@@ -328,6 +383,8 @@ export function registerAuthRoutes(app: Express) {
     }
   });
   app.get("/api/auth/callback", async (req, res) => {
+    if (req.query.token_hash !== undefined)
+      return emailConfirmationPage(req, res);
     res.set("Cache-Control", "no-store");
     if (req.query.error) {
       const expired = req.query.error_code === "otp_expired";
