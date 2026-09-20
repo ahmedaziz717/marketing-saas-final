@@ -35,3 +35,13 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: node scripts/smoke-build.mjs
+      - name: Check dialog layout and approval controls in Chrome
+        run: node scripts/check-dialog-layout.mjs
+      - name: Save dialog browser regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dialog-layout
+          path: artifacts/dialog-layout/
+          if-no-files-found: ignore
+          retention-days: 7
