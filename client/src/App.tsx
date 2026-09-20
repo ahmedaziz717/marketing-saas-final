@@ -39,6 +39,8 @@ function Router() {
       <Route path="/app/advertising/meta/legacy" component={LegacyPublishingPage} />
       <Route path="/app/advertising/meta" component={AdvertisingPage} />
       <Route path="/app/analytics" component={AnalyticsPage} />
+      <Route path="/app/analytics/advertising" component={AnalyticsPage} />
+      <Route path="/app/analytics/social" component={AnalyticsPage} />
       <Route path="/app/publishing" component={PublishingPage} />
       <Route path="/app/brand" component={BrandPage} />
       <Route path="/app/integrations"><Redirect to="/app/settings/integrations" replace /></Route>

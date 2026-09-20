@@ -3,10 +3,7 @@ import { Link } from "wouter";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import {
-  ChannelConnectionCard,
-  channelInput,
-} from "@/components/ChannelConnections";
+import { channelInput } from "@/components/ChannelConnections";
 import { PublishingCalendar } from "@/components/PublishingCalendar";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -131,27 +128,10 @@ function Advertising() {
   return (
     <>
       <PageHeader
-        eyebrow="Paid channels"
-        title="Advertising"
-        description="Inspect your paid campaigns, prepare approved creative delivery and compare results. Paid budgets remain separate from organic publishing."
+        eyebrow="Advertising / Meta"
+        title="Meta Ads"
+        description="Manage Facebook and Instagram advertising, inspect campaigns, and prepare approved creative delivery. Paid budgets remain separate from organic publishing."
       />
-      <nav
-        aria-label="Advertising channels"
-        className="mb-6 flex flex-wrap gap-3 rounded-xl border bg-card p-3"
-      >
-        <Link
-          href="/app/advertising/meta"
-          className="rounded-lg bg-primary/10 px-4 py-2 font-semibold text-primary"
-        >
-          Meta Ads / Facebook & Instagram
-        </Link>
-        <span className="px-4 py-2 text-sm text-muted-foreground">
-          Google Ads - planned
-        </span>
-        <span className="px-4 py-2 text-sm text-muted-foreground">
-          Microsoft Advertising - planned
-        </span>
-      </nav>
       <div className="mb-6 flex flex-wrap gap-3">
         <Button
           variant={tab === "campaigns" ? "default" : "outline"}
@@ -166,7 +146,7 @@ function Advertising() {
           Creative delivery calendar
         </Button>
         <Link
-          href="/app/analytics?tab=advertising"
+          href="/app/analytics/advertising"
           className="ml-auto self-center text-sm text-primary"
         >
           Advertising analytics
@@ -176,8 +156,7 @@ function Advertising() {
         <PublishingCalendar channelScope="meta_ads" />
       ) : (
         <>
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <ChannelConnectionCard channel="meta_ads" />
+          <div>
             <div className="surface p-6">
               <h2 className="text-xl font-semibold">
                 Approved creative, controlled delivery
@@ -204,6 +183,29 @@ function Advertising() {
               </p>
             </div>
           </div>
+          {query.isLoading ? (
+            <p role="status" className="mt-6 text-sm">
+              Loading ad accounts...
+            </p>
+          ) : query.error ? (
+            <div role="alert" className="mt-6 text-sm">
+              <p>Could not load ad accounts.</p>
+              <Button variant="ghost" onClick={() => query.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : !accounts.length ? (
+            <p className="mt-6 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+              No ad accounts connected. Account setup is managed in{" "}
+              <Link
+                href="/app/settings/integrations"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                Settings / Integrations
+              </Link>
+              . You can still prepare drafts and plan your calendar here.
+            </p>
+          ) : null}
           {accounts.length > 0 && (
             <>
               <label

@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { Router, useLocation } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
+import DashboardLayout from "../../client/src/components/DashboardLayout";
+import { workspaceNavigation } from "../../client/src/components/WorkspaceNavigation";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { observable } from "@trpc/server/observable";
@@ -93,7 +96,10 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
-  if (path === "channels.connections") return connections;
+  if (path === "channels.connections")
+    return which === "advertising-empty" || which === "social-empty"
+      ? { ...connections, items: [] }
+      : connections;
   if (path === "publishing.list") return { items: posts, truncated: false };
   if (path === "publishing.history") return [];
   if (path === "channels.plan")
@@ -234,25 +240,58 @@ const which =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
     "page"
   ) ?? "publishing";
-const Pages: Record<string, React.ComponentType> = {
-  publishing: PublishingPage,
-  social: SocialMediaPage,
-  advertising: AdvertisingPage,
-  analytics: AnalyticsPage,
-  integrations: IntegrationsPage,
+const routeForPage: Record<string, string> = {
+  "advertising-empty": "/app/advertising/meta",
+  "social-empty": "/app/social/facebook",
+  publishing: "/app/publishing",
+  social: "/app/social/facebook",
+  advertising: "/app/advertising/meta",
+  analytics: "/app/analytics",
+  "analytics-ads": "/app/analytics/advertising",
+  "analytics-social": "/app/analytics/social",
+  integrations: "/app/settings/integrations",
 };
-const Page = Pages[which];
+const fixtureRouter = memoryLocation({
+  path: routeForPage[which] ?? "/app/advertising/meta",
+});
+if (which === "navigation-ten") {
+  const group = workspaceNavigation.find(
+    item => item.path === "/app/advertising"
+  )!;
+  group.children = [
+    ...group.children!,
+    ...Array.from({ length: 7 }, (_, i) => ({
+      label: `Future channel ${i + 4}`,
+      path: `/app/advertising/future-${i}`,
+      planned: true,
+    })),
+  ];
+}
+function RoutedPage() {
+  const [path] = useLocation();
+  const Page = path.startsWith("/app/analytics")
+    ? AnalyticsPage
+    : path.startsWith("/app/social")
+      ? SocialMediaPage
+      : path.startsWith("/app/advertising")
+        ? AdvertisingPage
+        : path.startsWith("/app/settings")
+          ? IntegrationsPage
+          : PublishingPage;
+  return (
+    <DashboardLayout>
+      <Page />
+    </DashboardLayout>
+  );
+}
 window.confirm = () => true;
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={client} queryClient={query}>
     <QueryClientProvider client={query}>
       <TooltipProvider>
-        <div className="p-4 md:p-8">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Frame browser test fixture - synthetic data
-          </p>
-          <Page />
-        </div>
+        <Router hook={fixtureRouter.hook} searchHook={fixtureRouter.searchHook}>
+          <RoutedPage />
+        </Router>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
@@ -372,6 +411,40 @@ function layout() {
         "Unconfigured OAuth is explained, not faked"
       );
     }
+    if (
+      ["social", "advertising", "social-empty", "advertising-empty"].includes(
+        which
+      )
+    ) {
+      check(
+        !document.querySelector(
+          'nav[aria-label="Advertising channels"],nav[aria-label="Social channels"]'
+        ),
+        "No horizontal channel selector remains"
+      );
+      check(
+        !button("Connect account") && !button("Manage connections"),
+        "Connection management is only in Integrations"
+      );
+    }
+    if (which === "analytics-ads" || which === "analytics-social") {
+      const account = document.querySelector<HTMLSelectElement>(
+        '[aria-label="Analytics account"]'
+      )!;
+      check(
+        account.options.length === 2,
+        "Scoped analytics has only its account type"
+      );
+      check(
+        document.querySelector("h1")?.textContent ===
+          (which === "analytics-ads"
+            ? "Advertising analytics"
+            : "Social media analytics"),
+        "Analytics deep link chooses the correct view"
+      );
+    }
+    if (which.startsWith("navigation"))
+      await navigationChecks(which === "navigation-ten");
     return {
       passed: true,
       page: which,
@@ -391,3 +464,114 @@ function layout() {
     };
   }
 };
+
+async function navigationChecks(ten: boolean) {
+  const mobile = innerWidth < 768;
+  const openDrawer = async () => {
+    if (mobile && !document.querySelector('[data-mobile="true"]'))
+      await click("Toggle Sidebar");
+  };
+  await openDrawer();
+  const nav = () =>
+    document.querySelector<HTMLElement>(
+      'nav[aria-label="Workspace navigation"]'
+    )!;
+  const parent = (label: string) =>
+    nav().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  const children = (label: string) =>
+    document.getElementById(parent(label).getAttribute("aria-controls")!)!;
+  check(
+    parent("Advertising").getAttribute("aria-expanded") === "true",
+    "Direct link opens its sidebar group"
+  );
+  check(
+    children("Advertising").querySelector('[aria-current="page"]')
+      ?.textContent === "Meta Ads",
+    "Active channel highlighted"
+  );
+  parent("Advertising").click();
+  await pause();
+  check(children("Advertising").hidden, "User can collapse current section");
+  parent("Advertising").click();
+  await pause();
+  if (ten) {
+    const last = children("Advertising").querySelector<HTMLElement>(
+      '[title="Future channel 10 - planned, not available yet"]'
+    )!;
+    check(last, "Ten channels use the same sidebar list");
+    last.scrollIntoView({ block: "center" });
+    await pause();
+    const r = last.getBoundingClientRect();
+    check(
+      r.top >= 0 && r.bottom <= innerHeight + 1,
+      "Last of ten channels is reachable by scrolling"
+    );
+    check(
+      nav().scrollWidth <= nav().clientWidth + 1,
+      "Long channel list fits sidebar width"
+    );
+    return;
+  }
+  parent("Social Media").click();
+  await pause();
+  check(
+    parent("Advertising").getAttribute("aria-expanded") === "true",
+    "Groups expand independently"
+  );
+  const facebook = children("Social Media").querySelector<HTMLAnchorElement>(
+    'a[href="/app/social/facebook"]'
+  )!;
+  facebook.scrollIntoView({ block: "center" });
+  facebook.click();
+  await pause();
+  check(
+    document.querySelector("h1")?.textContent === "Facebook",
+    "Channel link changes the page"
+  );
+  if (mobile)
+    check(
+      !document.querySelector('[data-mobile="true"]'),
+      "Selecting a channel closes the mobile drawer"
+    );
+  await openDrawer();
+  parent("Analytics").click();
+  await pause();
+  const adReport = children("Analytics").querySelector<HTMLAnchorElement>(
+    'a[href="/app/analytics/advertising"]'
+  )!;
+  adReport.scrollIntoView({ block: "center" });
+  adReport.click();
+  await pause();
+  check(
+    document.querySelector("h1")?.textContent === "Advertising analytics",
+    "Analytics subsection opens directly"
+  );
+  fixtureRouter.navigate(
+    "/app/analytics?tab=social&since=2026-09-01&until=2026-09-20&compare=1"
+  );
+  await pause();
+  check(
+    document.querySelector("h1")?.textContent === "Social media analytics",
+    "Legacy deep links remain compatible"
+  );
+  await openDrawer();
+  const overview = children("Analytics").querySelector<HTMLAnchorElement>(
+    'a[href^="/app/analytics?"]'
+  )!;
+  check(
+    overview.href.includes("since=2026-09-01") &&
+      overview.href.includes("compare=1"),
+    "Dates and comparison preserved by sidebar"
+  );
+  overview.click();
+  await pause();
+  check(
+    document.querySelector("h1")?.textContent === "Analytics overview",
+    "Overview stays separate from scoped analytics"
+  );
+  layout();
+  // Leave the initial advertising page visible for a comparable screenshot.
+  fixtureRouter.navigate("/app/advertising/meta");
+  await pause();
+  if (mobile) await openDrawer();
+}
