@@ -18,7 +18,10 @@ function libraryMetadata(metadata: Record<string, unknown> | null) {
 export function normalizeUpload(row: typeof brandAssets.$inferSelect, workflow?: WorkflowSnapshot): LibraryAsset {
   const metadata = libraryMetadata(row.metadata);
   const fingerprint = stableHash({ name: row.name, key: row.storageKey, mimeType: row.mimeType, type: row.type, ...metadata });
-  return { key: `asset:${row.id}`, name: row.name, origin: "uploaded", url: row.url, mediaType: row.mimeType.startsWith("video/") ? "video" : row.mimeType.startsWith("image/") ? "image" : "other", mimeType: row.mimeType, sourceType: row.type, purpose: metadata.purpose, isUgc: metadata.isUgc, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: metadata.parentKey, createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId };
+  // Legacy font records are not one of the supported media upload categories.
+  // Keep their original database type and fingerprint; only normalize the UI hint.
+  const sourceType = row.type === "font" ? "other" : row.type;
+  return { key: `asset:${row.id}`, name: row.name, origin: "uploaded", url: row.url, mediaType: row.mimeType.startsWith("video/") ? "video" : row.mimeType.startsWith("image/") ? "image" : "other", mimeType: row.mimeType, sourceType, purpose: metadata.purpose, isUgc: metadata.isUgc, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: metadata.parentKey, createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId };
 }
 export function normalizeCreative(row: typeof creativeVariants.$inferSelect, workflow?: WorkflowSnapshot): LibraryAsset {
   const fingerprint = stableHash({ name: row.name, imageUrl: row.imageUrl, imageStorageKey: row.imageStorageKey, headline: row.headline, primaryText: row.primaryText, description: row.description, callToAction: row.callToAction, channel: row.channel, format: row.format, renderMetadata: row.renderMetadata });
