@@ -1,0 +1,21 @@
+name: Prepare Frame product source
+on:
+  push:
+    branches: [codex/frame-product-structure-billing]
+    paths: [.github/workflows/product-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar.gz -o /tmp/frame-product-source.tgz HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frame-product-source
+          path: /tmp/frame-product-source.tgz
+          retention-days: 1
