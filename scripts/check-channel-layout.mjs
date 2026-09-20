@@ -34,6 +34,7 @@ const bundle = await build({
   jsx: "automatic",
   define: { "process.env.NODE_ENV": '"production"' },
   alias: {
+    "@/_core/hooks/useAuth": path.resolve("scripts/fixtures/channel-workspace-stubs.tsx"),
     "@/hooks/useWorkspace": path.resolve(
       "scripts/fixtures/channel-workspace-stubs.tsx"
     ),
@@ -150,7 +151,7 @@ try {
   await mkdir("artifacts/channel-layout", { recursive: true });
   const results = [];
   const cases = [
-    ...["publishing", "social", "advertising", "analytics"].flatMap(page => [
+    ...["publishing", "social", "advertising", "analytics", "analytics-ads", "analytics-social", "advertising-empty", "social-empty", "navigation", "navigation-ten"].flatMap(page => [
       { width: 1705, height: 864, role: "owner", page },
       { width: 375, height: 750, role: "owner", page },
     ]),

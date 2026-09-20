@@ -12,3 +12,11 @@ export function useWorkspace() {
     },
   };
 }
+
+export function useAuth() {
+  return {
+    loading: false,
+    user: { name: "Test user", email: "test@example.test" },
+    logout: async () => undefined,
+  };
+}

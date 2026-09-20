@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Facebook, Instagram, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import {
-  ChannelConnectionCard,
-  channelInput,
-} from "@/components/ChannelConnections";
+import { channelInput } from "@/components/ChannelConnections";
 import { PublishingCalendar } from "@/components/PublishingCalendar";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -109,29 +106,10 @@ function SocialMedia() {
   return (
     <>
       <PageHeader
-        eyebrow="Organic channels"
-        title="Social Media"
+        eyebrow="Social Media / Meta"
+        title="Facebook"
         description="Manage organic content separately from paid advertising. Use the same approved assets and central publishing calendar."
       />
-      <nav
-        aria-label="Social channels"
-        className="mb-6 flex flex-wrap gap-3 rounded-xl border bg-card p-3"
-      >
-        <Link
-          href="/app/social/facebook"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 font-semibold text-primary"
-        >
-          <Facebook className="h-4 w-4" />
-          Meta / Facebook
-        </Link>
-        <span className="inline-flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
-          <Instagram className="h-4 w-4" />
-          Instagram - coming next
-        </span>
-        <span className="px-4 py-2 text-sm text-muted-foreground">
-          TikTok - planned
-        </span>
-      </nav>
       <div className="mb-6 flex flex-wrap gap-2">
         <Button
           variant={tab === "overview" ? "default" : "outline"}
@@ -148,7 +126,7 @@ function SocialMedia() {
         </Button>
         <Link
           className="ml-auto self-center text-sm text-primary"
-          href="/app/analytics?tab=social"
+          href="/app/analytics/social"
         >
           View social analytics
         </Link>
@@ -157,8 +135,7 @@ function SocialMedia() {
         <PublishingCalendar channelScope="facebook" />
       ) : (
         <>
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <ChannelConnectionCard channel="facebook" />
+          <div>
             <div className="surface p-6">
               <h2 className="text-xl font-semibold">
                 Plan your next Facebook posts
@@ -189,6 +166,29 @@ function SocialMedia() {
               </p>
             </div>
           </div>
+          {query.isLoading ? (
+            <p role="status" className="mt-6 text-sm">
+              Loading Facebook Pages...
+            </p>
+          ) : query.error ? (
+            <div role="alert" className="mt-6 text-sm">
+              <p>Could not load Facebook Pages.</p>
+              <Button variant="ghost" onClick={() => query.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : !pages.length ? (
+            <p className="mt-6 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+              No Facebook Pages connected. Account setup is managed in{" "}
+              <Link
+                href="/app/settings/integrations"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                Settings / Integrations
+              </Link>
+              . You can still prepare drafts and plan your calendar here.
+            </p>
+          ) : null}
           {pages.length > 0 && (
             <>
               <label

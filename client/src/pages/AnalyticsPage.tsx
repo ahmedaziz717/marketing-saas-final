@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Area,
   AreaChart,
@@ -13,13 +13,16 @@ import {
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import {
+  analyticsFilters,
+  analyticsPaths,
+  analyticsViewForRoute,
+} from "@/lib/analyticsNavigation";
 import { channelInput } from "@/components/ChannelConnections";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import {
   channelNames,
-  dateInZone,
-  moveDate,
   previousRange,
   rangeSchema,
   type DateRange,
@@ -316,28 +319,43 @@ function ReportPanel({
 function Analytics() {
   const { organizationId } = useWorkspace();
   const utils = trpc.useUtils();
-  const tabParam = new URLSearchParams(useSearch()).get("tab");
-  const [tab, setTab] = useState(
-    tabParam === "social" || tabParam === "advertising" ? tabParam : "overview"
-  );
-  const today = dateInZone(Date.now(), "UTC").slice(0, 10);
-  const [range, setRange] = useState<DateRange>({
-    since: moveDate(today, -29),
-    until: today,
-  });
-  const [draftRange, setDraftRange] = useState(range);
-  const [account, setAccount] = useState("all"),
-    [compare, setCompare] = useState(false);
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const tab = analyticsViewForRoute(location, search);
+  const { range, compare, account, channel } = analyticsFilters(search);
+  const [draftRange, setDraftRange] = useState<DateRange>(range);
+  useEffect(() => setDraftRange(range), [range.since, range.until]);
+  const setFilters = (updates: Record<string, string>) => {
+    const params = new URLSearchParams(search);
+    params.delete("tab");
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value || value === "all") params.delete(key);
+      else params.set(key, value);
+    }
+    navigate(analyticsPaths[tab] + (params.size ? "?" + params : ""));
+  };
   const connections = trpc.channels.connections.useQuery(
     { organizationId: organizationId! },
     { enabled: !!organizationId }
   );
-  const selected = (connections.data?.items ?? []).filter(
+  const availableChannels =
+    tab === "advertising"
+      ? ["meta_ads"]
+      : tab === "social"
+        ? ["facebook"]
+        : ["facebook", "meta_ads"];
+  const selectedChannel = availableChannels.includes(channel) ? channel : "all";
+  const availableAccounts = (connections.data?.items ?? []).filter(
     c =>
       c.status === "connected" &&
-      (account === "all" || c.id === account) &&
-      (tab === "overview" ||
-        c.channel === (tab === "social" ? "facebook" : "meta_ads"))
+      availableChannels.includes(c.channel) &&
+      (selectedChannel === "all" || c.channel === selectedChannel)
+  );
+  const selectedAccount = availableAccounts.some(c => c.id === account)
+    ? account
+    : "all";
+  const selected = availableAccounts.filter(
+    c => selectedAccount === "all" || c.id === selectedAccount
   );
   const bounded = selected.slice(0, 8);
   const queries = useQueries({
@@ -389,26 +407,29 @@ function Analytics() {
   return (
     <>
       <PageHeader
-        eyebrow="Cross-channel performance"
-        title="Analytics"
-        description="Compare organic and paid performance with channel-specific metrics, explicit date ranges and transparent attribution."
+        eyebrow={
+          tab === "overview"
+            ? "Analytics / Overview"
+            : tab === "advertising"
+              ? "Analytics / Advertising"
+              : "Analytics / Social Media"
+        }
+        title={
+          tab === "overview"
+            ? "Analytics overview"
+            : tab === "advertising"
+              ? "Advertising analytics"
+              : "Social media analytics"
+        }
+        description={
+          tab === "overview"
+            ? "Overall organic and paid performance, with channel and account filters, date comparisons and transparent attribution."
+            : tab === "advertising"
+              ? "Compare paid channel and campaign performance. Filter by advertising account and date range."
+              : "Review social content and audience engagement. Filter by channel, Page and date range."
+        }
       />
-      <div className="mb-5 flex flex-wrap gap-2">
-        {["overview", "social", "advertising"].map(v => (
-          <Button
-            key={v}
-            variant={tab === v ? "default" : "outline"}
-            onClick={() => setTab(v)}
-          >
-            {v === "overview"
-              ? "Overall performance"
-              : v === "social"
-                ? "Social Media"
-                : "Advertising"}
-          </Button>
-        ))}
-      </div>
-      <div className="mb-5 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-5 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-6">
         <label className="text-xs">
           From
           <input
@@ -434,27 +455,50 @@ function Analytics() {
           />
         </label>
         <label className="text-xs">
+          Channel
+          <select
+            aria-label="Analytics channel"
+            className={channelInput + " mt-1"}
+            value={selectedChannel}
+            onChange={e =>
+              setFilters({ channel: e.target.value, account: "all" })
+            }
+          >
+            <option value="all">
+              {tab === "overview"
+                ? "All channels"
+                : tab === "advertising"
+                  ? "All advertising channels"
+                  : "All social channels"}
+            </option>
+            {availableChannels.map(c => (
+              <option key={c} value={c}>
+                {channelNames[c as keyof typeof channelNames]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs">
           Account
           <select
+            aria-label="Analytics account"
             className={channelInput + " mt-1"}
-            value={account}
-            onChange={e => setAccount(e.target.value)}
+            value={selectedAccount}
+            onChange={e => setFilters({ account: e.target.value })}
           >
             <option value="all">All connected accounts</option>
-            {connections.data?.items
-              .filter(c => c.status === "connected")
-              .map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} / {channelNames[c.channel]}
-                </option>
-              ))}
+            {availableAccounts.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} / {channelNames[c.channel]}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={compare}
-            onChange={e => setCompare(e.target.checked)}
+            onChange={e => setFilters({ compare: e.target.checked ? "1" : "" })}
           />
           Compare previous period
         </label>
@@ -464,7 +508,7 @@ function Analytics() {
             const parsed = rangeSchema.safeParse(draftRange);
             if (!parsed.success)
               return window.alert("Choose a valid range of 1 to 93 days.");
-            setRange(parsed.data);
+            setFilters(parsed.data);
           }}
         >
           Apply date range
@@ -497,17 +541,17 @@ function Analytics() {
       ) : !selected.length ? (
         <div className="surface p-8">
           <h2 className="text-xl font-semibold">
-            Connect a channel to see its results
+            No connected accounts for this view
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            There is no sample performance data in this view. Start by
-            connecting a Facebook Page or Meta ad account.
+            No sample performance data is shown. Account connections and
+            permissions are managed in Settings / Integrations.
           </p>
           <Link
             href="/app/settings/integrations"
             className="mt-4 inline-block text-primary"
           >
-            Open Integrations
+            Settings / Integrations
           </Link>
         </div>
       ) : (
