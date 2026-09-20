@@ -13,7 +13,7 @@ let organizationId = 0, userId = 0, sourceId = 0, finishedId = 0, briefId = 0, v
 let caller: ReturnType<typeof appRouter.createCaller>;
 const database = async () => { const db = await getDb(); if (!db) throw new Error("Use an isolated test database"); return db; };
 const asset = async (key: string) => {
-  const row = (await caller.assetLibrary.list({ organizationId })).find(row => row.key === key);
+  const row = (await caller.assetLibrary.studioList({ organizationId })).find(row => row.key === key);
   if (!row) throw new Error("Test asset missing");
   return row;
 };
@@ -43,7 +43,6 @@ beforeAll(async () => {
   connectionId = connection.id;
   caller = appRouter.createCaller({ user, req: {}, res: {} } as TrpcContext);
 });
-
 afterAll(async () => {
   if (!organizationId) return;
   const db = await database();
@@ -51,51 +50,17 @@ afterAll(async () => {
   await db.delete(organizations).where(eq(organizations.id, organizationId));
   await db.delete(users).where(eq(users.id, userId));
 });
-
 describe.sequential("library approval consumers", () => {
-  it("leaves unrelated routes outside the compatibility policy", () => {
-    expect(hasLibraryPolicy("auth.me")).toBe(false);
-    expect(hasLibraryPolicy("assetLibrary.review")).toBe(false);
-    expect(hasLibraryPolicy("meta.executeRequest")).toBe(true);
-  });
-  it("rejects the old Brand direct-approval endpoint", async () => {
-    await expect(caller.brand.reviewAsset({ organizationId, assetId: sourceId, decision: "approved" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    expect((await asset(`asset:${sourceId}`)).state).toBe("draft");
-  });
-  it("rejects the old Creative direct-approval endpoint", async () => {
-    await expect(caller.creatives.reviewVariant({ organizationId, variantId, decision: "approved" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    expect((await asset(`creative:${variantId}`)).state).toBe("draft");
-  });
-  it("accepts source material only after explicit library review", async () => {
-    await approve(`asset:${sourceId}`);
-    await expect(assertLibraryConsumer("creatives.generate", { organizationId, briefId }, userId)).resolves.toBeUndefined();
-  });
-  it("does not allow approved finished content as a source asset", async () => {
-    await approve(`asset:${finishedId}`);
-    await expect(requireApprovedLibraryAsset(await database(), organizationId, `asset:${finishedId}`, "source")).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-  });
-  it("blocks an altered source even while its old status says approved", async () => {
-    const db = await database();
-    await db.update(brandAssets).set({ name: "Altered source" }).where(eq(brandAssets.id, sourceId));
-    await expect(assertLibraryConsumer("creatives.generate", { organizationId, briefId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    await expect(caller.creatives.generate({ organizationId, briefId, count: 2 })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-  });
-  it("also blocks stale approvals when a queued worker starts", async () => {
-    const setup = { ...defaultCreativeSetup(), logoAssetId: sourceId };
-    await expect(assertBuilderSourceApprovals(await database(), organizationId, setup)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-  });
-  it("accepts the modified source after a fresh submission and review", async () => {
-    await approve(`asset:${sourceId}`);
-    await expect(assertBuilderSourceApprovals(await database(), organizationId, { ...defaultCreativeSetup(), logoAssetId: sourceId })).resolves.toBeUndefined();
-  });
-  it("blocks a foreign workspace before inspecting assets", async () => {
-    await expect(assertLibraryConsumer("meta.createRequest", { organizationId: organizationId + 1000000, variantId }, userId)).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-  it("validates new publishing assets using the library state", async () => {
-    await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    await approve(`creative:${variantId}`);
-    await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).resolves.toBeUndefined();
-  });
+  it("leaves unrelated routes outside the compatibility policy", () => { expect(hasLibraryPolicy("auth.me")).toBe(false); expect(hasLibraryPolicy("assetLibrary.review")).toBe(false); expect(hasLibraryPolicy("meta.executeRequest")).toBe(true); });
+  it("rejects the old Brand direct-approval endpoint", async () => { await expect(caller.brand.reviewAsset({ organizationId, assetId: sourceId, decision: "approved" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); expect((await asset(`asset:${sourceId}`)).state).toBe("draft"); });
+  it("rejects the old Creative direct-approval endpoint", async () => { await expect(caller.creatives.reviewVariant({ organizationId, variantId, decision: "approved" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); expect((await asset(`creative:${variantId}`)).state).toBe("draft"); });
+  it("accepts source material only after explicit library review", async () => { await approve(`asset:${sourceId}`); await expect(assertLibraryConsumer("creatives.generate", { organizationId, briefId }, userId)).resolves.toBeUndefined(); });
+  it("does not allow approved finished content as a source asset", async () => { await approve(`asset:${finishedId}`); await expect(requireApprovedLibraryAsset(await database(), organizationId, `asset:${finishedId}`, "source")).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); });
+  it("blocks an altered source even while its old status says approved", async () => { const db = await database(); await db.update(brandAssets).set({ name: "Altered source" }).where(eq(brandAssets.id, sourceId)); await expect(assertLibraryConsumer("creatives.generate", { organizationId, briefId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); await expect(caller.creatives.generate({ organizationId, briefId, count: 2 })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); });
+  it("also blocks stale approvals when a queued worker starts", async () => { const setup = { ...defaultCreativeSetup(), logoAssetId: sourceId }; await expect(assertBuilderSourceApprovals(await database(), organizationId, setup)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); });
+  it("accepts the modified source after a fresh submission and review", async () => { await approve(`asset:${sourceId}`); await expect(assertBuilderSourceApprovals(await database(), organizationId, { ...defaultCreativeSetup(), logoAssetId: sourceId })).resolves.toBeUndefined(); });
+  it("blocks a foreign workspace before inspecting assets", async () => { await expect(assertLibraryConsumer("meta.createRequest", { organizationId: organizationId + 1000000, variantId }, userId)).rejects.toMatchObject({ code: "FORBIDDEN" }); });
+  it("validates new publishing assets using the library state", async () => { await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); await approve(`creative:${variantId}`); await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).resolves.toBeUndefined(); });
   it("rejects a publishing payload with stale creative text", async () => {
     const db = await database();
     const [variant] = await db.select().from(creativeVariants).where(eq(creativeVariants.id, variantId));
@@ -106,9 +71,5 @@ describe.sequential("library approval consumers", () => {
     await db.update(publishRequests).set({ payload, payloadHash: stableHash(payload) }).where(eq(publishRequests.id, request.id));
     await expect(assertLibraryConsumer("meta.approveRequest", { organizationId, requestId: request.id }, userId)).resolves.toBeUndefined();
   });
-  it("rejects revocation before publishing", async () => {
-    const current = await asset(`creative:${variantId}`);
-    await caller.assetLibrary.review({ organizationId, key: current.key, revision: current.revision, decision: "changes_requested", note: "New image needed" });
-    await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-  });
+  it("rejects revocation before publishing", async () => { const current = await asset(`creative:${variantId}`); await caller.assetLibrary.review({ organizationId, key: current.key, revision: current.revision, decision: "changes_requested", note: "New image needed" }); await expect(assertLibraryConsumer("meta.createRequest", { organizationId, variantId }, userId)).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); });
 });
