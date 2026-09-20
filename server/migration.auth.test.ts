@@ -20,6 +20,12 @@ describe("independent authentication boundaries", () => {
   ])("rejects external or ambiguous login return paths: %s", path => {
     expect(safeReturnPath(path)).toBe("/app");
   });
+  it.each(["/", "/?utm_source=email", "/#features"])("opens the app instead of the marketing homepage: %s", path => {
+    expect(safeReturnPath(path)).toBe("/app");
+  });
+  it("preserves an app destination", () => {
+    expect(safeReturnPath("/app/creatives?tab=results")).toBe("/app/creatives?tab=results");
+  });
   it("retains a company invitation or creative route after signing in", () => {
     expect(safeReturnPath("/invite/abc?next=review")).toBe(
       "/invite/abc?next=review"

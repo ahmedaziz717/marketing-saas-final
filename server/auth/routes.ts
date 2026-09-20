@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authClient, resolveAuthUser } from "./supabase";
 
 export function safeReturnPath(value: unknown): string {
+  if (typeof value === "string" && /^\/(?:[?#]|$)/.test(value)) return "/app";
   return typeof value === "string" && /^\/(?!\/)[^\\\x00-\x20]*$/.test(value)
     ? value
     : "/app";
