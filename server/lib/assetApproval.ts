@@ -38,7 +38,7 @@ export async function assertBuilderSourceApprovals(db: LibraryDatabase, organiza
   const ids = new Set<number>();
   if (setup.logoAssetId) ids.add(setup.logoAssetId);
   if (setup.person?.kind === "asset") ids.add(setup.person.assetId);
-  for (const id of ids) await requireApprovedLibraryAsset(db, organizationId, `asset:${id}`, "source");
+  for (const id of Array.from(ids)) await requireApprovedLibraryAsset(db, organizationId, `asset:${id}`, "source");
 }
 
 function readId(input: Record<string, unknown>, key: string): number {
@@ -75,7 +75,7 @@ export async function assertLibraryConsumer(path: string, rawInput: unknown, use
       if (!setup.success) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Save a valid creative setup before generating." });
       await assertBuilderSourceApprovals(db, organizationId, setup.data);
     } else {
-      for (const assetId of new Set(brief.assetIds)) await requireApprovedLibraryAsset(db, organizationId, `asset:${assetId}`, "source");
+      for (const assetId of Array.from(new Set(brief.assetIds))) await requireApprovedLibraryAsset(db, organizationId, `asset:${assetId}`, "source");
     }
     return;
   }
