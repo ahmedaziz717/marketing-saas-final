@@ -12,6 +12,7 @@ import { crawlRouter } from "./routers/crawl";
 import { catalogSourcesRouter } from "./routers/catalogSources";
 import { catalogRouter } from "./routers/catalog";
 import { creativeBuilderRouter } from "./routers/creativeBuilder";
+import { assetLibraryRouter } from "./routers/assetLibrary";
 import { authClient } from "./auth/supabase";
 
 export const appRouter = router({
@@ -31,6 +32,7 @@ export const appRouter = router({
   activity: activityRouter,
   creatives: creativesRouter,
   creativeBuilder: creativeBuilderRouter,
+  assetLibrary: assetLibraryRouter,
   meta: metaRouter,
   crawl: crawlRouter,
   catalog: catalogRouter,
