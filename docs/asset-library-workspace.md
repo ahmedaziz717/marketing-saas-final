@@ -1,32 +1,29 @@
-# Asset Library implementation checkpoint
+# Asset Library implementation status
 
-This feature branch is based on `codex/render-supabase-migration`. It does not modify the Manus deployment or the main branch. Nothing in this checkpoint launches ads or social posts.
+The implementation branch targets the existing Frame staging migration branch. The Manus application and main branch are not modified. This change performs no live social posts or advertising actions.
 
-## Scope implemented in this checkpoint
+## Implemented
 
-- Shared Asset Library route at `/app/library` with separate type/category and review-status controls.
-- Image, video, UGC and brand/product source views. UGC is a classification, not a second physical asset.
-- Uploads of JPEG, PNG, WebP, GIF (12 MB per file), MP4 and WebM (20 MB per file); all uploads are drafts.
-- Generated creative records are directly visible in the library without copying the underlying media. Pending generated records are drafts, not automatically submitted.
-- Explicit submit, approve, request-changes and reject transitions. Version/review revision checks reject stale requests.
-- New upload versions link to the original record and never overwrite its media or approval.
-- Role checks, tenant-scoped reads and mutations, file signature checks, UGC permission confirmation, and transactional audit events.
-- Content Studio links to the shared library and submits results for review there; download and copy-text actions remain.
-- Existing pre-library asset approvals and legacy creative comments are retained.
+- Shared Asset Library route at `/app/library`, with independent asset type and review status filters.
+- Images, videos, UGC, and brand/product source views. UGC is a classification, not a duplicate file.
+- Image uploads (12 MB per file) and MP4/WebM uploads (20 MB per file), saved as drafts.
+- Studio-generated records appear directly in the library without copying media.
+- Explicit submission, approval, change-request and rejection actions; stale review decisions are rejected.
+- Linked upload versions preserve original media and approvals.
+- Role-checked and tenant-scoped operations, file signature validation, UGC permission confirmation and transactional audit history.
+- Content Studio handoff to the same library and review queue.
+- Brand source view now links to the shared library instead of maintaining separate upload/review controls.
+- Retired direct-review API routes reject requests and explain the new review path.
+- Existing generation and publishing API consumers check the current library approval/fingerprint rather than only an old status column.
+- Queued creative jobs recheck source approvals before generation.
+- Legacy Meta requests must still match their frozen creative copy and review timestamp before approval/execution.
 
-## Validation before deployment
+## Verification
 
-Run `pnpm check`, `pnpm test`, `pnpm build`, and `node scripts/smoke-build.mjs` with the existing isolated PostgreSQL CI service.
+CI runs TypeScript checks, unit/integration tests, build and startup smoke checks against isolated PostgreSQL. New integration tests cover retired endpoint bypasses, source/finished purpose restrictions, stale source approvals, queued source validation, cross-workspace access, frozen publishing copy and revoked approvals.
 
-The new unit and database integration tests cover review transitions, stale decisions, upload classification, generated-record normalization, version preservation, audit-chain integrity, malformed file signatures, and cross-workspace access.
+CI mocks storage where relevant. It does not prove real Supabase upload or video playback. Browser checks and real storage verification must be recorded separately before declaring production readiness. No new database migration is required for the library.
 
-A browser walkthrough and real Supabase upload/playback verification are still required before calling the feature production-ready. CI storage is mocked and is not proof of a real Supabase upload. Larger/resumable video uploads are not included in this checkpoint.
+## Still separate unfinished work
 
-## Follow-up integration work (not represented as complete)
-
-- Reconcile legacy Brand review controls and legacy review endpoints with the new explicit submission workflow.
-- Enforce library fingerprint validation in every generation/publishing consumer, beyond the existing stored approval status checks.
-- Verify the final layout, keyboard interactions and video playback in the deployed application.
-- Social Media and Advertising channel workspaces, full Facebook connection and capability checks, weekly/future scheduling, and cross-channel Analytics remain separate unfinished workstreams.
-
-No migration is needed for this checkpoint: uploads use existing `brand_assets.metadata`, generated images remain existing `creative_variants`, and review transitions use the existing organization-scoped audit ledger.
+Full Facebook OAuth/account selection and live workflow validation; Social Media and Advertising channel workspaces; centralized weekly/future scheduling; cross-channel Analytics; larger resumable video uploads. Channel backend drafts from the previous work are not part of this library-only checkpoint.
