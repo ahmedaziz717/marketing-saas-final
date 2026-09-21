@@ -25,7 +25,7 @@ function matchesState(asset: LibraryAsset, surface: AssetSurface, view: string) 
 function AssetStatus({ state }: { state: AssetState }) {
   return <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-medium ${state === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : state === "needs_review" ? "border-amber-200 bg-amber-50 text-amber-900" : "bg-muted text-muted-foreground"}`}>{workflowLabel(state)}</span>;
 }
-export function AssetWorkbench({ surface }: { surface: AssetSurface }) {
+export function AssetWorkbench({ surface, initialType }: { surface: AssetSurface; initialType?: AssetView }) {
   const { organizationId, membership } = useWorkspace();
   const role = membership?.role ?? "", canCreate = mayCreateAssets(role);
   const params = new URLSearchParams(useSearch());
@@ -36,7 +36,7 @@ export function AssetWorkbench({ surface }: { surface: AssetSurface }) {
   const view = views.some(item => item.id === requestedView) ? requestedView! : surface === "studio" ? "drafts" : "approved";
   const base = surface === "studio" ? "/app/creatives?tab=saved" : "/app/library";
   const separator = surface === "studio" ? "&" : "?";
-  const [type, setType] = useState<AssetView>("all"), [search, setSearch] = useState("");
+  const [type, setType] = useState<AssetView>(initialType ?? (ASSET_VIEWS.some(v => v.id === params.get("type")) ? params.get("type") as AssetView : "all")), [search, setSearch] = useState("");
   const [note, setNote] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false), [parent, setParent] = useState<LibraryAsset | null>(null);
   const utils = trpc.useUtils();

@@ -1,3 +1,122 @@
-import { WorkspaceGate } from "@/components/WorkspaceGate"; import { PageHeader } from "@/components/PageHeader"; import { StatusPill } from "@/components/StatusPill"; import { Button } from "@/components/ui/button"; import { useWorkspace } from "@/hooks/useWorkspace"; import { trpc } from "@/lib/trpc"; import { ArrowRight, BookOpenText, Boxes, CheckCircle2, Images, ShieldCheck } from "lucide-react"; import { useLocation } from "wouter";
-function Dashboard(){const{organizationId,organization}=useWorkspace();const[,setLocation]=useLocation();const brand=trpc.brand.get.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const assets=trpc.brand.assets.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const briefs=trpc.briefs.list.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const approvedAssets=assets.data?.filter(a=>a.status==="approved").length??0;const approvedBriefs=briefs.data?.filter(b=>b.status==="approved").length??0;const steps=[{label:"Activate brand kit",complete:brand.data?.status==="active",action:()=>setLocation("/app/brand")},{label:"Approve brand assets",complete:approvedAssets>0,action:()=>setLocation("/app/brand")},{label:"Approve a campaign brief",complete:approvedBriefs>0,action:()=>setLocation("/app/briefs")},{label:"Generate a creative set",complete:false,action:()=>setLocation("/app/creatives")}];return <><PageHeader eyebrow="Creative control center" title="Good work starts with a clear frame." description={`${organization?.name??"Your workspace"} has one governed path from source material to published Meta creative.`} action={<Button onClick={()=>setLocation("/app/briefs")} className="rounded-full">New campaign brief<ArrowRight className="ml-2 h-4 w-4"/></Button>}/><div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><section className="surface p-6 md:p-8"><div className="flex items-start justify-between"><div><p className="eyebrow">Launch readiness</p><h2 className="mt-3 text-2xl font-semibold">Your first creative set</h2></div><div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><ShieldCheck className="h-6 w-6"/></div></div><div className="mt-8 grid gap-3">{steps.map((step,index)=><button key={step.label} onClick={step.action} className="flex w-full items-center gap-4 rounded-2xl border hairline bg-background/60 p-4 text-left hover:border-primary/30 hover:bg-primary/[.03]"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${step.complete?"bg-emerald-100 text-emerald-700":"bg-muted text-muted-foreground"}`}>{step.complete?<CheckCircle2 className="h-4 w-4"/>:index+1}</span><span className="flex-1 font-medium">{step.label}</span>{step.complete?<StatusPill status="completed"/>:<ArrowRight className="h-4 w-4 text-muted-foreground"/>}</button>)}</div></section><aside className="space-y-5"><div className="surface p-6"><p className="eyebrow">Workspace health</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-muted/70 p-4"><Boxes className="h-4 w-4 text-primary"/><p className="mt-5 text-3xl font-semibold">{approvedAssets}</p><p className="mt-1 text-xs text-muted-foreground">Approved assets</p></div><div className="rounded-2xl bg-muted/70 p-4"><BookOpenText className="h-4 w-4 text-primary"/><p className="mt-5 text-3xl font-semibold">{approvedBriefs}</p><p className="mt-1 text-xs text-muted-foreground">Approved briefs</p></div></div></div><div className="surface overflow-hidden bg-[#211d28] p-6 text-white"><Images className="h-5 w-5 text-violet-300"/><h3 className="mt-8 font-editorial text-3xl leading-none">Only approved inputs enter the model.</h3><p className="mt-4 text-sm leading-6 text-white/55">Frame re-checks brief and asset status on the server before every generation request.</p></div></aside></div></>}
-export default function WorkspaceApp(){return <WorkspaceGate><Dashboard/></WorkspaceGate>}
+import { Link } from "wouter";
+import { ArrowRight, FolderOpen, ShieldCheck } from "lucide-react";
+import { WorkspaceGate } from "@/components/WorkspaceGate";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { PRODUCT_STAGES, mayManageBilling } from "@shared/frameProduct";
+function Dashboard() {
+  const { organization, membership } = useWorkspace();
+  return (
+    <>
+      <PageHeader
+        eyebrow="Your marketing workspace"
+        title="Create. Activate. Measure. Optimize."
+        description={`${organization?.name ?? "Your workspace"}: one connected workflow, with people in control of approvals and delivery.`}
+        action={
+          <Link href="/app/creatives/overview">
+            <Button>
+              Open Content Studio
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        }
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        {PRODUCT_STAGES.map((stage, index) => (
+          <article className="surface flex flex-col p-6" key={stage.id}>
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">0{index + 1}</p>
+              {"planned" in stage && (
+                <span className="rounded-full bg-muted px-3 py-1 text-xs">
+                  Tools planned
+                </span>
+              )}
+            </div>
+            <h2 className="mt-5 text-2xl font-semibold">{stage.label}</h2>
+            <p className="mb-6 mt-3 flex-1 text-sm leading-6 text-muted-foreground">
+              {stage.description}
+            </p>
+            <Link
+              href={stage.href}
+              className="inline-flex items-center gap-2 self-start text-sm font-semibold text-primary underline underline-offset-4"
+            >
+              {"planned" in stage ? "View roadmap" : "Open " + stage.label}
+              <ArrowRight size={16} />
+            </Link>
+          </article>
+        ))}
+      </div>
+      <div className="mt-6 grid gap-5 xl:grid-cols-2">
+        <section className="surface p-6">
+          <FolderOpen className="h-5 w-5 text-primary" />
+          <h2 className="mt-4 text-lg font-semibold">
+            Your content has one home at each stage
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Save working drafts in Content Studio. Submit selected versions to
+            Asset Library for review. Use approved assets in Publishing. Weekly
+            planning supports future weeks and months.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-4">
+            <Link
+              href="/app/creatives/saved"
+              className="text-sm text-primary underline"
+            >
+              Saved work
+            </Link>
+            <Link
+              href="/app/library?view=needs_review"
+              className="text-sm text-primary underline"
+            >
+              Needs Review
+            </Link>
+            <Link
+              href="/app/publishing"
+              className="text-sm text-primary underline"
+            >
+              Publishing calendar
+            </Link>
+          </div>
+        </section>
+        <section className="surface p-6">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <h2 className="mt-4 text-lg font-semibold">
+            One workspace, separate responsibilities
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Account connections and administration stay in Settings. Asset
+            approval does not authorize a post, campaign launch or ad budget.
+            Planned tools are not yet operational.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-4">
+            <Link href="/app/brand" className="text-sm text-primary underline">
+              Brand kit
+            </Link>
+            <Link
+              href="/app/settings/integrations"
+              className="text-sm text-primary underline"
+            >
+              Integrations
+            </Link>
+            {mayManageBilling(membership?.role ?? "") && (
+              <Link
+                href="/app/settings/billing"
+                className="text-sm text-primary underline"
+              >
+                Billing & Usage
+              </Link>
+            )}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+export default function WorkspaceApp() {
+  return (
+    <WorkspaceGate>
+      <Dashboard />
+    </WorkspaceGate>
+  );
+}

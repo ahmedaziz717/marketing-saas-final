@@ -6,6 +6,11 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { observable } from "@trpc/server/observable";
 import { trpc } from "../../client/src/lib/trpc";
+import WorkspaceApp from "../../client/src/pages/WorkspaceApp";
+import ProductOverviewPage from "../../client/src/pages/ProductOverviewPage";
+import PlannedFeaturePage from "../../client/src/pages/PlannedFeaturePage";
+import SettingsPage from "../../client/src/pages/SettingsPage";
+import { PRODUCT_FEATURES, PROPOSED_PLANS, USAGE_METERS } from "../../shared/frameProduct";
 import PublishingPage from "../../client/src/pages/PublishingPage";
 import SocialMediaPage from "../../client/src/pages/SocialMediaPage";
 import AdvertisingPage from "../../client/src/pages/AdvertisingPage";
@@ -96,6 +101,10 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
+  if (path === "workspace.members" || path === "workspace.invites") return [];
+  if (path === "billing.summary") return { mode: "preview", commercialStatus: "proposal", chargesEnabled: false, enforcement: false, selectedPreviewPlanId: null, revision: 0, plans: PROPOSED_PLANS, month: input.month, creditsUsed: null, usage: USAGE_METERS.map(m => ({ ...m, quantity: m.id === "image_outputs" ? 24 : 2 })), inventory: { activeSeats: 3, catalogItems: 485, connectedAccounts: 2 }, coverage: "Recorded successful outputs, not billable credits." };
+  if (path === "billing.selectPreviewPlan") { mutations.push(path); return { success: true, previewOnly: true }; }
+
   if (path === "channels.connections")
     return which === "advertising-empty" || which === "social-empty"
       ? { ...connections, items: [] }
@@ -241,6 +250,15 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "product-home": "/app",
+  "studio-overview": "/app/creatives/overview",
+  "advertising-overview": "/app/advertising",
+  "social-overview": "/app/social",
+  "billing-usage": "/app/settings/billing",
+  "billing-plans": "/app/settings/billing",
+  "planned-attribution": "/app/attribution",
+  "optimize-overview": "/app/optimize",
+
   "advertising-empty": "/app/advertising/meta",
   "social-empty": "/app/social/facebook",
   publishing: "/app/publishing",
@@ -260,8 +278,8 @@ if (which === "navigation-ten") {
   )!;
   group.children = [
     ...group.children!,
-    ...Array.from({ length: 7 }, (_, i) => ({
-      label: `Future channel ${i + 4}`,
+    ...Array.from({ length: Math.max(0, 10 - group.children!.length) }, (_, i) => ({
+      label: `Future channel ${i + group.children!.length + 1}`,
       path: `/app/advertising/future-${i}`,
       planned: true,
     })),
@@ -269,7 +287,11 @@ if (which === "navigation-ten") {
 }
 function RoutedPage() {
   const [path] = useLocation();
-  const Page = path.startsWith("/app/analytics")
+  const Page = path === "/app" ? WorkspaceApp
+    : path === "/app/settings/billing" ? SettingsPage
+    : ["/app/creatives/overview", "/app/optimize", "/app/advertising", "/app/social"].includes(path) ? ProductOverviewPage
+    : PRODUCT_FEATURES.some(f => f.availability === "planned" && f.href === path) ? PlannedFeaturePage
+    : path.startsWith("/app/analytics")
     ? AnalyticsPage
     : path.startsWith("/app/social")
       ? SocialMediaPage
@@ -442,6 +464,35 @@ function layout() {
             : "Social media analytics"),
         "Analytics deep link chooses the correct view"
       );
+    }
+    if (which === "product-home") {
+      check(document.querySelector("h1")?.textContent?.includes("Create. Activate. Measure. Optimize."), "Product stages are visible on Home");
+      check(document.body.textContent?.includes("Tools planned"), "Home does not imply optimization tools are operational");
+    }
+    if (which === "studio-overview") {
+      check(document.body.textContent?.includes("Image assets") && document.body.textContent?.includes("Video creation"), "Studio separates creative formats");
+      check(document.body.textContent?.includes("Video generation and editing are not available yet"), "Unavailable video is clearly marked");
+    }
+    if (which === "billing-usage" || which === "billing-plans") {
+      if (role === "creator") {
+        check(document.body.textContent?.includes("Only workspace owners and administrators"), "Billing role restriction is visible");
+        check(!button("Preview Growth"), "Creator has no plan actions");
+      } else {
+        check(document.body.textContent?.includes("AI credits are not calculated yet"), "No fabricated credit balance");
+        if (which === "billing-plans") {
+          const plans = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(t => t.textContent === "Proposed plans")!;
+          plans.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); plans.click(); await pause();
+          check(!!button("Preview Growth"), "Proposed plans render");
+          await click("Preview Growth");
+          check(mutations.length === 0, "Selecting a card does not create a charge or change a plan");
+          check(!!document.querySelector('[aria-label="Confirm plan preview"]'), "Preview-only confirmation shown");
+          layout();
+        }
+      }
+    }
+    if (which === "planned-attribution" || which === "optimize-overview") {
+      check(document.body.textContent?.includes("Planned"), "Roadmap is labeled");
+      check(!button("Upgrade") && !button("Activate"), "Unbuilt tools are not paid unlocks");
     }
     if (which.startsWith("navigation"))
       await navigationChecks(which === "navigation-ten");

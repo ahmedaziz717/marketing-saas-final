@@ -153,7 +153,7 @@ it("mobile group toggles keep the drawer open and selecting a leaf closes it", (
 it("handles ten channels with the same nested-list structure", () => {
   const items = [
     {
-      ...workspaceNavigation[5],
+      ...workspaceNavigation.find(item => item.path === "/app/advertising")!,
       children: Array.from({ length: 10 }, (_, i) => ({
         label: `Channel ${i + 1}`,
         path: `/app/advertising/channel-${i + 1}`,
@@ -190,4 +190,28 @@ it("labels direct and historical nested pages correctly", () => {
   expect(workspacePageLabel("/app/social/facebook")).toBe(
     "Social Media / Facebook"
   );
+});
+it("groups tools under the four product stages and keeps administration separate", () => {
+  setup("/app");
+  for (const name of ["Create", "Activate", "Measure", "Optimize"]) expect(screen.getByText(name)).toBeTruthy();
+  expect(workspaceNavigation.find(item => item.path === "/app/creatives")?.group).toBe("Create");
+  expect(workspaceNavigation.find(item => item.path === "/app/advertising")?.group).toBe("Activate");
+  expect(workspaceNavigation.find(item => item.path === "/app/analytics")?.group).toBe("Measure");
+  expect(workspaceNavigation.find(item => item.path === "/app/optimize/agent")?.roadmap).toBe(true);
+});
+it("opens Settings for the retained Brand route and highlights billing", () => {
+  setup("/app/brand");
+  expect(screen.getByRole("button", { name: "Settings" }).getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByRole("link", { name: "Brand kit" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "Billing & Usage" })).toBeTruthy();
+});
+it("maps old saved-work deep links to the Studio subsection", () => {
+  setup("/app/creatives?tab=saved&asset=creative%3A42");
+  expect(screen.getByRole("link", { name: "Saved work" }).getAttribute("aria-current")).toBe("page");
+  expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+});
+it("keeps channel Overview separate from the individual Meta route", () => {
+  setup("/app/advertising");
+  expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")).toBeNull();
 });

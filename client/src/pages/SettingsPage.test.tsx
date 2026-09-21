@@ -20,6 +20,10 @@ vi.mock("@/lib/trpc", () => ({
         invites: { invalidate: vi.fn() },
       },
     }),
+    billing: {
+      summary: { useQuery: () => ({ data: null, isLoading: false }) },
+      selectPreviewPlan: { useMutation: () => ({ mutate: state.mutate, isPending: false }) },
+    },
     workspace: {
       members: {
         useQuery: () => ({
@@ -72,7 +76,9 @@ it("hides administrative actions from creators and labels unimplemented settings
   render(<SettingsPage />);
   expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Invite teammate" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Billing & usage" }));
+  fireEvent.click(screen.getByRole("button", { name: "Billing & Usage" }));
+  expect(screen.getByText(/Only workspace owners and administrators/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Security" }));
   expect(screen.getByText("Planned")).toBeTruthy();
   expect(screen.getByText(/not connected yet/)).toBeTruthy();
 });

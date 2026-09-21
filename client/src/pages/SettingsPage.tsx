@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { Integrations } from "./IntegrationsPage";
+import { BillingUsage } from "@/components/BillingUsage";
 import { Activity } from "./ActivityPage";
 import {
   History,
@@ -31,7 +32,7 @@ const sections = [
   { id: "team", label: "Team & access", icon: Users },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "activity", label: "Activity & audit log", icon: History },
-  { id: "billing", label: "Billing & usage", icon: CreditCard },
+  { id: "billing", label: "Billing & Usage", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
   { id: "data", label: "Data & privacy", icon: Database },
@@ -229,7 +230,9 @@ function Settings() {
           ))}
         </nav>
         <div className="min-w-0 space-y-6">
-          {section === "integrations" ? (
+          {section === "billing" ? (
+            <BillingUsage />
+          ) : section === "integrations" ? (
             <Integrations />
           ) : section === "activity" ? (
             <Activity />
