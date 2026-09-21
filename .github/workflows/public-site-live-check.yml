@@ -1,0 +1,46 @@
+name: Verify deployed Frame public website
+on:
+  push:
+    branches: [codex/frame-public-website]
+    paths: [.github/workflows/public-site-live-check.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/codex/frame-public-website'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read public pages only; do not submit forms or authenticate
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = 'https://frame-staging.onrender.com';
+          const paths = ['/', '/product', '/product/create', '/product/activate', '/product/measure', '/product/optimize', '/integrations', '/pricing', '/about', '/contact', '/privacy', '/terms', '/data-deletion', '/security'];
+          for (const path of paths) {
+            const r = await fetch(origin + path, {signal: AbortSignal.timeout(20000)});
+            assert.equal(r.status, 200, path + ' must be public HTTP 200');
+            assert.match(r.headers.get('content-type') || '', /text\/html/);
+            assert.equal(r.headers.has('set-cookie'), false, path + ' must not require an auth cookie');
+            assert.ok(r.headers.get('content-security-policy'), path + ' must have a CSP');
+            const html = await r.text();
+            assert.ok(html.includes('<h1'), path + ' must contain server-rendered content');
+            assert.ok(html.includes('/website/site.css'), path + ' must load the public design');
+            assert.ok(!html.includes('<div id="root">'), path + ' must not be a client app shell');
+            assert.ok(html.includes('noindex'), path + ' must retain draft disclosure indexing state until operator confirmation');
+            console.log('PASS live public HTML, privacy and headers:', path);
+          }
+          const css = await fetch(origin + '/website/site.css', {signal: AbortSignal.timeout(20000)});
+          assert.equal(css.status, 200);
+          assert.match(css.headers.get('content-type') || '', /text\/css/);
+          assert.match(await css.text(), /minmax\(0, 0\.8fr\)/);
+          for (const path of ['/website/favicon.svg', '/sitemap.xml', '/robots.txt', '/healthz', '/login']) {
+            assert.equal((await fetch(origin + path, {signal: AbortSignal.timeout(20000)})).status, 200, path);
+            console.log('PASS live public resource:', path);
+          }
+          console.log('Read-only live staging verification passed; no form submissions, authentication, emails or customer data changes.');
+          JS
