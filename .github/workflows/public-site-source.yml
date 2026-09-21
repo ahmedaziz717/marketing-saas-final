@@ -1,0 +1,21 @@
+name: Public website source snapshot
+on:
+  push:
+    branches: [codex/frame-public-website]
+    paths: [.github/workflows/public-site-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar.gz HEAD > /tmp/frame-public-source.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frame-public-source
+          path: /tmp/frame-public-source.tgz
+          retention-days: 1
