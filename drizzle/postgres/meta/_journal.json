@@ -22,6 +22,13 @@
       "when": 1789931244805,
       "tag": "0002_dark_iron_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790016698357,
+      "tag": "0003_lazy_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }

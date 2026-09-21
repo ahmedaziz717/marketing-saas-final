@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import ProductOverviewPage from "./pages/ProductOverviewPage";
 import PlannedFeaturePage from "./pages/PlannedFeaturePage";
 import { PRODUCT_FEATURES } from "@shared/frameProduct";
+import PlatformWebsitePage from "./pages/PlatformWebsitePage";
 import Home from "./pages/Home";
 import WorkspaceApp from "./pages/WorkspaceApp";
 import BrandPage from "./pages/BrandPage";
@@ -39,6 +40,7 @@ function Router() {
         <LoginPage resetPassword />
       </Route>
       <Route path="/app" component={WorkspaceApp} />
+      <Route path="/app/platform/website" component={PlatformWebsitePage} />
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={ProductOverviewPage} />

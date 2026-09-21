@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerPublicWebsite } from "../public/routes";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -33,19 +34,29 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set("trust proxy", 1);
   const server = createServer(app);
+  registerPublicWebsite(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); }, requireSameOrigin);
-  app.get('/healthz', async (_req, res) => {
+  app.use(
+    "/api",
+    (_req, res, next) => {
+      res.set("Cache-Control", "private, no-store");
+      next();
+    },
+    requireSameOrigin
+  );
+  app.get("/healthz", async (_req, res) => {
     try {
       const db = await getDb();
-      if (!db) throw new Error('Database unavailable');
+      if (!db) throw new Error("Database unavailable");
       await db.execute(sql`select 1 from app_private.users limit 1`);
-      res.set('Cache-Control', 'no-store').json({ ok: true });
-    } catch { res.status(503).json({ ok: false }); }
+      res.set("Cache-Control", "no-store").json({ ok: true });
+    } catch {
+      res.status(503).json({ ok: false });
+    }
   });
   registerStorageProxy(app);
   registerAuthRoutes(app);
@@ -66,18 +77,26 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = process.env.NODE_ENV === 'production' ? preferredPort : await findAvailablePort(preferredPort);
+  const port =
+    process.env.NODE_ENV === "production"
+      ? preferredPort
+      : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, '0.0.0.0', () => {
+  server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
-  process.on('SIGTERM', () => {
-    server.close(() => { void closeDb().finally(() => process.exit(0)); });
+  process.on("SIGTERM", () => {
+    server.close(() => {
+      void closeDb().finally(() => process.exit(0));
+    });
   });
 }
 
-startServer().catch(() => { console.error('Application startup failed'); process.exitCode = 1; });
+startServer().catch(() => {
+  console.error("Application startup failed");
+  process.exitCode = 1;
+});

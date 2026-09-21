@@ -15,14 +15,14 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
     await migrate(drizzle(engine), { migrationsFolder: "drizzle/postgres" });
     expect(
       (await engine.query("SELECT * FROM drizzle.__drizzle_migrations")).rows
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(
       (
         await engine.query(
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(23);
+    ).toHaveLength(25);
     expect(
       (await engine.query("SELECT id, public FROM storage.buckets")).rows
     ).toEqual([{ id: "frame-assets", public: false }]);
@@ -33,7 +33,9 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
       has_table_privilege('authenticated', 'app_private.users', 'SELECT') AS customer_direct_access`)
       ).rows
     ).toEqual([{ anonymous_access: false, customer_direct_access: false }]);
-    const channels = await engine.query<{ relrowsecurity: boolean }>("SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname IN ('channel_connections','channel_oauth_sessions','channel_plans','publications')");
+    const channels = await engine.query<{ relrowsecurity: boolean }>(
+      "SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname IN ('channel_connections','channel_oauth_sessions','channel_plans','publications')"
+    );
     expect(channels.rows).toHaveLength(4);
     expect(channels.rows.every(row => row.relrowsecurity)).toBe(true);
     await expect(engine.exec(buildBootstrapSql())).rejects.toThrow(
