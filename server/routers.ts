@@ -17,8 +17,11 @@ import { channelsRouter, publishingRouter } from "./routers/channels";
 import { billingRouter } from "./routers/billing";
 import { authClient } from "./auth/supabase";
 
+import { publicWebsiteAdminRouter } from "./routers/publicWebsite";
+
 export const appRouter = router({
   system: systemRouter,
+  publicWebsiteAdmin: publicWebsiteAdminRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(async ({ ctx }) => {

@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ role: "owner", mutate: vi.fn() }));
+const state = vi.hoisted(() => ({
+  role: "owner",
+  platformRole: "user",
+  mutate: vi.fn(),
+}));
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { role: state.platformRole }, loading: false }),
+}));
 vi.mock("@/components/WorkspaceGate", () => ({
   WorkspaceGate: ({ children }: any) => children,
 }));
@@ -22,7 +29,9 @@ vi.mock("@/lib/trpc", () => ({
     }),
     billing: {
       summary: { useQuery: () => ({ data: null, isLoading: false }) },
-      selectPreviewPlan: { useMutation: () => ({ mutate: state.mutate, isPending: false }) },
+      selectPreviewPlan: {
+        useMutation: () => ({ mutate: state.mutate, isPending: false }),
+      },
     },
     workspace: {
       members: {
@@ -50,6 +59,7 @@ import SettingsPage from "./SettingsPage";
 afterEach(() => {
   cleanup();
   state.role = "owner";
+  state.platformRole = "user";
   state.mutate.mockClear();
 });
 it("requires confirmation before removing a teammate and protects the owner", () => {
@@ -77,8 +87,22 @@ it("hides administrative actions from creators and labels unimplemented settings
   expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Invite teammate" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Billing & Usage" }));
-  expect(screen.getByText(/Only workspace owners and administrators/)).toBeTruthy();
+  expect(
+    screen.getByText(/Only workspace owners and administrators/)
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Security" }));
   expect(screen.getByText("Planned")).toBeTruthy();
   expect(screen.getByText(/not connected yet/)).toBeTruthy();
+});
+
+it("keeps platform website administration out of ordinary workspace-owner settings", () => {
+  render(<SettingsPage />);
+  expect(document.querySelector('a[href="/app/platform/website"]')).toBeNull();
+});
+it("links the global platform administrator to public website details and requests", () => {
+  state.platformRole = "admin";
+  render(<SettingsPage />);
+  expect(
+    document.querySelector('a[href="/app/platform/website"]')
+  ).toBeTruthy();
 });
