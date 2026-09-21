@@ -39,6 +39,16 @@ jobs:
         run: node scripts/check-dialog-layout.mjs
       - name: Check channel pages and publishing workflow in Chrome
         run: node scripts/check-channel-layout.mjs
+      - name: Check public website without authentication or JavaScript
+        run: node scripts/check-public-website.mjs
+      - name: Save public website regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-website
+          path: artifacts/public-website/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save channel browser regression screenshots
         if: always()
         uses: actions/upload-artifact@v4
