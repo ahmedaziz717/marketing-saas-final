@@ -1,0 +1,68 @@
+name: Apply tested public form width correction
+on:
+  push:
+    branches: [codex/frame-public-website]
+    paths: [.github/workflows/public-site-width.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/codex/frame-public-website'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Apply only exact tested CSS and diagnostic changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "d335a213ac04ef2b0564ad93e1b0704a0a4f92c3"
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path('client/public/website/site.css')
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == '4cbf72a34f7fab57dab7a708027e7a7f41fdfce232dde4acd42675ec296ba6ee'
+          s = p.read_text()
+          s = s.replace('grid-template-columns: 0.8fr 1.2fr;', 'grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);')
+          s = s.replace('.contact-grid > div > p {', '.contact-grid > *,\n.contact-form > *,\n.contact-form label,\n.form-grid > *,\n.contact-form .checkbox-label > span {\n  min-width: 0;\n  max-width: 100%;\n}\n.contact-form label,\n.contact-form .fineprint {\n  overflow-wrap: anywhere;\n}\n.contact-grid > div > p {')
+          s = s.replace('.form-grid {\n  display: grid;\n  grid-template-columns: 1fr 1fr;', '.form-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));')
+          s = s.replace('  .about-grid,\n  .contact-grid {\n    grid-template-columns: 1fr;', '  .about-grid,\n  .contact-grid {\n    grid-template-columns: minmax(0, 1fr);')
+          s = s.replace('  .form-grid {\n    grid-template-columns: 1fr;', '  .form-grid {\n    grid-template-columns: minmax(0, 1fr);')
+          s = s.replace('  min-width: 0;\n}\n.contact-form textarea', '  min-width: 0;\n  max-width: 100%;\n}\n.contact-form textarea')
+          s = s.replace('  flex-shrink: 0;\n  margin-top: 4px;', '  flex-shrink: 0;\n  padding: 0;\n  margin: 4px 0 0;')
+          s = s.replace('.contact-form .button {\n  align-self: start;\n}', '.contact-form .button {\n  align-self: start;\n  max-width: 100%;\n  white-space: normal;\n  overflow-wrap: anywhere;\n}')
+          assert hashlib.sha256(s.encode()).hexdigest() == '7baab45da0ac2d9df3df29f708c3c12cd3840147a44c24e82f6b04ad9b8b96b7'
+          p.write_text(s)
+          p = Path('scripts/check-public-website.mjs')
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == '2a7896aec93da586c2336a5d519c629c501747a2f23d0ab425f4f5caeff8c8c8'
+          s = p.read_text()
+          insertion = '''      // Keep actionable diagnostics even when a host font exposes an intrinsic
+                // form/grid width issue that did not occur on the developer machine.
+                if (layout.scroll > width + 2) {
+                  const overflow = await evaluate(
+                    `Array.from(document.querySelectorAll('body *')).filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > innerWidth + 2 && !el.closest('.form-trap'); }).map(el => ({ tag: el.tagName, className: typeof el.className === 'string' ? el.className : '', width: el.getBoundingClientRect().width, right: el.getBoundingClientRect().right, minWidth: getComputedStyle(el).minWidth })).slice(0, 30)`
+                  );
+                  await writeFile(
+                    `artifacts/public-website/overflow-${url.slice(1).replaceAll("/", "-") || "home"}-${width}.json`,
+                    JSON.stringify(overflow, null, 2)
+                  );
+                  console.error("Offscreen element diagnostics", overflow);
+                }
+          '''
+          # Remove the YAML-readable ten-space indentation added after the first line.
+          lines = insertion.splitlines(keepends=True)
+          insertion = lines[0] + ''.join(line[10:] if line.startswith('          ') else line for line in lines[1:])
+          anchor = '      assert.ok(\n        layout.scroll <= width + 2,'
+          assert s.count(anchor) == 1
+          s = s.replace(anchor, insertion + anchor)
+          assert hashlib.sha256(s.encode()).hexdigest() == '787446dab2f1e3e0af9957a6b51abbfebdfc1f6f92b76848c3a1320fce08f303'
+          p.write_text(s)
+          PY
+          git add client/public/website/site.css scripts/check-public-website.mjs
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Keep public forms within narrow viewports across host fonts"
+          git push origin HEAD:refs/heads/codex/frame-public-website
