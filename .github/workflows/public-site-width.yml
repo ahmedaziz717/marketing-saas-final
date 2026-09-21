@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "d335a213ac04ef2b0564ad93e1b0704a0a4f92c3"
+          test "$(git rev-parse HEAD^)" = "a97d037a2894caf87f97f2f6eda259419179321b"
           python3 - <<'PY'
           from pathlib import Path
           import hashlib
@@ -51,9 +51,6 @@ jobs:
                   console.error("Offscreen element diagnostics", overflow);
                 }
           '''
-          # Remove the YAML-readable ten-space indentation added after the first line.
-          lines = insertion.splitlines(keepends=True)
-          insertion = lines[0] + ''.join(line[10:] if line.startswith('          ') else line for line in lines[1:])
           anchor = '      assert.ok(\n        layout.scroll <= width + 2,'
           assert s.count(anchor) == 1
           s = s.replace(anchor, insertion + anchor)
