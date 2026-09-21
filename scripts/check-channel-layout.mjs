@@ -151,11 +151,12 @@ try {
   await mkdir("artifacts/channel-layout", { recursive: true });
   const results = [];
   const cases = [
-    ...["publishing", "social", "advertising", "analytics", "analytics-ads", "analytics-social", "advertising-empty", "social-empty", "navigation", "navigation-ten"].flatMap(page => [
+    ...["publishing", "social", "advertising", "analytics", "analytics-ads", "analytics-social", "advertising-empty", "social-empty", "navigation", "navigation-ten", "product-home", "studio-overview", "advertising-overview", "social-overview", "billing-usage", "billing-plans", "planned-attribution", "optimize-overview"].flatMap(page => [
       { width: 1705, height: 864, role: "owner", page },
       { width: 375, height: 750, role: "owner", page },
     ]),
     { width: 320, height: 568, role: "creator", page: "publishing" },
+    { width: 375, height: 750, role: "creator", page: "billing-usage" },
     { width: 375, height: 750, role: "creator", page: "publishing" },
   ];
   for (const item of cases) {
