@@ -207,6 +207,18 @@ try {
       const layout = await evaluate(
         `({width:innerWidth,scroll:document.documentElement.scrollWidth,h1:document.querySelector('h1').textContent,css:getComputedStyle(document.querySelector('body')).fontFamily,forms:[...document.querySelectorAll('form')].length,scripts:[...document.scripts].filter(s=>s.type!=='application/ld+json').length,links:[...document.querySelectorAll('main a,footer a')].filter(a=>{const r=a.getBoundingClientRect();return r.width&& (r.right>innerWidth+2||r.left < -2)}).map(a=>a.textContent)})`
       );
+      // Keep actionable diagnostics even when a host font exposes an intrinsic
+      // form/grid width issue that did not occur on the developer machine.
+      if (layout.scroll > width + 2) {
+        const overflow = await evaluate(
+          `Array.from(document.querySelectorAll('body *')).filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > innerWidth + 2 && !el.closest('.form-trap'); }).map(el => ({ tag: el.tagName, className: typeof el.className === 'string' ? el.className : '', width: el.getBoundingClientRect().width, right: el.getBoundingClientRect().right, minWidth: getComputedStyle(el).minWidth })).slice(0, 30)`
+        );
+        await writeFile(
+          `artifacts/public-website/overflow-${url.slice(1).replaceAll("/", "-") || "home"}-${width}.json`,
+          JSON.stringify(overflow, null, 2)
+        );
+        console.error("Offscreen element diagnostics", overflow);
+      }
       assert.ok(
         layout.scroll <= width + 2,
         `Overflow ${url} ${width}: ${JSON.stringify(layout)}`

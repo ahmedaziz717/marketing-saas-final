@@ -771,7 +771,7 @@ p {
 }
 .faq-section {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 100px;
   border-top: 1px solid var(--line);
 }
@@ -1131,7 +1131,7 @@ p {
 }
 .contact-grid {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 60px;
   align-items: start;
   margin-bottom: 80px;
@@ -1139,6 +1139,18 @@ p {
 .contact-grid h2 {
   font-size: 43px;
   margin: 18px 0 25px;
+}
+.contact-grid > *,
+.contact-form > *,
+.contact-form label,
+.form-grid > *,
+.contact-form .checkbox-label > span {
+  min-width: 0;
+  max-width: 100%;
+}
+.contact-form label,
+.contact-form .fineprint {
+  overflow-wrap: anywhere;
 }
 .contact-grid > div > p {
   font-size: 13px;
@@ -1171,7 +1183,7 @@ p {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 .contact-form input,
@@ -1185,6 +1197,7 @@ p {
   padding: 11px 12px;
   font-size: 14px;
   min-width: 0;
+  max-width: 100%;
 }
 .contact-form textarea {
   resize: vertical;
@@ -1201,7 +1214,8 @@ p {
   width: 17px;
   height: 17px;
   flex-shrink: 0;
-  margin-top: 4px;
+  padding: 0;
+  margin: 4px 0 0;
   accent-color: var(--purple);
 }
 .contact-form a {
@@ -1210,6 +1224,9 @@ p {
 }
 .contact-form .button {
   align-self: start;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .form-error {
   border: 1px solid #bf6e6e;
@@ -1629,7 +1646,7 @@ p {
   }
   .about-grid,
   .contact-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
   }
   .article-layout {
@@ -1926,7 +1943,7 @@ p {
     padding: 23px 20px;
   }
   .form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .contact-form input,
   .contact-form select,
