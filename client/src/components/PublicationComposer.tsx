@@ -695,7 +695,7 @@ export function PublicationDetails({
               onClick={() => {
                 if (
                   window.confirm(
-                    "Cancel this publication in Frame? This does not delete anything in Meta."
+                    "Cancel this publication in EvokeLoop? This does not delete anything in Meta."
                   )
                 )
                   cancel.mutate({ ...version, confirm: true });

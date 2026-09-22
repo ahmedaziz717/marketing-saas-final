@@ -74,7 +74,7 @@ export function BillingUsage() {
           </span>
         </div>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">
-          This workspace has no paid subscription managed by Frame. Plan prices,
+          This workspace has no paid subscription managed by EvokeLoop. Plan prices,
           AI allowances and ad-spend bands below are proposals. Selecting a
           preview does not start billing, change permissions, enforce limits or
           enable unfinished tools.

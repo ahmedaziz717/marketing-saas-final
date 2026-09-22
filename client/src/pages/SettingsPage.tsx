@@ -170,7 +170,7 @@ function Settings() {
     }
   }
   function compose(url: string, recipient: string) {
-    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(`Join ${organization?.name} on Frame`)}&body=${encodeURIComponent(`You are invited to join ${organization?.name} on Frame. Sign in with ${recipient} to accept your invitation:\n\n${url}\n\nThis invitation expires in seven days.`)}`;
+    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(`Join ${organization?.name} on EvokeLoop`)}&body=${encodeURIComponent(`You are invited to join ${organization?.name} on EvokeLoop. Sign in with ${recipient} to accept your invitation:\n\n${url}\n\nThis invitation expires in seven days.`)}`;
   }
   const invite = trpc.workspace.createInvite.useMutation({
     onSuccess: (data, variables) => {
@@ -223,7 +223,7 @@ function Settings() {
             Platform website &amp; public requests
           </a>
           <p className="mt-1 text-muted-foreground">
-            Manage Frame's public company information and support/privacy inbox.
+            Manage EvokeLoop's public company information and support/privacy inbox.
             Platform administrator only.
           </p>
         </div>

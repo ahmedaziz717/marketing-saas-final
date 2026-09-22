@@ -56,7 +56,7 @@ function WebsiteAdministration() {
       <PageHeader
         eyebrow="Platform administration"
         title="Public website & requests"
-        description="Frame platform settings, not the identity or permissions of a customer workspace."
+        description="EvokeLoop platform settings, not the identity or permissions of a customer workspace."
       />
       <div className="mb-6 flex flex-wrap gap-3">
         <Button
@@ -83,7 +83,7 @@ function WebsiteAdministration() {
       {tab === "profile" ? (
         <section className="surface max-w-3xl p-6">
           <h2 className="text-xl font-semibold">
-            Confirm the business behind Frame
+            Confirm the business behind EvokeLoop
           </h2>
           <p className="my-3 text-sm text-muted-foreground">
             These details appear on public company, policy and contact pages. Do
@@ -368,11 +368,11 @@ export default function PlatformWebsitePage() {
             Platform administrator access required
           </h1>
           <p className="mt-3 text-sm">
-            A workspace owner or reviewer cannot change Frame's public business
+            A workspace owner or reviewer cannot change EvokeLoop's public business
             details or read the platform inbox.
           </p>
           <a className="mt-4 inline-block text-primary" href="/contact">
-            Contact Frame
+            Contact EvokeLoop
           </a>
         </section>
       )}

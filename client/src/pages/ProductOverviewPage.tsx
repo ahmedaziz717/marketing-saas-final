@@ -1,5 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Info } from "lucide-react";
+import {
+  Sparkles,
+  Image,
+  Video,
+  Mail,
+  FileText,
+  Layers3,
+  ArrowRight,
+  Info,
+} from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -26,7 +35,26 @@ export function ProductFeatureCards({
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {features.map(feature => (
-        <article key={feature.id} className="surface flex min-w-0 flex-col p-5">
+        <article
+          key={feature.id}
+          className="surface evoke-feature-card flex min-w-0 flex-col p-5"
+          data-state={feature.availability}
+        >
+          <div className="evoke-feature-icon">
+            {feature.id.includes("video") ? (
+              <Video size={20} />
+            ) : feature.id.includes("email") ? (
+              <Mail size={20} />
+            ) : feature.id.includes("blog") ? (
+              <FileText size={20} />
+            ) : feature.id.includes("image") ? (
+              <Image size={20} />
+            ) : feature.id.includes("library") ? (
+              <Layers3 size={20} />
+            ) : (
+              <Sparkles size={20} />
+            )}
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">{feature.name}</h2>
             <span className="rounded-full bg-muted px-2.5 py-1 text-xs">

@@ -1,3 +1,4 @@
+import { EvokeLoopLogo } from "@shared/brand";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,195 +85,218 @@ export default function LoginPage({
   const title = signup
     ? sent
       ? "Verify your email"
-      : "Create your Frame account"
+      : "Create your EvokeLoop account"
     : resetPassword
       ? "Set your password"
       : sent
         ? "Check your email"
         : recovery
           ? "Set or reset your password"
-          : "Log in to Frame";
+          : "Log in to EvokeLoop";
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <a href="/" className="text-lg font-semibold tracking-tight">
-          Frame
-        </a>
-        <h1 className="mt-8 text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {signup
-            ? sent
-              ? `If registration is available for ${email}, open the verification email in this browser to continue. Already registered? Log in below.`
-              : "Verify your email first. Next, choose your password and set up your workspace."
-            : resetPassword
-              ? "Choose a strong password with at least 12 characters. You can still sign in with an emailed link."
-              : sent
-                ? recovery
-                  ? `If an account exists for ${email}, a password-reset link will arrive shortly. Open it in this browser.`
-                  : `If sign-in is available for ${email}, a sign-in link will arrive shortly. Open it in this browser. Check your spam folder too.`
-                : recovery
-                  ? "Already use email links? Use this to add a password to the same account, or reset a forgotten password."
-                  : "Choose how to sign in to your creative workspace."}
-        </p>
-        {!signup && !resetPassword && !recovery && (
-          <div
-            className="mt-6 grid grid-cols-2 gap-2"
-            role="group"
-            aria-label="Sign-in method"
-          >
-            <Button
-              type="button"
-              variant={method === "password" ? "default" : "outline"}
-              disabled={busy}
-              aria-pressed={method === "password"}
-              onClick={() => chooseMethod("password")}
+    <main className="evoke-auth">
+      <aside className="evoke-auth-story">
+        <EvokeLoopLogo reversed />
+        <div>
+          <p className="eyebrow">ONE CONNECTED MARKETING WORKSPACE</p>
+          <h2>
+            Marketing that gets smarter
+            <br />
+            <em>every time it runs.</em>
+          </h2>
+          <p>
+            Bring your ideas, approved work and campaign decisions into one
+            continuous workflow.
+          </p>
+        </div>
+        <footer>Create. Activate. Measure. Optimize. Repeat.</footer>
+      </aside>
+      <div className="evoke-auth-panel">
+        <section>
+          <a href="/product" aria-label="EvokeLoop website">
+            <EvokeLoopLogo />
+          </a>
+          <h1 className="mt-8 text-3xl font-semibold tracking-tight">
+            {title}
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {signup
+              ? sent
+                ? `If registration is available for ${email}, open the verification email in this browser to continue. Already registered? Log in below.`
+                : "Verify your email first. Next, choose your password and set up your workspace."
+              : resetPassword
+                ? "Choose a strong password with at least 12 characters. You can still sign in with an emailed link."
+                : sent
+                  ? recovery
+                    ? `If an account exists for ${email}, a password-reset link will arrive shortly. Open it in this browser.`
+                    : `If sign-in is available for ${email}, a sign-in link will arrive shortly. Open it in this browser. Check your spam folder too.`
+                  : recovery
+                    ? "Already use email links? Use this to add a password to the same account, or reset a forgotten password."
+                    : "Choose how to sign in to your creative workspace."}
+          </p>
+          {!signup && !resetPassword && !recovery && (
+            <div
+              className="mt-6 grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="Sign-in method"
             >
-              Password
-            </Button>
-            <Button
-              type="button"
-              variant={method === "link" ? "default" : "outline"}
-              disabled={busy}
-              aria-pressed={method === "link"}
-              onClick={() => chooseMethod("link")}
-            >
-              Email link
-            </Button>
-          </div>
-        )}
-        <form className="mt-7 space-y-5" onSubmit={submit}>
-          {!sent && !resetPassword && (
-            <div className="space-y-2">
-              <Label htmlFor="email">Work email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
+              <Button
+                type="button"
+                variant={method === "password" ? "default" : "outline"}
                 disabled={busy}
-              />
+                aria-pressed={method === "password"}
+                onClick={() => chooseMethod("password")}
+              >
+                Password
+              </Button>
+              <Button
+                type="button"
+                variant={method === "link" ? "default" : "outline"}
+                disabled={busy}
+                aria-pressed={method === "link"}
+                onClick={() => chooseMethod("link")}
+              >
+                Email link
+              </Button>
             </div>
           )}
-          {!sent &&
-            (resetPassword ||
-              (!signup && method === "password" && !recovery)) && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="password">
-                    {resetPassword ? "New password" : "Password"}
-                  </Label>
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete={
-                      signup || resetPassword
-                        ? "new-password"
-                        : "current-password"
-                    }
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    minLength={signup || resetPassword ? 12 : undefined}
-                    maxLength={signup || resetPassword ? 128 : 1024}
-                    required
-                    disabled={busy}
-                  />
-                  <button
-                    type="button"
-                    className="text-xs text-primary"
-                    onClick={() => setShowPassword(v => !v)}
-                  >
-                    {showPassword ? "Hide password" : "Show password"}
-                  </button>
-                </div>
-                {resetPassword && (
+          <form className="mt-7 space-y-5" onSubmit={submit}>
+            {!sent && !resetPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="email">Work email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  disabled={busy}
+                />
+              </div>
+            )}
+            {!sent &&
+              (resetPassword ||
+                (!signup && method === "password" && !recovery)) && (
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="confirm-password">
-                      Confirm new password
+                    <Label htmlFor="password">
+                      {resetPassword ? "New password" : "Password"}
                     </Label>
                     <Input
-                      id="confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      minLength={12}
-                      maxLength={128}
-                      value={confirm}
-                      onChange={e => setConfirm(e.target.value)}
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete={
+                        signup || resetPassword
+                          ? "new-password"
+                          : "current-password"
+                      }
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      minLength={signup || resetPassword ? 12 : undefined}
+                      maxLength={signup || resetPassword ? 128 : 1024}
                       required
                       disabled={busy}
                     />
+                    <button
+                      type="button"
+                      className="text-xs text-primary"
+                      onClick={() => setShowPassword(v => !v)}
+                    >
+                      {showPassword ? "Hide password" : "Show password"}
+                    </button>
                   </div>
-                )}
-              </>
+                  {resetPassword && (
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">
+                        Confirm new password
+                      </Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        maxLength={128}
+                        value={confirm}
+                        onChange={e => setConfirm(e.target.value)}
+                        required
+                        disabled={busy}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
             )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {!sent && (
-            <Button className="w-full" disabled={busy}>
-              {busy
-                ? "Please wait…"
-                : resetPassword
-                  ? "Save password & continue"
-                  : signup
-                    ? "Send verification email"
-                    : recovery
-                      ? "Email me a password-reset link"
-                      : method === "password"
-                        ? "Sign in with password"
-                        : "Email me a sign-in link"}
-            </Button>
-          )}
-          {sent && (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setSent(false)}
-            >
-              Use another email or request a new link
-            </Button>
-          )}
-          {!signup && !resetPassword && !recovery && method === "password" && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              disabled={busy}
-              onClick={() => {
-                setRecovery(true);
-                setSent(false);
-                setError("");
-                setPassword("");
-              }}
-            >
-              Set or forgot password?
-            </Button>
-          )}
-          {(recovery || resetPassword) && (
-            <a
-              className="block text-center text-sm text-primary"
-              href={`/login?next=${encodeURIComponent(next)}`}
-            >
-              Back to sign in
-            </a>
-          )}
-          {!resetPassword && (
-            <p className="text-center text-sm text-muted-foreground">
-              {signup ? "Already have an account? " : "New to Frame? "}
-              <a
-                className="text-primary underline"
-                href={`${signup ? "/login" : "/signup"}?next=${encodeURIComponent(next)}`}
+            {!sent && (
+              <Button className="w-full" disabled={busy}>
+                {busy
+                  ? "Please wait…"
+                  : resetPassword
+                    ? "Save password & continue"
+                    : signup
+                      ? "Send verification email"
+                      : recovery
+                        ? "Email me a password-reset link"
+                        : method === "password"
+                          ? "Sign in with password"
+                          : "Email me a sign-in link"}
+              </Button>
+            )}
+            {sent && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setSent(false)}
               >
-                {signup ? "Log in" : "Create an account"}
+                Use another email or request a new link
+              </Button>
+            )}
+            {!signup &&
+              !resetPassword &&
+              !recovery &&
+              method === "password" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => {
+                    setRecovery(true);
+                    setSent(false);
+                    setError("");
+                    setPassword("");
+                  }}
+                >
+                  Set or forgot password?
+                </Button>
+              )}
+            {(recovery || resetPassword) && (
+              <a
+                className="block text-center text-sm text-primary"
+                href={`/login?next=${encodeURIComponent(next)}`}
+              >
+                Back to sign in
               </a>
-            </p>
-          )}
-        </form>
-      </section>
+            )}
+            {!resetPassword && (
+              <p className="text-center text-sm text-muted-foreground">
+                {signup ? "Already have an account? " : "New to EvokeLoop? "}
+                <a
+                  className="text-primary underline"
+                  href={`${signup ? "/login" : "/signup"}?next=${encodeURIComponent(next)}`}
+                >
+                  {signup ? "Log in" : "Create an account"}
+                </a>
+              </p>
+            )}
+          </form>
+        </section>
+      </div>
     </main>
   );
 }

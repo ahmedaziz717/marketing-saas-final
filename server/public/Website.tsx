@@ -1,4 +1,5 @@
 import React from "react";
+import { EvokeLoopLogo, MarketingLoop } from "../../shared/brand";
 import {
   ArrowRight,
   Check,
@@ -30,25 +31,20 @@ type Props = {
   unavailable?: boolean;
 };
 const Arrow = () => <ArrowRight size={17} aria-hidden="true" />;
-const Mark = () => (
-  <span className="brand-mark" aria-hidden="true">
-    f
-  </span>
-);
+
 export function PublicWebsite(props: Props) {
   const { path, profile } = props;
   const legal =
     path === "/privacy" || path === "/terms" || path === "/data-deletion";
   return (
-    <div className="frame-website">
+    <div className="evokeloop-website">
       <a className="skip" href="#main">
         Skip to content
       </a>
       <header className="site-header">
         <div className="container header-inner">
-          <a href="/" className="brand" aria-label="Frame home">
-            <Mark />
-            Frame<span className="preview-word">Preview</span>
+          <a href="/" className="brand" aria-label="EvokeLoop home">
+            <EvokeLoopLogo />
           </a>
           <nav aria-label="Main navigation" className="desktop-nav">
             <a
@@ -121,7 +117,7 @@ export function PublicWebsite(props: Props) {
           <div className="container section">
             <h1>Page not found.</h1>
             <a className="button" href="/">
-              Back to Frame
+              Back to EvokeLoop
             </a>
           </div>
         )}
@@ -135,13 +131,12 @@ export function PublicWebsite(props: Props) {
         <div className="container footer-top">
           <div className="footer-brand">
             <a href="/" className="brand">
-              <Mark />
-              Frame
+              <EvokeLoopLogo reversed />
             </a>
             <p>
-              Your next marketing move.
+              Marketing that gets smarter
               <br />
-              One connected workspace.
+              every time it runs.
             </p>
             <span className="eyebrow">
               Create / Activate / Measure / Optimize
@@ -160,7 +155,7 @@ export function PublicWebsite(props: Props) {
           </div>
           <div>
             <h2>Company</h2>
-            <a href="/about">About Frame</a>
+            <a href="/about">About EvokeLoop</a>
             <a href="/contact">Contact & support</a>
             <a href="/contact?topic=access">Request access</a>
             <a href="/security">Security & trust</a>
@@ -181,9 +176,9 @@ export function PublicWebsite(props: Props) {
         <div className="container footer-bottom">
           <p>
             &copy; {new Date().getUTCFullYear()}{" "}
-            {profile.operatorName || "Frame"}.{" "}
+            {profile.operatorName || "EvokeLoop"}.{" "}
             {profile.operatorName
-              ? "Frame is a product of this business."
+              ? "EvokeLoop is a product of this business."
               : "Pre-release product website."}
           </p>
           <p>Independent software. Not affiliated with or endorsed by Meta.</p>
@@ -216,20 +211,20 @@ function CTA() {
   return (
     <section className="container cta">
       <div>
-        <p className="eyebrow">Your next chapter</p>
+        <p className="eyebrow">YOUR NEXT BETTER MOVE</p>
         <h2>
-          Make room for
+          Start something.
           <br />
-          <em>better marketing.</em>
+          <em>Keep improving it.</em>
         </h2>
-        <p>Explore the preview. Help shape what comes next.</p>
+        <p>Bring your next campaign into one connected workflow.</p>
       </div>
       <div className="cta-actions">
-        <a className="button light" href="/contact?topic=access">
-          Request access <Arrow />
+        <a className="button" href="/contact?topic=access">
+          Explore early access <Arrow />
         </a>
-        <a href="/contact?topic=demo" className="text-link">
-          Talk to the Frame team <MoveUpRight size={16} />
+        <a href="/product" className="text-link">
+          Take a closer look <MoveUpRight size={16} />
         </a>
       </div>
     </section>
@@ -239,12 +234,12 @@ function StudioVisual() {
   return (
     <div
       className="hero-visual"
-      aria-label="Illustration of the Frame creative and approval workflow, not customer results"
+      aria-label="Illustration of the EvokeLoop creative and approval workflow, not customer results"
     >
       <div className="studio-window">
         <div className="window-top">
           <span>
-            <span className="mini-mark">f</span> Content Studio
+            <EvokeLoopLogo symbol /> Content Studio
           </span>
           <span className="window-label">Illustrative workspace</span>
         </div>
@@ -322,194 +317,269 @@ function StudioVisual() {
   );
 }
 function Home() {
+  const icons = [
+    Sparkles,
+    CalendarDays,
+    ChartNoAxesCombined,
+    SlidersHorizontal,
+  ];
   return (
     <>
-      <section className="container hero">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            <span className="dot" />
-            The marketing workspace, reimagined
-          </p>
-          <h1>
-            Your marketing.
-            <br />
-            In one <em>Frame.</em>
-          </h1>
-          <p className="hero-lede">
-            From the first creative idea to the next informed decision. Bring
-            your content, channels and performance into one connected workspace.
-          </p>
-          <div className="button-row">
-            <a href="/contact?topic=access" className="button">
-              Explore early access <Arrow />
-            </a>
-            <a href="/product" className="button secondary">
-              See the platform
-            </a>
+      <section className="hero-band">
+        <div className="container hero">
+          <div className="hero-copy">
+            <p className="eyebrow">
+              <span className="dot" /> THE INTELLIGENT MARKETING LOOP
+            </p>
+            <h1>
+              Marketing that
+              <br className="desktop-break" /> gets smarter
+              <br />
+              <em>every time it runs.</em>
+            </h1>
+            <p className="hero-lede">
+              From your first idea to your next better decision. Connect
+              creative, campaigns and performance in one marketing workspace.
+            </p>
+            <div className="button-row">
+              <a href="/contact?topic=access" className="button">
+                Explore early access <Arrow />
+              </a>
+              <a href="/product" className="button secondary">
+                Meet the platform <MoveUpRight size={16} />
+              </a>
+            </div>
+            <p className="hero-note">
+              <ShieldCheck size={15} /> Useful automation. Human control.
+            </p>
           </div>
-          <p className="fineprint">
-            Preview available. More channels and optimization tools on the
-            roadmap.
-          </p>
+          <div className="hero-loop">
+            <MarketingLoop />
+            <p className="loop-disclosure">
+              A connected workflow today. Automated optimization is on the
+              roadmap.
+            </p>
+          </div>
         </div>
-        <StudioVisual />
-      </section>
-      <div className="container journey-strip">
-        {PILLARS.map(p => (
-          <a key={p.id} href={`#${p.id}`}>
-            <span>{p.number}</span>
-            <strong>{p.name}</strong>
-            <Arrow />
+        <div className="container hero-bottom">
+          <span>CREATIVE ENERGY. CONTINUOUS IMPROVEMENT.</span>
+          <a href="#the-platform">
+            Discover the loop <ChevronDown size={15} />
           </a>
-        ))}
-      </div>
-      <section className="container section platform-intro">
+        </div>
+      </section>
+      <section
+        className="container stack-band"
+        aria-label="Integration availability"
+      >
+        <p>
+          Built around
+          <br />
+          <strong>your marketing world.</strong>
+        </p>
         <div>
-          <p className="eyebrow">Less switching. More doing.</p>
+          <span>
+            Facebook <small>In setup</small>
+          </span>
+          <span>
+            Meta Ads <small>In setup</small>
+          </span>
+          <span>
+            Shopify <small>Preview</small>
+          </span>
+          <span>
+            BigCommerce <small>Preview</small>
+          </span>
+          <a href="/integrations">
+            See all integrations <Arrow />
+          </a>
+        </div>
+      </section>
+      <section id="the-platform" className="container section platform-intro">
+        <div>
+          <p className="eyebrow">ONE CONNECTED SYSTEM</p>
           <h2>
-            Not another tool.
+            Your best work shouldn't
             <br />
-            <em>A place for the whole process.</em>
+            <em>start from zero.</em>
           </h2>
         </div>
         <p>
-          Creative work should not lose its context when it becomes a post, an
-          ad, or a performance report. Frame brings those steps together, with
-          your team in control.
+          Ideas become creative. Creative becomes campaigns. Results inform what
+          happens next. EvokeLoop is designed to keep that context moving with
+          you, instead of leaving it scattered across tools.
         </p>
       </section>
       <section
         className="container pillar-grid"
-        aria-label="Frame platform capabilities"
+        aria-label="EvokeLoop platform capabilities"
       >
-        {PILLARS.map(p => (
-          <article
-            id={p.id}
-            key={p.id}
-            className={`pillar-card pillar-${p.id}`}
-          >
-            <div className="card-top">
-              <span className="pillar-number">
-                {p.number} / {p.name}
-              </span>
-              <span className="availability">{p.status}</span>
-            </div>
-            <h3>{p.headline}</h3>
-            <p>{p.description}</p>
-            <div className="feature-tags">
-              {p.items.slice(0, 3).map(i => (
-                <span key={i}>{i}</span>
-              ))}
-            </div>
-            <a className="text-link" href={`/product/${p.id}`}>
-              Explore {p.name.toLowerCase()} <Arrow />
-            </a>
-          </article>
-        ))}
+        {PILLARS.map((p, i) => {
+          const Icon = icons[i]!;
+          return (
+            <article
+              id={p.id}
+              key={p.id}
+              className={`pillar-card pillar-${p.id}`}
+            >
+              <div className="card-top">
+                <span className="pillar-number">
+                  {p.number} / {p.name}
+                </span>
+                <span className="availability">{p.status}</span>
+              </div>
+              <div className="pillar-icon">
+                <Icon size={28} />
+              </div>
+              <h3>{p.headline}</h3>
+              <p>{p.description}</p>
+              <div className="feature-tags">
+                {p.items.slice(0, 3).map(item => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              <a className="text-link" href={`/product/${p.id}`}>
+                Explore {p.name.toLowerCase()} <Arrow />
+              </a>
+            </article>
+          );
+        })}
       </section>
-      <section className="workflow-section section">
+      <section className="section studio-story">
         <div className="container">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Move forward, without losing control</p>
+              <p className="eyebrow">FROM POSSIBILITY TO READY</p>
               <h2>
-                Good work deserves
+                Create freely.
                 <br />
-                <em>a clear next step.</em>
+                <em>Move forward deliberately.</em>
               </h2>
             </div>
-            <a href="/security" className="text-link">
-              Built-in controls <Arrow />
-            </a>
+            <p>
+              Keep the experiments in your Studio.
+              <br />
+              Give your strongest ideas a clear path to approval.
+            </p>
           </div>
-          <div className="workflow-grid">
-            {[
-              [
-                "01",
-                "Keep the experiments.",
-                "Generate, upload and refine in Studio. Working drafts stay out of your shared approved library.",
-              ],
-              [
-                "02",
-                "Choose what moves on.",
-                "Submit a selected version to the library. An authorized reviewer approves it or requests changes.",
-              ],
-              [
-                "03",
-                "Give publishing its own check.",
-                "Choose the caption, account and schedule. Final publishing approval is separate from asset approval.",
-              ],
-              [
-                "04",
-                "Learn from the results.",
-                "Review available organic and paid metrics, then bring what you learn back to your next creative brief.",
-              ],
-            ].map(([n, t, d]) => (
-              <article key={n}>
-                <span className="step-number">{n}</span>
-                <h3>{t}</h3>
-                <p>{d}</p>
-              </article>
-            ))}
-          </div>
+          <StudioVisual />
         </div>
       </section>
-      <section className="container section integration-teaser">
+      <section className="container section control-story">
         <div>
-          <p className="eyebrow">Your accounts. Your workspace.</p>
+          <p className="eyebrow">
+            AUTONOMOUS IN AMBITION. ACCOUNTABLE BY DESIGN.
+          </p>
           <h2>
-            Connected by you.
+            Your team stays
             <br />
-            <em>Controlled by you.</em>
+            <em>in the loop.</em>
           </h2>
           <p>
-            Connect your own business assets, not a shared advertiser account.
-            Facebook and Meta Ads are first; the architecture is built to grow
-            with more channels.
+            Approving a creative isn't the same as publishing a campaign. Keep
+            the right person in control of every decision that matters.
           </p>
-          <a className="text-link" href="/integrations">
-            Explore integration availability <Arrow />
+          <a className="text-link" href="/security">
+            Explore the safeguards <Arrow />
           </a>
         </div>
-        <div className="connection-illustration">
-          <div className="connection-row">
-            <span className="provider-letter">f</span>
-            <div>
-              <strong>Facebook Pages</strong>
-              <small>Organic posts & engagement</small>
-            </div>
-            <span className="availability">In setup</span>
+        <div className="control-steps">
+          {[
+            [
+              "01",
+              "Make room for ideas.",
+              "Create, upload and refine. Working drafts stay in Content Studio.",
+            ],
+            [
+              "02",
+              "Choose what moves forward.",
+              "Submit a version. An authorized reviewer approves it or requests changes.",
+            ],
+            [
+              "03",
+              "Give delivery its own approval.",
+              "Review the final caption, destination and schedule before publishing.",
+            ],
+            [
+              "04",
+              "Bring the learning back.",
+              "Use available channel reports to inform your next brief and decisions.",
+            ],
+          ].map(([n, t, d]) => (
+            <article key={n}>
+              <span>{n}</span>
+              <div>
+                <h3>{t}</h3>
+                <p>{d}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="connected-band">
+        <div className="container section integration-teaser">
+          <div>
+            <p className="eyebrow">YOUR ACCOUNTS. YOUR AUTHORIZATION.</p>
+            <h2>
+              Connected by you.
+              <br />
+              <em>Working together.</em>
+            </h2>
+            <p>
+              Bring your catalog into the creative process. Connect your own
+              business channels when available. One workspace, without handing
+              over control.
+            </p>
+            <a className="text-link" href="/integrations">
+              Explore integration availability <Arrow />
+            </a>
           </div>
-          <div className="connection-row">
-            <span className="provider-letter">M</span>
-            <div>
-              <strong>Meta Ads</strong>
-              <small>Paid activity & reporting</small>
-            </div>
-            <span className="availability">In setup</span>
+          <div className="connection-illustration">
+            {[
+              ["Facebook Pages", "Organic content and engagement", "In setup"],
+              ["Meta Ads", "Paid activity and reporting", "In setup"],
+              [
+                "Shopify / BigCommerce / WooCommerce",
+                "Product catalog imports",
+                "Preview",
+              ],
+              [
+                "More channels & email",
+                "Expanding your connected workflow",
+                "Planned",
+              ],
+            ].map(([name, desc, state]) => (
+              <div className="connection-row" key={name}>
+                <span className="provider-letter">
+                  <Link2 size={20} />
+                </span>
+                <div>
+                  <strong>{name}</strong>
+                  <small>{desc}</small>
+                </div>
+                <span className="availability">{state}</span>
+              </div>
+            ))}
+            <p className="fineprint">
+              Meta connection availability depends on platform setup, review and
+              customer authorization. No shared advertiser accounts.
+            </p>
           </div>
-          <div className="connection-row">
-            <span className="provider-letter pale">+</span>
-            <div>
-              <strong>More of your marketing stack</strong>
-              <small>Instagram, Google Ads, email & more</small>
-            </div>
-            <span className="availability">Planned</span>
-          </div>
-          <p className="fineprint">
-            Meta access is pending platform setup and review. Customers
-            authorize their own accounts when available.
-          </p>
         </div>
       </section>
       <section className="container section faq-section">
         <div>
-          <p className="eyebrow">A little clarity</p>
+          <p className="eyebrow">A LITTLE CLARITY</p>
           <h2>
-            Questions,
+            Good questions.
             <br />
-            <em>answered.</em>
+            <em>Clear answers.</em>
           </h2>
+          <p>
+            What works today. What's next.
+            <br />
+            And where you stay in control.
+          </p>
         </div>
         <div className="faq-list">
           {FAQ.map(([q, a]) => (
@@ -531,33 +601,50 @@ function Product() {
   return (
     <>
       <Intro
-        eyebrow="One platform. Four connected stages."
-        title="From idea to impact."
+        eyebrow="THE EVOKELOOP PLATFORM"
+        title="One loop. A clearer next move."
       >
         <p>
-          Start with the workflows available in preview. Grow into a broader
-          marketing operating system as new channels, measurement and
-          optimization tools arrive.
+          Creative energy meets a repeatable cycle of learning and improvement.
+          Explore the connected workspace, and see exactly what is available
+          today.
         </p>
       </Intro>
-      <div className="container product-list">
+      <section className="container product-cycle">
+        <div>
+          <h2>
+            Not four disconnected tools.
+            <br />
+            <em>One continuous system.</em>
+          </h2>
+          <p>
+            Create content. Activate approved work. Measure available results.
+            Bring those insights into the next iteration.
+          </p>
+          <p className="fineprint">
+            The loop describes the product vision. Automated optimization is
+            planned; current decisions remain under your control.
+          </p>
+        </div>
+        <MarketingLoop />
+      </section>
+      <section className="container section capability-grid">
         {PILLARS.map(p => (
-          <article key={p.id} className="product-row">
-            <span className="big-number">{p.number}</span>
-            <div>
-              <p className="eyebrow">
-                {p.name} / {p.status}
-              </p>
-              <h2>{p.headline}</h2>
-              <p>{p.description}</p>
-              <p className="fineprint">{p.next}</p>
+          <article className="capability" key={p.id}>
+            <div className="card-top">
+              <span className="pillar-number">
+                {p.number} / {p.name}
+              </span>
+              <span className="availability">{p.status}</span>
             </div>
-            <a className="button secondary" href={`/product/${p.id}`}>
-              Explore {p.name} <Arrow />
+            <h3>{p.headline}</h3>
+            <p>{p.description}</p>
+            <a className="text-link" href={`/product/${p.id}`}>
+              Explore {p.name.toLowerCase()} <Arrow />
             </a>
           </article>
         ))}
-      </div>
+      </section>
       <CTA />
     </>
   );
@@ -698,10 +785,10 @@ function Integrations() {
           ))}
         </div>
         <p className="fineprint">
-          Intended self-service flow. Public onboarding depends on Frame's
+          Intended self-service flow. Public onboarding depends on EvokeLoop's
           platform setup, Meta review, account eligibility and granted
-          permissions. Customers do not create a developer app or enter Frame's
-          credentials.
+          permissions. Customers do not create a developer app or enter
+          EvokeLoop's credentials.
         </p>
       </section>
       {groups.map(g => (
@@ -820,7 +907,7 @@ function Business({ profile: p }: { profile: WebsiteProfile }) {
       {p.operatorName ? (
         <>
           <p>
-            <strong>Frame is operated by {p.operatorName}.</strong>
+            <strong>EvokeLoop is operated by {p.operatorName}.</strong>
           </p>
           {p.businessAddress && (
             <p className="preserve-lines">{p.businessAddress}</p>
@@ -835,7 +922,7 @@ function Business({ profile: p }: { profile: WebsiteProfile }) {
         </>
       ) : (
         <p>
-          Frame is a pre-release marketing platform. The operator's verified
+          EvokeLoop is a pre-release marketing platform. The operator's verified
           legal details have not yet been published; they must be confirmed
           before public launch and Meta verification submission.
         </p>
@@ -869,9 +956,9 @@ function Business({ profile: p }: { profile: WebsiteProfile }) {
 function About({ profile }: { profile: WebsiteProfile }) {
   return (
     <>
-      <Intro eyebrow="About Frame" title="Marketing works better together.">
+      <Intro eyebrow="About EvokeLoop" title="Marketing works better together.">
         <p>
-          Frame is a self-service software platform being built for business
+          EvokeLoop is a self-service software platform being built for business
           teams that want their creative work, channel activity and measurement
           in one place.
         </p>
@@ -896,7 +983,7 @@ function About({ profile }: { profile: WebsiteProfile }) {
             attribution and optimization on the roadmap.
           </p>
           <p>
-            Frame is software for customers to use with their own authorized
+            EvokeLoop is software for customers to use with their own authorized
             accounts. It is not a single advertiser's account, a promise to
             manage every campaign for you, or an official Meta product.
           </p>
@@ -978,7 +1065,7 @@ function ContactForm({
         <input name="acknowledgement" type="checkbox" value="yes" required />
         <span>
           I have read the <a href="/privacy">Privacy notice</a> and understand
-          Frame will use this information to handle my request. Identity or
+          EvokeLoop will use this information to handle my request. Identity or
           business authority may need to be verified.
         </span>
       </label>
@@ -987,8 +1074,8 @@ function ContactForm({
         <Arrow />
       </button>
       <p className="fineprint">
-        Your request is stored in Frame's private platform inbox. A receipt is
-        not confirmation that a demo is booked, access is granted or data is
+        Your request is stored in EvokeLoop's private platform inbox. A receipt
+        is not confirmation that a demo is booked, access is granted or data is
         deleted. No marketing subscription is added.
       </p>
     </form>
@@ -998,12 +1085,12 @@ function Contact(props: Props) {
   return (
     <>
       <Intro
-        eyebrow="Talk to the Frame team"
+        eyebrow="Talk to the EvokeLoop team"
         title="Let's make your next move."
       >
         <p>
           Ask about early access, explore the product, get help, or make a
-          privacy request. No Frame account is needed to contact us.
+          privacy request. No EvokeLoop account is needed to contact us.
         </p>
       </Intro>
       <section className="container contact-grid">
@@ -1125,7 +1212,7 @@ function Receipt({ receipt, unavailable }: Props) {
       )}
       <div className="container section">
         <a className="button secondary" href="/contact">
-          Contact Frame <Arrow />
+          Contact EvokeLoop <Arrow />
         </a>
       </div>
     </>

@@ -1,3 +1,4 @@
+import { inlineBrandAssets } from "./brand-fixture-assets.mjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
@@ -82,7 +83,9 @@ try {
   }
   const cssResponse = await fetch(origin + "/website/site.css");
   assert.equal(cssResponse.status, 200);
-  const css = await cssResponse.text();
+  const brandResponse = await fetch(origin + "/website/brand.css");
+  assert.equal(brandResponse.status, 200);
+  const css = (await brandResponse.text()) + "\n" + (await cssResponse.text());
   assert.match(css, /\.hero/);
   // Check actual document links rather than just a predetermined URL list.
   for (const html of documents.values())
@@ -193,12 +196,9 @@ try {
       await page("Page.navigate", { url: "about:blank" });
       await pause(25);
       const { frameTree } = await page("Page.getFrameTree");
-      const html = documents
-        .get(url)
-        .replace(
-          /<link rel="stylesheet"[^>]+\/>/,
-          "<style>" + css + "</style>"
-        );
+      const html = inlineBrandAssets(documents.get(url))
+        .replace(/<link[^>]*rel="stylesheet"[^>]*>/g, "")
+        .replace("</head>", "<style>" + css + "</style></head>");
       await page("Page.setDocumentContent", {
         frameId: frameTree.frame.id,
         html,
@@ -225,6 +225,47 @@ try {
       );
       assert.equal(layout.scripts, 0, "No executable client JS is required");
       assert.equal(layout.links.length, 0, `Offscreen links ${url} ${width}`);
+      const logo = await evaluate(
+        `(()=>{const i=document.querySelector('.site-header .evoke-wordmark');return {loaded:i.complete&&i.naturalWidth>0,width:i.getBoundingClientRect().width,height:i.getBoundingClientRect().height}})()`
+      );
+      assert.ok(
+        logo.loaded && logo.width >= 172,
+        "Approved wordmark must load at its minimum visible width"
+      );
+      assert.ok(
+        Math.abs(logo.width / logo.height - 487 / 115) < 0.02,
+        "Wordmark keeps its aspect ratio"
+      );
+      if (url === "/" || url === "/product") {
+        assert.deepEqual(
+          await evaluate(
+            `[...document.querySelectorAll('.loop-stage strong')].map(n=>n.textContent)`
+          ),
+          ["Create", "Activate", "Measure", "Optimize"]
+        );
+        await evaluate(
+          `document.querySelector('.loop-motion-control input').click()`
+        );
+        assert.equal(
+          await evaluate(
+            `getComputedStyle(document.querySelector('.loop-current')).animationPlayState`
+          ),
+          "paused"
+        );
+        await evaluate(
+          `document.querySelector('.loop-motion-control input').click()`
+        );
+        await page("Emulation.setEmulatedMedia", {
+          features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+        });
+        assert.equal(
+          await evaluate(
+            `getComputedStyle(document.querySelector('.loop-current')).animationName`
+          ),
+          "none"
+        );
+        await page("Emulation.setEmulatedMedia", { features: [] });
+      }
       if (url === "/") {
         await evaluate(`document.querySelector('.faq-list summary').click()`);
         assert.equal(

@@ -23,30 +23,30 @@ import { getDb } from "../db";
 import { requirePublicSiteOrigin, websiteOrigin } from "../lib/siteOrigins";
 export const publicOrigin = websiteOrigin;
 const titles: Record<string, string> = {
-  "/": "Frame | Create. Activate. Measure. Optimize.",
-  "/product": "The Frame platform | A connected marketing workspace",
-  "/product/create": "Create | Frame Content Studio & Asset Library",
-  "/product/activate": "Activate | Frame publishing & channels",
-  "/product/measure": "Measure | Frame marketing analytics",
-  "/product/optimize": "Optimize | Frame product roadmap",
-  "/integrations": "Integrations | Frame",
-  "/pricing": "Proposed pricing | Frame",
-  "/about": "About Frame | Business information",
-  "/contact": "Contact Frame | Support & privacy requests",
-  "/privacy": "Privacy notice | Frame",
-  "/terms": "Preview terms | Frame",
-  "/data-deletion": "Data deletion instructions | Frame",
-  "/security": "Security & trust | Frame",
+  "/": "EvokeLoop | Create. Activate. Measure. Optimize.",
+  "/product": "The EvokeLoop platform | A connected marketing workspace",
+  "/product/create": "Create | EvokeLoop Content Studio & Asset Library",
+  "/product/activate": "Activate | EvokeLoop publishing & channels",
+  "/product/measure": "Measure | EvokeLoop marketing analytics",
+  "/product/optimize": "Optimize | EvokeLoop product roadmap",
+  "/integrations": "Integrations | EvokeLoop",
+  "/pricing": "Proposed pricing | EvokeLoop",
+  "/about": "About EvokeLoop | Business information",
+  "/contact": "Contact EvokeLoop | Support & privacy requests",
+  "/privacy": "Privacy notice | EvokeLoop",
+  "/terms": "Preview terms | EvokeLoop",
+  "/data-deletion": "Data deletion instructions | EvokeLoop",
+  "/security": "Security & trust | EvokeLoop",
 };
 export function publicDocument(
   path: string,
   profile: WebsiteProfile,
   extra: Partial<React.ComponentProps<typeof PublicWebsite>> = {}
 ) {
-  const title = titles[path] || "Request status | Frame";
+  const title = titles[path] || "Request status | EvokeLoop";
   const description =
     ARTICLES[path]?.intro ||
-    "Create content, activate approved campaigns and measure performance in Frame. Explore current preview capabilities and the roadmap for marketing optimization.";
+    "Create content, activate approved campaigns and measure performance in EvokeLoop. Explore current preview capabilities and the roadmap for marketing optimization.";
   const nonce = randomBytes(16).toString("base64");
   const privatePage = path.startsWith("/request-status/");
   const noindex =
@@ -55,7 +55,7 @@ export function publicDocument(
   const structured = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Frame",
+    name: "EvokeLoop",
     url: publicOrigin(),
     description,
     ...(profile.operatorName
@@ -83,16 +83,27 @@ export function publicDocument(
             name="robots"
             content={noindex ? "noindex, follow" : "index, follow"}
           />
-          <meta name="theme-color" content="#faf8f4" />
+          <meta name="theme-color" content="#0A1C26" />
           <link rel="canonical" href={canonical} />
           <meta property="og:type" content="website" />
-          <meta property="og:site_name" content="Frame" />
+          <meta property="og:site_name" content="EvokeLoop" />
           <meta property="og:title" content={title} />
           <meta property="og:description" content={description} />
           <meta property="og:url" content={canonical} />
           <meta name="twitter:card" content="summary" />
           <link rel="icon" href="/website/favicon.svg" type="image/svg+xml" />
-          <link rel="stylesheet" href="/website/site.css?v=public-20260921" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link
+            rel="preconnect"
+            href="https://fonts.gstatic.com"
+            crossOrigin="anonymous"
+          />
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"
+          />
+          <link rel="stylesheet" href="/website/brand.css?v=evokeloop-1" />
+          <link rel="stylesheet" href="/website/site.css?v=evokeloop-1" />
           {!privatePage && (
             <script
               type="application/ld+json"
@@ -131,8 +142,8 @@ export function registerPublicWebsite(app: Express) {
         "Cache-Control": "private, no-store",
         "Referrer-Policy": doc.privatePage ? "no-referrer" : "strict-origin",
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
-        "Content-Security-Policy": `default-src 'none'; style-src 'self'; img-src 'self' data:; script-src 'nonce-${doc.nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
+        "X-EvokeLoop-Options": "DENY",
+        "Content-Security-Policy": `default-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'nonce-${doc.nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
         ...(doc.noindex ? { "X-Robots-Tag": "noindex, follow" } : {}),
       })
       .send(doc.html);

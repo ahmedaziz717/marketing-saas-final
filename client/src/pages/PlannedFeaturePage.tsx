@@ -29,7 +29,7 @@ export default function PlannedFeaturePage() {
           Planned - not available yet
         </span>
         <h2 className="mt-5 text-xl font-semibold">
-          Part of the Frame roadmap
+          Part of the EvokeLoop roadmap
         </h2>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           This is a scope preview, not an operational tool or a feature you can

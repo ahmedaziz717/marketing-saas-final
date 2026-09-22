@@ -1,3 +1,4 @@
+import { inlineLiveBrandImages } from "./brand-fixture-assets.mjs";
 import { build } from "esbuild";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -34,7 +35,9 @@ const bundle = await build({
   jsx: "automatic",
   define: { "process.env.NODE_ENV": '"production"' },
   alias: {
-    "@/_core/hooks/useAuth": path.resolve("scripts/fixtures/channel-workspace-stubs.tsx"),
+    "@/_core/hooks/useAuth": path.resolve(
+      "scripts/fixtures/channel-workspace-stubs.tsx"
+    ),
     "@/hooks/useWorkspace": path.resolve(
       "scripts/fixtures/channel-workspace-stubs.tsx"
     ),
@@ -151,7 +154,29 @@ try {
   await mkdir("artifacts/channel-layout", { recursive: true });
   const results = [];
   const cases = [
-    ...["publishing", "social", "advertising", "analytics", "analytics-ads", "analytics-social", "advertising-empty", "social-empty", "navigation", "navigation-ten", "product-home", "studio-overview", "advertising-overview", "social-overview", "billing-usage", "billing-plans", "planned-attribution", "optimize-overview"].flatMap(page => [
+    ...[
+      "login",
+      "signup",
+      "reset-password",
+      "publishing",
+      "social",
+      "advertising",
+      "analytics",
+      "analytics-ads",
+      "analytics-social",
+      "advertising-empty",
+      "social-empty",
+      "navigation",
+      "navigation-ten",
+      "product-home",
+      "studio-overview",
+      "advertising-overview",
+      "social-overview",
+      "billing-usage",
+      "billing-plans",
+      "planned-attribution",
+      "optimize-overview",
+    ].flatMap(page => [
       { width: 1705, height: 864, role: "owner", page },
       { width: 375, height: 750, role: "owner", page },
     ]),
@@ -220,6 +245,8 @@ try {
       throw new Error(
         `Fixture returned no test result: ${JSON.stringify(evaluation)}`
       );
+    await page("Runtime.evaluate", { expression: inlineLiveBrandImages });
+    await new Promise(resolve => setTimeout(resolve, 60));
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
     const image = await page("Page.captureScreenshot", { format: "png" });
     await writeFile(

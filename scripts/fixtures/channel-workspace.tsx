@@ -6,11 +6,16 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { observable } from "@trpc/server/observable";
 import { trpc } from "../../client/src/lib/trpc";
+import LoginPage from "../../client/src/pages/LoginPage";
 import WorkspaceApp from "../../client/src/pages/WorkspaceApp";
 import ProductOverviewPage from "../../client/src/pages/ProductOverviewPage";
 import PlannedFeaturePage from "../../client/src/pages/PlannedFeaturePage";
 import SettingsPage from "../../client/src/pages/SettingsPage";
-import { PRODUCT_FEATURES, PROPOSED_PLANS, USAGE_METERS } from "../../shared/frameProduct";
+import {
+  PRODUCT_FEATURES,
+  PROPOSED_PLANS,
+  USAGE_METERS,
+} from "../../shared/frameProduct";
 import PublishingPage from "../../client/src/pages/PublishingPage";
 import SocialMediaPage from "../../client/src/pages/SocialMediaPage";
 import AdvertisingPage from "../../client/src/pages/AdvertisingPage";
@@ -102,8 +107,28 @@ const role =
   ) ?? "owner";
 function respond(path: string, input: any) {
   if (path === "workspace.members" || path === "workspace.invites") return [];
-  if (path === "billing.summary") return { mode: "preview", commercialStatus: "proposal", chargesEnabled: false, enforcement: false, selectedPreviewPlanId: null, revision: 0, plans: PROPOSED_PLANS, month: input.month, creditsUsed: null, usage: USAGE_METERS.map(m => ({ ...m, quantity: m.id === "image_outputs" ? 24 : 2 })), inventory: { activeSeats: 3, catalogItems: 485, connectedAccounts: 2 }, coverage: "Recorded successful outputs, not billable credits." };
-  if (path === "billing.selectPreviewPlan") { mutations.push(path); return { success: true, previewOnly: true }; }
+  if (path === "billing.summary")
+    return {
+      mode: "preview",
+      commercialStatus: "proposal",
+      chargesEnabled: false,
+      enforcement: false,
+      selectedPreviewPlanId: null,
+      revision: 0,
+      plans: PROPOSED_PLANS,
+      month: input.month,
+      creditsUsed: null,
+      usage: USAGE_METERS.map(m => ({
+        ...m,
+        quantity: m.id === "image_outputs" ? 24 : 2,
+      })),
+      inventory: { activeSeats: 3, catalogItems: 485, connectedAccounts: 2 },
+      coverage: "Recorded successful outputs, not billable credits.",
+    };
+  if (path === "billing.selectPreviewPlan") {
+    mutations.push(path);
+    return { success: true, previewOnly: true };
+  }
 
   if (path === "channels.connections")
     return which === "advertising-empty" || which === "social-empty"
@@ -251,6 +276,9 @@ const which =
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
   "product-home": "/app",
+  login: "/login",
+  signup: "/signup",
+  "reset-password": "/reset-password",
   "studio-overview": "/app/creatives/overview",
   "advertising-overview": "/app/advertising",
   "social-overview": "/app/social",
@@ -278,28 +306,50 @@ if (which === "navigation-ten") {
   )!;
   group.children = [
     ...group.children!,
-    ...Array.from({ length: Math.max(0, 10 - group.children!.length) }, (_, i) => ({
-      label: `Future channel ${i + group.children!.length + 1}`,
-      path: `/app/advertising/future-${i}`,
-      planned: true,
-    })),
+    ...Array.from(
+      { length: Math.max(0, 10 - group.children!.length) },
+      (_, i) => ({
+        label: `Future channel ${i + group.children!.length + 1}`,
+        path: `/app/advertising/future-${i}`,
+        planned: true,
+      })
+    ),
   ];
 }
 function RoutedPage() {
   const [path] = useLocation();
-  const Page = path === "/app" ? WorkspaceApp
-    : path === "/app/settings/billing" ? SettingsPage
-    : ["/app/creatives/overview", "/app/optimize", "/app/advertising", "/app/social"].includes(path) ? ProductOverviewPage
-    : PRODUCT_FEATURES.some(f => f.availability === "planned" && f.href === path) ? PlannedFeaturePage
-    : path.startsWith("/app/analytics")
-    ? AnalyticsPage
-    : path.startsWith("/app/social")
-      ? SocialMediaPage
-      : path.startsWith("/app/advertising")
-        ? AdvertisingPage
-        : path.startsWith("/app/settings")
-          ? IntegrationsPage
-          : PublishingPage;
+  if (["/login", "/signup", "/reset-password"].includes(path))
+    return (
+      <LoginPage
+        signup={path === "/signup"}
+        resetPassword={path === "/reset-password"}
+      />
+    );
+  const Page =
+    path === "/app"
+      ? WorkspaceApp
+      : path === "/app/settings/billing"
+        ? SettingsPage
+        : [
+              "/app/creatives/overview",
+              "/app/optimize",
+              "/app/advertising",
+              "/app/social",
+            ].includes(path)
+          ? ProductOverviewPage
+          : PRODUCT_FEATURES.some(
+                f => f.availability === "planned" && f.href === path
+              )
+            ? PlannedFeaturePage
+            : path.startsWith("/app/analytics")
+              ? AnalyticsPage
+              : path.startsWith("/app/social")
+                ? SocialMediaPage
+                : path.startsWith("/app/advertising")
+                  ? AdvertisingPage
+                  : path.startsWith("/app/settings")
+                    ? IntegrationsPage
+                    : PublishingPage;
   return (
     <DashboardLayout>
       <Page />
@@ -465,34 +515,111 @@ function layout() {
         "Analytics deep link chooses the correct view"
       );
     }
+    if (["login", "signup", "reset-password"].includes(which)) {
+      check(
+        document
+          .querySelector("h1")
+          ?.textContent?.includes(
+            which === "signup"
+              ? "Create your EvokeLoop account"
+              : which === "reset-password"
+                ? "Set your password"
+                : "Log in to EvokeLoop"
+          ),
+        "Correct auth screen and brand"
+      );
+      check(
+        !!document.querySelector("form"),
+        "Authentication form is preserved"
+      );
+      check(
+        document.querySelector<HTMLFormElement>("form")?.checkValidity() ===
+          false,
+        "Empty auth form does not submit"
+      );
+      check(
+        mutations.length === 0,
+        "Visual test does not change real accounts"
+      );
+    }
     if (which === "product-home") {
-      check(document.querySelector("h1")?.textContent?.includes("Create. Activate. Measure. Optimize."), "Product stages are visible on Home");
-      check(document.body.textContent?.includes("Tools planned"), "Home does not imply optimization tools are operational");
+      check(
+        document
+          .querySelector("h1")
+          ?.textContent?.includes("Make your next move.") &&
+          document.body.textContent?.includes(
+            "Create. Activate. Measure. Optimize."
+          ),
+        "Product stages are visible on Home"
+      );
+      check(
+        document.body.textContent?.includes(
+          "Automated optimization is on the roadmap."
+        ),
+        "Home does not imply optimization tools are operational"
+      );
     }
     if (which === "studio-overview") {
-      check(document.body.textContent?.includes("Image assets") && document.body.textContent?.includes("Video creation"), "Studio separates creative formats");
-      check(document.body.textContent?.includes("Video generation and editing are not available yet"), "Unavailable video is clearly marked");
+      check(
+        document.body.textContent?.includes("Image assets") &&
+          document.body.textContent?.includes("Video creation"),
+        "Studio separates creative formats"
+      );
+      check(
+        document.body.textContent?.includes(
+          "Video generation and editing are not available yet"
+        ),
+        "Unavailable video is clearly marked"
+      );
     }
     if (which === "billing-usage" || which === "billing-plans") {
       if (role === "creator") {
-        check(document.body.textContent?.includes("Only workspace owners and administrators"), "Billing role restriction is visible");
+        check(
+          document.body.textContent?.includes(
+            "Only workspace owners and administrators"
+          ),
+          "Billing role restriction is visible"
+        );
         check(!button("Preview Growth"), "Creator has no plan actions");
       } else {
-        check(document.body.textContent?.includes("AI credits are not calculated yet"), "No fabricated credit balance");
+        check(
+          document.body.textContent?.includes(
+            "AI credits are not calculated yet"
+          ),
+          "No fabricated credit balance"
+        );
         if (which === "billing-plans") {
-          const plans = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(t => t.textContent === "Proposed plans")!;
-          plans.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); plans.click(); await pause();
+          const plans = Array.from(
+            document.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+          ).find(t => t.textContent === "Proposed plans")!;
+          plans.dispatchEvent(
+            new MouseEvent("mousedown", { bubbles: true, button: 0 })
+          );
+          plans.click();
+          await pause();
           check(!!button("Preview Growth"), "Proposed plans render");
           await click("Preview Growth");
-          check(mutations.length === 0, "Selecting a card does not create a charge or change a plan");
-          check(!!document.querySelector('[aria-label="Confirm plan preview"]'), "Preview-only confirmation shown");
+          check(
+            mutations.length === 0,
+            "Selecting a card does not create a charge or change a plan"
+          );
+          check(
+            !!document.querySelector('[aria-label="Confirm plan preview"]'),
+            "Preview-only confirmation shown"
+          );
           layout();
         }
       }
     }
     if (which === "planned-attribution" || which === "optimize-overview") {
-      check(document.body.textContent?.includes("Planned"), "Roadmap is labeled");
-      check(!button("Upgrade") && !button("Activate"), "Unbuilt tools are not paid unlocks");
+      check(
+        document.body.textContent?.includes("Planned"),
+        "Roadmap is labeled"
+      );
+      check(
+        !button("Upgrade") && !button("Activate"),
+        "Unbuilt tools are not paid unlocks"
+      );
     }
     if (which.startsWith("navigation"))
       await navigationChecks(which === "navigation-ten");

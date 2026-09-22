@@ -237,7 +237,7 @@ export function workspacePageLabel(location: string, search = "") {
   );
   return child
     ? `${parent!.label} / ${child.label}`
-    : (parent?.label ?? "Frame");
+    : (parent?.label ?? "EvokeLoop");
 }
 function readGroups(): Record<string, boolean> {
   try {
