@@ -1,6 +1,7 @@
 import type { Express, RequestHandler, Request, Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
+import { siteOrigins } from "../lib/siteOrigins";
 import { authClient, resolveAuthUser } from "./supabase";
 
 export function safeReturnPath(value: unknown): string {
@@ -12,10 +13,7 @@ export function safeReturnPath(value: unknown): string {
 
 export const requireSameOrigin: RequestHandler = (req, res, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
-  if (
-    !process.env.APP_ORIGIN ||
-    req.headers.origin !== process.env.APP_ORIGIN
-  ) {
+  if (!siteOrigins().app || req.headers.origin !== siteOrigins().app) {
     res.status(403).json({ error: "Request origin is not permitted." });
     return;
   }

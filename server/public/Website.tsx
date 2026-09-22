@@ -18,6 +18,7 @@ import {
 import { FAQ, PILLARS, type WebsiteProfile } from "../../shared/publicWebsite";
 import { PROPOSED_PLANS } from "../../shared/frameProduct";
 import { ARTICLES } from "./content";
+import { dashboardHref } from "../lib/siteOrigins";
 
 type Props = {
   path: string;
@@ -72,7 +73,7 @@ export function PublicWebsite(props: Props) {
             <a href="/about">Company</a>
           </nav>
           <div className="header-actions">
-            <a href="/login" className="login-link">
+            <a href={dashboardHref("/login")} className="login-link">
               Sign in
             </a>
             <a href="/contact?topic=access" className="button small">
@@ -91,7 +92,7 @@ export function PublicWebsite(props: Props) {
               <a href="/security">Trust</a>
               <a href="/about">Company</a>
               <a href="/contact">Contact</a>
-              <a href="/login">Sign in</a>
+              <a href={dashboardHref("/login")}>Sign in</a>
               <a href="/contact?topic=access">Request access</a>
             </nav>
           </details>
@@ -163,7 +164,7 @@ export function PublicWebsite(props: Props) {
             <a href="/contact">Contact & support</a>
             <a href="/contact?topic=access">Request access</a>
             <a href="/security">Security & trust</a>
-            <a href="/login">Sign in</a>
+            <a href={dashboardHref("/login")}>Sign in</a>
           </div>
           <div>
             <h2>Data & policies</h2>
