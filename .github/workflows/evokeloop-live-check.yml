@@ -21,6 +21,7 @@ jobs:
           import assert from 'node:assert/strict';
           import {createHash} from 'node:crypto';
           const origin='https://frame-staging.onrender.com';
+          const hash=text=>createHash('sha256').update(text).digest('hex');
           const get = async (url) => {
             const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
             assert.equal(r.status,200,url);
@@ -46,14 +47,14 @@ jobs:
             console.log('PASS live public page:',path);
           }
           const master=await get(origin+'/website/evokeloop-wordmark.svg');
-          assert.equal(createHash('sha256').update(master.text).digest('hex'),'5d1287ee6c10c0e0fd8751501503baed86bd967176064961bf09ee3908a2e32e');
+          assert.equal(hash(master.text),'5d1287ee6c10c0e0fd8751501503baed86bd967176064961bf09ee3908a2e32e');
           for(const name of ['evokeloop-wordmark-reversed.svg','evokeloop-symbol.svg','favicon.svg']){
             assert.match((await get(origin+'/website/'+name)).text,/<svg/);
           }
           const brand=await get(origin+'/website/brand.css');
-          assert.match(brand.text,/prefers-reduced-motion/);
-          assert.match(brand.text,/animation-play-state: paused/);
-          assert.match((await get(origin+'/website/site.css')).text,/evoke-hero/);
+          assert.equal(hash(brand.text),'2d0307d50453c81aab62923304ff8c4c0c13b27eb67c05a18b0f3b47cb5e4a87');
+          const site=await get(origin+'/website/site.css');
+          assert.equal(hash(site.text),'e6f3c61331c56f7260895640609c74d3eed6aea4d63b802474bb80cd34314c6c');
           const login=await get(origin+'/login');
           assert.match(login.text,/EvokeLoop \| Your marketing workspace/);
           const script=login.text.match(/<script[^>]*src="([^"]+)"/);
@@ -67,6 +68,6 @@ jobs:
             console.log('PASS custom-host HTTPS and public content:',host);
             if(host==='www.evokeloop.com')assert.equal(new URL(result.r.url).hostname,'evokeloop.com');
           }
-          console.log('PASS read-only live verification: public content, exact SVG master, CSS, app build, health and HTTPS aliases.');
+          console.log('PASS read-only live verification: public content, exact SVG master and stylesheet bytes, app build, health and HTTPS aliases.');
           console.log('NOT tested or activated: authenticated customer flows on custom domains, form submissions, emails, publishing, billing or Supabase URL configuration.');
           JS
