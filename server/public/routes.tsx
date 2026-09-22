@@ -20,20 +20,8 @@ import {
 } from "../lib/publicWebsite";
 import { websiteRequests } from "../../drizzle/websiteSchema";
 import { getDb } from "../db";
-import { requireSameOrigin } from "../auth/routes";
-
-export const publicOrigin = () => {
-  try {
-    const u = new URL(
-      process.env.APP_ORIGIN || "https://frame-staging.onrender.com"
-    );
-    return ["https:", "http:"].includes(u.protocol)
-      ? u.origin
-      : "https://frame-staging.onrender.com";
-  } catch {
-    return "https://frame-staging.onrender.com";
-  }
-};
+import { requirePublicSiteOrigin, websiteOrigin } from "../lib/siteOrigins";
+export const publicOrigin = websiteOrigin;
 const titles: Record<string, string> = {
   "/": "Frame | Create. Activate. Measure. Optimize.",
   "/product": "The Frame platform | A connected marketing workspace",
@@ -205,7 +193,7 @@ export function registerPublicWebsite(app: Express) {
   // Registered before the application's large upload parsers, with a bounded public body.
   app.post(
     "/public/request",
-    requireSameOrigin,
+    requirePublicSiteOrigin,
     rateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 5,
