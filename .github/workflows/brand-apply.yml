@@ -1,0 +1,102 @@
+name: Apply verified EvokeLoop experience
+on:
+  push:
+    branches: [codex/evokeloop-brand-experience]
+    paths: [.github/workflows/brand-apply.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/codex/evokeloop-brand-experience'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify and apply exact locally tested source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "3d3f29c4f0d91d897c9e61467efe26d258993fb8"
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import hashlib, json, lzma, pathlib, subprocess
+          packed = b''.join(pathlib.Path(f'.brand-transfer/part-{i:02d}.bin').read_bytes() for i in range(6))
+          assert len(packed) == 36776
+          assert hashlib.sha256(packed).hexdigest() == '015912caa40dc599eccb3a59825bee9ea380a83ea5de3826f461440823394128'
+          delta = json.loads(lzma.decompress(packed))
+          expected = set('''
+          client/index.html
+          client/public/website/brand.css
+          client/public/website/evokeloop-symbol.svg
+          client/public/website/evokeloop-wordmark-reversed.svg
+          client/public/website/evokeloop-wordmark.svg
+          client/public/website/favicon.svg
+          client/public/website/site.css
+          client/src/components/BillingUsage.tsx
+          client/src/components/DashboardLayout.tsx
+          client/src/components/PageHeader.tsx
+          client/src/components/PublicationComposer.tsx
+          client/src/components/WorkspaceNavigation.tsx
+          client/src/components/ui/button.tsx
+          client/src/index.css
+          client/src/pages/Home.tsx
+          client/src/pages/IntegrationsPage.tsx
+          client/src/pages/InvitePage.tsx
+          client/src/pages/LegacyPublishingPage.tsx
+          client/src/pages/LoginPage.tsx
+          client/src/pages/OnboardingPage.tsx
+          client/src/pages/PlannedFeaturePage.tsx
+          client/src/pages/PlatformWebsitePage.tsx
+          client/src/pages/ProductOverviewPage.tsx
+          client/src/pages/SettingsPage.tsx
+          client/src/pages/SocialMediaPage.tsx
+          client/src/pages/WorkspaceApp.tsx
+          docs/evokeloop-experience-plan.md
+          scripts/brand-fixture-assets.mjs
+          scripts/check-channel-layout.mjs
+          scripts/check-dialog-layout.mjs
+          scripts/check-public-website.mjs
+          scripts/fixtures/asset-review-dialog.tsx
+          scripts/fixtures/channel-workspace.tsx
+          server/auth/routes.ts
+          server/brandExperience.test.ts
+          server/public/Website.tsx
+          server/public/content.ts
+          server/public/routes.tsx
+          server/publicWebsite.test.ts
+          shared/brand.tsx
+          shared/publicWebsite.ts
+          '''.split())
+          assert len(delta) == len(expected) and {row['path'] for row in delta} == expected
+          for row in delta:
+              p = pathlib.Path(row['path'])
+              if row['before'] is None:
+                  assert not p.exists(), row['path']
+                  old = b''
+              else:
+                  old = p.read_bytes()
+                  assert hashlib.sha256(old).hexdigest() == row['before'], row['path']
+              lines = old.decode().splitlines(keepends=True)
+              for lo, hi, text in reversed(row['edits']):
+                  lines[lo:hi] = [text] if text else []
+              output = ''.join(lines).encode()
+              assert hashlib.sha256(output).hexdigest() == row['after'], row['path']
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_bytes(output)
+          subprocess.run(['git', 'add', '--', *sorted(expected)], check=True)
+          print('Verified every input and output file, checksum and exact path allowlist')
+          PY
+          git rm -r .brand-transfer
+          git rm .github/workflows/brand-apply.yml
+          test "$(git write-tree)" = "ba452f24589646158cc68890a27df85b06b0cfdc"
+          echo 'Verified exact tested final source tree'
+          # Connector will remove the temporary workflow after source application.
+          git restore --source=HEAD --staged --worktree -- .github/workflows/brand-apply.yml
+          if git diff --cached --name-only | grep -q '^.github/workflows/'; then exit 1; fi
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Redesign public website and dashboard around EvokeLoop brand and continuous cycle"
+          git push origin HEAD:refs/heads/codex/evokeloop-brand-experience
