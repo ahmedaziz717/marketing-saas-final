@@ -87,9 +87,10 @@ try {
   assert.equal(brandResponse.status, 200);
   const css = (await brandResponse.text()) + "\n" + (await cssResponse.text());
   assert.match(css, /\.hero/);
-  // Check actual document links rather than just a predetermined URL list.
+  // Check navigation links. React's image preload links are static resources,
+  // not page destinations, and must not be treated as navigation routes.
   for (const html of documents.values())
-    for (const match of html.matchAll(/href="(\/[^"#]*)"/g)) {
+    for (const match of html.matchAll(/<a\b[^>]*\bhref="(\/[^"#]*)"/g)) {
       const href = match[1].replaceAll("&amp;", "&");
       if (
         href.startsWith("/website/") ||
