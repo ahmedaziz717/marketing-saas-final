@@ -260,7 +260,7 @@ function PublishingWorkspace() {
                 </div>
                 <div className="flex items-start gap-2 rounded-2xl bg-muted/60 p-4 text-xs leading-5 text-muted-foreground">
                   <LockKeyhole className="mt-.5 h-4 w-4 shrink-0 text-primary" />
-                  Frame never records raw tokens in the activity ledger or
+                  EvokeLoop never records raw tokens in the activity ledger or
                   exposes them through workspace APIs.
                 </div>
               </div>
@@ -509,7 +509,7 @@ function PublishingWorkspace() {
                           <AlertDialogDescription>
                             This will {request.action} a Meta ad using the
                             approved creative and frozen payload. The ad will be
-                            saved as PAUSED. Frame will record each API action
+                            saved as PAUSED. EvokeLoop will record each API action
                             in the immutable ledger.
                           </AlertDialogDescription>
                         </AlertDialogHeader>

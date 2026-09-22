@@ -16,6 +16,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { EvokeLoopLogo } from "@shared/brand";
+import { ArrowUpRight, CircleHelp } from "lucide-react";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LogOut, PanelLeft } from "lucide-react";
@@ -25,8 +27,8 @@ import { WorkspaceNavigation, workspacePageLabel } from "./WorkspaceNavigation";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 const SIDEBAR_WIDTH_KEY = "frame-sidebar-width";
-const DEFAULT_WIDTH = 248;
-const MIN_WIDTH = 210;
+const DEFAULT_WIDTH = 276;
+const MIN_WIDTH = 260;
 const MAX_WIDTH = 360;
 export default function DashboardLayout({
   children,
@@ -54,10 +56,8 @@ export default function DashboardLayout({
     return (
       <div className="grid min-h-screen place-items-center p-6">
         <div className="surface max-w-md p-8 text-center">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary font-editorial text-2xl text-primary-foreground">
-            F
-          </div>
-          <h1 className="mt-6 font-editorial text-5xl">Sign in to Frame</h1>
+          <EvokeLoopLogo className="mx-auto" />
+          <h1 className="mt-6 font-editorial text-5xl">Sign in to EvokeLoop</h1>
           <p className="mt-4 text-sm leading-6 text-muted-foreground">
             Keep creative work, approvals, and publishing actions inside one
             controlled workspace.
@@ -74,6 +74,7 @@ export default function DashboardLayout({
     );
   return (
     <SidebarProvider
+      className="evoke-shell"
       style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
     >
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
@@ -129,24 +130,23 @@ function DashboardLayoutContent({
           disableTransition={isResizing}
         >
           <SidebarHeader className="h-20 justify-center border-b border-sidebar-border/70">
-            <div className="flex w-full items-center gap-3 px-2">
+            <div className="evoke-sidebar-brand">
+              {!isCollapsed && (
+                <a href="/app" aria-label="EvokeLoop workspace">
+                  <EvokeLoopLogo />
+                </a>
+              )}
               <button
                 onClick={toggleSidebar}
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                {isCollapsed ? (
+                  <EvokeLoopLogo symbol />
+                ) : (
+                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                )}
               </button>
-              {!isCollapsed && (
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="grid h-7 w-7 place-items-center rounded-lg bg-primary font-editorial text-lg text-primary-foreground">
-                    F
-                  </div>
-                  <span className="truncate font-semibold tracking-tight">
-                    Frame
-                  </span>
-                </div>
-              )}
             </div>
           </SidebarHeader>
           <SidebarContent className="gap-0 pt-4">
@@ -192,15 +192,24 @@ function DashboardLayoutContent({
         />
       </div>
       <SidebarInset className="min-w-0">
-        {isMobile && (
-          <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/90 px-2 backdrop-blur">
-            <SidebarTrigger className="h-9 w-9 rounded-lg" />
-            <span className="font-medium">
-              {workspacePageLabel(location, search)}
-            </span>
+        <div className="evoke-toolbar">
+          <div className="evoke-toolbar-path">
+            {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg" />}
+            <span>{workspacePageLabel(location, search)}</span>
           </div>
-        )}
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+          <div className="evoke-toolbar-actions">
+            <a href="/product">
+              Explore the platform <ArrowUpRight size={13} />
+            </a>
+            <a href="/contact">
+              <CircleHelp size={15} /> Help
+            </a>
+            <span className="evoke-toolbar-label">Marketing workspace</span>
+          </div>
+        </div>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 md:p-7 lg:p-8">
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

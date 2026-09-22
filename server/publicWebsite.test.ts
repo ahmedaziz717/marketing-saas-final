@@ -97,7 +97,10 @@ describe.sequential(
         expect(html).not.toContain('id="root"');
         expect(html).not.toContain("/src/main.tsx");
         expect(response.headers.get("set-cookie")).toBeNull();
-        expect(html).not.toContain("fonts.googleapis");
+        expect(html).toContain("fonts.googleapis.com");
+        expect(html).toContain("family=Manrope");
+        expect(html).not.toContain("googletagmanager");
+        expect(html).not.toContain("Instrument+Serif");
         expect(response.headers.get("content-security-policy")).toContain(
           "frame-ancestors 'none'"
         );

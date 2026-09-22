@@ -41,14 +41,14 @@ export function registerAuthRoutes(app: Express) {
       "Cache-Control": "private, no-store",
       "Referrer-Policy": "strict-origin",
       "Content-Security-Policy":
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
       "X-Robots-Tag": "noindex, nofollow",
     });
     if (!token.success) return void res.redirect("/login?error=expired");
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset your Frame password</title><style>body{background:#faf7f2;color:#16121c;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#625c70}button{background:#6331d6;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}a{color:#6331d6}</style></head><body><main><strong>Frame</strong><h1>Reset your password</h1><p>Click below to verify your email link and choose a new password.</p><form method="post" action="/api/auth/recovery/confirm"><input type="hidden" name="token_hash" value="${token.data}"><button type="submit">Continue to set password</button></form><p>If you did not request this, you can close this page.</p></main></body></html>`
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset your EvokeLoop password</title><style>body{background:#F1F7F7;color:#0A1C26;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#526B76}button{background:#007F76;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}a{color:#007F76}</style></head><body><main><img src="/website/evokeloop-wordmark.svg" alt="EvokeLoop" width="196" height="46" style="display:block;height:auto;margin-bottom:24px"/><h1>Reset your password</h1><p>Click below to verify your email link and choose a new password.</p><form method="post" action="/api/auth/recovery/confirm"><input type="hidden" name="token_hash" value="${token.data}"><button type="submit">Continue to set password</button></form><p>If you did not request this, you can close this page.</p></main></body></html>`
       );
   });
   app.post("/api/auth/recovery/confirm", limiter(), async (req, res) => {
@@ -86,7 +86,7 @@ export function registerAuthRoutes(app: Express) {
       "Referrer-Policy": "strict-origin",
       "X-Robots-Tag": "noindex, nofollow",
       "Content-Security-Policy":
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     });
     if (!token.success) return void res.redirect("/login?error=expired");
     const next = safeReturnPath(req.query.next)
@@ -97,7 +97,7 @@ export function registerAuthRoutes(app: Express) {
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Verify your email · Frame</title><style>body{background:#faf7f2;color:#16121c;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#625c70}button{background:#6331d6;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}</style></head><body><main><strong>Frame</strong><h1>Verify your email</h1><p>Continue to securely sign in or finish setting up your account.</p><form method="post" action="/api/auth/email/confirm"><input type="hidden" name="token_hash" value="${token.data}"><input type="hidden" name="next" value="${next}"><button type="submit">Verify email &amp; continue</button></form><p>If you did not request this, close this page.</p></main></body></html>`
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Verify your email · EvokeLoop</title><style>body{background:#F1F7F7;color:#0A1C26;font:16px system-ui;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #ddd;border-radius:20px;padding:36px;max-width:420px;margin:24px}p{line-height:1.6;color:#526B76}button{background:#007F76;color:white;border:0;border-radius:24px;padding:14px 24px;font:inherit;cursor:pointer;width:100%}</style></head><body><main><img src="/website/evokeloop-wordmark.svg" alt="EvokeLoop" width="196" height="46" style="display:block;height:auto;margin-bottom:24px"/><h1>Verify your email</h1><p>Continue to securely sign in or finish setting up your account.</p><form method="post" action="/api/auth/email/confirm"><input type="hidden" name="token_hash" value="${token.data}"><input type="hidden" name="next" value="${next}"><button type="submit">Verify email &amp; continue</button></form><p>If you did not request this, close this page.</p></main></body></html>`
       );
   };
   app.get("/api/auth/email/confirm", emailConfirmationPage);

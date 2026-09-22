@@ -34,7 +34,7 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
       </div>
       <p className="text-sm text-muted-foreground">
         Posts published in the last 30 days (UTC), including posts created
-        outside Frame. Reactions, comments and shares are current lifetime
+        outside EvokeLoop. Reactions, comments and shares are current lifetime
         totals for each post.
       </p>
       {query.isLoading ? (

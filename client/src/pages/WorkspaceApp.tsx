@@ -1,115 +1,142 @@
 import { Link } from "wouter";
-import { ArrowRight, FolderOpen, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  FolderOpen,
+  ShieldCheck,
+  CalendarDays,
+  Link2,
+  Sparkles,
+  Check,
+} from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { PRODUCT_STAGES, mayManageBilling } from "@shared/frameProduct";
+import { MarketingLoop } from "@shared/brand";
 function Dashboard() {
   const { organization, membership } = useWorkspace();
   return (
     <>
       <PageHeader
-        eyebrow="Your marketing workspace"
-        title="Create. Activate. Measure. Optimize."
-        description={`${organization?.name ?? "Your workspace"}: one connected workflow, with people in control of approvals and delivery.`}
+        eyebrow={organization?.name || "YOUR MARKETING WORKSPACE"}
+        title="Make your next move."
+        description="Create. Activate. Measure. Optimize. Keep your ideas, approvals and campaign plans connected."
         action={
-          <Link href="/app/creatives/overview">
+          <Link href="/app/creatives/images">
             <Button>
-              Open Content Studio
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <Sparkles size={15} /> New creative
             </Button>
           </Link>
         }
       />
-      <div className="grid gap-4 md:grid-cols-2">
-        {PRODUCT_STAGES.map((stage, index) => (
-          <article className="surface flex flex-col p-6" key={stage.id}>
-            <div className="flex items-center justify-between">
-              <p className="eyebrow">0{index + 1}</p>
-              {"planned" in stage && (
-                <span className="rounded-full bg-muted px-3 py-1 text-xs">
-                  Tools planned
-                </span>
-              )}
-            </div>
-            <h2 className="mt-5 text-2xl font-semibold">{stage.label}</h2>
-            <p className="mb-6 mt-3 flex-1 text-sm leading-6 text-muted-foreground">
-              {stage.description}
-            </p>
-            <Link
-              href={stage.href}
-              className="inline-flex items-center gap-2 self-start text-sm font-semibold text-primary underline underline-offset-4"
-            >
-              {"planned" in stage ? "View roadmap" : "Open " + stage.label}
-              <ArrowRight size={16} />
-            </Link>
-          </article>
-        ))}
-      </div>
-      <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        <section className="surface p-6">
-          <FolderOpen className="h-5 w-5 text-primary" />
-          <h2 className="mt-4 text-lg font-semibold">
-            Your content has one home at each stage
+      <div className="evoke-home-top">
+        <section className="evoke-start">
+          <p className="eyebrow">CREATE WITH PURPOSE</p>
+          <h2>
+            From a good idea
+            <br />
+            to your <em>next campaign.</em>
           </h2>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Save working drafts in Content Studio. Submit selected versions to
-            Asset Library for review. Use approved assets in Publishing. Weekly
-            planning supports future weeks and months.
+          <p>
+            Start with your product, your brand and a fresh direction. Keep
+            working drafts in Studio until you choose what's ready for review.
           </p>
-          <div className="mt-5 flex flex-wrap gap-4">
-            <Link
-              href="/app/creatives/saved"
-              className="text-sm text-primary underline"
-            >
-              Saved work
+          <div className="evoke-start-actions">
+            <Link href="/app/creatives/overview">
+              <Button>
+                Open Content Studio <ArrowRight size={15} />
+              </Button>
             </Link>
-            <Link
-              href="/app/library?view=needs_review"
-              className="text-sm text-primary underline"
-            >
-              Needs Review
-            </Link>
-            <Link
-              href="/app/publishing"
-              className="text-sm text-primary underline"
-            >
-              Publishing calendar
+            <Link href="/app/creatives/saved">
+              <FolderOpen size={15} /> Saved work
             </Link>
           </div>
+          <div className="evoke-start-notes">
+            <span>
+              <Check size={12} /> Product context
+            </span>
+            <span>
+              <Check size={12} /> Brand direction
+            </span>
+            <span>
+              <Check size={12} /> Human approval
+            </span>
+          </div>
         </section>
-        <section className="surface p-6">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <h2 className="mt-4 text-lg font-semibold">
-            One workspace, separate responsibilities
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Account connections and administration stay in Settings. Asset
-            approval does not authorize a post, campaign launch or ad budget.
-            Planned tools are not yet operational.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-4">
-            <Link href="/app/brand" className="text-sm text-primary underline">
-              Brand kit
-            </Link>
-            <Link
-              href="/app/settings/integrations"
-              className="text-sm text-primary underline"
-            >
-              Integrations
-            </Link>
-            {mayManageBilling(membership?.role ?? "") && (
-              <Link
-                href="/app/settings/billing"
-                className="text-sm text-primary underline"
-              >
-                Billing & Usage
+        <section className="evoke-home-cycle">
+          <div className="evoke-home-cycle-head">
+            <h2>Your marketing loop</h2>
+            <span>Connected workflow</span>
+          </div>
+          <MarketingLoop context="app" compact />
+          <p>Explore each stage. Automated optimization is on the roadmap.</p>
+        </section>
+      </div>
+      <section className="evoke-next-actions" aria-label="Your next actions">
+        <Link
+          href="/app/library?view=needs_review"
+          className="evoke-next-action"
+        >
+          <ShieldCheck size={22} />
+          <div>
+            <h3>Ready for a second look?</h3>
+            <p>Open Needs Review and check submitted versions.</p>
+          </div>
+          <ArrowUpRight className="next-arrow" />
+        </Link>
+        <Link href="/app/publishing" className="evoke-next-action">
+          <CalendarDays size={22} />
+          <div>
+            <h3>Make room for what's next.</h3>
+            <p>Plan this week, next week and beyond.</p>
+          </div>
+          <ArrowUpRight className="next-arrow" />
+        </Link>
+        <Link href="/app/settings/integrations" className="evoke-next-action">
+          <Link2 size={22} />
+          <div>
+            <h3>Bring your channels together.</h3>
+            <p>Manage your own accounts and connections.</p>
+          </div>
+          <ArrowUpRight className="next-arrow" />
+        </Link>
+      </section>
+      <section className="evoke-home-section">
+        <div className="evoke-section-heading">
+          <h2>Explore your workspace</h2>
+          <span>One system. Clear next steps.</span>
+        </div>
+        <div className="evoke-stage-grid">
+          {PRODUCT_STAGES.map((stage, i) => (
+            <article className="evoke-stage-card" key={stage.id}>
+              <div className="eyebrow">
+                0{i + 1} /{" "}
+                {"planned" in stage ? "ON THE ROADMAP" : "YOUR WORKFLOW"}
+              </div>
+              <h3>{stage.label}</h3>
+              <p>{stage.description}</p>
+              <Link href={stage.href}>
+                {"planned" in stage ? "View roadmap" : "Open " + stage.label}
+                <ArrowRight size={13} />
               </Link>
-            )}
-          </div>
-        </section>
-      </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="evoke-home-note">
+        <ShieldCheck size={20} />
+        <p>
+          Asset approval and publishing approval stay separate. Your roles and
+          permissions control who can take each action.
+        </p>
+        <Link href="/app/brand">Brand kit</Link>
+        <Link href="/app/settings/integrations">Integrations</Link>
+        {mayManageBilling(membership?.role ?? "") && (
+          <Link href="/app/settings/billing">Billing & Usage</Link>
+        )}
+      </section>
     </>
   );
 }

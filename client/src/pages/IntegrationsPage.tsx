@@ -369,7 +369,7 @@ export function Integrations() {
               </ol>
               <p className="rounded-xl bg-muted p-4 text-sm">
                 {selected.group === "email"
-                  ? "You will choose the audience, schedule, and final send in your email provider. Frame will prepare approved drafts."
+                  ? "You will choose the audience, schedule, and final send in your email provider. EvokeLoop will prepare approved drafts."
                   : selected.group === "advertising"
                     ? "Connecting an account will not launch ads or change budgets. Those actions will require approval in Campaigns."
                     : "Planned access is read-only. Your analytics configuration will stay in Google Analytics."}

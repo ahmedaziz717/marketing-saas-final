@@ -129,7 +129,7 @@ export const FAQ = [
   ],
   [
     "Do customers need developer apps or API keys for Meta?",
-    "No. The intended customer flow is Connect with Meta, authorize access, and select your own Page or ad account. Frame supplies the platform integration. Public Meta onboarding is pending platform configuration and review; a working test account does not establish approval for all customers.",
+    "No. The intended customer flow is Connect with Meta, authorize access, and select your own Page or ad account. EvokeLoop supplies the platform integration. Public Meta onboarding is pending platform configuration and review; a working test account does not establish approval for all customers.",
   ],
   [
     "Does approving an image publish it?",
@@ -145,6 +145,6 @@ export const FAQ = [
   ],
   [
     "Can I disconnect an integration or request deletion?",
-    "Yes. Manage connections in Settings > Integrations, and use the public data-deletion request page for information held by Frame. Disconnecting, removing Meta access, and deleting stored data are different actions. A request does not automatically delete a shared workspace.",
+    "Yes. Manage connections in Settings > Integrations, and use the public data-deletion request page for information held by EvokeLoop. Disconnecting, removing Meta access, and deleting stored data are different actions. A request does not automatically delete a shared workspace.",
   ],
 ] as const;

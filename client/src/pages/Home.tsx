@@ -6,8 +6,8 @@ export default function Home() {
   }, []);
   return (
     <main className="p-8">
-      <p>Opening the Frame website...</p>
-      <a href="/">Continue to Frame</a>
+      <p>Opening the EvokeLoop website...</p>
+      <a href="/">Continue to EvokeLoop</a>
     </main>
   );
 }
