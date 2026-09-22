@@ -96,7 +96,9 @@ describe("EvokeLoop source-of-truth brand contract", () => {
           context === "app" ? /^\/app\// : /^\/product\//
         );
       expect($("figcaption").text()).toContain("Repeat.");
-      expect($(".stage-4 small").text()).toBe("Roadmap");
+      expect($(".stage-4 small").text()).toBe(
+        context === "app" ? "Roadmap" : "Better decisions"
+      );
       expect($(".loop-orbit circle").length).toBe(2);
       expect($("input[type=checkbox]").length).toBe(1);
     }
@@ -107,7 +109,7 @@ describe("EvokeLoop source-of-truth brand contract", () => {
     expect(html).toContain('alt="EvokeLoop"');
   });
   it.each(PUBLIC_PATHS)(
-    "keeps %s public, branded and honest about preview readiness",
+    "keeps %s public and branded with operator approval tracked separately",
     path => {
       const { html, noindex } = publicDocument(path, emptyWebsiteProfile);
       expect(html).toContain("EvokeLoop");
@@ -117,7 +119,7 @@ describe("EvokeLoop source-of-truth brand contract", () => {
       expect(noindex).toBe(true);
       expect(html).not.toContain("googletagmanager");
       if (path === "/product/optimize")
-        expect(html).toContain("On the roadmap");
+        expect(html).toContain("Your team makes the optimization decisions");
     }
   );
 });

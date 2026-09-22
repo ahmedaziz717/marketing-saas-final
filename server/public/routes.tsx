@@ -23,18 +23,18 @@ import { getDb } from "../db";
 import { requirePublicSiteOrigin, websiteOrigin } from "../lib/siteOrigins";
 export const publicOrigin = websiteOrigin;
 const titles: Record<string, string> = {
-  "/": "EvokeLoop | Create. Activate. Measure. Optimize.",
-  "/product": "The EvokeLoop platform | A connected marketing workspace",
+  "/": "EvokeLoop | AI marketing. Your team in control.",
+  "/product": "The EvokeLoop platform | AI marketing for lean teams",
   "/product/create": "Create | EvokeLoop Content Studio & Asset Library",
   "/product/activate": "Activate | EvokeLoop publishing & channels",
   "/product/measure": "Measure | EvokeLoop marketing analytics",
-  "/product/optimize": "Optimize | EvokeLoop product roadmap",
+  "/product/optimize": "Optimize | EvokeLoop campaign improvement",
   "/integrations": "Integrations | EvokeLoop",
-  "/pricing": "Proposed pricing | EvokeLoop",
-  "/about": "About EvokeLoop | Business information",
+  "/pricing": "Pricing | EvokeLoop",
+  "/about": "About EvokeLoop | AI and marketing experience",
   "/contact": "Contact EvokeLoop | Support & privacy requests",
   "/privacy": "Privacy notice | EvokeLoop",
-  "/terms": "Preview terms | EvokeLoop",
+  "/terms": "Terms of service | EvokeLoop",
   "/data-deletion": "Data deletion instructions | EvokeLoop",
   "/security": "Security & trust | EvokeLoop",
 };
@@ -46,7 +46,7 @@ export function publicDocument(
   const title = titles[path] || "Request status | EvokeLoop";
   const description =
     ARTICLES[path]?.intro ||
-    "Create content, activate approved campaigns and measure performance in EvokeLoop. Explore current preview capabilities and the roadmap for marketing optimization.";
+    "EvokeLoop brings AI and marketing experience to content, campaigns and reporting. Do more with a lean team while you stay in control.";
   const nonce = randomBytes(16).toString("base64");
   const privatePage = path.startsWith("/request-status/");
   const noindex =
@@ -103,7 +103,7 @@ export function publicDocument(
             href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"
           />
           <link rel="stylesheet" href="/website/brand.css?v=evokeloop-1" />
-          <link rel="stylesheet" href="/website/site.css?v=evokeloop-1" />
+          <link rel="stylesheet" href="/website/site.css?v=integrations-2" />
           {!privatePage && (
             <script
               type="application/ld+json"

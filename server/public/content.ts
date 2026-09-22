@@ -9,12 +9,12 @@ export const ARTICLES: Record<string, Article> = {
     title: "Your data. A clear explanation.",
     eyebrow: "Privacy notice",
     intro:
-      "How the EvokeLoop preview handles account information, creative assets, connected marketing data and requests from you. Updated September 21, 2026.",
+      "How EvokeLoop handles account information, creative assets, connected marketing data and requests from you. Updated September 22, 2026.",
     sections: [
       {
         title: "Who this notice covers",
         paragraphs: [
-          "This notice covers the EvokeLoop public website and marketing workspace. The operating business and contact details appear in the Business information panel. When those details or approval of this notice are pending, the panel identifies the notice as a pre-release draft, not a completed verification declaration.",
+          "This notice covers the EvokeLoop public website and marketing workspace. For support, business enquiries or questions about your information, use the Contact page or the contact details published with this notice.",
           "For account administration, security and website enquiries, EvokeLoop handles information to operate its service. For marketing information a business connects to its workspace, EvokeLoop acts on that business's instructions. That business is also responsible for the permissions, rights and notices needed for its own customers and team members.",
         ],
       },
@@ -30,7 +30,7 @@ export const ARTICLES: Record<string, Article> = {
         title: "How information is used",
         paragraphs: [
           "We use information to sign you in, organize your workspace, import authorized product information, generate requested creative work, preserve versions, manage reviews, schedule approved content, execute authorized delivery and display marketing reports. We also use it to answer enquiries, handle privacy requests, troubleshoot errors and record security and approval activity.",
-          "Connecting an account does not publish a post, activate an ad or authorize a budget change. Our initial Meta workflow supports Facebook Page posts and paused image ads in existing ad sets when required access and live delivery are enabled. We do not use the current integration to read personal messages, retrieve lead-form submissions, or manage Meta catalogs. Planned features require additional implementation and updated disclosures before use.",
+          "Connecting an account does not publish a post, activate an ad or authorize a budget change. Our Meta workflow supports Facebook Page posts and paused image ads in existing ad sets when required access and live delivery are enabled. We do not use the integration to read personal messages, retrieve lead-form submissions, or manage Meta catalogs.",
         ],
       },
       {
@@ -44,7 +44,7 @@ export const ARTICLES: Record<string, Article> = {
       {
         title: "Meta data and customer separation",
         paragraphs: [
-          "Meta access is authorized by each customer for their own workspace. EvokeLoop is not a shared CLX or other advertiser account. Credentials are encrypted on the server and are not returned in ordinary connection responses. The current product does not sell Meta Platform Data or make a customer's account data available as a cross-customer data product.",
+          "Meta access is authorized by each customer for their own workspace. Credentials are encrypted on the server and are not returned in ordinary connection responses. EvokeLoop does not sell Meta Platform Data or make a customer's account data available as a cross-customer data product.",
           "Reports are based on the data the provider makes available. Platform-attributed conversions are not represented as independently deduplicated sales, and unique reach is not added across channels as though it were unique people. EvokeLoop does not claim Meta certification, partnership or completed review merely because a connection interface exists.",
         ],
       },
@@ -59,30 +59,30 @@ export const ARTICLES: Record<string, Article> = {
         title: "Retention, deletion and your choices",
         paragraphs: [
           "Working assets, account records and activity history remain available while needed for the workspace and service. Disconnecting a Meta connection removes its stored credential in EvokeLoop and invalidates affected queued approvals, but does not automatically erase prior drafts, publications or audit records. OAuth selection sessions expire and are cleaned up as the connection flow runs.",
-          "You may request access, correction or deletion through the public Contact or Data deletion page without a EvokeLoop login. We need to verify identity and, for shared business data, authority before acting. A request receipt confirms receipt, not completed deletion. The platform team handles fulfillment; there is no instant workspace-erasure action in this release.",
-          "Deletion can require removing eligible active records and stored assets, restricting further use and coordinating with service providers. Limited records may need to remain for legal obligations, security or disputes; backup copies may persist until their applicable retention cycle expires. The team will explain relevant exceptions and timing when handling a verified request, within applicable legal requirements. We do not promise an unimplemented universal deletion deadline.",
-          "For data your employer or another business controls, identify the workspace or contact that business as well. Available privacy rights vary by location and may include access, correction, deletion and objection or restriction. Contact us to exercise a right or ask about a decision. You do not have to delete your Facebook account to make a EvokeLoop request.",
+          "You may request access, correction or deletion through the public Contact or Data deletion page without an EvokeLoop login. We need to verify identity and, for shared business data, authority before acting. A request receipt confirms receipt, not completed deletion. The platform team reviews and fulfills verified requests.",
+          "Deletion can require removing eligible active records and stored assets, restricting further use and coordinating with service providers. Limited records may need to remain for legal obligations, security or disputes; backup copies may persist until their applicable retention cycle expires. The team will explain relevant exceptions and timing when handling a verified request, within applicable legal requirements.",
+          "For data your employer or another business controls, identify the workspace or contact that business as well. Available privacy rights vary by location and may include access, correction, deletion and objection or restriction. Contact us to exercise a right or ask about a decision. You do not have to delete your Facebook account to make an EvokeLoop request.",
         ],
       },
       {
         title: "Service location, audience and updates",
         paragraphs: [
-          "EvokeLoop is a business marketing service, not a product directed to children. Do not upload sensitive personal information or children's data that is unnecessary to your task. Hosting and service providers may process information outside your location, including in the United States. Required contractual and transfer arrangements must be reviewed for the business and regions served before public launch.",
-          "We update this notice when the service, data use or providers materially change. The published update date identifies the version; important changes may also be communicated through the application or account contact. The current public-release readiness of this notice is stated below.",
+          "EvokeLoop is a business marketing service, not a product directed to children. Do not upload sensitive personal information or children's data that is unnecessary to your task. Hosting and service providers may process information outside your location, including in the United States.",
+          "We update this notice when the service, data use or providers materially change. The published update date identifies the version; important changes may also be communicated through the application or account contact.",
         ],
       },
     ],
   },
   "/terms": {
     title: "Clear expectations. Shared control.",
-    eyebrow: "Preview terms",
+    eyebrow: "Terms of service",
     intro:
-      "Working terms for using EvokeLoop's pre-release marketing service. Updated September 21, 2026. Operator approval and legal review are required before commercial launch.",
+      "Terms for using EvokeLoop's marketing workspace, connected accounts and creative tools. Updated September 22, 2026.",
     sections: [
       {
-        title: "The service and its operator",
+        title: "The service",
         paragraphs: [
-          "EvokeLoop brings creative work, channel activation and reporting into one workspace. The Business information panel identifies the operator once confirmed. This preview is not a representation that every feature on the roadmap is available or approved by a third-party platform.",
+          "EvokeLoop brings creative work, channel activation and reporting into one workspace. For questions about the service or these terms, use the Contact page or the business contact details published on this website.",
         ],
       },
       {
@@ -105,9 +105,9 @@ export const ARTICLES: Record<string, Article> = {
         ],
       },
       {
-        title: "Preview features, proposed pricing and third parties",
+        title: "Features, pricing and third parties",
         paragraphs: [
-          "Public plan prices are proposals, not a checkout offer or an active subscription. Features, allowances, credit costs and commercial terms must be confirmed before any purchase. Preview access does not authorize a charge. Features explicitly marked Planned or Roadmap are not unlocked by selecting a plan.",
+          "Contact our team to confirm your plan's price, features, usage allowances, credit costs and commercial terms before purchase. Advertising spend is separate from the workspace plan. Submitting an enquiry or discussing a plan does not authorize a charge.",
           "External functionality depends on customer consent, provider permissions, account eligibility and platform review. Provider changes, outages or revoked access may interrupt it. Keep copies of important work and check delivery results before retrying an uncertain publication.",
         ],
       },
@@ -115,7 +115,7 @@ export const ARTICLES: Record<string, Article> = {
         title: "Privacy, disconnection and ending use",
         paragraphs: [
           "The Privacy notice explains current data handling. Use Settings > Integrations to disconnect an authorized account. Use the Data deletion page to request removal of data held by EvokeLoop. Disconnecting or closing a workspace does not itself delete posts or campaigns already held by Meta, or cancel activity configured directly in an external account.",
-          "Public enquiries go to EvokeLoop's platform inbox. The team may need to verify authority before deleting shared business records or changing access. Contact us for questions, a privacy request or information about ending preview access.",
+          "Public enquiries go to EvokeLoop's platform inbox. The team may need to verify authority before deleting shared business records or changing access. Contact us for questions, a privacy request or help closing your account.",
         ],
       },
     ],
@@ -124,7 +124,7 @@ export const ARTICLES: Record<string, Article> = {
     title: "Request deletion of your data.",
     eyebrow: "Data deletion instructions",
     intro:
-      "A public way to ask EvokeLoop to remove information it holds about you or a workspace you are authorized to manage. A EvokeLoop login is not required.",
+      "A public way to ask EvokeLoop to remove information it holds about you or a workspace you are authorized to manage. An EvokeLoop login is not required.",
     sections: [
       {
         title: "1. Stop future access when needed",
@@ -148,10 +148,10 @@ export const ARTICLES: Record<string, Article> = {
         ],
       },
       {
-        title: "What a EvokeLoop deletion does not do",
+        title: "What an EvokeLoop deletion does not do",
         paragraphs: [
           "A request to EvokeLoop does not delete your Facebook Page, Meta account, published posts, or ads already created on Meta. Manage or remove that external content directly in Meta. Disconnecting EvokeLoop also does not pause a campaign that is already running on an external platform.",
-          "Limited legal, security or dispute records may need to be retained, and backups may persist until their retention cycle expires. Such exceptions must be explained when applicable. This page is a human-readable deletion-instructions URL; it is not a signed-request webhook callback.",
+          "Limited legal, security or dispute records may need to be retained, and backups may persist until their retention cycle expires. The team will explain any applicable exceptions when handling your request.",
         ],
       },
     ],
@@ -181,9 +181,9 @@ export const ARTICLES: Record<string, Article> = {
         ],
       },
       {
-        title: "No implied certification or platform approval",
+        title: "Connected services and availability",
         paragraphs: [
-          "This page describes implemented controls, not a SOC 2, ISO 27001, GDPR-compliance or Meta-partner certification. Public Meta access, live-account compatibility and policy review remain separate readiness requirements. No system is risk-free, and external providers can change access or functionality.",
+          "Connected services depend on your account permissions, provider requirements and account eligibility. Revoked access, provider changes or outages can interrupt a connection. You can review and manage connections in Settings > Integrations. No system can guarantee absolute security or uninterrupted availability.",
         ],
       },
       {

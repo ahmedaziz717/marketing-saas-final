@@ -103,7 +103,16 @@ export function MarketingLoop({
                   <stage.icon size={18} aria-hidden="true" />
                 </span>
                 <strong>{stage.name}</strong>
-                <small>{stage.state}</small>
+                <small>
+                  {context === "app"
+                    ? stage.state
+                    : [
+                        "Your next idea",
+                        "Approved work",
+                        "Useful insights",
+                        "Better decisions",
+                      ][i]}
+                </small>
                 <ArrowUpRight
                   className="stage-go"
                   size={14}

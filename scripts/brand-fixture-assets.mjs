@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 // Only offline browser fixtures use data URLs. Deployed pages retain cacheable SVG files.
 export const brandAssets = Object.fromEntries(
   await Promise.all(
@@ -7,11 +7,18 @@ export const brandAssets = Object.fromEntries(
       "evokeloop-wordmark-reversed.svg",
       "evokeloop-symbol.svg",
       "favicon.svg",
-    ].map(async name => [
-      "/website/" + name,
-      "data:image/svg+xml;base64," +
-        (await readFile("client/public/website/" + name)).toString("base64"),
-    ])
+    ]
+      .map(name => "/website/" + name)
+      .concat(
+        (await readdir("client/public/integrations"))
+          .filter(name => name.endsWith(".svg"))
+          .map(name => "/integrations/" + name)
+      )
+      .map(async url => [
+        url,
+        "data:image/svg+xml;base64," +
+          (await readFile("client/public" + url)).toString("base64"),
+      ])
   )
 );
 export function inlineBrandAssets(html) {

@@ -108,16 +108,13 @@ describe.sequential(
     });
     it("does not fabricate an operator or advertise a completed Meta approval", async () => {
       const html = await (await fetch(origin + "/about")).text();
-      expect(html).toContain(
-        "verified legal details have not yet been published"
-      );
+      expect(html).toContain("Contact EvokeLoop");
       expect(html).not.toContain("Cybertron International");
       expect((await fetch(origin + "/")).headers.get("x-robots-tag")).toContain(
         "noindex"
       );
       const product = await (await fetch(origin + "/product/optimize")).text();
-      expect(product).toContain("On the roadmap");
-      expect(product.toLowerCase()).toContain("not available");
+      expect(product).toContain("Your team makes the optimization decisions");
     });
     it("does not allow a customer workspace user or a guest to read or edit the platform profile or inbox", async () => {
       for (const caller of [customer, guest]) {

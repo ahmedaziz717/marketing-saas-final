@@ -190,10 +190,11 @@ function WebsiteAdministration() {
                 {save.isPending ? "Saving..." : "Save public details"}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Until approved with a legal operator and contact emails, public
-                pages remain labeled pre-release and noindex. Meta and other
-                crawlers can still read the actual public HTML. Saving does not
-                change any Meta credential or live-publishing flag.
+                Operator identity and policy approval are tracked here. Public
+                pages use customer-facing copy and remain noindex until these
+                details are approved. Meta and other crawlers can still read the
+                public HTML. Provider review, credentials and live-publishing
+                settings are managed separately.
               </p>
             </form>
           )}
@@ -368,8 +369,8 @@ export default function PlatformWebsitePage() {
             Platform administrator access required
           </h1>
           <p className="mt-3 text-sm">
-            A workspace owner or reviewer cannot change EvokeLoop's public business
-            details or read the platform inbox.
+            A workspace owner or reviewer cannot change EvokeLoop's public
+            business details or read the platform inbox.
           </p>
           <a className="mt-4 inline-block text-primary" href="/contact">
             Contact EvokeLoop

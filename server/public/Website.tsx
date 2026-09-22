@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   ChartNoAxesCombined,
   CircleCheck,
-  Link2,
   MoveUpRight,
   Image,
   SlidersHorizontal,
@@ -20,6 +19,11 @@ import { FAQ, PILLARS, type WebsiteProfile } from "../../shared/publicWebsite";
 import { PROPOSED_PLANS } from "../../shared/frameProduct";
 import { ARTICLES } from "./content";
 import { dashboardHref } from "../lib/siteOrigins";
+import {
+  IntegrationDirectory,
+  ProviderLogo,
+  integrationGroups,
+} from "./IntegrationDirectory";
 
 type Props = {
   path: string;
@@ -73,7 +77,7 @@ export function PublicWebsite(props: Props) {
               Sign in
             </a>
             <a href="/contact?topic=access" className="button small">
-              Request access <Arrow />
+              Get started <Arrow />
             </a>
           </div>
           <details className="mobile-nav">
@@ -89,7 +93,7 @@ export function PublicWebsite(props: Props) {
               <a href="/about">Company</a>
               <a href="/contact">Contact</a>
               <a href={dashboardHref("/login")}>Sign in</a>
-              <a href="/contact?topic=access">Request access</a>
+              <a href="/contact?topic=access">Get started</a>
             </nav>
           </details>
         </div>
@@ -147,24 +151,23 @@ export function PublicWebsite(props: Props) {
             {PILLARS.map(p => (
               <a key={p.id} href={`/product/${p.id}`}>
                 {p.name}
-                {p.id === "optimize" && " (roadmap)"}
               </a>
             ))}
             <a href="/integrations">Integrations</a>
-            <a href="/pricing">Proposed pricing</a>
+            <a href="/pricing">Pricing</a>
           </div>
           <div>
             <h2>Company</h2>
             <a href="/about">About EvokeLoop</a>
             <a href="/contact">Contact & support</a>
-            <a href="/contact?topic=access">Request access</a>
+            <a href="/contact?topic=access">Get started</a>
             <a href="/security">Security & trust</a>
             <a href={dashboardHref("/login")}>Sign in</a>
           </div>
           <div>
             <h2>Data & policies</h2>
             <a href="/privacy">Privacy notice</a>
-            <a href="/terms">Preview terms</a>
+            <a href="/terms">Terms of service</a>
             <a href="/data-deletion">Data deletion</a>
             {profile.supportEmail && (
               <a href={`mailto:${profile.supportEmail}`}>
@@ -176,10 +179,7 @@ export function PublicWebsite(props: Props) {
         <div className="container footer-bottom">
           <p>
             &copy; {new Date().getUTCFullYear()}{" "}
-            {profile.operatorName || "EvokeLoop"}.{" "}
-            {profile.operatorName
-              ? "EvokeLoop is a product of this business."
-              : "Pre-release product website."}
+            {profile.operatorName || "EvokeLoop"}. All rights reserved.
           </p>
           <p>Independent software. Not affiliated with or endorsed by Meta.</p>
         </div>
@@ -211,17 +211,20 @@ function CTA() {
   return (
     <section className="container cta">
       <div>
-        <p className="eyebrow">YOUR NEXT BETTER MOVE</p>
+        <p className="eyebrow">YOUR AMBITION. YOUR NEXT MOVE.</p>
         <h2>
-          Start something.
+          Do more with
           <br />
-          <em>Keep improving it.</em>
+          <em>the team you have.</em>
         </h2>
-        <p>Bring your next campaign into one connected workflow.</p>
+        <p>
+          Bring AI, marketing experience and your ideas together. Your next
+          campaign starts here.
+        </p>
       </div>
       <div className="cta-actions">
         <a className="button" href="/contact?topic=access">
-          Explore early access <Arrow />
+          Get started <Arrow />
         </a>
         <a href="/product" className="text-link">
           Take a closer look <MoveUpRight size={16} />
@@ -329,40 +332,40 @@ function Home() {
         <div className="container hero">
           <div className="hero-copy">
             <p className="eyebrow">
-              <span className="dot" /> THE INTELLIGENT MARKETING LOOP
+              <span className="dot" /> AI. EXPERIENCE. YOUR ADVANTAGE.
             </p>
             <h1>
-              Marketing that
-              <br className="desktop-break" /> gets smarter
+              Expertise built in.
               <br />
-              <em>every time it runs.</em>
+              <em>You in control.</em>
             </h1>
             <p className="hero-lede">
-              From your first idea to your next better decision. Connect
-              creative, campaigns and performance in one marketing workspace.
+              Create content, plan campaigns and understand results with AI,
+              backed by the experience of marketing teams. Do more with the team
+              you have, with less overhead and complexity.
             </p>
             <div className="button-row">
               <a href="/contact?topic=access" className="button">
-                Explore early access <Arrow />
+                Get started <Arrow />
               </a>
               <a href="/product" className="button secondary">
                 Meet the platform <MoveUpRight size={16} />
               </a>
             </div>
             <p className="hero-note">
-              <ShieldCheck size={15} /> Useful automation. Human control.
+              <ShieldCheck size={15} /> You set the direction. You approve what
+              goes live.
             </p>
           </div>
           <div className="hero-loop">
             <MarketingLoop />
             <p className="loop-disclosure">
-              A connected workflow today. Automated optimization is on the
-              roadmap.
+              From your first idea to your next better decision.
             </p>
           </div>
         </div>
         <div className="container hero-bottom">
-          <span>CREATIVE ENERGY. CONTINUOUS IMPROVEMENT.</span>
+          <span>MARKETING THAT GETS SMARTER EVERY TIME IT RUNS.</span>
           <a href="#the-platform">
             Discover the loop <ChevronDown size={15} />
           </a>
@@ -370,7 +373,7 @@ function Home() {
       </section>
       <section
         className="container stack-band"
-        aria-label="Integration availability"
+        aria-label="Marketing platforms"
       >
         <p>
           Built around
@@ -378,18 +381,17 @@ function Home() {
           <strong>your marketing world.</strong>
         </p>
         <div>
-          <span>
-            Facebook <small>In setup</small>
-          </span>
-          <span>
-            Meta Ads <small>In setup</small>
-          </span>
-          <span>
-            Shopify <small>Preview</small>
-          </span>
-          <span>
-            BigCommerce <small>Preview</small>
-          </span>
+          {[
+            ["meta", "Meta Ads"],
+            ["googleads", "Google Ads"],
+            ["shopify", "Shopify"],
+            ["bigcommerce", "BigCommerce"],
+          ].map(([id, name]) => (
+            <span className="stack-provider" key={id}>
+              <ProviderLogo id={id} />
+              {name}
+            </span>
+          ))}
           <a href="/integrations">
             See all integrations <Arrow />
           </a>
@@ -397,17 +399,18 @@ function Home() {
       </section>
       <section id="the-platform" className="container section platform-intro">
         <div>
-          <p className="eyebrow">ONE CONNECTED SYSTEM</p>
+          <p className="eyebrow">BUILT FOR YOU TO RUN</p>
           <h2>
-            Your best work shouldn't
+            The power to do more.
             <br />
-            <em>start from zero.</em>
+            <em>The freedom to stay lean.</em>
           </h2>
         </div>
         <p>
-          Ideas become creative. Creative becomes campaigns. Results inform what
-          happens next. EvokeLoop is designed to keep that context moving with
-          you, instead of leaving it scattered across tools.
+          You don't need an agency or a large team of graphic designers, media
+          buyers, copywriters and analysts to get started. EvokeLoop brings the
+          essential work into one workflow, helping you create, plan and learn
+          without years of marketing experience.
         </p>
       </section>
       <section
@@ -426,7 +429,6 @@ function Home() {
                 <span className="pillar-number">
                   {p.number} / {p.name}
                 </span>
-                <span className="availability">{p.status}</span>
               </div>
               <div className="pillar-icon">
                 <Icon size={28} />
@@ -449,17 +451,17 @@ function Home() {
         <div className="container">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">FROM POSSIBILITY TO READY</p>
+              <p className="eyebrow">YOUR IDEAS, WITH AI AT YOUR SIDE</p>
               <h2>
-                Create freely.
+                Create with confidence.
                 <br />
-                <em>Move forward deliberately.</em>
+                <em>Make it your own.</em>
               </h2>
             </div>
             <p>
-              Keep the experiments in your Studio.
-              <br />
-              Give your strongest ideas a clear path to approval.
+              Start with your product and brand. Let AI help with images and
+              copy, then refine and approve the work that feels right for your
+              business.
             </p>
           </div>
           <StudioVisual />
@@ -467,17 +469,16 @@ function Home() {
       </section>
       <section className="container section control-story">
         <div>
-          <p className="eyebrow">
-            AUTONOMOUS IN AMBITION. ACCOUNTABLE BY DESIGN.
-          </p>
+          <p className="eyebrow">YOUR BUSINESS. YOUR DECISIONS.</p>
           <h2>
-            Your team stays
+            You and your team.
             <br />
-            <em>in the loop.</em>
+            <em>In the driver's seat.</em>
           </h2>
           <p>
-            Approving a creative isn't the same as publishing a campaign. Keep
-            the right person in control of every decision that matters.
+            Set the creative direction, choose your accounts and review what
+            goes live. EvokeLoop helps you do the work while you keep the final
+            say.
           </p>
           <a className="text-link" href="/security">
             Explore the safeguards <Arrow />
@@ -487,23 +488,23 @@ function Home() {
           {[
             [
               "01",
-              "Make room for ideas.",
-              "Create, upload and refine. Working drafts stay in Content Studio.",
+              "Start with what you know.",
+              "Bring your products, brand and business goals. You know your customers; start with that insight.",
             ],
             [
               "02",
-              "Choose what moves forward.",
-              "Submit a version. An authorized reviewer approves it or requests changes.",
+              "Let AI help you create.",
+              "Generate images, explore copy and refine your ideas. Choose the versions that represent your business.",
             ],
             [
               "03",
-              "Give delivery its own approval.",
-              "Review the final caption, destination and schedule before publishing.",
+              "Make it yours. Then approve.",
+              "Your team reviews the creative, caption, destination and schedule before publishing.",
             ],
             [
               "04",
-              "Bring the learning back.",
-              "Use available channel reports to inform your next brief and decisions.",
+              "Learn and choose your next move.",
+              "See your connected account results and use what you learn to shape the next campaign.",
             ],
           ].map(([n, t, d]) => (
             <article key={n}>
@@ -519,51 +520,38 @@ function Home() {
       <section className="connected-band">
         <div className="container section integration-teaser">
           <div>
-            <p className="eyebrow">YOUR ACCOUNTS. YOUR AUTHORIZATION.</p>
+            <p className="eyebrow">BUILT AROUND YOUR BUSINESS</p>
             <h2>
-              Connected by you.
+              Your tools.
               <br />
               <em>Working together.</em>
             </h2>
             <p>
-              Bring your catalog into the creative process. Connect your own
-              business channels when available. One workspace, without handing
-              over control.
+              Bring your product catalog, campaign creative and social content
+              into the same workflow. Spend less time on handoffs and more time
+              moving your marketing forward.
             </p>
             <a className="text-link" href="/integrations">
-              Explore integration availability <Arrow />
+              Explore integrations <Arrow />
             </a>
           </div>
-          <div className="connection-illustration">
+          <div
+            className="provider-showcase"
+            aria-label="Advertising and catalog platforms"
+          >
             {[
-              ["Facebook Pages", "Organic content and engagement", "In setup"],
-              ["Meta Ads", "Paid activity and reporting", "In setup"],
-              [
-                "Shopify / BigCommerce / WooCommerce",
-                "Product catalog imports",
-                "Preview",
-              ],
-              [
-                "More channels & email",
-                "Expanding your connected workflow",
-                "Planned",
-              ],
-            ].map(([name, desc, state]) => (
-              <div className="connection-row" key={name}>
-                <span className="provider-letter">
-                  <Link2 size={20} />
-                </span>
-                <div>
-                  <strong>{name}</strong>
-                  <small>{desc}</small>
-                </div>
-                <span className="availability">{state}</span>
-              </div>
+              ...integrationGroups[0].providers,
+              ...integrationGroups[2].providers,
+            ].map(provider => (
+              <a
+                className="provider-tile"
+                href="/integrations"
+                key={provider.id}
+              >
+                <ProviderLogo id={provider.id} />
+                <strong>{provider.name}</strong>
+              </a>
             ))}
-            <p className="fineprint">
-              Meta connection availability depends on platform setup, review and
-              customer authorization. No shared advertiser accounts.
-            </p>
           </div>
         </div>
       </section>
@@ -576,9 +564,7 @@ function Home() {
             <em>Clear answers.</em>
           </h2>
           <p>
-            What works today. What's next.
-            <br />
-            And where you stay in control.
+            Getting started, working with AI and keeping your team in control.
           </p>
         </div>
         <div className="faq-list">
@@ -602,28 +588,28 @@ function Product() {
     <>
       <Intro
         eyebrow="THE EVOKELOOP PLATFORM"
-        title="One loop. A clearer next move."
+        title="One platform. More power for your team."
       >
         <p>
-          Creative energy meets a repeatable cycle of learning and improvement.
-          Explore the connected workspace, and see exactly what is available
-          today.
+          Bring creative, campaign planning and reporting into a workflow you
+          can run yourself. AI supports the creative work, marketing experience
+          shapes the process, and your team makes the decisions.
         </p>
       </Intro>
       <section className="container product-cycle">
         <div>
           <h2>
-            Not four disconnected tools.
+            A clear path from
             <br />
-            <em>One continuous system.</em>
+            <em>idea to improvement.</em>
           </h2>
           <p>
-            Create content. Activate approved work. Measure available results.
-            Bring those insights into the next iteration.
+            Start with your brand and products. Create content, prepare
+            campaigns and approve what goes live. Bring the results back into
+            your next creative decision, all in one workspace.
           </p>
           <p className="fineprint">
-            The loop describes the product vision. Automated optimization is
-            planned; current decisions remain under your control.
+            Build your marketing around the team you have and the goals you set.
           </p>
         </div>
         <MarketingLoop />
@@ -635,7 +621,6 @@ function Product() {
               <span className="pillar-number">
                 {p.number} / {p.name}
               </span>
-              <span className="availability">{p.status}</span>
             </div>
             <h3>{p.headline}</h3>
             <p>{p.description}</p>
@@ -654,7 +639,7 @@ function PillarPage({ id }: { id: string }) {
   if (!p) return null;
   return (
     <>
-      <Intro eyebrow={`${p.name} / ${p.status}`} title={p.headline}>
+      <Intro eyebrow={p.name} title={p.headline}>
         <p>{p.description}</p>
       </Intro>
       <section className="container capability-grid">
@@ -665,30 +650,30 @@ function PillarPage({ id }: { id: string }) {
             <p>
               {p.id === "create"
                 ? [
-                    "Turn selected brand and product inputs into creative variations. Review the result rather than treating generation as approval.",
-                    "Organize the logos, product images and reference material your team is authorized to use.",
-                    "Keep drafts in Studio. Send only selected versions to the library's Needs Review queue, preserving original versions.",
-                    "Upload existing images, videos and creator content. UGC is a classification, not a duplicate file store.",
+                    "Start with your brand and products. Let AI help you generate images and explore copy, then refine the ideas you want to use.",
+                    "Keep your logos, product images and reference material together so each new piece of creative starts with your business.",
+                    "Compare versions and gather feedback in one place. Send the work you choose for review while keeping your original drafts.",
+                    "Bring existing images, videos and creator content into your asset library so your team can build on work you already have.",
                   ][n]
                 : p.id === "activate"
                   ? [
-                      "Prepare Facebook Page content separately from paid advertising. Customer consent determines the Page available to the workspace.",
-                      "Inspect existing Meta campaigns and prepare paused image ads in existing ad sets. Budget editing and campaign activation remain outside this release.",
-                      "Plan two Facebook posts a week by default, or choose your own cadence. Navigate into future weeks and months.",
-                      "Review the caption, asset version, destination and schedule before delivery. Edits clear the relevant approval.",
+                      "Connect the Facebook Page you manage and prepare posts with your approved creative, captions and schedule in one place.",
+                      "Review campaigns and prepare image ads in existing Meta ad sets. Ads are created paused for your review and activation in Meta.",
+                      "Build a posting rhythm that suits your business. Plan future weeks and months, and review your calendar in the view that works for you.",
+                      "Keep the final say over the creative, caption, destination and schedule. Changes return the work for approval before delivery.",
                     ][n]
                   : p.id === "measure"
                     ? [
-                        "View available connected-account results together or focus on paid and organic activity separately.",
-                        "Select a reporting range and compare it with an equal prior period, keeping filter context visible.",
-                        "Inspect supported Meta campaign and platform metrics. Missing provider metrics remain unavailable rather than invented zeros.",
-                        "Keep spend grouped by account currency. Platform attribution is not claimed as deduplicated revenue or causal lift.",
+                        "Bring results from your connected accounts into one view, with separate reports for advertising and social activity.",
+                        "Choose your dates and compare with the previous period to see how your marketing is changing over time.",
+                        "Look closer at the campaign and channel metrics available from Meta to understand where to focus your attention.",
+                        "Read spend in each account's currency and see platform-reported results in context as you make your next decision.",
                       ][n]
                     : [
-                        "Planned: turn performance signals into reviewable suggestions, rather than unexplained automatic decisions.",
-                        "Planned: evaluate allocation opportunities with explicit budget and permission controls.",
-                        "Planned: distinguish experiments and incremental lift from platform attribution. Not available in the current release.",
-                        "Planned: coordinate end-to-end marketing tasks on top of the existing permission and approval system.",
+                        "Review available campaign and channel reports to identify the creative, messages and products your team wants to explore next.",
+                        "Use your product information and brand assets to generate a fresh set of creative variations for the next campaign.",
+                        "Compare versions, collect feedback and send the selected work for approval before using it in a campaign.",
+                        "Keep the next brief grounded in what you learned. Your team chooses the changes and approves the next round of work.",
                       ][n]}
             </p>
           </article>
@@ -696,9 +681,7 @@ function PillarPage({ id }: { id: string }) {
       </section>
       <div className="container notice section-note">
         <ShieldCheck size={23} />
-        <p>
-          <strong>{p.status}.</strong> {p.next}
-        </p>
+        <p>{p.next}</p>
       </div>
       {p.id === "create" && (
         <div className="container studio-wide">
@@ -710,129 +693,51 @@ function PillarPage({ id }: { id: string }) {
   );
 }
 function Integrations() {
-  const groups = [
-    {
-      name: "Social & advertising",
-      entries: [
-        [
-          "Facebook Pages",
-          "Meta setup pending",
-          "Pages selected by the customer, organic posts and available Page reporting.",
-        ],
-        [
-          "Meta Ads",
-          "Meta setup pending",
-          "Customer ad accounts, existing campaign reporting and paused image-ad creation.",
-        ],
-        [
-          "Instagram & TikTok",
-          "Planned",
-          "Organic publishing is on the roadmap, not available in this release.",
-        ],
-        [
-          "Google & Microsoft Ads",
-          "Planned",
-          "Paid-channel integrations are planned; listing them does not mean they are connected.",
-        ],
-      ],
-    },
-    {
-      name: "Catalog & content",
-      entries: [
-        [
-          "Shopify, BigCommerce & WooCommerce",
-          "Preview",
-          "Import products using supported read-only store credentials. This is not Meta catalog management.",
-        ],
-        [
-          "Website import",
-          "Preview",
-          "Review imported product and brand material before using it in creative work.",
-        ],
-        [
-          "Email providers & CMS",
-          "Planned",
-          "Email delivery and CMS publishing will be added alongside their creation workflows.",
-        ],
-      ],
-    },
-  ];
   return (
     <>
       <Intro
-        eyebrow="A growing, connected workspace"
-        title="Your stack, in the picture."
+        eyebrow="YOUR MARKETING ECOSYSTEM"
+        title="Your tools. One connected workflow."
       >
         <p>
-          Every customer connects their own accounts. Availability is explicit:
-          a planned integration is not a working connection, and account consent
-          is never permission to spend.
+          Bring your catalog, campaign creative and social content together.
+          Explore the platforms behind your marketing and find the workflow that
+          fits your business.
         </p>
       </Intro>
-      <section className="container connect-flow">
-        <h2>The Meta customer experience</h2>
-        <div>
-          {[
-            "Choose Facebook or Meta Ads",
-            "Authorize access with Meta",
-            "Select your Page or ad account",
-            "Review available capabilities",
-          ].map((s, i) => (
-            <p key={s}>
-              <span>{i + 1}</span>
-              {s}
-            </p>
-          ))}
-        </div>
-        <p className="fineprint">
-          Intended self-service flow. Public onboarding depends on EvokeLoop's
-          platform setup, Meta review, account eligibility and granted
-          permissions. Customers do not create a developer app or enter
-          EvokeLoop's credentials.
-        </p>
-      </section>
-      {groups.map(g => (
-        <section key={g.name} className="container section">
-          <h2 className="section-label">{g.name}</h2>
-          <div className="capability-grid">
-            {g.entries.map(([t, s, d]) => (
-              <article className="capability" key={t}>
-                <div className="card-top">
-                  <Link2 size={22} />
-                  <span className="availability">{s}</span>
-                </div>
-                <h3>{t}</h3>
-                <p>{d}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
-      <section className="container notice section-note">
+      <IntegrationDirectory />
+      <section className="container notice section-note integration-account-note">
         <ShieldCheck size={24} />
-        <p>
-          Manage account selection, reconnection and disconnection in{" "}
-          <strong>Settings &gt; Integrations</strong>. Read our{" "}
-          <a href="/privacy">Privacy notice</a> and{" "}
-          <a href="/data-deletion">Data deletion instructions</a> before
-          connecting.
-        </p>
+        <div>
+          <h2>Your accounts. Your control.</h2>
+          <p>
+            Manage account connections in your workspace. Account actions depend
+            on your provider permissions; creative exports are ready to upload
+            through the relevant platform. Read our{" "}
+            <a href="/privacy">Privacy notice</a> or{" "}
+            <a href="/data-deletion">Data deletion instructions</a>.
+          </p>
+        </div>
       </section>
       <CTA />
     </>
   );
 }
+
 function Pricing() {
+  const descriptions = {
+    launch: "A starting point for your marketing workflow.",
+    growth: "More creative capacity for a growing marketing team.",
+    scale: "For teams managing higher-volume marketing and measurement.",
+    enterprise: "A tailored plan for your organization and marketing needs.",
+  };
   return (
     <>
-      <Intro
-        eyebrow="Proposed monthly pricing / USD"
-        title="Room to start. Room to grow."
-      >
+      <Intro eyebrow="Monthly plans / USD" title="Room to start. Room to grow.">
         <p>
-          A subscription for your workspace, with usage designed around your
-          creative and marketing needs. These plans are proposals, not active
-          subscriptions or an offer to charge your account.
+          Build a marketing workflow around the team you have. Find the right
+          plan for your creative output and campaign activity, then talk with us
+          to confirm your workspace's plan, usage and onboarding.
         </p>
       </Intro>
       <section className="container pricing-grid">
@@ -842,7 +747,9 @@ function Pricing() {
             key={p.id}
           >
             <span className="eyebrow">
-              {p.id === "growth" ? "Built for a growing team" : "Proposed plan"}
+              {p.id === "growth"
+                ? "Built for a growing team"
+                : "Workspace plan"}
             </span>
             <h2>{p.name}</h2>
             <div className="price">
@@ -855,33 +762,29 @@ function Pricing() {
                 "Custom"
               )}
             </div>
-            <p>
-              {p.id === "enterprise"
-                ? "A conversation about larger-scale needs and requirements."
-                : p.description}
-            </p>
+            <p>{descriptions[p.id]}</p>
             <a
               className={`button ${p.id === "growth" ? "" : "secondary"}`}
               href="/contact?topic=access"
             >
-              Discuss early access <Arrow />
+              Contact sales <Arrow />
             </a>
             <div className="price-details">
               <p>
                 <Check size={16} />
                 {p.credits
-                  ? `${p.credits.toLocaleString("en-US")} proposed AI credits / month`
+                  ? `${p.credits.toLocaleString("en-US")} AI credits / month`
                   : "Custom usage structure"}
               </p>
               <p>
                 <Check size={16} />
                 {p.monthlyAdSpendUsd
-                  ? `Proposed spend band: up to $${p.monthlyAdSpendUsd.toLocaleString("en-US")} / month`
+                  ? `Ad-spend band: up to $${p.monthlyAdSpendUsd.toLocaleString("en-US")} / month`
                   : "Custom marketing scale"}
               </p>
               <p>
                 <Check size={16} />
-                Final feature limits to be confirmed
+                Plan details confirmed with your team
               </p>
             </div>
           </article>
@@ -889,11 +792,10 @@ function Pricing() {
       </section>
       <div className="container notice section-note">
         <p>
-          <strong>No checkout or automatic billing is active.</strong> Credit
-          consumption, video allowances, overages, taxes and final commercial
-          terms will be defined before purchase. Ad-spend bands refer to
-          customer scale; advertising spend is not included in the subscription.
-          Selecting a plan does not unlock an unfinished feature.
+          Prices are in USD. Contact our team to confirm features, usage
+          allowances and commercial terms before purchase. Ad-spend bands
+          describe your marketing scale; advertising spend and applicable taxes
+          are separate from the plan price.
         </p>
       </div>
       <CTA />
@@ -903,7 +805,7 @@ function Pricing() {
 function Business({ profile: p }: { profile: WebsiteProfile }) {
   return (
     <section className="business-panel">
-      <h2>Business information</h2>
+      <h2>{p.operatorName ? "Business information" : "Contact EvokeLoop"}</h2>
       {p.operatorName ? (
         <>
           <p>
@@ -922,9 +824,8 @@ function Business({ profile: p }: { profile: WebsiteProfile }) {
         </>
       ) : (
         <p>
-          EvokeLoop is a pre-release marketing platform. The operator's verified
-          legal details have not yet been published; they must be confirmed
-          before public launch and Meta verification submission.
+          Questions about the platform, your workspace or your data? Contact our
+          team for product information, support and privacy enquiries.
         </p>
       )}
       <div className="business-contacts">
@@ -939,56 +840,53 @@ function Business({ profile: p }: { profile: WebsiteProfile }) {
           </p>
         )}
         <p>
-          <a href="/contact">Public contact form</a> /{" "}
+          <a href="/contact">Contact the team</a> /{" "}
           <a href="/data-deletion">Request data deletion</a>
         </p>
       </div>
-      {!p.disclosuresApproved && (
-        <p className="draft-notice">
-          <strong>Pre-release disclosure draft.</strong> Operator details and
-          these policies still need approval by the platform operator before use
-          in a Meta verification submission.
-        </p>
-      )}
     </section>
   );
 }
 function About({ profile }: { profile: WebsiteProfile }) {
   return (
     <>
-      <Intro eyebrow="About EvokeLoop" title="Marketing works better together.">
+      <Intro
+        eyebrow="About EvokeLoop"
+        title="Powerful marketing should be within reach."
+      >
         <p>
-          EvokeLoop is a self-service software platform being built for business
-          teams that want their creative work, channel activity and measurement
-          in one place.
+          We built EvokeLoop to give business owners and lean teams access to AI
+          and the experience behind professional marketing, without needing to
+          assemble a large department.
         </p>
       </Intro>
       <section className="container about-grid">
         <div>
           <h2>
-            One connected process.
+            Technology with experience.
             <br />
-            <em>Not four disconnected tools.</em>
+            <em>Built around your business.</em>
           </h2>
           <p>
-            Start with brand and product knowledge, turn it into creative work,
-            move selected versions through review, and prepare channel-specific
-            delivery. Bring the resulting performance information back into the
-            same workspace.
+            EvokeLoop brings together AI and the practical experience of teams
+            who understand creative, media buying, copywriting and analytics. We
+            turn that experience into a connected workflow you and your team can
+            use directly.
           </p>
           <p>
-            Our direction is Create, Activate, Measure and Optimize. We are
-            rolling it out in stages: creative production and review first,
-            Facebook-first activation and reporting next, with broader channels,
-            attribution and optimization on the roadmap.
+            Whether you're running marketing yourself or working with a small
+            team, start with your brand and goals. Create, activate, measure and
+            improve in one workspace, with less time spent coordinating people
+            and tools.
           </p>
           <p>
-            EvokeLoop is software for customers to use with their own authorized
-            accounts. It is not a single advertiser's account, a promise to
-            manage every campaign for you, or an official Meta product.
+            You bring the knowledge of your business. AI helps with the creative
+            work, and connected reports help you understand the results. Your
+            team chooses the direction, approves the work and decides what to do
+            next.
           </p>
           <a className="text-link" href="/product">
-            See current capabilities <Arrow />
+            Explore the platform <Arrow />
           </a>
         </div>
         <Business profile={profile} />
@@ -1029,7 +927,7 @@ function ContactForm({
       <label>
         How can we help?
         <select name="topic" defaultValue={topic}>
-          <option value="access">Early access</option>
+          <option value="access">Sales &amp; plans</option>
           <option value="demo">Product walkthrough</option>
           <option value="support">Support</option>
           <option value="privacy">Privacy question or request</option>
@@ -1074,9 +972,9 @@ function ContactForm({
         <Arrow />
       </button>
       <p className="fineprint">
-        Your request is stored in EvokeLoop's private platform inbox. A receipt
-        is not confirmation that a demo is booked, access is granted or data is
-        deleted. No marketing subscription is added.
+        Our team will review your request. Keep the private status link provided
+        after submission to follow its progress. Submitting this form does not
+        subscribe you to marketing emails.
       </p>
     </form>
   );
@@ -1089,13 +987,13 @@ function Contact(props: Props) {
         title="Let's make your next move."
       >
         <p>
-          Ask about early access, explore the product, get help, or make a
-          privacy request. No EvokeLoop account is needed to contact us.
+          Find a plan, arrange a product walkthrough, get help or make a privacy
+          request. You can contact us without an EvokeLoop account.
         </p>
       </Intro>
       <section className="container contact-grid">
         <div>
-          <p className="eyebrow">A real request, not a dead-end form</p>
+          <p className="eyebrow">Sales, support &amp; privacy</p>
           <h2>
             Tell us what
             <br />
@@ -1134,14 +1032,6 @@ function Article(props: Props) {
           <a href="/contact">Contact the team</a>
         </nav>
         <article className="policy-content">
-          {!props.profile.disclosuresApproved && (
-            <div className="draft-notice">
-              <strong>Pre-release draft.</strong> This document describes the
-              current preview. The operator must confirm its business details
-              and approve these disclosures before public launch or Meta
-              submission.
-            </div>
-          )}
           {page.sections.map((s, i) => (
             <section key={s.title} id={`section-${i + 1}`}>
               <h2>{s.title}</h2>
