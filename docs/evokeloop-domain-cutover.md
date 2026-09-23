@@ -1,5 +1,10 @@
 # Evokeloop domain cutover
 
+The existing Render services host both EvokeLoop domains. Public pages use
+https://evokeloop.com and customer accounts use https://app.evokeloop.com.
+The Blueprint pins these origins; do not derive customer links from
+RENDER_EXTERNAL_URL. The Frame hostname is only an incoming legacy address.
+
 Public/app domain separation is activated when PUBLIC_SITE_ORIGIN differs from
 APP_ORIGIN. Before that cutover, sign-in links and account routes on any attached
 domain already redirect to the configured APP_ORIGIN. This keeps browser requests,

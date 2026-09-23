@@ -17,10 +17,11 @@ services:
     envVars:
       - fromGroup: frame-staging
       - key: APP_ORIGIN
-        fromService:
-          name: frame-staging
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://app.evokeloop.com
+      - key: PUBLIC_SITE_ORIGIN
+        value: https://evokeloop.com
+      - key: LEGACY_SITE_ORIGINS
+        value: https://frame-staging.onrender.com,https://www.evokeloop.com
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
@@ -50,8 +51,7 @@ services:
         fromService:
           name: frame-staging
           type: web
-          # Render does not allow references to another referenced variable.
-          envVarKey: RENDER_EXTERNAL_URL
+          envVarKey: APP_ORIGIN
       - key: DATABASE_URL
         fromService:
           name: frame-staging

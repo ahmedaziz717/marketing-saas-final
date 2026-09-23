@@ -43,7 +43,7 @@ async function teamManager(
   return actor;
 }
 function inviteOrigin(origin: string) {
-  const expected = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL;
+  const expected = process.env.APP_ORIGIN;
   const value = new URL(expected || origin);
   if (process.env.NODE_ENV === "production" && !expected)
     throw new TRPCError({
