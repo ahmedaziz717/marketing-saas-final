@@ -1,17 +1,16 @@
-# Staging only. Review the paid worker plan before applying this Blueprint.
+# Existing Render services. Preserve the always-on web and paid worker plans.
 # Enter credentials in Render's initial setup form; never commit their values.
 services:
   - type: web
     name: frame-staging
     runtime: node
-    plan: free
+    plan: 0.5c-512mb
     region: ohio
     repo: https://github.com/ahmedaziz717/marketing-saas-final
     branch: codex/render-supabase-migration
     autoDeployTrigger: "off"
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
-    # Free web services have no pre-deploy command. This single staging web
-    # instance applies migrations on startup; the worker starts paused.
+    # The existing single web instance applies migrations on startup.
     startCommand: pnpm db:migrate && pnpm start
     healthCheckPath: /healthz
     envVars:
