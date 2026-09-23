@@ -29,11 +29,11 @@ function configure() {
 }
 afterEach(() => vi.unstubAllEnvs());
 describe("domain configuration", () => {
-  it("preserves existing combined-host behavior", () => {
+  it("uses the configured app for sign-in before the public domain cutover", () => {
     vi.stubEnv("APP_ORIGIN", "https://old.example.test");
     vi.stubEnv("PUBLIC_SITE_ORIGIN", "");
     expect(siteOrigins().split).toBe(false);
-    expect(dashboardHref("/login")).toBe("/login");
+    expect(dashboardHref("/login")).toBe("https://old.example.test/login");
   });
   it.each([
     "https://example.test/path",

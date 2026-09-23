@@ -1,7 +1,11 @@
 # Evokeloop domain cutover
 
-Routing is prepared but intentionally inactive until PUBLIC_SITE_ORIGIN differs
-from APP_ORIGIN. Customer data, cookie scope and existing API permissions stay intact.
+Public/app domain separation is activated when PUBLIC_SITE_ORIGIN differs from
+APP_ORIGIN. Before that cutover, sign-in links and account routes on any attached
+domain already redirect to the configured APP_ORIGIN. This keeps browser requests,
+session cookies and email callbacks on the same origin while custom domains serve
+the public website. Noncanonical POSTs are rejected and never replayed. Customer
+data, cookie scope and existing API permissions stay intact.
 
 1. Verify HTTPS on root, www and app domains; keep Render's subdomain enabled.
 2. In Supabase Authentication > URL Configuration retain existing allowed URLs

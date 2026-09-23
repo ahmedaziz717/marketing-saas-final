@@ -17,12 +17,44 @@ const appPath = (p: string) =>
   ["/app", "/api", "/media", "/manus-storage", "/invite"].some(v =>
     under(p, v)
   ) || ["/login", "/signup", "/reset-password", "/404"].includes(p);
-/** Inert until separate PUBLIC_SITE_ORIGIN and APP_ORIGIN are configured. */
+/** Account routes always use APP_ORIGIN, including before a domain cutover. */
 export function registerSiteRouting(app: Express) {
   const s = siteOrigins();
-  if (!s.split || !s.app || !s.website) return;
+  if (!s.app || !s.website) return;
   const dashboard = new URL(s.app),
     website = new URL(s.website);
+  if (!s.split) {
+    app.use((req, res, next) => {
+      if (!appPath(req.path)) return next();
+      const host = (req.headers.host || "").toLowerCase();
+      if (host === dashboard.host || host === dashboard.host + ":443")
+        return next();
+      res.set({
+        "Cache-Control": "private, no-store",
+        "Referrer-Policy": "no-referrer",
+      });
+      // Never replay passwords, verification forms or API writes across hosts.
+      if (!["GET", "HEAD"].includes(req.method))
+        return void res.status(403).json({
+          error:
+            "This sign-in address has moved. Reload the page and try again.",
+        });
+      const raw = req.originalUrl;
+      if (
+        !raw.startsWith("/") ||
+        raw.startsWith("//") ||
+        /[\\\x00-\x20]/.test(raw)
+      )
+        return void res.status(400).send("Invalid request path.");
+      // A PKCE verifier cookie belongs to the host where sign-in began.
+      const path =
+        req.path === "/api/auth/callback" && typeof req.query.code === "string"
+          ? "/login?error=signin"
+          : raw;
+      res.redirect(302, dashboard.origin + path);
+    });
+    return;
+  }
   if (dashboard.host === website.host)
     throw new Error("Separate sites require different hostnames");
   const oldHosts = new Set<string>();
@@ -72,13 +104,10 @@ export function registerSiteRouting(app: Express) {
       res.redirect(302, origin + path);
     };
     const reject = () => {
-      res
-        .status(403)
-        .set("Cache-Control", "no-store")
-        .json({
-          error:
-            "This address has moved. Reload the page at the correct site before submitting.",
-        });
+      res.status(403).set("Cache-Control", "no-store").json({
+        error:
+          "This address has moved. Reload the page at the correct site before submitting.",
+      });
     };
     if (isOld) {
       if (!read) return reject();

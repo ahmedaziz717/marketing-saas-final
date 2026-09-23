@@ -36,7 +36,9 @@ export const websiteOrigin = () =>
   siteOrigins().website || "https://frame-staging.onrender.com";
 export function dashboardHref(path: "/login" | "/signup" | "/app") {
   const s = siteOrigins();
-  return s.split ? s.app + path : path;
+  // Custom domains can already serve the website before the domain cutover.
+  // Always open authentication on the origin its API and cookies use.
+  return s.app ? s.app + path : path;
 }
 /** A marketing form's origin must never authorize dashboard API writes. */
 export const requirePublicSiteOrigin: RequestHandler = (req, res, next) => {
