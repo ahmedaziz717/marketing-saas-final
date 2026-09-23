@@ -156,6 +156,7 @@ describe("domain routing and cross-origin safety", () => {
   it.each([
     "/privacy",
     "/product",
+    "/integrations",
     "/contact",
     "/data-deletion",
     "/request-status/opaque",
@@ -187,6 +188,16 @@ describe("domain routing and cross-origin safety", () => {
   it("does not serve an SPA for unknown public paths", async () => {
     expect((await request("evokeloop.com", "/not-a-page")).status).toBe(404);
   });
+  it.each(["meta", "shopify", "instagram"])(
+    "serves the %s integration logo on both canonical hosts",
+    async provider => {
+      for (const h of ["evokeloop.com", "app.evokeloop.com"]) {
+        const r = await request(h, `/integrations/${provider}.svg`);
+        expect(r.status).toBe(200);
+        expect(r.location).toBeUndefined();
+      }
+    }
+  );
   it("ignores forwarded-host spoofing", async () => {
     expect(
       (

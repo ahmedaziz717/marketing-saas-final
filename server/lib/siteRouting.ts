@@ -127,6 +127,7 @@ export function registerSiteRouting(app: Express) {
       read &&
       (under(req.path, "/website") ||
         under(req.path, "/assets") ||
+        /^\/integrations\/[a-z0-9-]+\.svg$/.test(req.path) ||
         req.path === "/favicon.ico")
     )
       return next();

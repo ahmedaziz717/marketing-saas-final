@@ -19,7 +19,7 @@ data, cookie scope and existing API permissions stay intact.
 
    APP_ORIGIN=https://app.evokeloop.com
    PUBLIC_SITE_ORIGIN=https://evokeloop.com
-   LEGACY_SITE_ORIGINS=https://frame-staging.onrender.com
+   LEGACY_SITE_ORIGINS=https://frame-staging.onrender.com,https://www.evokeloop.com
 
 4. Apply matching APP_ORIGIN on the worker. No database or asset migration is needed.
 5. Add https://app.evokeloop.com/api/channels/meta/callback to Meta's exact redirect
