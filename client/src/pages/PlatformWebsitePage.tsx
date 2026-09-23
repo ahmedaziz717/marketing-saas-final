@@ -214,11 +214,18 @@ function WebsiteAdministration() {
             </Button>
           </div>
           <p className="my-4 text-sm text-muted-foreground">
-            Submitted website forms are stored here. Automatic email delivery is
-            not configured. Use the requester's email to reply, verify authority
-            before fulfillment, and record the outcome. Closing a request does
-            not delete any account, asset, Meta data or public content.
+            Website messages are saved here and queued for email notification.
+            Reply within two business days, verify authority before fulfilling
+            privacy requests, and record the outcome. Closing a request does not
+            delete any account, asset, connected data or public content.
           </p>
+          {requests.data && !requests.data.deliveryConfigured && (
+            <p role="alert" className="mb-4 text-sm text-destructive">
+              Email delivery is not configured. Messages remain saved here;
+              configure the contact email sender before relying on
+              notifications.
+            </p>
+          )}
           {requests.isLoading ? (
             <p role="status">Loading requests...</p>
           ) : requests.error ? (
@@ -246,6 +253,15 @@ function WebsiteAdministration() {
                       <p className="mt-1 text-xs">
                         {new Date(r.createdAtMs).toLocaleString()} /{" "}
                         {r.state.replaceAll("_", " ")}
+                      </p>
+                      <p className="mt-1 text-xs">
+                        {r.emailState === "sent"
+                          ? "Email notification accepted by the delivery provider"
+                          : r.emailState === "needs_attention"
+                            ? "Email notification needs attention — use the inbox to respond"
+                            : r.emailState === "retrying"
+                              ? "Email notification is being retried"
+                              : "Email notification queued"}
                       </p>
                     </div>
                     <Button

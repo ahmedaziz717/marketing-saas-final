@@ -13,6 +13,7 @@ import { serveStatic, setupVite } from "./vite";
 import { sql } from "drizzle-orm";
 import { registerChannelOAuth } from "../lib/channelConnections";
 import { getDb, closeDb } from "../db";
+import { startWebsiteNotificationDelivery } from "../lib/websiteNotifications";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -91,9 +92,12 @@ async function startServer() {
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+  const stopNotifications = startWebsiteNotificationDelivery();
   process.on("SIGTERM", () => {
     server.close(() => {
-      void closeDb().finally(() => process.exit(0));
+      void stopNotifications()
+        .then(closeDb)
+        .finally(() => process.exit(0));
     });
   });
 }

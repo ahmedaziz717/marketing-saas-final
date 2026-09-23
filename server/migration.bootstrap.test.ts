@@ -15,7 +15,7 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
     await migrate(drizzle(engine), { migrationsFolder: "drizzle/postgres" });
     expect(
       (await engine.query("SELECT * FROM drizzle.__drizzle_migrations")).rows
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     expect(
       (
         await engine.query(

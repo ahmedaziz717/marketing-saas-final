@@ -972,9 +972,10 @@ function ContactForm({
         <Arrow />
       </button>
       <p className="fineprint">
-        Our team will review your request. Keep the private status link provided
-        after submission to follow its progress. Submitting this form does not
-        subscribe you to marketing emails.
+        Our team will contact you within two business days. We use your name,
+        email and message to respond and keep a record of your enquiry as
+        explained in our <a href="/privacy">Privacy policy</a>. Submitting this
+        form does not subscribe you to marketing emails.
       </p>
     </form>
   );
@@ -1000,8 +1001,8 @@ function Contact(props: Props) {
             <em>you have in mind.</em>
           </h2>
           <p>
-            We save your request and provide a private status link. Keep it for
-            reference while the platform team reviews your message.
+            Send us a message and a member of our team will contact you within
+            two business days.
           </p>
           <p>
             For deletion requests, identify the data and the workspace where
@@ -1038,6 +1039,11 @@ function Article(props: Props) {
               {s.paragraphs.map(p => (
                 <p key={p}>{p}</p>
               ))}
+              {s.links?.map(link => (
+                <p key={link.href}>
+                  <a href={link.href}>{link.label}</a>
+                </p>
+              ))}
             </section>
           ))}
           {props.path === "/data-deletion" && (
@@ -1060,10 +1066,10 @@ function Receipt({ receipt, unavailable }: Props) {
   return (
     <>
       <Intro
-        eyebrow="Private request receipt"
+        eyebrow={receipt ? "Message received" : "Contact EvokeLoop"}
         title={
           receipt
-            ? "Your request is on record."
+            ? "Thank you for contacting us."
             : unavailable
               ? "Status temporarily unavailable."
               : "Request not found."
@@ -1071,7 +1077,7 @@ function Receipt({ receipt, unavailable }: Props) {
       >
         <p>
           {receipt
-            ? "Keep this private link to check the status of your request. It contains no public name, email or message."
+            ? "A member of the EvokeLoop team will contact you at the email address you provided within two business days."
             : unavailable
               ? "Please try this same link again later. This does not mean your request was lost."
               : "Check the full link you received after submitting. No request details are available at this address."}
@@ -1080,29 +1086,16 @@ function Receipt({ receipt, unavailable }: Props) {
       {receipt && (
         <section className="container receipt-panel">
           <CircleCheck size={32} />
-          <h2>Status: {receipt.state.replaceAll("_", " ")}</h2>
+          <h2>We've received your message.</h2>
           <p>
-            Received: {new Date(receipt.createdAtMs).toISOString().slice(0, 10)}
-          </p>
-          <p>
-            Last updated:{" "}
-            {new Date(receipt.updatedAtMs).toISOString().slice(0, 10)}
-          </p>
-          <p>
-            This is a saved-request receipt, not an automated email
-            confirmation. The platform team may contact the email you supplied
-            to verify identity or authority.
-          </p>
-          <p>
-            A closed request does not by itself mean all requested data was
-            deleted. The team must separately explain the outcome and any
-            exceptions.
+            Thank you for getting in touch. Our team will review your enquiry
+            and get back to you soon.
           </p>
         </section>
       )}
       <div className="container section">
-        <a className="button secondary" href="/contact">
-          Contact EvokeLoop <Arrow />
+        <a className="button secondary" href="/">
+          Back to EvokeLoop <Arrow />
         </a>
       </div>
     </>

@@ -9,6 +9,7 @@ import {
 import { adminProcedure, router } from "../_core/trpc";
 import { libraryDatabase } from "../lib/assetLibrary";
 import { readWebsiteProfile } from "../lib/publicWebsite";
+import { websiteEmailConfigured } from "../lib/websiteNotifications";
 export const publicWebsiteAdminRouter = router({
   profile: adminProcedure.query(() => readWebsiteProfile()),
   saveProfile: adminProcedure
@@ -81,6 +82,10 @@ export const publicWebsiteAdminRouter = router({
           topic: websiteRequests.topic,
           workspace: websiteRequests.workspace,
           message: websiteRequests.message,
+          emailState: websiteRequests.emailState,
+          emailAttempts: websiteRequests.emailAttempts,
+          emailSentAtMs: websiteRequests.emailSentAtMs,
+          emailLastError: websiteRequests.emailLastError,
           state: websiteRequests.state,
           resolutionNote: websiteRequests.resolutionNote,
           createdAtMs: websiteRequests.createdAtMs,
@@ -98,6 +103,7 @@ export const publicWebsiteAdminRouter = router({
       const last = items.at(-1);
       return {
         items,
+        deliveryConfigured: websiteEmailConfigured(),
         nextBefore:
           rows.length > 100 && last
             ? { createdAtMs: last.createdAtMs, id: last.id }

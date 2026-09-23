@@ -28,6 +28,20 @@ export const websiteRequests = appSchema
     topic: varchar("topic", { length: 20 }).notNull(),
     workspace: varchar("workspace", { length: 200 }).notNull(),
     message: text("message").notNull(),
+    emailState: varchar("emailState", { length: 24 })
+      .notNull()
+      .default("pending"),
+    emailAttempts: integer("emailAttempts").notNull().default(0),
+    emailNextAttemptAtMs: bigint("emailNextAttemptAtMs", { mode: "number" })
+      .notNull()
+      .default(0),
+    emailLeaseUntilMs: bigint("emailLeaseUntilMs", { mode: "number" })
+      .notNull()
+      .default(0),
+    emailFirstAttemptAtMs: bigint("emailFirstAttemptAtMs", { mode: "number" }),
+    emailSentAtMs: bigint("emailSentAtMs", { mode: "number" }),
+    emailProviderId: varchar("emailProviderId", { length: 128 }),
+    emailLastError: varchar("emailLastError", { length: 80 }),
     state: varchar("state", { length: 30 }).notNull().default("received"),
     resolutionNote: text("resolutionNote"),
     updatedBy: integer("updatedBy").references(() => users.id),

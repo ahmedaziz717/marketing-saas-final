@@ -1,10 +1,16 @@
 import { z } from "zod";
 
+export const PUBLIC_CONTACT_EMAIL = "ahmed.aziz@cybertron.com";
+
 /** Platform identity, never an individual customer's workspace identity. */
 export const websiteProfileSchema = z.object({
   operatorName: z.string().trim().max(180).default(""),
-  supportEmail: z.union([z.email().max(254), z.literal("")]).default(""),
-  privacyEmail: z.union([z.email().max(254), z.literal("")]).default(""),
+  supportEmail: z
+    .union([z.email().max(254), z.literal("")])
+    .default(PUBLIC_CONTACT_EMAIL),
+  privacyEmail: z
+    .union([z.email().max(254), z.literal("")])
+    .default(PUBLIC_CONTACT_EMAIL),
   businessAddress: z.string().trim().max(500).default(""),
   operatorWebsite: z
     .union([

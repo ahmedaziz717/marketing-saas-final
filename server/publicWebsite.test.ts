@@ -206,7 +206,9 @@ describe.sequential(
       const receipt = await fetch(origin + a.headers.get("location"));
       const html = await receipt.text();
       expect(receipt.status).toBe(200);
-      expect(html).toContain("Your request is on record");
+      expect(html).toContain("Thank you for contacting us.");
+      expect(html).toContain("within two business days");
+      expect(html).not.toContain("saved-request receipt");
       expect(html).not.toContain("requester@example.test");
       expect(html).not.toContain("Please remove my contact");
       expect(receipt.headers.get("referrer-policy")).toBe("no-referrer");
@@ -226,6 +228,8 @@ describe.sequential(
       expect(inbox.items).toHaveLength(1);
       expect(inbox.items[0].email).toBe("requester@example.test");
       expect(inbox.items[0]).not.toHaveProperty("receiptHash");
+      expect(inbox.items[0].emailState).toBe("pending");
+      expect(inbox.items[0].emailAttempts).toBe(0);
       const r = inbox.items[0];
       await expect(
         customer.updateRequest({
