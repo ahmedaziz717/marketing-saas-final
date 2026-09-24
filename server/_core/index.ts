@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerResendInbound } from "../lib/resendInbound";
 import { registerSiteRouting } from "../lib/siteRouting";
 import { registerPublicWebsite } from "../public/routes";
 import express from "express";
@@ -40,6 +41,7 @@ async function startServer() {
   const server = createServer(app);
   registerSiteRouting(app);
   registerPublicWebsite(app);
+  registerResendInbound(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

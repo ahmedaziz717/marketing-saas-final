@@ -36,6 +36,13 @@
       "when": 1790201160049,
       "tag": "0004_website_contact_email",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790288604845,
+      "tag": "0005_resend_privacy_inbound",
+      "breakpoints": true
     }
   ]
 }

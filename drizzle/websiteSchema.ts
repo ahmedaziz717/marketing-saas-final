@@ -49,3 +49,21 @@ export const websiteRequests = appSchema
     updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
   })
   .enableRLS();
+
+// Private deduplication ledger. Original bodies and attachments remain in Resend.
+export const inboundPrivacyEmails = appSchema
+  .table("inbound_privacy_emails", {
+    id: uuid("id").primaryKey(),
+    sender: text("sender").notNull(),
+    recipient: text("recipient").notNull(),
+    intro: text("intro").notNull(),
+    state: varchar("state", { length: 20 }).notNull().default("pending"),
+    leaseUntilMs: bigint("leaseUntilMs", { mode: "number" })
+      .notNull()
+      .default(0),
+    firstAttemptAtMs: bigint("firstAttemptAtMs", { mode: "number" }),
+    createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    sentAtMs: bigint("sentAtMs", { mode: "number" }),
+    providerId: varchar("providerId", { length: 128 }),
+  })
+  .enableRLS();
