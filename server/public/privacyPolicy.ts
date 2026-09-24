@@ -9,7 +9,7 @@ export const PRIVACY_POLICY: Article = {
     {
       title: "1. Scope and responsibility",
       paragraphs: [
-        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean the operator of that service. Contact our privacy team at privacy@evokeloop.com or through our Contact page. Any additional legal operator details are published in the Business information panel below.",
+        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean the operator of that service. Contact our privacy team at privacy@evokeloop.com or through our Contact page.",
         "We determine how information is used for our own account administration, website, security and business enquiries. When a customer connects marketing accounts, imports a catalog or supplies content about other people, we process that information on the customer's instructions to provide the service. The customer determines its campaigns and purposes and is responsible for its own notices, consent, permissions and applicable data-processing agreement. Contact that business about its activities; we will help route requests that concern information we process for it.",
         "This policy applies across enabled integrations, including advertising, social media, commerce and email services. Naming a provider does not mean every integration, permission or feature is available to every customer. We access an external account only through an enabled feature and the authorization you or your organization provides.",
       ],
@@ -21,6 +21,7 @@ export const PRIVACY_POLICY: Article = {
         "Content and catalog information: prompts, brand instructions, product names, descriptions, prices, specifications, product URLs, images, videos, logos, captions, drafts, generated outputs, approval decisions and comments. You provide this directly or instruct us to import it from an authorized store, file or website. Content can contain personal information about its creators or depicted people.",
         "Connected-account information: provider and account identifiers, account or Page names, granted permissions, connection status, authorization credentials, selected destinations, campaign or publication records and performance metrics made available by the provider. We receive only the data used by the integration you enable, subject to your account access and provider permissions.",
         "Enquiry information: your name, email address, request category, optional business or workspace reference, message and our response or verification records. You provide this through forms, email or support conversations. Do not submit passwords, access tokens, financial account details, government identifiers or unnecessary sensitive information.",
+        "Plan and commercial enquiries: your selected plan preview, business contact details, requested services and related correspondence. The current service has no active online checkout or payment-processor integration and does not collect payment-card numbers, card security codes or bank-account credentials through a billing feature. Selecting a plan preview does not create a paid subscription or charge you. Do not include payment credentials in a contact form or email. Before introducing online billing, we will identify the payment provider and explain the payment information it receives and the transaction or billing records EvokeLoop receives.",
         "Technical information: IP addresses, browser and device request information, timestamps, visited endpoints, error and security logs, session identifiers and interface preferences. This is generated when your browser or a connected service interacts with our infrastructure. We do not request precise device location or use uploaded images to identify people through biometric recognition.",
       ],
     },
@@ -28,6 +29,7 @@ export const PRIVACY_POLICY: Article = {
       title: "3. How we use information",
       paragraphs: [
         "We use account information to authenticate users, administer workspaces and enforce access permissions. We use content and catalog information to perform requested imports, creative generation, editing, storage and review. We use connected-account information to manage authorized connections, carry out approved publishing or advertising actions and show reports. A connection by itself does not authorize an unapproved publication or budget change.",
+        "We use plan preferences and commercial enquiries to discuss service options and maintain the commercial records you provide. Current usage counters support product visibility; they are not an active payment collection system.",
         "We use enquiry information to answer questions, arrange requested demonstrations, provide support and handle privacy requests. Contact submissions are stored in our restricted platform inbox and routed to our designated support email. Submitting a form does not subscribe you to promotional email.",
         "We use technical and activity information to operate and troubleshoot the service, prevent abuse, investigate security issues, enforce our terms and document approvals. We may also process information as necessary to meet legal obligations, resolve disputes and protect rights. We do not use customer information to make eligibility decisions about employment, lending, housing, insurance or similarly significant matters.",
       ],
@@ -76,7 +78,7 @@ export const PRIVACY_POLICY: Article = {
     {
       title: "8. Who receives information",
       paragraphs: [
-        "Service providers receive information needed to perform their functions: Render hosts the application; Supabase provides authentication, database and asset storage; OpenAI processes requested AI tasks; and our configured email provider delivers authentication and support notifications. Our designated support mailbox receives contact submissions. These providers' processing is governed by the applicable service terms and agreements.",
+        "Service providers receive information needed to perform their functions: Render hosts the application; Supabase provides authentication, database and asset storage; OpenAI processes requested AI tasks; and Resend handles configured authentication and support emails, receives messages sent to our privacy address and forwards them to our designated restricted support mailbox. These messages may include attachments supplied by the sender. Our support mailbox also receives contact-form notifications. These providers' processing is governed by the applicable service terms and agreements.",
         "Authorized workspace members can access workspace information according to their roles. Selected advertising, social, commerce or email providers receive the API requests and content necessary for your authorized actions. Platform personnel may access information for necessary support, security and operation, subject to applicable platform-specific restrictions.",
         "We may disclose information where legally required, to protect rights or investigate abuse, to professional advisers subject to appropriate confidentiality, or in a business transaction with safeguards and any required notice or consent. Platform restrictions, including Google's restrictions on transfers, continue to apply. We do not make customer workspace data available to unrelated customers.",
       ],
@@ -130,14 +132,36 @@ export const PRIVACY_POLICY: Article = {
       ],
     },
     {
-      title: "14. Children and restricted information",
+      title: "14. European Economic Area and United Kingdom",
+      paragraphs: [
+        "This section applies where the EU GDPR or UK GDPR governs our processing. For our own account, website and business-administration activities, we act as a controller. For personal information processed on a customer's instructions within its workspace, we act as a processor; that customer determines its lawful basis and responds to requests, with our assistance where required.",
+        "Our controller purposes and legal bases are: providing a service or taking requested pre-contract steps where necessary for a contract with you; legitimate interests in administering business accounts, supporting customer organizations, responding to enquiries and keeping the service secure, subject to your rights and interests; and compliance with applicable legal obligations, including required records and privacy requests. Where your employer is the customer, we do not treat its contract as a contract with you. If a feature requires consent, we request it separately before the relevant processing. An integration authorization is not blanket consent to unrelated uses.",
+        "Subject to applicable conditions, you can request access, correction, erasure, restriction and data portability. Where processing relies on consent, you may withdraw it at any time through the relevant control or by emailing privacy@evokeloop.com, without affecting earlier lawful processing. Required account and security information is needed to provide access; withholding it may prevent us from providing the requested service. Optional enquiries and content are voluntary.",
+        "Your right to object: you may object to processing based on legitimate interests for reasons relating to your situation. You may object to direct marketing at any time. Contact privacy@evokeloop.com to exercise these rights. We do not make solely automated decisions about individuals that produce legal or similarly significant effects.",
+        "We respond to applicable rights requests without undue delay and normally within one month. Where the law permits an extension for complexity or number of requests, we explain it within the initial period. You may complain to your competent EEA supervisory authority, including where you live or work or where an alleged infringement occurred, or to the UK Information Commissioner's Office. You do not need to contact us first.",
+        "International transfers: our U.S.-based service and the providers described in section 8 can involve processing outside the EEA or UK. A restricted transfer requires an applicable adequacy decision or appropriate safeguards, such as the European Commission's standard contractual clauses and, for UK transfers, an applicable UK addendum or International Data Transfer Agreement, with any required assessment and supplementary measures. The mechanism depends on the recipient and transfer; this notice does not claim that every provider is certified or that a particular agreement has been signed. Contact privacy@evokeloop.com for information about the safeguards applicable to your data and how to obtain a copy, subject to necessary redactions. Agreeing to this policy does not itself authorize a restricted transfer.",
+      ],
+      links: [
+        {
+          label: "Find an EEA supervisory authority",
+          href: "https://www.edpb.europa.eu/about-edpb/about-edpb/members_en",
+        },
+        {
+          label: "Complain to the UK ICO",
+          href: "https://ico.org.uk/make-a-complaint/",
+        },
+        { label: "Submit a privacy request", href: "/contact?topic=privacy" },
+      ],
+    },
+    {
+      title: "15. Children and restricted information",
       paragraphs: [
         "EvokeLoop is a business service intended for adults acting for themselves or an authorized organization. It is not directed to children under 13, and we do not knowingly collect their personal information. Contact our privacy team if you believe a child has provided information so we can investigate and remove it as appropriate.",
         "Do not use the service to submit unnecessary health information, financial account data, government identifiers, precise location data, biometric identifiers, children's information or other sensitive records. Do not use generated content or connected information for unlawful profiling, discrimination or surveillance.",
       ],
     },
     {
-      title: "15. Changes and contacting us",
+      title: "16. Changes and contacting us",
       paragraphs: [
         "We review this policy and update the effective date when it changes. Material changes will receive any additional notice or consent required before the new use begins. A new purpose or expanded integration is not authorized merely by updating this page.",
         "For privacy, support, an appeal or an accessible copy of this policy, contact privacy@evokeloop.com. You may also use the public Contact form. We will contact you within two business days after receiving an enquiry.",

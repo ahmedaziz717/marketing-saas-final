@@ -47,3 +47,12 @@ Set `CONTACT_RESEND_API_KEY` to a sending credential, `CONTACT_EMAIL_FROM` to an
 The web process checks pending requests every 30 seconds. Transient errors retry with the same idempotency key. Permanent errors, exhausted attempts and uncertain retries beyond 23 hours become `needs_attention`; the admin inbox displays that state. Inspect the provider before any manual resend. Resend's [idempotency window is 24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys).
 
 `sent` means the provider accepted the message. Verify Delivered or a bounce in the provider before asserting mailbox delivery. Email failure never deletes the saved enquiry, changes request fulfillment status or exposes request details on the public thank-you page.
+
+
+## September 24 policy follow-up
+
+- Verified that billing remains preview-only (`server/routers/billing.ts`, `shared/frameProduct.ts`); no payment processor or live checkout is implemented. Policy now states this and describes plan/commercial enquiries without inventing Stripe, offline invoicing, or card processing.
+- Removed the assertion that an operator name/address are already published. The public profile remains empty: owner must supply the legal operator's exact name and business mailing address. This gap is not cured by deleting the assertion.
+- Added conditional EEA/UK controller/processor roles, purpose-linked legal bases, rights, a distinct objection notice, complaint links, response timing, information-provision consequences and transfer requirements. This is not a GDPR compliance certification. Before serving EEA/UK customers, confirm lawful-basis assessments, processor agreements, actual recipient transfer mechanisms, applicable representatives/DPO requirements and their contact disclosures. The notice does not assert executed SCCs, an IDTA, or Data Privacy Framework certification without evidence.
+- Updated email-provider disclosure for the now-enabled Resend privacy-email receiving and forwarding, including sender-supplied attachments.
+- Sources reviewed: https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/individual-rights/the-right-to-be-informed/what-privacy-information-should-we-provide/ ; https://www.edpb.europa.eu/topics/key-gdpr-concepts/legal-basis_en ; https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng ; https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/international-transfers/a-guide-to-international-transfers/
