@@ -21,24 +21,34 @@ const eventSchema = z.object({
 function mailbox(value: string) {
   return (value.match(/<([^<>]+)>$/)?.[1] || value).trim().toLowerCase();
 }
-function config() {
-  const key = process.env.RESEND_RECEIVING_API_KEY;
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
-  const to = process.env.CONTACT_NOTIFICATION_EMAIL;
-  const from = process.env.CONTACT_EMAIL_FROM;
+function configuration() {
+  const key = process.env.RESEND_RECEIVING_API_KEY?.trim();
+  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
+  const to = process.env.CONTACT_NOTIFICATION_EMAIL?.trim();
+  const from = process.env.CONTACT_EMAIL_FROM?.trim();
+  const issues: string[] = [];
+  if (!key) issues.push("RESEND_RECEIVING_API_KEY");
+  if (!secret) issues.push("RESEND_WEBHOOK_SECRET");
   if (
-    !key ||
-    !secret ||
     !to ||
-    !from ||
     !z.email().safeParse(to).success ||
-    !z.email().safeParse(mailbox(from)).success ||
-    /[\r\n]/.test(from) ||
     to.toLowerCase().endsWith("@evokeloop.com")
   )
-    return null;
-  return { key, secret, to, from };
+    issues.push("CONTACT_NOTIFICATION_EMAIL");
+  if (
+    !from ||
+    !z.email().safeParse(mailbox(from)).success ||
+    /[\r\n]/.test(from)
+  )
+    issues.push("CONTACT_EMAIL_FROM");
+  return {
+    issues,
+    config: issues.length
+      ? null
+      : { key: key!, secret: secret!, to: to!, from: from! },
+  };
 }
+const config = () => configuration().config;
 
 export function registerResendInbound(app: Express) {
   // This exact signed route precedes the JSON parser and browser-origin guard.
@@ -48,6 +58,7 @@ export function registerResendInbound(app: Express) {
       endpoint: "resend-inbound",
       method: "POST",
       configured: Boolean(config()),
+      invalidOrMissing: configuration().issues,
     });
   });
   app.post(

@@ -131,6 +131,7 @@ describe.sequential("signed privacy inbound forwarding", () => {
       endpoint: "resend-inbound",
       method: "POST",
       configured: false,
+      invalidOrMissing: ["RESEND_WEBHOOK_SECRET"],
     });
     expect(apiFetch).not.toHaveBeenCalled();
   });
@@ -197,6 +198,15 @@ describe.sequential("signed privacy inbound forwarding", () => {
     );
     expect((await post()).status).toBe(503);
     expect(sends()).toHaveLength(1);
+  });
+  it("accepts surrounding whitespace in copied settings", async () => {
+    vi.stubEnv(
+      "CONTACT_EMAIL_FROM",
+      " EvokeLoop <notifications@evokeloop.com> "
+    );
+    vi.stubEnv("CONTACT_NOTIFICATION_EMAIL", " recipient@example.test ");
+    vi.stubEnv("RESEND_WEBHOOK_SECRET", " " + secret + " ");
+    expect((await post()).status).toBe(200);
   });
   it("rejects forwarding back into the receiving domain", async () => {
     vi.stubEnv("CONTACT_NOTIFICATION_EMAIL", "privacy@evokeloop.com");
