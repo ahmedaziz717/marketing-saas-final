@@ -76,7 +76,7 @@ export const ARTICLES: Record<string, Article> = {
         title: "2. Submit a deletion request",
         paragraphs: [
           "Use the form below, or email the published privacy contact in the Business information panel. Give the email associated with your request, an optional workspace or Page/account reference, and what you want removed: contact information, connected advertising, social or store data, your individual account, or an entire workspace. You can submit a request even if you can no longer sign in.",
-          "Do not send passwords, access tokens, verification codes, payment information or unnecessary identity documents. The form saves your request to the platform team's restricted inbox and queues an email notification to our support team at ahmed.aziz@cybertron.com. We will contact you within two business days. That initial response is separate from verification and completion of deletion.",
+          "Do not send passwords, access tokens, verification codes, payment information or unnecessary identity documents. The form saves your request to the platform team's restricted inbox and queues an email notification to our support team. We will contact you within two business days. That initial response is separate from verification and completion of deletion.",
         ],
       },
       {

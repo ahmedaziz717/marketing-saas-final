@@ -4,12 +4,12 @@ export const PRIVACY_POLICY: Article = {
   title: "Privacy policy",
   eyebrow: "Your information. Your choices.",
   intro:
-    "How EvokeLoop collects, uses, discloses and protects personal information across our website, marketing workspace and connected services. Effective September 23, 2026.",
+    "How EvokeLoop collects, uses, discloses and protects personal information across our website, marketing workspace and connected services. Effective September 24, 2026.",
   sections: [
     {
       title: "1. Scope and responsibility",
       paragraphs: [
-        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean the operator of that service. Contact our privacy team at ahmed.aziz@cybertron.com or through our Contact page. Any additional legal operator details are published in the Business information panel below.",
+        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean the operator of that service. Contact our privacy team at privacy@evokeloop.com or through our Contact page. Any additional legal operator details are published in the Business information panel below.",
         "We determine how information is used for our own account administration, website, security and business enquiries. When a customer connects marketing accounts, imports a catalog or supplies content about other people, we process that information on the customer's instructions to provide the service. The customer determines its campaigns and purposes and is responsible for its own notices, consent, permissions and applicable data-processing agreement. Contact that business about its activities; we will help route requests that concern information we process for it.",
         "This policy applies across enabled integrations, including advertising, social media, commerce and email services. Naming a provider does not mean every integration, permission or feature is available to every customer. We access an external account only through an enabled feature and the authorization you or your organization provides.",
       ],
@@ -108,7 +108,7 @@ export const PRIVACY_POLICY: Article = {
     {
       title: "12. Requests, verification and appeals",
       paragraphs: [
-        "Email ahmed.aziz@cybertron.com or use the Contact page and select Privacy question or request or Data deletion request. State your request, the email associated with the information and, if relevant, the workspace or provider. You do not need to create an EvokeLoop account. We will contact you within two business days; this initial response is separate from the time needed to verify and fulfill a privacy request.",
+        "Email privacy@evokeloop.com or use the Contact page and select Privacy question or request or Data deletion request. State your request, the email associated with the information and, if relevant, the workspace or provider. You do not need to create an EvokeLoop account. We will contact you within two business days; this initial response is separate from the time needed to verify and fulfill a privacy request.",
         "We verify identity and authority in proportion to the request and use verification information for that purpose. An authorized agent may submit a request; we may ask for proof of authorization and verification permitted by law. Do not send passwords, access tokens or identity documents through the public form. We will explain any necessary secure verification steps.",
         "We respond within the applicable legal deadline. For covered California access, correction and deletion requests, that is generally 45 calendar days, with a permitted extension explained within the initial period. Other requests and jurisdictions may have different or shorter deadlines. We will explain a denial or an applicable exception rather than treating a receipt as completed fulfillment.",
         "Where an appeal right applies, reply to our decision or email the same address with ‘Privacy appeal’ and the request reference. We will review the decision and respond within the applicable period, with reasons and information about contacting your state attorney general or other regulator if the appeal is denied. You may also contact your regulator directly. Ask us for an accessible alternative format if you need one.",
@@ -118,7 +118,7 @@ export const PRIVACY_POLICY: Article = {
         { label: "Data deletion instructions", href: "/data-deletion" },
         {
           label: "Email the privacy team",
-          href: "mailto:ahmed.aziz@cybertron.com",
+          href: "mailto:privacy@evokeloop.com",
         },
       ],
     },
@@ -140,7 +140,7 @@ export const PRIVACY_POLICY: Article = {
       title: "15. Changes and contacting us",
       paragraphs: [
         "We review this policy and update the effective date when it changes. Material changes will receive any additional notice or consent required before the new use begins. A new purpose or expanded integration is not authorized merely by updating this page.",
-        "For privacy, support, an appeal or an accessible copy of this policy, contact ahmed.aziz@cybertron.com. You may also use the public Contact form. We will contact you within two business days after receiving an enquiry.",
+        "For privacy, support, an appeal or an accessible copy of this policy, contact privacy@evokeloop.com. You may also use the public Contact form. We will contact you within two business days after receiving an enquiry.",
       ],
     },
   ],

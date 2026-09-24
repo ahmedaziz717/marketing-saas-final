@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PUBLIC_CONTACT_EMAIL = "ahmed.aziz@cybertron.com";
+export const PUBLIC_CONTACT_EMAIL = "privacy@evokeloop.com";
 
 /** Platform identity, never an individual customer's workspace identity. */
 export const websiteProfileSchema = z.object({

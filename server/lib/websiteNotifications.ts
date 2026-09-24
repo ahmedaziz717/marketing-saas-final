@@ -1,7 +1,6 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { websiteRequests } from "../../drizzle/websiteSchema";
-import { PUBLIC_CONTACT_EMAIL } from "../../shared/publicWebsite";
 import { getDb } from "../db";
 import { siteOrigins } from "./siteOrigins";
 
@@ -27,7 +26,7 @@ const topicNames: Record<string, string> = {
 function notificationConfig(): NotificationConfig | null {
   const key = process.env.CONTACT_RESEND_API_KEY;
   const from = process.env.CONTACT_EMAIL_FROM;
-  const to = process.env.CONTACT_NOTIFICATION_EMAIL || PUBLIC_CONTACT_EMAIL;
+  const to = process.env.CONTACT_NOTIFICATION_EMAIL || "ahmed.aziz@cybertron.com";
   const app = siteOrigins().app;
   const senderAddress = from?.match(/^[^<>\r\n]+<([^<>\r\n]+)>$/)?.[1] || from;
   if (
