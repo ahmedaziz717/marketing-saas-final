@@ -184,7 +184,6 @@ export function PublicWebsite(props: Props) {
             <br />
             All Rights Reserved.
           </p>
-          <p>Independent software. Not affiliated with or endorsed by Meta.</p>
         </div>
       </footer>
     </div>
