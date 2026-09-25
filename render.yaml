@@ -1,0 +1,91 @@
+# Existing Render services. Preserve the always-on web and paid worker plans.
+# Enter credentials in Render's initial setup form; never commit their values.
+services:
+  - type: web
+    name: frame-staging
+    runtime: node
+    plan: 0.5c-512mb
+    region: ohio
+    repo: https://github.com/ahmedaziz717/marketing-saas-final
+    branch: codex/render-supabase-migration
+    autoDeployTrigger: "off"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    # The existing single web instance applies migrations on startup.
+    startCommand: pnpm db:migrate && pnpm start
+    healthCheckPath: /healthz
+    envVars:
+      - fromGroup: frame-staging
+      - key: APP_ORIGIN
+        value: https://app.evokeloop.com
+      - key: PUBLIC_SITE_ORIGIN
+        value: https://evokeloop.com
+      - key: LEGACY_SITE_ORIGINS
+        value: https://frame-staging.onrender.com,https://www.evokeloop.com
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_OWNER_USER_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: INTEGRATION_TOKEN_ENCRYPTION_SECRET
+        generateValue: true
+  - type: worker
+    name: frame-staging-creatives
+    runtime: node
+    plan: 1c-2g
+    region: ohio
+    repo: https://github.com/ahmedaziz717/marketing-saas-final
+    branch: codex/render-supabase-migration
+    autoDeployTrigger: "off"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    maxShutdownDelaySeconds: 300
+    startCommand: pnpm start:worker
+    envVars:
+      - fromGroup: frame-staging
+      - key: APP_ORIGIN
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: APP_ORIGIN
+      - key: DATABASE_URL
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: DATABASE_URL
+      - key: SUPABASE_SECRET_KEY
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: SUPABASE_SECRET_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: INTEGRATION_TOKEN_ENCRYPTION_SECRET
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: INTEGRATION_TOKEN_ENCRYPTION_SECRET
+
+envVarGroups:
+  - name: frame-staging
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://lxejhbtyfwpxlreuueyi.supabase.co
+      - key: SUPABASE_STORAGE_BUCKET
+        value: frame-assets
+      - key: AUTH_SIGNUP_ENABLED
+        value: "false"
+      - key: CREATIVE_WORKER_ENABLED
+        value: "false"
+      - key: LIVE_AD_ACTIONS_ENABLED
+        value: "false"

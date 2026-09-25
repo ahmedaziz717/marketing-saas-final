@@ -1,3 +1,4 @@
+import { processNextBuilderJob } from "./jobs/creativeWorker";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { and, eq } from "drizzle-orm";
@@ -48,7 +49,10 @@ import {
   products,
   users,
 } from "../drizzle/schema";
-import { applyCreativeTheme, defaultCreativeSetup } from "../shared/creativeBuilder";
+import {
+  applyCreativeTheme,
+  defaultCreativeSetup,
+} from "../shared/creativeBuilder";
 import { getDb } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -85,90 +89,111 @@ beforeAll(async () => {
   ).toString("base64");
   userId = Number(
     (
-      await db.insert(users).values({
-        openId: "builder-" + suffix,
-        name: "Builder integration",
-        email: "builder@example.test",
-        loginMethod: "test",
-      })
+      await db
+        .insert(users)
+        .values({
+          openId: "builder-" + suffix,
+          name: "Builder integration",
+          email: "builder@example.test",
+          loginMethod: "test",
+        })
+        .returning({ insertId: users.id })
     )[0].insertId
   );
   organizationId = Number(
     (
-      await db.insert(organizations).values({
-        name: "Builder integration",
-        slug: "builder-" + suffix,
-        createdByUserId: userId,
-        createdAtMs: now,
-      })
+      await db
+        .insert(organizations)
+        .values({
+          name: "Builder integration",
+          slug: "builder-" + suffix,
+          createdByUserId: userId,
+          createdAtMs: now,
+        })
+        .returning({ insertId: organizations.id })
     )[0].insertId
   );
-  await db.insert(organizationMemberships).values({
-    userId,
-    organizationId,
-    role: "owner",
-    status: "active",
-    createdAtMs: now,
-  });
+  await db
+    .insert(organizationMemberships)
+    .values({
+      userId,
+      organizationId,
+      role: "owner",
+      status: "active",
+      createdAtMs: now,
+    })
+    .returning({ insertId: organizationMemberships.id });
   const kitId = Number(
     (
-      await db.insert(brandKits).values({
-        organizationId,
-        name: "Studio",
-        colors: ["#ffffff"],
-        fonts: ["Inter"],
-        voice: "Clear",
-        requiredClaims: "",
-        prohibitedContent: "",
-        status: "active",
-        updatedByUserId: userId,
-        updatedAtMs: now,
-      })
+      await db
+        .insert(brandKits)
+        .values({
+          organizationId,
+          name: "Studio",
+          colors: ["#ffffff"],
+          fonts: ["Inter"],
+          voice: "Clear",
+          requiredClaims: "",
+          prohibitedContent: "",
+          status: "active",
+          updatedByUserId: userId,
+          updatedAtMs: now,
+        })
+        .returning({ insertId: brandKits.id })
     )[0].insertId
   );
   logoAssetId = Number(
     (
-      await db.insert(brandAssets).values({
-        organizationId,
-        brandKitId: kitId,
-        name: "Studio mark",
-        type: "logo",
-        storageKey: "test/logo.png",
-        url: "/manus-storage/test/logo.png",
-        mimeType: "image/png",
-        status: "approved",
-        uploadedByUserId: userId,
-        createdAtMs: now,
-      })
+      await db
+        .insert(brandAssets)
+        .values({
+          organizationId,
+          brandKitId: kitId,
+          name: "Studio mark",
+          type: "logo",
+          storageKey: "test/logo.png",
+          url: "/manus-storage/test/logo.png",
+          mimeType: "image/png",
+          status: "approved",
+          uploadedByUserId: userId,
+          createdAtMs: now,
+        })
+        .returning({ insertId: brandAssets.id })
     )[0].insertId
   );
   productId = Number(
     (
-      await db.insert(products).values({
-        organizationId,
-        name: "Studio lamp",
-        dedupeKey: "lamp-" + suffix,
-        productUrl: "https://example.test/products/studio-lamp",
-        price: "89.00",
-        currency: "USD",
-        specifications: { Power: "12 W", Material: "Aluminum" },
-        provenance: {},
-        status: "approved",
-        createdAtMs: now,
-        updatedAtMs: now,
-      })
+      await db
+        .insert(products)
+        .values({
+          organizationId,
+          name: "Studio lamp",
+          dedupeKey: "lamp-" + suffix,
+          productUrl: "https://example.test/products/studio-lamp",
+          price: "89.00",
+          currency: "USD",
+          specifications: { Power: "12 W", Material: "Aluminum" },
+          provenance: {},
+          status: "approved",
+          createdAtMs: now,
+          updatedAtMs: now,
+        })
+        .returning({ insertId: products.id })
     )[0].insertId
   );
   imageId = Number(
     (
-      await db.insert(productImages).values({
-        organizationId,
-        productId,
-        sourceUrl: "https://example.test/lamp.png",
-        storageKey: "test/lamp.png",
-        url: "/manus-storage/test/lamp.png",
-        createdAtMs: now,
-      })
+      await db
+        .insert(productImages)
+        .values({
+          organizationId,
+          productId,
+          sourceUrl: "https://example.test/lamp.png",
+          storageKey: "test/lamp.png",
+          url: "/manus-storage/test/lamp.png",
+          createdAtMs: now,
+        })
+        .returning({ insertId: productImages.id })
     )[0].insertId
   );
   const user = (
@@ -303,7 +328,8 @@ describe.sequential("persistent creative builder", () => {
       requestId: randomUUID(),
     };
     const started = await caller.creativeBuilder.generate(request);
-    expect(started.status).toBe("running");
+    expect(started.status).toBe("queued");
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () => {
         const state = await caller.creatives.overview({ organizationId });
@@ -364,6 +390,7 @@ describe.sequential("persistent creative builder", () => {
       expectedUpdatedAtMs: saved.updatedAtMs,
       requestId: randomUUID(),
     });
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () => {
         const state = await caller.creatives.overview({ organizationId });
@@ -384,6 +411,7 @@ describe.sequential("persistent creative builder", () => {
       requestId: randomUUID(),
     });
     expect(retry.jobId).not.toBe(started.jobId);
+    await processNextBuilderJob(await database());
     await vi.waitFor(
       async () =>
         expect(
@@ -394,4 +422,86 @@ describe.sequential("persistent creative builder", () => {
       { timeout: 10_000, interval: 30 }
     );
   });
+});
+
+it("persists person choices and rejects unapproved or cross-workspace person assets", async () => {
+  const db = await database();
+  const { loadInputs } = await import("./routers/creativeBuilder");
+  const draft = {
+    ...setup(),
+    shot: "female" as const,
+    person: { kind: "library" as const, id: "female-auburn-4" },
+    personHair: "auburn" as const,
+  };
+  const saved = await caller.creativeBuilder.save({
+    organizationId,
+    setup: draft,
+  });
+  expect(
+    (await caller.creativeBuilder.options({ organizationId })).drafts.find(
+      d => d.id === saved.briefId
+    )?.setup.person
+  ).toEqual(draft.person);
+  const kit = (
+    await db
+      .select()
+      .from(brandKits)
+      .where(eq(brandKits.organizationId, organizationId))
+      .limit(1)
+  )[0];
+  const otherOrg = (
+    await db
+      .insert(organizations)
+      .values({
+        name: "Other person tenant",
+        slug: `person-${suffix}`,
+        createdByUserId: userId,
+        createdAtMs: Date.now(),
+      })
+      .returning()
+  )[0];
+  const asset = (
+    await db
+      .insert(brandAssets)
+      .values({
+        organizationId,
+        brandKitId: kit.id,
+        name: "Uploaded person",
+        type: "reference",
+        storageKey: "test/person.png",
+        url: "/test/person.png",
+        mimeType: "image/png",
+        status: "pending",
+        metadata: { kind: "lifestyle_person", gender: "female" },
+        uploadedByUserId: userId,
+        createdAtMs: Date.now(),
+      })
+      .returning()
+  )[0];
+  const assetSetup = {
+    ...draft,
+    person: { kind: "asset" as const, assetId: asset.id },
+  };
+  try {
+    await expect(
+      loadInputs(db, organizationId, assetSetup)
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await db
+      .update(brandAssets)
+      .set({ status: "approved" })
+      .where(eq(brandAssets.id, asset.id));
+    expect(
+      (await loadInputs(db, organizationId, assetSetup)).personAsset?.id
+    ).toBe(asset.id);
+    await db
+      .update(brandAssets)
+      .set({ organizationId: otherOrg.id })
+      .where(eq(brandAssets.id, asset.id));
+    await expect(
+      loadInputs(db, organizationId, assetSetup)
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  } finally {
+    await db.delete(brandAssets).where(eq(brandAssets.id, asset.id));
+    await db.delete(organizations).where(eq(organizations.id, otherOrg.id));
+  }
 });

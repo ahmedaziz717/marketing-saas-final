@@ -27,7 +27,7 @@ export function categorizeGenerationError(message: string): { category: Generati
     return { category: "source_image", userMessage: "A selected source image could not be read. Use approved PNG, JPEG, or WebP assets, then retry." };
   }
   if (/sunburst credential|invalid_api_key|authentication|model_not_found|does not have access|sunburst request failed \((401|403)\)/.test(normalized)) {
-    return { category: "model_access", userMessage: "GPT Image 2.5 Sunburst access is unavailable for this workspace. Ask an owner to verify the OpenAI connection, then retry." };
+    return { category: "model_access", userMessage: "AI generation is unavailable for this workspace. Ask an owner to check the connection, then retry." };
   }
   if (/required gpt|model.+unavailable|list image models|list llm models/.test(normalized)) {
     return { category: "model_unavailable", userMessage: "AI generation is temporarily unavailable. Your setup is saved; try again later." };
