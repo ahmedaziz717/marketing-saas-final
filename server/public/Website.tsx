@@ -1085,16 +1085,6 @@ function Receipt({ receipt, unavailable }: Props) {
               : "Check the full link you received after submitting. No request details are available at this address."}
         </p>
       </Intro>
-      {receipt && (
-        <section className="container receipt-panel">
-          <CircleCheck size={32} />
-          <h2>We've received your message.</h2>
-          <p>
-            Thank you for getting in touch. Our team will review your enquiry
-            and get back to you soon.
-          </p>
-        </section>
-      )}
       <div className="container section">
         <a className="button secondary" href="/">
           Back to EvokeLoop <Arrow />
