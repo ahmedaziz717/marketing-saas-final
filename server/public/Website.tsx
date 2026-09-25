@@ -178,8 +178,11 @@ export function PublicWebsite(props: Props) {
         </div>
         <div className="container footer-bottom">
           <p>
-            &copy; {new Date().getUTCFullYear()}{" "}
-            {profile.operatorName || "EvokeLoop"}. All rights reserved.
+            &copy;{new Date().getUTCFullYear()} EvokeLoop, a division of
+            <br />
+            CYBERTRON INTERNATIONAL INC.
+            <br />
+            All Rights Reserved.
           </p>
           <p>Independent software. Not affiliated with or endorsed by Meta.</p>
         </div>

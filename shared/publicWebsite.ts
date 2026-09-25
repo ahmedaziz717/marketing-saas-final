@@ -4,14 +4,22 @@ export const PUBLIC_CONTACT_EMAIL = "privacy@evokeloop.com";
 
 /** Platform identity, never an individual customer's workspace identity. */
 export const websiteProfileSchema = z.object({
-  operatorName: z.string().trim().max(180).default(""),
+  operatorName: z
+    .string()
+    .trim()
+    .max(180)
+    .default("Cybertron International, Inc."),
   supportEmail: z
     .union([z.email().max(254), z.literal("")])
     .default(PUBLIC_CONTACT_EMAIL),
   privacyEmail: z
     .union([z.email().max(254), z.literal("")])
     .default(PUBLIC_CONTACT_EMAIL),
-  businessAddress: z.string().trim().max(500).default(""),
+  businessAddress: z
+    .string()
+    .trim()
+    .max(500)
+    .default("4747 South Emporia Street\nWichita, KS 67216"),
   operatorWebsite: z
     .union([
       z.url().refine(v => {

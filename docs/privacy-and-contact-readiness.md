@@ -56,3 +56,8 @@ The web process checks pending requests every 30 seconds. Transient errors retry
 - Added conditional EEA/UK controller/processor roles, purpose-linked legal bases, rights, a distinct objection notice, complaint links, response timing, information-provision consequences and transfer requirements. This is not a GDPR compliance certification. Before serving EEA/UK customers, confirm lawful-basis assessments, processor agreements, actual recipient transfer mechanisms, applicable representatives/DPO requirements and their contact disclosures. The notice does not assert executed SCCs, an IDTA, or Data Privacy Framework certification without evidence.
 - Updated email-provider disclosure for the now-enabled Resend privacy-email receiving and forwarding, including sender-supplied attachments.
 - Sources reviewed: https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/individual-rights/the-right-to-be-informed/what-privacy-information-should-we-provide/ ; https://www.edpb.europa.eu/topics/key-gdpr-concepts/legal-basis_en ; https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng ; https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/international-transfers/a-guide-to-international-transfers/
+
+
+## Confirmed legal operator
+
+On September 24, 2026 (America/New_York), the owner confirmed EvokeLoop is a division of Cybertron International, Inc., 4747 South Emporia Street, Wichita, KS 67216. These confirmed details now populate the public business profile defaults and the privacy notice. The footer uses the owner-requested division attribution. This resolves the operator-identity gap noted above, without marking unrelated compliance disclosures approved.

@@ -9,7 +9,7 @@ export const PRIVACY_POLICY: Article = {
     {
       title: "1. Scope and responsibility",
       paragraphs: [
-        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean the operator of that service. Contact our privacy team at privacy@evokeloop.com or through our Contact page.",
+        "This policy applies to evokeloop.com, app.evokeloop.com, our support communications and the EvokeLoop service. EvokeLoop is a division of Cybertron International, Inc., located at 4747 South Emporia Street, Wichita, KS 67216, United States. References to ‘EvokeLoop’, ‘we’ and ‘our’ mean Cybertron International, Inc., the operator of the service. Contact our privacy team at privacy@evokeloop.com or through our Contact page.",
         "We determine how information is used for our own account administration, website, security and business enquiries. When a customer connects marketing accounts, imports a catalog or supplies content about other people, we process that information on the customer's instructions to provide the service. The customer determines its campaigns and purposes and is responsible for its own notices, consent, permissions and applicable data-processing agreement. Contact that business about its activities; we will help route requests that concern information we process for it.",
         "This policy applies across enabled integrations, including advertising, social media, commerce and email services. Naming a provider does not mean every integration, permission or feature is available to every customer. We access an external account only through an enabled feature and the authorization you or your organization provides.",
       ],

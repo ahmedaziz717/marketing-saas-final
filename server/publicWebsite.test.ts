@@ -106,10 +106,15 @@ describe.sequential(
         );
       }
     });
-    it("does not fabricate an operator or advertise a completed Meta approval", async () => {
+    it("shows the confirmed operator without advertising a completed Meta approval", async () => {
       const html = await (await fetch(origin + "/about")).text();
-      expect(html).toContain("Contact EvokeLoop");
-      expect(html).not.toContain("Cybertron International");
+      expect(html).toContain("Business information");
+      expect(html).toContain("Cybertron International, Inc.");
+      expect(html).toContain("4747 South Emporia Street");
+      expect(html).toContain("Wichita, KS 67216");
+      expect(html).toContain(
+        "EvokeLoop, a division of<br/>CYBERTRON INTERNATIONAL INC.<br/>All Rights Reserved."
+      );
       expect((await fetch(origin + "/")).headers.get("x-robots-tag")).toContain(
         "noindex"
       );
@@ -132,7 +137,11 @@ describe.sequential(
     it("requires actual operator/contact details before disclosure approval", async () => {
       await expect(
         admin.saveProfile({
-          profile: { ...emptyWebsiteProfile, disclosuresApproved: true },
+          profile: {
+            ...emptyWebsiteProfile,
+            operatorName: "",
+            disclosuresApproved: true,
+          },
           revision: 0,
         })
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });
