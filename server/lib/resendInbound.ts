@@ -6,7 +6,10 @@ import { inboundPrivacyEmails } from "../../drizzle/websiteSchema";
 import { getDb } from "../db";
 
 export const RESEND_INBOUND_PATH = "/api/webhooks/resend/inbound";
-const privacyAddress = "privacy@evokeloop.com";
+const forwardingAddresses = new Set([
+  "privacy@evokeloop.com",
+  "support@evokeloop.com",
+]);
 const leaseMs = 10 * 60_000;
 const retryWindowMs = 23 * 60 * 60_000;
 const eventSchema = z.object({
@@ -105,7 +108,10 @@ export function registerResendInbound(app: Express) {
       const recipients = event.received_for?.length
         ? event.received_for
         : event.to;
-      if (!recipients.some(v => mailbox(v) === privacyAddress)) {
+      const matchedAddresses = [...new Set(recipients.map(mailbox))].filter(
+        address => forwardingAddresses.has(address)
+      );
+      if (!matchedAddresses.length) {
         res.json({ ignored: true });
         return;
       }
@@ -123,7 +129,7 @@ export function registerResendInbound(app: Express) {
             id,
             sender: cfg.from,
             recipient: cfg.to,
-            intro: `A message was sent to ${privacyAddress}.\nOriginal sender: ${event.from.replace(/[\r\n]/g, " ")}\n\nOpen the attached original email to read and reply to the sender. Its attachments are preserved inside it.\nPlease respond within two business days.`,
+            intro: `A message was sent to ${matchedAddresses.join(", ")}.\nOriginal sender: ${event.from.replace(/[\r\n]/g, " ")}\n\nOpen the attached original email to read and reply to the sender. Its attachments are preserved inside it.\nPlease respond within two business days.`,
             createdAtMs: now,
           })
           .onConflictDoNothing();
@@ -139,7 +145,7 @@ export function registerResendInbound(app: Express) {
           saved.firstAttemptAtMs &&
           now - saved.firstAttemptAtMs >= retryWindowMs
         ) {
-          console.warn("Privacy email forwarding needs manual review", {
+          console.warn("Inbound email forwarding needs manual review", {
             emailId: id,
             code: "retry_window_expired",
           });
@@ -210,7 +216,7 @@ export function registerResendInbound(app: Express) {
             /* lease expires if the database is temporarily unavailable */
           }
         }
-        console.warn("Privacy email forwarding deferred", { emailId: id });
+        console.warn("Inbound email forwarding deferred", { emailId: id });
         res.status(503).json({ error: "Forwarding temporarily unavailable" });
       }
     }

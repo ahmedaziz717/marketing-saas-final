@@ -115,7 +115,7 @@ const sends = () =>
   apiFetch.mock.calls.filter(
     ([url]) => url === "https://api.resend.com/emails"
   );
-describe.sequential("signed privacy inbound forwarding", () => {
+describe.sequential("signed support and privacy inbound forwarding", () => {
   it("rejects forged, expired and altered signatures without sending", async () => {
     expect((await post(undefined, undefined, false)).status).toBe(401);
     expect(
@@ -135,7 +135,7 @@ describe.sequential("signed privacy inbound forwarding", () => {
     });
     expect(apiFetch).not.toHaveBeenCalled();
   });
-  it("only processes privacy envelope recipients and ignores other signed events", async () => {
+  it("only processes allowed envelope recipients and ignores other signed events", async () => {
     expect(
       (
         await post(
@@ -169,6 +169,25 @@ describe.sequential("signed privacy inbound forwarding", () => {
     );
     expect(result.rows).toEqual([{ state: "sent" }]);
   });
+  it.each([
+    ["Support <SUPPORT@evokeloop.com>"],
+    ["support@evokeloop.com", "privacy@evokeloop.com"],
+  ])(
+    "forwards support and combined recipients once: %s",
+    async (...received_for) => {
+      const payload = JSON.stringify(
+        event({ to: ["other@evokeloop.com"], received_for })
+      );
+      expect((await post(payload)).status).toBe(200);
+      expect((await post(payload)).status).toBe(200);
+      expect(sends()).toHaveLength(1);
+      const body = JSON.parse(sends()[0][1].body);
+      expect(body.to).toBe("recipient@example.test");
+      expect(body.text).toContain("support@evokeloop.com");
+      if (received_for.length > 1)
+        expect(body.text).toContain("privacy@evokeloop.com");
+    }
+  );
   it("does not acknowledge provider failures; retries with the identical payload and key", async () => {
     const original = apiFetch.getMockImplementation()!;
     let failed = false;

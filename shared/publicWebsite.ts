@@ -11,7 +11,7 @@ export const websiteProfileSchema = z.object({
     .default("Cybertron International, Inc."),
   supportEmail: z
     .union([z.email().max(254), z.literal("")])
-    .default(PUBLIC_CONTACT_EMAIL),
+    .default("support@evokeloop.com"),
   privacyEmail: z
     .union([z.email().max(254), z.literal("")])
     .default(PUBLIC_CONTACT_EMAIL),
