@@ -22,6 +22,7 @@ import {
   publicationDraftSchema,
   rangeSchema,
   postRangeSchema,
+  adBrowseFiltersSchema,
   scopeSchema,
   timezoneSchema,
 } from "../../shared/channels";
@@ -365,7 +366,7 @@ export const channelsRouter = router({
       }
     }),
   adObjects: protectedProcedure
-    .input(destination)
+    .input(destination.extend({ filters: adBrowseFiltersSchema.optional() }))
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       try {
@@ -375,7 +376,8 @@ export const channelsRouter = router({
             input.organizationId,
             input.connectionId,
             "meta_ads"
-          )
+          ),
+          input.filters
         );
       } catch (e) {
         throw upstream(e);

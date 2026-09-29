@@ -4,6 +4,7 @@ import {
   actionValue,
   moveDate,
   type DateRange,
+  type AdBrowseFilters,
 } from "../../shared/channels";
 import { connectionToken } from "./channelConnections";
 import {
@@ -220,26 +221,43 @@ export async function facebookReport(c: ChannelConnection, range: DateRange) {
     note: "Post dates are filtered in UTC. Reactions/comments/shares are current lifetime totals on those posts, not engagement earned only within the selected period. Page views may include paid distribution and must not be added to ad impressions.",
   };
 }
-export async function advertisingObjects(c: ChannelConnection) {
+export async function advertisingObjects(c: ChannelConnection, filters?: AdBrowseFilters) {
   const token = connectionToken(c);
-  const [campaigns, adsets, ads] = await Promise.all([
-    graphCollection(`act_${remoteId(c.accountId)}/campaigns`, token, {
-      fields:
-        "id,name,objective,status,effective_status,daily_budget,lifetime_budget",
-    }),
-    graphCollection(`act_${remoteId(c.accountId)}/adsets`, token, {
-      fields:
-        "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,targeting,optimization_goal",
-    }),
-    graphCollection(`act_${remoteId(c.accountId)}/ads`, token, {
-      fields: "id,name,adset_id,campaign_id,status,effective_status",
-    }),
-  ]);
+  const status = filters?.status ?? "all";
+  const statuses = status === "paused"
+    ? ["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"]
+    : [status.toUpperCase()];
+  const account = `act_${remoteId(c.accountId)}`;
+  const definitions = [
+    { edge: "campaigns", level: "campaign", id: "campaign_id", fields: "id,name,objective,status,effective_status,daily_budget,lifetime_budget" },
+    { edge: "adsets", level: "adset", id: "adset_id", fields: "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,targeting,optimization_goal" },
+    { edge: "ads", level: "ad", id: "ad_id", fields: "id,name,adset_id,campaign_id,status,effective_status" },
+  ];
+  const results = await Promise.all(definitions.map(async definition => {
+    // Campaigns cannot inherit a parent's paused status.
+    const allowed = status === "paused"
+      ? definition.level === "campaign" ? ["PAUSED"] : definition.level === "adset" ? ["PAUSED", "CAMPAIGN_PAUSED"] : statuses
+      : statuses;
+    const objects = await graphCollection(`${account}/${definition.edge}`, token, {
+      fields: definition.fields,
+      ...(status === "all" ? {} : { effective_status: JSON.stringify(allowed) }),
+    });
+    let data = objects.data.filter(row => status === "all" || allowed.includes(String(row.effective_status || row.status)));
+    if (!filters?.range) return { ...objects, data };
+    const delivery = await graphCollection(`${account}/insights`, token, {
+      level: definition.level,
+      fields: `${definition.id},impressions`,
+      time_range: JSON.stringify(filters.range),
+    });
+    const delivered = new Set(delivery.data.filter(row => Number(row.impressions) > 0).map(row => String(row[definition.id])));
+    data = data.filter(row => delivered.has(String(row.id)));
+    return { data, truncated: objects.truncated || delivery.truncated };
+  }));
   return {
-    campaigns: campaigns.data,
-    adsets: adsets.data,
-    ads: ads.data,
-    truncated: campaigns.truncated || adsets.truncated || ads.truncated,
+    campaigns: results[0].data,
+    adsets: results[1].data,
+    ads: results[2].data,
+    truncated: results.some(result => result.truncated),
     currency: c.details.currency ?? null,
   };
 }

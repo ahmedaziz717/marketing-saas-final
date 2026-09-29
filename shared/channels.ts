@@ -73,6 +73,11 @@ export const postRangeSchema = z
       until >= since && Date.parse(until) - Date.parse(since) < 366 * 86400000,
     "Select a range of up to one year (366 days)."
   );
+export const adBrowseFiltersSchema = z.object({
+  status: z.enum(["all", "active", "paused", "archived", "deleted"]).default("all"),
+  range: postRangeSchema.optional(),
+});
+export type AdBrowseFilters = z.infer<typeof adBrowseFiltersSchema>;
 export type DateRange = z.infer<typeof rangeSchema>;
 export const linkSchema = z
   .string()
