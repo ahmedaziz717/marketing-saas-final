@@ -462,7 +462,7 @@ function layout() {
       layout();
     } else if (which === "social")
       check(
-        document.body.textContent?.includes("Recent Facebook posts"),
+        Array.from(document.querySelectorAll("h2")).some(h => h.textContent === "Facebook posts"),
         "Facebook posts render"
       );
     else if (which === "advertising")
