@@ -1,5 +1,7 @@
+import { placementSlots } from "../../shared/metaPlacements";
+import { assetFormat } from "../../shared/assetFit";
 import { assetFit } from "../../shared/assetFit";
-import { metaLinkData } from "../../shared/metaCreative";
+import { metaLinkData, metaPlacementFeed } from "../../shared/metaCreative";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -142,15 +144,60 @@ export async function dependencies(db: Runner, item: Publication) {
           "Meta ads require an ad set, destination URL, headline, primary text and a connection with a Facebook Page.",
       });
   }
+  const placementAssets = [];
+  if (item.content.placementAssetKeys) {
+    const selected = item.content.placementAssetKeys;
+    if (
+      item.channel !== "meta_ads" ||
+      item.content.carouselAssetKeys?.length ||
+      selected.square !== item.assetKey
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Placement images must belong to a single-image Meta ad.",
+      });
+    for (const slot of placementSlots) {
+      const key = selected[slot.key];
+      if (!key)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Choose the ${slot.ratio} image for ${slot.label}.`,
+        });
+      const image = await readLibraryAsset(db, item.organizationId, key);
+      if (
+        image.state !== "approved" ||
+        !assetFit(image, "meta_ads") ||
+        assetFormat(image) !== slot.key
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `${slot.label} requires an approved ${slot.ratio} image.`,
+        });
+      placementAssets.push(image);
+    }
+  }
   const carouselKeys = item.content.carouselAssetKeys ?? [];
   const carouselAssets = [];
   if (carouselKeys.length) {
-    if (item.channel !== "meta_ads" || carouselKeys.length < 2 || carouselKeys.length > 10 || new Set(carouselKeys).size !== carouselKeys.length || carouselKeys[0] !== item.assetKey)
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Choose 2–10 unique carousel images in order." });
+    if (
+      item.channel !== "meta_ads" ||
+      carouselKeys.length < 2 ||
+      carouselKeys.length > 10 ||
+      new Set(carouselKeys).size !== carouselKeys.length ||
+      carouselKeys[0] !== item.assetKey
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Choose 2–10 unique carousel images in order.",
+      });
     for (const key of carouselKeys) {
       const card = await readLibraryAsset(db, item.organizationId, key);
       if (card.state !== "approved" || !assetFit(card, "meta_ads", true))
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Each carousel card must be an approved square finished image." });
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Each carousel card must be an approved square finished image.",
+        });
       carouselAssets.push(card);
     }
   }
@@ -165,7 +212,22 @@ export async function dependencies(db: Runner, item: Publication) {
     content: item.content,
     assetKey: item.assetKey,
     assetRevision: asset?.revision ?? null,
-    ...(carouselAssets.length ? { carouselRevisions: carouselAssets.map(a => ({ key: a.key, revision: a.revision })) } : {}),
+    ...(placementAssets.length
+      ? {
+          placementRevisions: placementAssets.map(a => ({
+            key: a.key,
+            revision: a.revision,
+          })),
+        }
+      : {}),
+    ...(carouselAssets.length
+      ? {
+          carouselRevisions: carouselAssets.map(a => ({
+            key: a.key,
+            revision: a.revision,
+          })),
+        }
+      : {}),
     scheduledAtMs: item.scheduledAtMs,
     timezone: item.timezone,
   });
@@ -457,28 +519,75 @@ export async function executePublication(
         null
       );
     } else {
-      const adSet = await graphRequest<{ id: string; account_id: string }>(
-        remoteId(item.content.adSetId),
-        token,
-        { fields: "id,account_id" }
-      );
+      const adSet = await graphRequest<{
+        id: string;
+        account_id: string;
+        is_dynamic_creative?: boolean;
+      }>(remoteId(item.content.adSetId), token, {
+        fields: item.content.placementAssetKeys
+          ? "id,account_id,is_dynamic_creative"
+          : "id,account_id",
+      });
       if (adSet.account_id !== connection.accountId)
         throw new Error(
           "The selected ad set belongs to a different ad account."
         );
-      const keys = item.content.carouselAssetKeys?.length ? item.content.carouselAssetKeys : [item.assetKey!];
-      const hashes = (result.imageHashes as Record<string, string> | undefined) ?? {};
-      if (keys.length === 1 && result.imageHash) hashes[keys[0]] = String(result.imageHash);
+      const placement = item.content.placementAssetKeys;
+      if (placement && adSet.is_dynamic_creative)
+        throw new Error(
+          "Placement images require a standard ad set without Dynamic Creative. Choose a compatible ad set."
+        );
+      const keys = placement
+        ? placementSlots.map(slot => placement[slot.key]!)
+        : item.content.carouselAssetKeys?.length
+          ? item.content.carouselAssetKeys
+          : [item.assetKey!];
+      const hashes =
+        (result.imageHashes as Record<string, string> | undefined) ?? {};
+      if (keys.length === 1 && result.imageHash)
+        hashes[keys[0]] = String(result.imageHash);
       for (const key of keys) {
         if (hashes[key]) continue;
-        const image = sharp(await assetBytes(db, { ...item, assetKey: key }), { limitInputPixels: 40000000 }).rotate();
+        const image = sharp(await assetBytes(db, { ...item, assetKey: key }), {
+          limitInputPixels: 40000000,
+        }).rotate();
         const bytes = await image.png().toBuffer();
         const info = await sharp(bytes).metadata();
-        if (keys.length > 1 && (!info.width || !info.height || Math.abs(info.width / info.height - 1) > .02 || Math.min(info.width, info.height) < 600))
-          throw new Error("Carousel images must be square and at least 600 × 600 pixels. Choose an approved square version.");
-        const uploaded = await graphPost(`act_${remoteId(connection.accountId)}/adimages`, token, { bytes: bytes.toString("base64") });
-        const stored = Object.values(uploaded.images ?? {})[0] as { hash?: string } | undefined;
-        if (!stored?.hash) throw new Error("Meta did not confirm the ad image.");
+        if (
+          !placement &&
+          keys.length > 1 &&
+          (!info.width ||
+            !info.height ||
+            Math.abs(info.width / info.height - 1) > 0.02 ||
+            Math.min(info.width, info.height) < 600)
+        )
+          throw new Error(
+            "Carousel images must be square and at least 600 × 600 pixels. Choose an approved square version."
+          );
+        if (placement) {
+          const slot = placementSlots.find(
+            slot => placement[slot.key] === key
+          )!;
+          if (
+            !info.width ||
+            !info.height ||
+            Math.abs(info.width / info.height - slot.aspect) >= 0.02 ||
+            Math.min(info.width, info.height) < 600
+          )
+            throw new Error(
+              `${slot.label} requires a ${slot.ratio} image at least 600 pixels on its shorter edge.`
+            );
+        }
+        const uploaded = await graphPost(
+          `act_${remoteId(connection.accountId)}/adimages`,
+          token,
+          { bytes: bytes.toString("base64") }
+        );
+        const stored = Object.values(uploaded.images ?? {})[0] as
+          | { hash?: string }
+          | undefined;
+        if (!stored?.hash)
+          throw new Error("Meta did not confirm the ad image.");
         hashes[key] = stored.hash;
         result.imageHashes = hashes;
         result.imageHash = hashes[keys[0]];
@@ -490,9 +599,23 @@ export async function executePublication(
           token,
           {
             name: item.content.title + " - EvokeLoop",
+            ...(placement
+              ? {
+                  asset_feed_spec: JSON.stringify(
+                    metaPlacementFeed(item.content, hashes)
+                  ),
+                }
+              : {}),
             object_story_spec: JSON.stringify({
               page_id: connection.details.pageId,
-              link_data: metaLinkData(item.content, keys.map(key => hashes[key])),
+              ...(!placement
+                ? {
+                    link_data: metaLinkData(
+                      item.content,
+                      keys.map(key => hashes[key])
+                    ),
+                  }
+                : {}),
             }),
           }
         );

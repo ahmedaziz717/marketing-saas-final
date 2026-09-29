@@ -74,7 +74,9 @@ export const postRangeSchema = z
     "Select a range of up to one year (366 days)."
   );
 export const adBrowseFiltersSchema = z.object({
-  status: z.enum(["all", "active", "paused", "archived", "deleted"]).default("all"),
+  status: z
+    .enum(["all", "active", "paused", "archived", "deleted"])
+    .default("all"),
   range: postRangeSchema.optional(),
   performanceRange: postRangeSchema.optional(),
 });
@@ -106,7 +108,26 @@ export const contentSchema = z.object({
   callToAction: z
     .enum(["SHOP_NOW", "LEARN_MORE", "SIGN_UP", "GET_OFFER"])
     .default("LEARN_MORE"),
-  carouselAssetKeys: z.array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/)).max(10).optional(),
+  placementAssetKeys: z
+    .object({
+      square: z
+        .string()
+        .regex(/^(asset|creative):[1-9][0-9]*$/)
+        .optional(),
+      portrait: z
+        .string()
+        .regex(/^(asset|creative):[1-9][0-9]*$/)
+        .optional(),
+      story: z
+        .string()
+        .regex(/^(asset|creative):[1-9][0-9]*$/)
+        .optional(),
+    })
+    .optional(),
+  carouselAssetKeys: z
+    .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
+    .max(10)
+    .optional(),
   campaignLabel: z.string().trim().max(180).default(""),
   adSetId: z.string().regex(/^\d*$/).max(100).default(""),
 });

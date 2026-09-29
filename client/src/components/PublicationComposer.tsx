@@ -1,3 +1,5 @@
+import { PlacementAssetPicker } from "./PlacementAssetPicker";
+import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -71,6 +73,9 @@ export function PublicationComposer({
     item?.channel ?? initialChannel
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [placement, setPlacement] = useState(
+    !!item?.content.placementAssetKeys
+  );
   const [carousel, setCarousel] = useState(
     !!item?.content.carouselAssetKeys?.length
   );
@@ -142,6 +147,10 @@ export function PublicationComposer({
         assetKey: assetKey || null,
         content: {
           ...content,
+          placementAssetKeys:
+            channel === "meta_ads" && placement
+              ? content.placementAssetKeys
+              : undefined,
           carouselAssetKeys:
             channel === "meta_ads" && carousel
               ? content.carouselAssetKeys
@@ -184,8 +193,13 @@ export function PublicationComposer({
               onChange={e => {
                 setChannel(e.target.value as Channel);
                 setCarousel(false);
+                setPlacement(false);
                 setAsset("");
-                setContent(c => ({ ...c, carouselAssetKeys: undefined }));
+                setContent(c => ({
+                  ...c,
+                  carouselAssetKeys: undefined,
+                  placementAssetKeys: undefined,
+                }));
                 setConnection("");
                 setField("adSetId", "");
               }}
@@ -245,28 +259,50 @@ export function PublicationComposer({
               <select
                 aria-label="Ad format"
                 className={channelInput + " mb-3"}
-                value={carousel ? "carousel" : "single"}
+                value={
+                  placement ? "placement" : carousel ? "carousel" : "single"
+                }
                 onChange={e => {
                   setCarousel(e.target.value === "carousel");
+                  setPlacement(e.target.value === "placement");
                   setAsset("");
-                  setContent(c => ({ ...c, carouselAssetKeys: undefined }));
+                  setContent(c => ({
+                    ...c,
+                    carouselAssetKeys: undefined,
+                    placementAssetKeys: undefined,
+                  }));
                 }}
               >
                 <option value="single">Single image</option>
+                <option value="placement">
+                  Placement images · 1:1, 4:5, 9:16
+                </option>
                 <option value="carousel">Carousel · 2–10 images</option>
               </select>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setPickerOpen(true)}
-            >
-              Browse approved assets
-              {carousel
-                ? ` (${content.carouselAssetKeys?.length ?? 0} selected)`
-                : ""}
-            </Button>
+            {!placement && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setPickerOpen(true)}
+              >
+                Browse approved assets
+                {carousel
+                  ? ` (${content.carouselAssetKeys?.length ?? 0} selected)`
+                  : ""}
+              </Button>
+            )}
+            {placement && (
+              <PlacementAssetPicker
+                assets={assets.data ?? []}
+                value={content.placementAssetKeys}
+                onChange={value => {
+                  setAsset(value.square ?? "");
+                  setContent(c => ({ ...c, placementAssetKeys: value }));
+                }}
+              />
+            )}
             {channel === "facebook" && assetKey && (
               <Button
                 type="button"
@@ -362,7 +398,7 @@ export function PublicationComposer({
                 The approved library could not be loaded.
               </p>
             )}
-            {selectedAsset && !carousel && (
+            {selectedAsset && !carousel && !placement && (
               <div className="mt-3 rounded-xl bg-muted/50 p-3">
                 {selectedAsset.mediaType === "video" ? (
                   <video
@@ -708,14 +744,37 @@ export function PublicationDetails({
             })}
           </div>
         )}
-        {item.assetKey && !item.content.carouselAssetKeys?.length && (
-          <Link
-            href={"/app/library?asset=" + encodeURIComponent(item.assetKey)}
-            className="text-sm text-primary"
-          >
-            Review attached asset
-          </Link>
+        {item.content.placementAssetKeys && (
+          <div className="grid grid-cols-3 gap-3">
+            {placementSlots.map(slot => {
+              const a = reviewAssets.data?.find(
+                a => a.key === item.content.placementAssetKeys?.[slot.key]
+              );
+              return (
+                <div key={slot.key}>
+                  <img
+                    src={a?.url}
+                    alt={a?.name ?? slot.label}
+                    className="h-32 w-full rounded-lg object-contain"
+                  />
+                  <p className="text-xs">
+                    {slot.label} · {slot.ratio}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         )}
+        {item.assetKey &&
+          !item.content.placementAssetKeys &&
+          !item.content.carouselAssetKeys?.length && (
+            <Link
+              href={"/app/library?asset=" + encodeURIComponent(item.assetKey)}
+              className="text-sm text-primary"
+            >
+              Review attached asset
+            </Link>
+          )}
         {item.channel === "meta_ads" && (
           <p className="rounded-xl border p-3 text-sm">
             Meta ad delivery creates a paused image ad only. No budget or

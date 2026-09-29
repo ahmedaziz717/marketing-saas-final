@@ -21,3 +21,50 @@ export function metaLinkData(content: PublicationContent, hashes: string[]) {
         multi_share_end_card: false,
       };
 }
+
+// Placement customization chooses an image within one single-image ad.
+// It does not change the ad set's enabled placements or create a carousel.
+export function metaPlacementFeed(
+  content: PublicationContent,
+  hashes: Record<string, string>
+) {
+  const assets = content.placementAssetKeys;
+  if (!assets?.square || !assets.portrait || !assets.story)
+    throw new Error("Choose all three placement images.");
+  const label = (name: string) => ({ name: `evokeloop_${name}` });
+  return {
+    ad_formats: ["SINGLE_IMAGE"],
+    optimization_type: "PLACEMENT",
+    images: (["square", "portrait", "story"] as const).map(slot => {
+      const hash = hashes[assets[slot]!];
+      if (!hash) throw new Error("Missing approved placement image.");
+      return { hash, adlabels: [label(slot)] };
+    }),
+    bodies: [{ text: content.message }],
+    titles: [{ text: content.headline }],
+    descriptions: [{ text: content.description || " " }],
+    link_urls: [{ website_url: content.link }],
+    call_to_action_types: [content.callToAction],
+    asset_customization_rules: [
+      {
+        customization_spec: {
+          publisher_platforms: ["facebook", "instagram"],
+          facebook_positions: ["story", "facebook_reels"],
+          instagram_positions: ["story", "reels"],
+        },
+        image_label: label("story"),
+      },
+      {
+        customization_spec: {
+          publisher_platforms: ["instagram"],
+          instagram_positions: ["stream"],
+        },
+        image_label: label("portrait"),
+      },
+      {
+        customization_spec: {},
+        image_label: label("square"),
+      },
+    ],
+  };
+}

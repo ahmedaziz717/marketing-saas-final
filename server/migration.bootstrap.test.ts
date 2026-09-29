@@ -1,6 +1,7 @@
 import { it, expect } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { buildBootstrapSql } from "../scripts/migration/supabase-bootstrap.mjs";
 
@@ -12,17 +13,31 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
       CREATE SCHEMA storage;
       CREATE TABLE storage.buckets (id text PRIMARY KEY, name text, public boolean NOT NULL DEFAULT false);`);
     await engine.exec(buildBootstrapSql());
+    const before = (
+      await engine.query(
+        "SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at"
+      )
+    ).rows;
     await migrate(drizzle(engine), { migrationsFolder: "drizzle/postgres" });
     expect(
+      (
+        await engine.query(
+          "SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at"
+        )
+      ).rows
+    ).toEqual(before);
+    expect(
       (await engine.query("SELECT * FROM drizzle.__drizzle_migrations")).rows
-    ).toHaveLength(5);
+    ).toHaveLength(
+      readMigrationFiles({ migrationsFolder: "drizzle/postgres" }).length
+    );
     expect(
       (
         await engine.query(
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(25);
+    ).toHaveLength(26);
     expect(
       (await engine.query("SELECT id, public FROM storage.buckets")).rows
     ).toEqual([{ id: "frame-assets", public: false }]);

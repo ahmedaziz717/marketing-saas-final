@@ -108,7 +108,7 @@ export function registerResendInbound(app: Express) {
       const recipients = event.received_for?.length
         ? event.received_for
         : event.to;
-      const matchedAddresses = [...new Set(recipients.map(mailbox))].filter(
+      const matchedAddresses = Array.from(new Set(recipients.map(mailbox))).filter(
         address => forwardingAddresses.has(address)
       );
       if (!matchedAddresses.length) {

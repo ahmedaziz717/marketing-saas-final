@@ -16,6 +16,7 @@ import {
 const state = vi.hoisted(() => ({
   db: null as any,
   image: "",
+  images: {} as Record<string, string>,
   graph: vi.fn(),
 }));
 vi.mock("./db", () => ({
@@ -30,7 +31,7 @@ vi.mock("./lib/channelGraph", async original => ({
 }));
 vi.mock("./storage", async original => ({
   ...(await original<typeof import("./storage")>()),
-  storageGetBase64: async () => state.image,
+  storageGetBase64: async (key: string) => state.images[key] ?? state.image,
 }));
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -102,17 +103,15 @@ beforeAll(async () => {
     .returning();
   org = orgs[0].id;
   otherOrg = orgs[1].id;
-  await db
-    .insert(organizationMemberships)
-    .values(
-      people.map((person: any, i: number) => ({
-        userId: person.id,
-        organizationId: i === 4 ? otherOrg : org,
-        role: i === 4 ? "owner" : person.name,
-        status: "active",
-        createdAtMs: now,
-      }))
-    );
+  await db.insert(organizationMemberships).values(
+    people.map((person: any, i: number) => ({
+      userId: person.id,
+      organizationId: i === 4 ? otherOrg : org,
+      role: i === 4 ? "owner" : person.name,
+      status: "active",
+      createdAtMs: now,
+    }))
+  );
   const [kit] = await db
     .insert(brandKits)
     .values({
@@ -217,6 +216,7 @@ beforeEach(async () => {
   vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "false");
   await state.db.delete(publications);
   state.graph.mockReset();
+  state.images = {};
   state.graph.mockResolvedValue({ id: "123_789" });
   await state.db
     .update(brandAssets)
@@ -508,38 +508,215 @@ describe.sequential(
     });
     it("delivers ordered carousel images paused and invalidates approval when any card changes", async () => {
       vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
-      const [base] = await state.db.select().from(brandAssets).where(eq(brandAssets.id, assetId));
-      const {id: ignored, ...fields} = base;
-      const [second] = await state.db.insert(brandAssets).values({...fields, name: "Second card", storageKey: "org-" + org + "/second.png"}).returning();
-      const extra = { channel: "meta_ads", connectionId: adsId, assetKey: `asset:${assetId}`, content: contentSchema.parse({title:"Carousel",message:"Caption",headline:"Shop",link:"https://example.test",adSetId:"777",carouselAssetKeys:[`asset:${assetId}`,`asset:${second.id}`]}) };
-      let uploads=0;
-      state.graph.mockImplementation(async (path: string) => path === "777" ? {account_id:"456"} : path.endsWith('/adimages') ? {images:{image:{hash:`card-${++uploads}`}}} : {id:"999"});
+      const [base] = await state.db
+        .select()
+        .from(brandAssets)
+        .where(eq(brandAssets.id, assetId));
+      const { id: ignored, ...fields } = base;
+      const [second] = await state.db
+        .insert(brandAssets)
+        .values({
+          ...fields,
+          name: "Second card",
+          storageKey: "org-" + org + "/second.png",
+        })
+        .returning();
+      const extra = {
+        channel: "meta_ads",
+        connectionId: adsId,
+        assetKey: `asset:${assetId}`,
+        content: contentSchema.parse({
+          title: "Carousel",
+          message: "Caption",
+          headline: "Shop",
+          link: "https://example.test",
+          adSetId: "777",
+          carouselAssetKeys: [`asset:${assetId}`, `asset:${second.id}`],
+        }),
+      };
+      let uploads = 0;
+      state.graph.mockImplementation(async (path: string) =>
+        path === "777"
+          ? { account_id: "456" }
+          : path.endsWith("/adimages")
+            ? { images: { image: { hash: `card-${++uploads}` } } }
+            : { id: "999" }
+      );
       const p = await queued(extra);
       await publicationTick(state.db);
-      expect((await current(p.id)).state, (await current(p.id)).error ?? "").toBe("published");
-      const creative = state.graph.mock.calls.find(c => c[0] === 'act_456/adcreatives');
-      const link = JSON.parse(creative![3].get('object_story_spec')).link_data;
-      expect(link.child_attachments.map((a: any) => a.image_hash)).toEqual(['card-1','card-2']);
+      expect(
+        (await current(p.id)).state,
+        (await current(p.id)).error ?? ""
+      ).toBe("published");
+      const creative = state.graph.mock.calls.find(
+        c => c[0] === "act_456/adcreatives"
+      );
+      const link = JSON.parse(creative![3].get("object_story_spec")).link_data;
+      expect(link.child_attachments.map((a: any) => a.image_hash)).toEqual([
+        "card-1",
+        "card-2",
+      ]);
       expect(link.multi_share_optimized).toBe(false);
-      expect(state.graph.mock.calls.find(c => c[0] === 'act_456/ads')![3].get('status')).toBe('PAUSED');
+      expect(
+        state.graph.mock.calls
+          .find(c => c[0] === "act_456/ads")![3]
+          .get("status")
+      ).toBe("PAUSED");
       const stale = await approved(extra);
-      await state.db.update(brandAssets).set({name:'Changed second card'}).where(eq(brandAssets.id,second.id));
-      await expect(owner.publishing.queue({...version(stale),confirm:true})).rejects.toThrow();
+      await state.db
+        .update(brandAssets)
+        .set({ name: "Changed second card" })
+        .where(eq(brandAssets.id, second.id));
+      await expect(
+        owner.publishing.queue({ ...version(stale), confirm: true })
+      ).rejects.toThrow();
+    });
+    it("creates one placement-customized ad with three correctly sized images and checks every approval", async () => {
+      vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
+      const [base] = await state.db
+        .select()
+        .from(brandAssets)
+        .where(eq(brandAssets.id, assetId));
+      const { id: ignored, ...fields } = base;
+      const keys: Record<string, string> = { square: `asset:${assetId}` };
+      for (const [slot, height] of [
+        ["portrait", 1350],
+        ["story", 1920],
+      ] as const) {
+        const storageKey = `org-${org}/${slot}.png`;
+        const [asset] = await state.db
+          .insert(brandAssets)
+          .values({
+            ...fields,
+            name: slot,
+            storageKey,
+            metadata: { ...base.metadata, width: 1080, height },
+          })
+          .returning();
+        keys[slot] = `asset:${asset.id}`;
+        state.images[storageKey] = (
+          await sharp({
+            create: { width: 1080, height, channels: 4, background: "white" },
+          })
+            .png()
+            .toBuffer()
+        ).toString("base64");
+      }
+      const extra = {
+        channel: "meta_ads",
+        connectionId: adsId,
+        assetKey: keys.square,
+        content: contentSchema.parse({
+          title: "Placement ad",
+          message: "Caption",
+          headline: "Shop",
+          link: "https://example.test",
+          adSetId: "777",
+          placementAssetKeys: keys,
+        }),
+      };
+      let uploaded = 0;
+      state.graph.mockImplementation(async (path: string) =>
+        path === "777"
+          ? { account_id: "456", is_dynamic_creative: false }
+          : path.endsWith("/adimages")
+            ? { images: { image: { hash: `placement-${++uploaded}` } } }
+            : { id: "999" }
+      );
+      const p = await queued(extra);
+      await publicationTick(state.db);
+      expect(
+        (await current(p.id)).state,
+        (await current(p.id)).error ?? ""
+      ).toBe("published");
+      const write = state.graph.mock.calls.find(
+        c => c[0] === "act_456/adcreatives"
+      )![3];
+      const feed = JSON.parse(write.get("asset_feed_spec"));
+      expect(feed.ad_formats).toEqual(["SINGLE_IMAGE"]);
+      expect(feed.images.map((i: any) => i.hash)).toEqual([
+        "placement-1",
+        "placement-2",
+        "placement-3",
+      ]);
+      expect(feed.asset_customization_rules[0]).toMatchObject({
+        image_label: { name: "evokeloop_story" },
+        customization_spec: { instagram_positions: ["story", "reels"] },
+      });
+      expect(feed.asset_customization_rules[1].image_label.name).toBe(
+        "evokeloop_portrait"
+      );
+      expect(feed.asset_customization_rules[2].customization_spec).toEqual({});
+      expect(
+        JSON.parse(write.get("object_story_spec")).link_data
+      ).toBeUndefined();
+      expect(
+        state.graph.mock.calls.filter(c => c[0] === "act_456/ads")
+      ).toHaveLength(1);
+      const stale = await approved(extra);
+      await state.db
+        .update(brandAssets)
+        .set({ name: "Changed vertical image" })
+        .where(eq(brandAssets.id, Number(keys.story.split(":")[1])));
+      await expect(
+        owner.publishing.queue({ ...version(stale), confirm: true })
+      ).rejects.toThrow();
+      await expect(
+        approved({
+          ...extra,
+          content: {
+            ...extra.content,
+            placementAssetKeys: { ...keys, story: keys.square },
+          },
+        })
+      ).rejects.toThrow("9:16");
     });
     it("requires a matching, unused review for Meta management writes", async () => {
       vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
-      const [c] = await state.db.select().from(channelConnections).where(eq(channelConnections.id,adsId));
-      await state.db.update(channelConnections).set({details:{...c.details,permissions:['ads_management']}}).where(eq(channelConnections.id,adsId));
-      const scope={organizationId:org,connectionId:adsId};
-      const change={kind:'create_campaign' as const,name:'Paused test campaign',budgetMode:'campaign' as const,dailyBudget:25};
-      await expect(creator.channels.reviewMetaChange({...scope,change})).rejects.toThrow();
-      const review=await owner.channels.reviewMetaChange({...scope,change});
-      await expect(owner.channels.applyMetaChange({...scope,change:{...change,dailyBudget:50},ticket:review.ticket})).rejects.toThrow('does not belong');
-      state.graph.mockResolvedValue({id:'888'});
-      await owner.channels.applyMetaChange({...scope,change,ticket:review.ticket});
-      expect(state.graph.mock.calls.at(-1)?.[3].get('status')).toBe('PAUSED');
-      const count=state.graph.mock.calls.length;
-      await expect(owner.channels.applyMetaChange({...scope,change,ticket:review.ticket})).rejects.toThrow('already been submitted');
+      const [c] = await state.db
+        .select()
+        .from(channelConnections)
+        .where(eq(channelConnections.id, adsId));
+      await state.db
+        .update(channelConnections)
+        .set({ details: { ...c.details, permissions: ["ads_management"] } })
+        .where(eq(channelConnections.id, adsId));
+      const scope = { organizationId: org, connectionId: adsId };
+      const change = {
+        kind: "create_campaign" as const,
+        name: "Paused test campaign",
+        budgetMode: "campaign" as const,
+        dailyBudget: 25,
+      };
+      await expect(
+        creator.channels.reviewMetaChange({ ...scope, change })
+      ).rejects.toThrow();
+      const review = await owner.channels.reviewMetaChange({
+        ...scope,
+        change,
+      });
+      await expect(
+        owner.channels.applyMetaChange({
+          ...scope,
+          change: { ...change, dailyBudget: 50 },
+          ticket: review.ticket,
+        })
+      ).rejects.toThrow("does not belong");
+      state.graph.mockResolvedValue({ id: "888" });
+      await owner.channels.applyMetaChange({
+        ...scope,
+        change,
+        ticket: review.ticket,
+      });
+      expect(state.graph.mock.calls.at(-1)?.[3].get("status")).toBe("PAUSED");
+      const count = state.graph.mock.calls.length;
+      await expect(
+        owner.channels.applyMetaChange({
+          ...scope,
+          change,
+          ticket: review.ticket,
+        })
+      ).rejects.toThrow("already been submitted");
       expect(state.graph).toHaveBeenCalledTimes(count);
     });
     it("disconnect cancels queued authorization without deleting remote posts", async () => {
