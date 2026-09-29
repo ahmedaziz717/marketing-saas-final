@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('./CatalogEntryForm', () => ({CatalogEntryForm: () => null}));
 vi.mock('@/lib/trpc', () => ({trpc: {
  useUtils: () => ({}),
- catalogSources: {list:{useQuery:()=>({data:[]})}, connect:{useMutation:()=>({})},action:{useMutation:()=>({})},addEntries:{useMutation:()=>({})}},
+ catalogSources: {list:{useQuery:()=>({data:[]})}, discoverOfferings:{useMutation:()=>({})}, connect:{useMutation:()=>({})},action:{useMutation:()=>({})},addEntries:{useMutation:()=>({})}},
  crawl:{latest:{useQuery:()=>({data:{status:'review_ready',sourceOrigin:'https://store.example',pagesProcessed:250,pagesDiscovered:250}})}},
  catalog:{overview:{useQuery:()=>({data:{total:485}})}}
 }}));

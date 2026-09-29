@@ -16,7 +16,10 @@ import { requireOrganizationRole } from './lib/access';
 let engine: PGlite;
 beforeAll(async () => {
   engine = new PGlite();
-  await engine.exec(readFileSync('drizzle/postgres/0000_long_mad_thinker.sql', 'utf8'));
+  const journal = JSON.parse(readFileSync('drizzle/postgres/meta/_journal.json', 'utf8'));
+  for (const entry of journal.entries) {
+    await engine.exec(readFileSync(`drizzle/postgres/${entry.tag}.sql`, 'utf8'));
+  }
   state.db = drizzle(engine);
 }, 30_000);
 afterAll(async () => { await engine?.close(); });
