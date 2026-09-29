@@ -218,6 +218,9 @@ describe.sequential("Meta OAuth consent boundary", () => {
     expect(row.stateHash).not.toBe(r.state);
     expect(row.stateHash).toHaveLength(64);
     expect(r.state).toBe(r.cookie);
+    expect(new URL(r.url).searchParams.get("scope")?.split(",")).toContain(
+      "pages_read_user_content"
+    );
     expect(new URL(r.url).searchParams.get("redirect_uri")).toBe(
       "https://example.test/api/channels/meta/callback"
     );

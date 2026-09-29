@@ -8,22 +8,29 @@ import { channelInput } from "@/components/ChannelConnections";
 import { PublishingCalendar } from "@/components/PublishingCalendar";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { dateInZone, moveDate } from "@shared/channels";
+import { dateInZone, moveDate, rangeSchema } from "@shared/channels";
 function FacebookPosts({ connectionId }: { connectionId: string }) {
   const { organizationId } = useWorkspace();
   const today = dateInZone(Date.now(), "UTC").slice(0, 10);
+  const [period, setPeriod] = useState("30");
+  const [range, setRange] = useState(() => ({
+    since: moveDate(today, -29),
+    until: today,
+  }));
+  const [custom, setCustom] = useState(range);
+  const [rangeError, setRangeError] = useState("");
   const query = trpc.channels.posts.useQuery(
     {
       organizationId: organizationId!,
       connectionId,
-      range: { since: moveDate(today, -29), until: today },
+      range,
     },
     { retry: false, staleTime: 60000 }
   );
   return (
     <section className="mt-5 space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-xl font-semibold">Recent Facebook posts</h2>
+        <h2 className="text-xl font-semibold">Facebook posts</h2>
         <Button
           variant="outline"
           disabled={query.isFetching}
@@ -32,15 +39,98 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
           Refresh posts
         </Button>
       </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          Time frame
+          <select
+            className={channelInput + " mt-1 block"}
+            value={period}
+            onChange={event => {
+              const value = event.target.value;
+              setPeriod(value);
+              setRangeError("");
+              if (value !== "custom") {
+                const next = {
+                  since: moveDate(today, 1 - Number(value)),
+                  until: today,
+                };
+                setRange(next);
+                setCustom(next);
+              }
+            }}
+          >
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="custom">Custom dates</option>
+          </select>
+        </label>
+        {period === "custom" && (
+          <>
+            <label className="text-sm">
+              From
+              <input
+                type="date"
+                className={channelInput + " mt-1 block"}
+                value={custom.since}
+                onChange={event =>
+                  setCustom({ ...custom, since: event.target.value })
+                }
+              />
+            </label>
+            <label className="text-sm">
+              Through
+              <input
+                type="date"
+                className={channelInput + " mt-1 block"}
+                value={custom.until}
+                onChange={event =>
+                  setCustom({ ...custom, until: event.target.value })
+                }
+              />
+            </label>
+            <Button
+              onClick={() => {
+                const parsed = rangeSchema.safeParse(custom);
+                if (!parsed.success) {
+                  setRangeError(
+                    "Choose valid dates in order, up to 93 days per range."
+                  );
+                  return;
+                }
+                setRangeError("");
+                setRange(parsed.data);
+              }}
+            >
+              Apply dates
+            </Button>
+            <p className="w-full text-xs text-muted-foreground">
+              Choose any historical period, up to 93 days at a time.
+            </p>
+          </>
+        )}
+      </div>
+      {rangeError && (
+        <p role="alert" className="text-sm text-destructive">
+          {rangeError}
+        </p>
+      )}
       <p className="text-sm text-muted-foreground">
-        Posts published in the last 30 days (UTC), including posts created
-        outside EvokeLoop. Reactions, comments and shares are current lifetime
-        totals for each post.
+        Posts published from {range.since} through {range.until} (UTC),
+        including posts created outside EvokeLoop. Reactions, comments and
+        shares are current lifetime totals for each post.
       </p>
       {query.data?.engagementUnavailable && (
         <p role="status" className="text-sm text-muted-foreground">
           Posts are shown without engagement totals because Meta did not allow
-          access to those fields.
+          access to those fields.{" "}
+          <Link
+            href="/app/settings/integrations"
+            className="text-primary underline"
+          >
+            Review your Facebook connection
+          </Link>
+          .
         </p>
       )}
       {query.isLoading ? (

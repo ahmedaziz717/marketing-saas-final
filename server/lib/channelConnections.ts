@@ -118,7 +118,7 @@ export async function beginMetaOAuth(
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
   const scope =
     purpose === "facebook"
-      ? "pages_show_list,pages_read_engagement,pages_manage_posts,read_insights"
+      ? "pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_posts,read_insights"
       : "pages_show_list,pages_read_engagement,pages_manage_ads,ads_read,ads_management";
   Object.entries({
     client_id: process.env.META_APP_ID!,
