@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { useQueries } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -21,12 +21,7 @@ import {
 import { channelInput } from "@/components/ChannelConnections";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import {
-  channelNames,
-  previousRange,
-  rangeSchema,
-  type DateRange,
-} from "@shared/channels";
+import { channelNames, previousRange } from "@shared/channels";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 type Report = inferRouterOutputs<AppRouter>["channels"]["report"];
@@ -323,8 +318,6 @@ function Analytics() {
   const search = useSearch();
   const tab = analyticsViewForRoute(location, search);
   const { range, compare, account, channel } = analyticsFilters(search);
-  const [draftRange, setDraftRange] = useState<DateRange>(range);
-  useEffect(() => setDraftRange(range), [range.since, range.until]);
   const setFilters = (updates: Record<string, string>) => {
     const params = new URLSearchParams(search);
     params.delete("tab");
@@ -430,30 +423,15 @@ function Analytics() {
         }
       />
       <div className="mb-5 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-6">
-        <label className="text-xs">
-          From
-          <input
-            aria-label="Analytics start date"
-            type="date"
-            className={channelInput + " mt-1"}
-            value={draftRange.since}
-            onChange={e =>
-              setDraftRange(r => ({ ...r, since: e.target.value }))
-            }
+        <div className="sm:col-span-2 xl:col-span-3">
+          <DateRangeFilter
+            value={range}
+            ariaPrefix="Analytics"
+            onChange={next => {
+              if (next) setFilters(next);
+            }}
           />
-        </label>
-        <label className="text-xs">
-          Through
-          <input
-            aria-label="Analytics end date"
-            type="date"
-            className={channelInput + " mt-1"}
-            value={draftRange.until}
-            onChange={e =>
-              setDraftRange(r => ({ ...r, until: e.target.value }))
-            }
-          />
-        </label>
+        </div>
         <label className="text-xs">
           Channel
           <select
@@ -502,17 +480,6 @@ function Analytics() {
           />
           Compare previous period
         </label>
-        <Button
-          className="self-end"
-          onClick={() => {
-            const parsed = rangeSchema.safeParse(draftRange);
-            if (!parsed.success)
-              return window.alert("Choose a valid range of 1 to 93 days.");
-            setFilters(parsed.data);
-          }}
-        >
-          Apply date range
-        </Button>
       </div>
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <p className="mr-auto text-sm">

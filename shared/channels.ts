@@ -62,17 +62,10 @@ export const rangeSchema = z
   .object({ since: dateSchema, until: dateSchema })
   .refine(
     ({ since, until }) =>
-      until >= since && Date.parse(until) - Date.parse(since) < 93 * 86400000,
-    "Select a range of 1 to 93 days."
-  );
-// Post history is independent of the shorter analytics reporting window.
-export const postRangeSchema = z
-  .object({ since: dateSchema, until: dateSchema })
-  .refine(
-    ({ since, until }) =>
       until >= since && Date.parse(until) - Date.parse(since) < 366 * 86400000,
     "Select a range of up to one year (366 days)."
   );
+export const postRangeSchema = rangeSchema;
 export const adBrowseFiltersSchema = z.object({
   status: z
     .enum(["all", "active", "paused", "archived", "deleted"])

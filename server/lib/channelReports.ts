@@ -1,3 +1,4 @@
+import { splitDateRange } from "../../shared/reportDates";
 import type { ChannelConnection } from "../../drizzle/channelSchema";
 import {
   finiteMetric,
@@ -178,24 +179,32 @@ export async function facebookReport(c: ChannelConnection, range: DateRange) {
         };
       }
       try {
-        const response = await graphCollection<{
-          name: string;
-          values: Array<{ value: unknown; end_time: string }>;
-        }>(`${remoteId(c.accountId)}/insights`, token, {
-          metric,
-          period: "day",
-          since: range.since + "T00:00:00Z",
-          until: moveDate(range.until, 1) + "T00:00:00Z",
-        });
-        const item = response.data.find(v => v.name === metric);
-        const values = (item?.values ?? []).flatMap(v => {
-          const value = finiteMetric(v.value);
-          return value === null ? [] : [{ date: v.end_time, value }];
-        });
+        const valuesByDate = new Map<string, number>();
+        for (const chunk of splitDateRange(range)) {
+          const response = await graphCollection<{
+            name: string;
+            values: Array<{ value: unknown; end_time: string }>;
+          }>(`${remoteId(c.accountId)}/insights`, token, {
+            metric,
+            period: "day",
+            since: chunk.since + "T00:00:00Z",
+            until: moveDate(chunk.until, 1) + "T00:00:00Z",
+          });
+          for (const item of response.data.filter(v => v.name === metric)) {
+            for (const v of item.values ?? []) {
+              const value = finiteMetric(v.value);
+              if (value !== null) valuesByDate.set(v.end_time, value);
+            }
+          }
+          if (response.truncated)
+            warnings.push(`${metric}: Provider response was truncated.`);
+        }
+        const values = Array.from(valuesByDate, ([date, value]) => ({
+          date,
+          value,
+        })).sort((a, b) => a.date.localeCompare(b.date));
         if (!values.length)
           warnings.push(`${metric}: No data returned for this period.`);
-        if (response.truncated)
-          warnings.push(`${metric}: Provider response was truncated.`);
         return {
           metric,
           values,
@@ -221,41 +230,97 @@ export async function facebookReport(c: ChannelConnection, range: DateRange) {
     note: "Post dates are filtered in UTC. Reactions/comments/shares are current lifetime totals on those posts, not engagement earned only within the selected period. Page views may include paid distribution and must not be added to ad impressions.",
   };
 }
-export async function advertisingObjects(c: ChannelConnection, filters?: AdBrowseFilters) {
+export async function advertisingObjects(
+  c: ChannelConnection,
+  filters?: AdBrowseFilters
+) {
   const token = connectionToken(c);
   const status = filters?.status ?? "all";
-  const statuses = status === "paused"
-    ? ["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"]
-    : [status.toUpperCase()];
+  const statuses =
+    status === "paused"
+      ? ["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"]
+      : [status.toUpperCase()];
   const account = `act_${remoteId(c.accountId)}`;
   const definitions = [
-    { edge: "campaigns", level: "campaign", id: "campaign_id", fields: "id,name,objective,status,effective_status,daily_budget,lifetime_budget" },
-    { edge: "adsets", level: "adset", id: "adset_id", fields: "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,targeting,optimization_goal" },
-    { edge: "ads", level: "ad", id: "ad_id", fields: "id,name,adset_id,campaign_id,status,effective_status,creative{id,name,thumbnail_url}" },
+    {
+      edge: "campaigns",
+      level: "campaign",
+      id: "campaign_id",
+      fields:
+        "id,name,objective,status,effective_status,daily_budget,lifetime_budget",
+    },
+    {
+      edge: "adsets",
+      level: "adset",
+      id: "adset_id",
+      fields:
+        "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,targeting,optimization_goal",
+    },
+    {
+      edge: "ads",
+      level: "ad",
+      id: "ad_id",
+      fields:
+        "id,name,adset_id,campaign_id,status,effective_status,creative{id,name,thumbnail_url}",
+    },
   ];
-  const results = await Promise.all(definitions.map(async definition => {
-    // Campaigns cannot inherit a parent's paused status.
-    const allowed = status === "paused"
-      ? definition.level === "campaign" ? ["PAUSED"] : definition.level === "adset" ? ["PAUSED", "CAMPAIGN_PAUSED"] : statuses
-      : statuses;
-    const objects = await graphCollection(`${account}/${definition.edge}`, token, {
-      fields: definition.fields,
-      ...(status === "all" ? {} : { effective_status: JSON.stringify(allowed) }),
-    });
-    let data = objects.data.filter(row => status === "all" || allowed.includes(String(row.effective_status || row.status)));
-    const reportRange = filters?.performanceRange ?? filters?.range;
-    if (!reportRange) return { ...objects, data };
-    const delivery = await graphCollection(`${account}/insights`, token, {
-      level: definition.level,
-      fields: `${definition.id},${fields},reach,frequency`,
-      time_range: JSON.stringify(reportRange),
-    });
-    const delivered = new Set(delivery.data.filter(row => Number(row.impressions) > 0).map(row => String(row[definition.id])));
-    if (filters?.range) data = data.filter(row => delivered.has(String(row.id)));
-    const metrics = new Map(delivery.data.map(row => [String(row[definition.id]), { ...adMetrics(row), reach: finiteMetric(row.reach), frequency: finiteMetric(row.frequency) }]));
-    data = data.map(row => ({ ...row, performance: metrics.get(String(row.id)) ?? null }));
-    return { data, truncated: objects.truncated || delivery.truncated };
-  }));
+  const results = await Promise.all(
+    definitions.map(async definition => {
+      // Campaigns cannot inherit a parent's paused status.
+      const allowed =
+        status === "paused"
+          ? definition.level === "campaign"
+            ? ["PAUSED"]
+            : definition.level === "adset"
+              ? ["PAUSED", "CAMPAIGN_PAUSED"]
+              : statuses
+          : statuses;
+      const objects = await graphCollection(
+        `${account}/${definition.edge}`,
+        token,
+        {
+          fields: definition.fields,
+          ...(status === "all"
+            ? {}
+            : { effective_status: JSON.stringify(allowed) }),
+        }
+      );
+      let data = objects.data.filter(
+        row =>
+          status === "all" ||
+          allowed.includes(String(row.effective_status || row.status))
+      );
+      const reportRange = filters?.performanceRange ?? filters?.range;
+      if (!reportRange) return { ...objects, data };
+      const delivery = await graphCollection(`${account}/insights`, token, {
+        level: definition.level,
+        fields: `${definition.id},${fields},reach,frequency`,
+        time_range: JSON.stringify(reportRange),
+      });
+      const delivered = new Set(
+        delivery.data
+          .filter(row => Number(row.impressions) > 0)
+          .map(row => String(row[definition.id]))
+      );
+      if (filters?.range)
+        data = data.filter(row => delivered.has(String(row.id)));
+      const metrics = new Map(
+        delivery.data.map(row => [
+          String(row[definition.id]),
+          {
+            ...adMetrics(row),
+            reach: finiteMetric(row.reach),
+            frequency: finiteMetric(row.frequency),
+          },
+        ])
+      );
+      data = data.map(row => ({
+        ...row,
+        performance: metrics.get(String(row.id)) ?? null,
+      }));
+      return { data, truncated: objects.truncated || delivery.truncated };
+    })
+  );
   return {
     campaigns: results[0].data,
     adsets: results[1].data,

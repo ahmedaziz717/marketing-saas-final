@@ -22,13 +22,21 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("channel dates, metrics and provider boundary", () => {
-  it("allows a leap year of post history without expanding analytics ranges", () => {
+  it("allows a leap year across post history and analytics", () => {
     const year = { since: "2028-01-01", until: "2028-12-31" };
     expect(postRangeSchema.safeParse(year).success).toBe(true);
-    expect(rangeSchema.safeParse(year).success).toBe(false);
-    expect(postRangeSchema.safeParse({ ...year, until: "2029-01-01" }).success).toBe(false);
-    expect(postRangeSchema.safeParse({ since: "2028-02-30", until: "2028-03-01" }).success).toBe(false);
-    expect(postRangeSchema.safeParse({ since: "2028-03-01", until: "2028-02-29" }).success).toBe(false);
+    expect(rangeSchema.safeParse(year).success).toBe(true);
+    expect(
+      postRangeSchema.safeParse({ ...year, until: "2029-01-01" }).success
+    ).toBe(false);
+    expect(
+      postRangeSchema.safeParse({ since: "2028-02-30", until: "2028-03-01" })
+        .success
+    ).toBe(false);
+    expect(
+      postRangeSchema.safeParse({ since: "2028-03-01", until: "2028-02-29" })
+        .success
+    ).toBe(false);
   });
   it("supports arbitrary future weeks, leap dates and non-hour timezone offsets", () => {
     expect(
@@ -59,7 +67,7 @@ describe("channel dates, metrics and provider boundary", () => {
         .success
     ).toBe(false);
     expect(
-      rangeSchema.safeParse({ since: "2026-01-01", until: "2027-01-01" })
+      rangeSchema.safeParse({ since: "2026-01-01", until: "2027-01-02" })
         .success
     ).toBe(false);
     expect(previousRange({ since: "2026-09-01", until: "2026-09-07" })).toEqual(

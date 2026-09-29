@@ -1,3 +1,5 @@
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { presetRange } from "@shared/reportDates";
 import { useState } from "react";
 import { Link } from "wouter";
 import { CalendarDays } from "lucide-react";
@@ -8,17 +10,9 @@ import { channelInput } from "@/components/ChannelConnections";
 import { PublishingCalendar } from "@/components/PublishingCalendar";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { dateInZone, moveDate, postRangeSchema } from "@shared/channels";
 function FacebookPosts({ connectionId }: { connectionId: string }) {
   const { organizationId } = useWorkspace();
-  const today = dateInZone(Date.now(), "UTC").slice(0, 10);
-  const [period, setPeriod] = useState("30");
-  const [range, setRange] = useState(() => ({
-    since: moveDate(today, -29),
-    until: today,
-  }));
-  const [custom, setCustom] = useState(range);
-  const [rangeError, setRangeError] = useState("");
+  const [range, setRange] = useState(() => presetRange("30"));
   const query = trpc.channels.posts.useQuery(
     {
       organizationId: organizationId!,
@@ -39,83 +33,12 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
           Refresh posts
         </Button>
       </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          Time frame
-          <select
-            className={channelInput + " mt-1 block"}
-            value={period}
-            onChange={event => {
-              const value = event.target.value;
-              setPeriod(value);
-              setRangeError("");
-              if (value !== "custom") {
-                const next = {
-                  since: moveDate(today, 1 - Number(value)),
-                  until: today,
-                };
-                setRange(next);
-                setCustom(next);
-              }
-            }}
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="365">Last year (365 days)</option>
-            <option value="custom">Custom dates</option>
-          </select>
-        </label>
-        {period === "custom" && (
-          <>
-            <label className="text-sm">
-              From
-              <input
-                type="date"
-                className={channelInput + " mt-1 block"}
-                value={custom.since}
-                onChange={event =>
-                  setCustom({ ...custom, since: event.target.value })
-                }
-              />
-            </label>
-            <label className="text-sm">
-              Through
-              <input
-                type="date"
-                className={channelInput + " mt-1 block"}
-                value={custom.until}
-                onChange={event =>
-                  setCustom({ ...custom, until: event.target.value })
-                }
-              />
-            </label>
-            <Button
-              onClick={() => {
-                const parsed = postRangeSchema.safeParse(custom);
-                if (!parsed.success) {
-                  setRangeError(
-                    "Choose valid dates in order, up to one year (366 days) per range."
-                  );
-                  return;
-                }
-                setRangeError("");
-                setRange(parsed.data);
-              }}
-            >
-              Apply dates
-            </Button>
-            <p className="w-full text-xs text-muted-foreground">
-              Choose any historical period, up to one year (366 days) at a time.
-            </p>
-          </>
-        )}
-      </div>
-      {rangeError && (
-        <p role="alert" className="text-sm text-destructive">
-          {rangeError}
-        </p>
-      )}
+      <DateRangeFilter
+        value={range}
+        onChange={next => {
+          if (next) setRange(next);
+        }}
+      />
       <p className="text-sm text-muted-foreground">
         Posts published from {range.since} through {range.until} (UTC),
         including posts created outside EvokeLoop. Reactions, comments and
@@ -194,7 +117,8 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
       )}
       {query.data?.truncated && (
         <p className="text-xs">
-          Only part of this period could be loaded. Choose a shorter date range to see more posts.
+          Only part of this period could be loaded. Choose a shorter date range
+          to see more posts.
         </p>
       )}
     </section>

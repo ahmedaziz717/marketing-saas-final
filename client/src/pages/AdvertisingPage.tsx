@@ -1,3 +1,4 @@
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { MetaChangeDialog } from "@/components/MetaChangeDialog";
 import { PublicationComposer } from "@/components/PublicationComposer";
 import type { MetaChange } from "@shared/metaManagement";
@@ -13,7 +14,6 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import {
   dateInZone,
   moveDate,
-  postRangeSchema,
   type AdBrowseFilters,
   type DateRange,
 } from "@shared/channels";
@@ -32,14 +32,8 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
   const [view, setView] = useState<"campaigns" | "adsets" | "ads">("campaigns"),
     [campaign, setCampaign] = useState("");
   const [status, setStatus] = useState<AdBrowseFilters["status"]>("active");
-  const [period, setPeriod] = useState("all");
   const [range, setRange] = useState<DateRange | undefined>();
   const today = dateInZone(Date.now(), "UTC").slice(0, 10);
-  const [custom, setCustom] = useState({
-    since: moveDate(today, -29),
-    until: today,
-  });
-  const [rangeError, setRangeError] = useState("");
   const query = trpc.channels.adObjects.useQuery(
     {
       organizationId: organizationId!,
@@ -187,82 +181,17 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
             <option value="deleted">Deleted</option>
           </select>
         </label>
-        <label className="text-sm">
-          Delivery dates
-          <select
-            aria-label="Filter by delivery dates"
-            className={channelInput + " mt-1 block"}
-            value={period}
-            onChange={e => {
-              const value = e.target.value;
-              setPeriod(value);
-              setRangeError("");
-              setCampaign("");
-              setAdSet("");
-              if (value === "all") setRange(undefined);
-              else if (value !== "custom") {
-                const next = {
-                  since: moveDate(today, 1 - Number(value)),
-                  until: today,
-                };
-                setRange(next);
-                setCustom(next);
-              }
-            }}
-          >
-            <option value="all">All dates</option>
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="365">Last year (365 days)</option>
-            <option value="custom">Custom dates</option>
-          </select>
-        </label>
-        {period === "custom" && (
-          <>
-            <label className="text-sm">
-              From
-              <input
-                type="date"
-                className={channelInput + " mt-1 block"}
-                value={custom.since}
-                onChange={e => setCustom({ ...custom, since: e.target.value })}
-              />
-            </label>
-            <label className="text-sm">
-              Through
-              <input
-                type="date"
-                className={channelInput + " mt-1 block"}
-                value={custom.until}
-                onChange={e => setCustom({ ...custom, until: e.target.value })}
-              />
-            </label>
-            <Button
-              onClick={() => {
-                const parsed = postRangeSchema.safeParse(custom);
-                if (!parsed.success) {
-                  setRangeError(
-                    "Choose dates in order, up to one year (366 days)."
-                  );
-                  return;
-                }
-                setRangeError("");
-                setRange(parsed.data);
-                setCampaign("");
-                setAdSet("");
-              }}
-            >
-              Apply dates
-            </Button>
-          </>
-        )}
+        <DateRangeFilter
+          value={range}
+          allowAll
+          label="Delivery dates"
+          onChange={next => {
+            setRange(next);
+            setCampaign("");
+            setAdSet("");
+          }}
+        />
       </div>
-      {rangeError && (
-        <p role="alert" className="text-sm text-destructive">
-          {rangeError}
-        </p>
-      )}
       <p className="text-sm text-muted-foreground">
         Status reflects the current state in Meta.{" "}
         {range
