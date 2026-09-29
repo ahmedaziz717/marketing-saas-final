@@ -449,6 +449,10 @@ function layout() {
       } else {
         await click("Approve publication");
         await click("Save test schedule");
+        check(posts[0].state === "approved", "Opening confirmation cannot queue delivery");
+        check(!!button("Confirm delivery"), "EvokeLoop confirmation dialog is shown");
+        layout();
+        await click("Confirm delivery");
         check(
           posts[0].state === "scheduled" &&
             posts[0].result.deliveryMode === "test",
