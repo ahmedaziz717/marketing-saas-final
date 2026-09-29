@@ -6,7 +6,12 @@ import {
   type DateRange,
 } from "../../shared/channels";
 import { connectionToken } from "./channelConnections";
-import { graphCollection, graphRequest, remoteId } from "./channelGraph";
+import {
+  ChannelGraphError,
+  graphCollection,
+  graphRequest,
+  remoteId,
+} from "./channelGraph";
 
 export type AdMetrics = {
   spend: number | null;
@@ -107,17 +112,37 @@ export async function adsReport(c: ChannelConnection, range: DateRange) {
   };
 }
 export async function facebookPosts(c: ChannelConnection, range: DateRange) {
-  const posts = await graphCollection(
-    `${remoteId(c.accountId)}/published_posts`,
-    connectionToken(c),
-    {
-      fields:
-        "id,message,created_time,permalink_url,full_picture,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares",
-      since: range.since + "T00:00:00Z",
-      until: moveDate(range.until, 1) + "T00:00:00Z",
-    }
-  );
+  const path = `${remoteId(c.accountId)}/published_posts`;
+  const token = connectionToken(c);
+  const params = {
+    since: range.since + "T00:00:00Z",
+    until: moveDate(range.until, 1) + "T00:00:00Z",
+  };
+  const baseFields = "id,message,created_time,permalink_url,full_picture";
+  let posts: Awaited<ReturnType<typeof graphCollection<Record<string, any>>>>;
+  let engagementUnavailable = false;
+  try {
+    posts = await graphCollection(path, token, {
+      ...params,
+      fields: `${baseFields},reactions.limit(0).summary(true),comments.limit(0).summary(true),shares`,
+    });
+  } catch (error) {
+    // An optional engagement expansion must not hide otherwise readable Page posts.
+    // Retry only this specific permission failure; auth and provider failures remain errors.
+    if (
+      !(error instanceof ChannelGraphError) ||
+      error.code !== 10 ||
+      !error.message.includes("pages_read_user_content")
+    )
+      throw error;
+    posts = await graphCollection(path, token, {
+      ...params,
+      fields: baseFields,
+    });
+    engagementUnavailable = true;
+  }
   return {
+    engagementUnavailable,
     data: posts.data.map(p => ({
       id: String(p.id),
       message: String(p.message ?? ""),

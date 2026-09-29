@@ -37,6 +37,12 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
         outside EvokeLoop. Reactions, comments and shares are current lifetime
         totals for each post.
       </p>
+      {query.data?.engagementUnavailable && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Posts are shown without engagement totals because Meta did not allow
+          access to those fields.
+        </p>
+      )}
       {query.isLoading ? (
         <p role="status">Loading Facebook posts...</p>
       ) : query.error ? (
@@ -54,6 +60,19 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {query.data.data.map(post => (
             <article key={String(post.id)} className="surface min-w-0 p-5">
+              {typeof post.image === "string" &&
+                post.image.startsWith("https://") && (
+                  <img
+                    src={post.image}
+                    alt="Facebook post image"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="mb-4 max-h-96 w-full rounded-xl object-contain"
+                    onError={event => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+                )}
               <p className="text-xs text-muted-foreground">
                 {post.createdAt
                   ? new Date(String(post.createdAt)).toLocaleString()
