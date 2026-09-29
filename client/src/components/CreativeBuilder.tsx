@@ -253,6 +253,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
         );
       change({
         ...setup,
+        promotionMode: "offerings",
         products: [
           ...setup.products,
           {
@@ -345,7 +346,7 @@ export function CreativeBuilder({ onGenerated }: Props) {
     return (
       <div className="surface p-8 text-sm text-muted-foreground">
         <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-        Loading your products and brand assets…
+        Loading your offerings and brand assets…
       </div>
     );
   if (options.error)
@@ -658,11 +659,40 @@ export function CreativeBuilder({ onGenerated }: Props) {
           </section>
           <section className={sectionClass}>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">3. Featured products</h2>
+              <h2 className="text-base font-semibold">
+                3. What are you promoting?
+              </h2>
               <span className="text-xs text-muted-foreground">
                 {setup.products.length} selected
               </span>
             </div>
+            <label className="mb-3 block text-sm">
+              Promotion type
+              <select
+                className="mt-1 w-full rounded-lg border p-3"
+                value={setup.promotionMode ?? "offerings"}
+                onChange={e =>
+                  change({
+                    ...setup,
+                    promotionMode: e.target.value as "offerings" | "platform",
+                    products:
+                      e.target.value === "platform" ? [] : setup.products,
+                  })
+                }
+              >
+                <option value="offerings">
+                  Selected products, services, or plans
+                </option>
+                <option value="platform">The platform / business</option>
+              </select>
+            </label>
+            {setup.promotionMode === "platform" && (
+              <p className="mb-3 text-sm text-muted-foreground">
+                Uses your saved business profile and brand. No product image is
+                required. Selecting an offering below switches back to selected
+                offerings.
+              </p>
+            )}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input

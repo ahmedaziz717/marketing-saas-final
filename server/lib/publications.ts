@@ -1,7 +1,12 @@
 import { placementSlots } from "../../shared/metaPlacements";
 import { assetFormat } from "../../shared/assetFit";
 import { assetFit } from "../../shared/assetFit";
-import { metaLinkData, metaPlacementFeed } from "../../shared/metaCreative";
+import {
+  metaLinkData,
+  metaPlacementFeed,
+  metaTextFeed,
+  hasTextVariants,
+} from "../../shared/metaCreative";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -144,6 +149,17 @@ export async function dependencies(db: Runner, item: Publication) {
           "Meta ads require an ad set, destination URL, headline, primary text and a connection with a Facebook Page.",
       });
   }
+  if (
+    hasTextVariants(item.content) &&
+    (item.channel !== "meta_ads" ||
+      item.content.placementAssetKeys ||
+      item.content.carouselAssetKeys?.length)
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Multiple text options currently require a single-image Meta ad. Choose one copy set for carousel and placement-image ads.",
+    });
   const placementAssets = [];
   if (item.content.placementAssetKeys) {
     const selected = item.content.placementAssetKeys;
@@ -266,7 +282,10 @@ export async function approvedDependencies(db: Runner, item: Publication) {
     });
   return d;
 }
-async function assetBytes(db: LibraryDatabase, item: Publication) {
+export async function assetBytes(
+  db: LibraryDatabase,
+  item: Pick<Publication, "assetKey" | "organizationId">
+) {
   const [kind, rawId] = item.assetKey!.split(":");
   const row =
     kind === "asset"
@@ -524,16 +543,20 @@ export async function executePublication(
         account_id: string;
         is_dynamic_creative?: boolean;
       }>(remoteId(item.content.adSetId), token, {
-        fields: item.content.placementAssetKeys
-          ? "id,account_id,is_dynamic_creative"
-          : "id,account_id",
+        fields:
+          item.content.placementAssetKeys || hasTextVariants(item.content)
+            ? "id,account_id,is_dynamic_creative"
+            : "id,account_id",
       });
       if (adSet.account_id !== connection.accountId)
         throw new Error(
           "The selected ad set belongs to a different ad account."
         );
       const placement = item.content.placementAssetKeys;
-      if (placement && adSet.is_dynamic_creative)
+      if (
+        (placement || hasTextVariants(item.content)) &&
+        adSet.is_dynamic_creative
+      )
         throw new Error(
           "Placement images require a standard ad set without Dynamic Creative. Choose a compatible ad set."
         );
@@ -604,6 +627,15 @@ export async function executePublication(
                   asset_feed_spec: JSON.stringify(
                     metaPlacementFeed(item.content, hashes)
                   ),
+                }
+              : {}),
+            ...(hasTextVariants(item.content)
+              ? {
+                  asset_feed_spec: JSON.stringify(metaTextFeed(item.content)),
+                  degrees_of_freedom_spec: JSON.stringify({
+                    degrees_of_freedom_type: "USER_ENROLLED",
+                    text_transformation_types: ["TEXT_LIQUIDITY"],
+                  }),
                 }
               : {}),
             object_story_spec: JSON.stringify({

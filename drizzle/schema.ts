@@ -1,3 +1,4 @@
+import type { BusinessProfile } from "../shared/businessProfile";
 import {
   bigint,
   integer,
@@ -228,6 +229,7 @@ export const brandKits = appSchema.table(
       .references(() => organizations.id),
     name: varchar("name", { length: 160 }).notNull(),
     voice: text("voice"),
+    businessProfile: json("businessProfile").$type<BusinessProfile>(),
     colors: json("colors").$type<string[]>().notNull(),
     fonts: json("fonts").$type<string[]>().notNull(),
     requiredClaims: text("requiredClaims"),
@@ -356,6 +358,12 @@ export const products = appSchema.table(
       .notNull(),
     variantCount: integer("variantCount").default(0).notNull(),
     serviceDetails: json("serviceDetails").$type<{
+      offeringType?: string;
+      audience?: string;
+      billingPeriod?: string;
+      trial?: string;
+      benefits?: string;
+      ownership?: string;
       pricing: string;
       duration: string;
       area: string;

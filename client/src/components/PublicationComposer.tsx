@@ -1,3 +1,4 @@
+import { AdCopyAssistant, TextVariantFields } from "./AdCopyAssistant";
 import { PlacementAssetPicker } from "./PlacementAssetPicker";
 import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
@@ -103,6 +104,9 @@ export function PublicationComposer({
       : (initialTime ?? "")
   );
   const scope = { organizationId: organizationId! };
+  const businessBrand = trpc.brand.get.useQuery(scope, {
+    enabled: !!organizationId,
+  });
   const connections = trpc.channels.connections.useQuery(scope, {
     enabled: !!organizationId,
   });
@@ -147,6 +151,21 @@ export function PublicationComposer({
         assetKey: assetKey || null,
         content: {
           ...content,
+          textVariants:
+            channel === "meta_ads" &&
+            !placement &&
+            !carousel &&
+            content.textVariants
+              ? {
+                  messages: content.textVariants.messages.filter(v => v.trim()),
+                  headlines: content.textVariants.headlines.filter(v =>
+                    v.trim()
+                  ),
+                  descriptions: content.textVariants.descriptions.filter(v =>
+                    v.trim()
+                  ),
+                }
+              : undefined,
           placementAssetKeys:
             channel === "meta_ads" && placement
               ? content.placementAssetKeys
@@ -417,6 +436,85 @@ export function PublicationComposer({
               </div>
             )}
           </div>
+          <div className="sm:col-span-2 rounded-xl border p-4 space-y-3">
+            <h3 className="font-semibold">Campaign purpose</h3>
+            <p className="text-xs text-muted-foreground">
+              Promote a product, service, plan, listing, category, or the whole
+              platform.
+            </p>
+            {(
+              [
+                ["audience", "Audience"],
+                ["goal", "Goal"],
+                ["offer", "What are you promoting?"],
+              ] as const
+            ).map(([key, label]) => (
+              <label className="block text-sm" key={key}>
+                {label}
+                <input
+                  className={channelInput + " mt-1"}
+                  value={content.promotion?.[key] ?? ""}
+                  placeholder={
+                    key === "audience"
+                      ? businessBrand.data?.businessProfile?.audiences
+                      : key === "goal"
+                        ? businessBrand.data?.businessProfile?.goals
+                        : businessBrand.data?.businessProfile?.primaryOffer
+                  }
+                  maxLength={2000}
+                  onChange={e =>
+                    setContent(c => ({
+                      ...c,
+                      promotion: {
+                        audience: "",
+                        goal: "",
+                        offer: "",
+                        ...c.promotion,
+                        [key]: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          {organizationId && (
+            <div className="sm:col-span-2">
+              <AdCopyAssistant
+                organizationId={organizationId}
+                assetKeys={
+                  placement
+                    ? Object.values(content.placementAssetKeys ?? {}).filter(
+                        (v): v is string => !!v
+                      )
+                    : carousel
+                      ? (content.carouselAssetKeys ?? [])
+                      : assetKey
+                        ? [assetKey]
+                        : []
+                }
+                promotion={content.promotion}
+                allowVariants={
+                  channel === "meta_ads" && !placement && !carousel
+                }
+                onUse={(copy, rest) =>
+                  setContent(c => ({
+                    ...c,
+                    ...copy,
+                    textVariants: rest
+                      ? {
+                          messages: rest.map(o => o.message),
+                          headlines: rest.map(o => o.headline),
+                          descriptions: rest
+                            .map(o => o.description)
+                            .filter(Boolean),
+                        }
+                      : undefined,
+                  }))
+                }
+              />
+            </div>
+          )}
           <div className="sm:col-span-2">
             <Label htmlFor="pub-message">
               {channel === "facebook"
@@ -431,6 +529,23 @@ export function PublicationComposer({
               onChange={e => setField("message", e.target.value)}
             />
           </div>
+          {channel === "meta_ads" && (
+            <div className="sm:col-span-2">
+              {!placement && !carousel ? (
+                <TextVariantFields
+                  value={content.textVariants}
+                  onChange={value =>
+                    setContent(c => ({ ...c, textVariants: value }))
+                  }
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Carousel and placement-image ads use one copy set here.
+                  Multiple text options are available with Single image.
+                </p>
+              )}
+            </div>
+          )}
           <div className="sm:col-span-2">
             <Label htmlFor="pub-link">
               {channel === "facebook"
@@ -714,6 +829,29 @@ export function PublicationDetails({
         <p className="whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-sm">
           {item.content.message || "No caption"}
         </p>
+        {item.channel === "meta_ads" && (
+          <div className="rounded-xl border p-4 space-y-2 text-sm">
+            <p>
+              <strong>Headline:</strong> {item.content.headline}
+            </p>
+            <p>
+              <strong>Description:</strong> {item.content.description || "None"}
+            </p>
+            {item.content.textVariants &&
+              Object.entries(item.content.textVariants).map(
+                ([label, values]) => (
+                  <div key={label}>
+                    <strong>Additional {label}</strong>
+                    {values.map((text, i) => (
+                      <p className="whitespace-pre-wrap" key={i}>
+                        {i + 2}. {text}
+                      </p>
+                    ))}
+                  </div>
+                )
+              )}
+          </div>
+        )}
         {item.content.link && (
           <p className="break-all text-sm">
             Destination URL: {item.content.link}

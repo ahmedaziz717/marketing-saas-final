@@ -23,6 +23,10 @@ export type AdMetrics = {
   purchases: number | null;
   purchaseValue: number | null;
   roas: number | null;
+  registrations?: number | null;
+  leads?: number | null;
+  trials?: number | null;
+  subscriptions?: number | null;
 };
 export function adMetrics(row: Record<string, unknown>): AdMetrics {
   const spend = finiteMetric(row.spend);
@@ -34,6 +38,22 @@ export function adMetrics(row: Record<string, unknown>): AdMetrics {
   const purchaseValue = actionValue(row.action_values, names);
   return {
     spend,
+    registrations: actionValue(row.actions, [
+      "offsite_conversion.fb_pixel_complete_registration",
+      "complete_registration",
+    ]),
+    leads: actionValue(row.actions, [
+      "lead",
+      "offsite_conversion.fb_pixel_lead",
+    ]),
+    trials: actionValue(row.actions, [
+      "offsite_conversion.fb_pixel_start_trial",
+      "start_trial",
+    ]),
+    subscriptions: actionValue(row.actions, [
+      "offsite_conversion.fb_pixel_subscribe",
+      "subscribe",
+    ]),
     impressions: finiteMetric(row.impressions),
     clicks: finiteMetric(row.clicks),
     linkClicks: finiteMetric(row.inline_link_clicks),

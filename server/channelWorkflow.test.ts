@@ -18,6 +18,15 @@ const state = vi.hoisted(() => ({
   image: "",
   images: {} as Record<string, string>,
   graph: vi.fn(),
+  llm: vi.fn(),
+}));
+vi.mock("./_core/llm", () => ({
+  listLLMModels: async () => ({ data: [{ id: "gpt-5.4" }] }),
+  invokeLLM: (...args: any[]) => state.llm(...args),
+}));
+vi.mock("./lib/models", async original => ({
+  ...(await original<typeof import("./lib/models")>()),
+  requireLatestGptTextModel: () => "gpt-5.4",
 }));
 vi.mock("./db", () => ({
   getDb: async () => state.db,
@@ -505,6 +514,147 @@ describe.sequential(
       await publicationTick(state.db);
       expect((await current(bad.id)).state).toBe("failed");
       expect(state.graph).toHaveBeenCalledTimes(1);
+    });
+    it("persists editable business profiles with workspace and role isolation", async () => {
+      const profile = {
+        model: "directory" as const,
+        summary: "An education resource directory",
+        audiences: "Parents; education providers",
+        goals: "Listing claims and subscriptions",
+        website: "https://example.test",
+        primaryOffer: "Provider listing plans",
+        timezone: "America/New_York",
+        currency: "USD",
+      };
+      await expect(
+        creator.brand.saveProfile({ organizationId: org, profile })
+      ).rejects.toThrow();
+      await expect(
+        outsider.brand.saveProfile({ organizationId: org, profile })
+      ).rejects.toThrow();
+      await owner.brand.saveProfile({ organizationId: org, profile });
+      expect(
+        (await owner.brand.get({ organizationId: org }))?.businessProfile
+      ).toEqual(profile);
+      await owner.brand.saveProfile({
+        organizationId: org,
+        profile: { ...profile, goals: "Trial starts" },
+      });
+      expect(
+        (await owner.brand.get({ organizationId: org }))?.businessProfile?.goals
+      ).toBe("Trial starts");
+    });
+    it("drafts copy from scoped approved image bytes and rejects unapproved assets", async () => {
+      state.llm.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                options: [
+                  {
+                    message: "Explore our resource directory",
+                    headline: "Find resources",
+                    description: "Discover learning options",
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+      const result = await creator.channels.draftAssetCopy({
+        organizationId: org,
+        assetKeys: [`asset:${assetId}`],
+      });
+      expect(result.options[0].headline).toBe("Find resources");
+      const prompt = state.llm.mock.calls.at(-1)?.[0];
+      expect(prompt.messages[1].content[1].image_url.url).toMatch(
+        /^data:image\/jpeg;base64,/
+      );
+      await expect(
+        outsider.channels.draftAssetCopy({
+          organizationId: org,
+          assetKeys: [`asset:${assetId}`],
+        })
+      ).rejects.toThrow();
+      await state.db
+        .update(brandAssets)
+        .set({ status: "pending" })
+        .where(eq(brandAssets.id, assetId));
+      await expect(
+        creator.channels.draftAssetCopy({
+          organizationId: org,
+          assetKeys: [`asset:${assetId}`],
+        })
+      ).rejects.toThrow("approved");
+    });
+    it("sends multiple reviewed text options on one paused ad and binds every option to approval", async () => {
+      vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
+      const content = contentSchema.parse({
+        title: "Text options",
+        message: "Primary",
+        headline: "Main headline",
+        description: "Description",
+        link: "https://example.test",
+        adSetId: "777",
+        textVariants: {
+          messages: ["Alternative"],
+          headlines: ["Second headline"],
+          descriptions: ["Second description"],
+        },
+      });
+      state.graph.mockImplementation(async (path: string) =>
+        path === "777"
+          ? { id: "777", account_id: "456", is_dynamic_creative: false }
+          : path.endsWith("/adimages")
+            ? { images: { image: { hash: "hash" } } }
+            : path.endsWith("/adcreatives")
+              ? { id: "888" }
+              : { id: "999" }
+      );
+      const p = await queued({
+        channel: "meta_ads",
+        connectionId: adsId,
+        assetKey: `asset:${assetId}`,
+        content,
+      });
+      await publicationTick(state.db);
+      expect((await current(p.id)).state).toBe("published");
+      const write = state.graph.mock.calls.find(
+        c => c[0] === "act_456/adcreatives"
+      );
+      const feed = JSON.parse(write?.[3].get("asset_feed_spec"));
+      expect(feed.bodies).toEqual([
+        { text: "Primary" },
+        { text: "Alternative" },
+      ]);
+      expect(feed.titles).toHaveLength(2);
+      expect(
+        state.graph.mock.calls
+          .find(c => c[0] === "act_456/ads")?.[3]
+          .get("status")
+      ).toBe("PAUSED");
+      const pending = await approved({
+        channel: "meta_ads",
+        connectionId: adsId,
+        assetKey: `asset:${assetId}`,
+        content,
+      });
+      await state.db
+        .update(publications)
+        .set({
+          content: {
+            ...content,
+            textVariants: {
+              ...content.textVariants!,
+              messages: ["Changed after approval"],
+            },
+          },
+        })
+        .where(eq(publications.id, pending.id));
+      await expect(
+        owner.publishing.queue({ ...version(pending), confirm: true })
+      ).rejects.toThrow();
     });
     it("delivers ordered carousel images paused and invalidates approval when any card changes", async () => {
       vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");

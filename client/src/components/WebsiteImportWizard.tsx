@@ -1,3 +1,4 @@
+import { OfferingDiscovery } from "./OfferingDiscovery";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
@@ -68,6 +69,7 @@ export function WebsiteImportWizard({
   scanMode?: "brand_and_products" | "products_only";
 }) {
   const utils = trpc.useUtils();
+  const businessBrand = trpc.brand.get.useQuery({ organizationId });
   const latest = trpc.crawl.latest.useQuery(
     { organizationId },
     { refetchInterval: 3000 }
@@ -285,6 +287,9 @@ export function WebsiteImportWizard({
   if (scanMode === "brand_and_products" && reviewReady && imported && !restart)
     return (
       <div className="space-y-7">
+        {["directory", "membership", "saas"].includes(
+          businessBrand.data?.businessProfile?.model ?? ""
+        ) && <OfferingDiscovery organizationId={organizationId} />}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="eyebrow">Review discovered identity</p>
@@ -645,6 +650,9 @@ export function WebsiteImportWizard({
     ["queued", "discovering", "crawling", "analyzing"].includes(job.status);
   return (
     <div className="space-y-6">
+      {["directory", "membership", "saas"].includes(
+        businessBrand.data?.businessProfile?.model ?? ""
+      ) && <OfferingDiscovery organizationId={organizationId} />}
       <div>
         <p className="eyebrow">Website intelligence</p>
         <h3 className="mt-2 text-2xl font-semibold">
@@ -653,7 +661,9 @@ export function WebsiteImportWizard({
         <p className="mt-2 text-sm text-muted-foreground">
           One continuous scan, processed in small batches. Progress is saved in
           the background, even when you close your browser. Website scanning
-          finds publicly exposed products; add services manually or through CSV.
+          finds public brand information and products. Directory and membership
+          profiles exclude third-party products; discover plans above or add
+          offerings in Catalog → Sources.
         </p>
       </div>
       <div>

@@ -1,16 +1,39 @@
+import { offeringTypes } from "./businessProfile";
 import { z } from "zod";
-export const serviceDetailsSchema = z.object({
-  pricing: z
-    .enum(["fixed", "starting_at", "hourly", "recurring", "quote"])
-    .default("quote"),
-  duration: z.string().max(200).default(""),
-  area: z.string().max(500).default(""),
-  delivery: z.enum(["onsite", "remote", "both"]).default("both"),
-  packages: z.string().max(3000).default(""),
-  cta: z
-    .enum(["Book now", "Get a quote", "Contact us", "Learn more"])
-    .default("Get a quote"),
-});
+export const serviceDetailsSchema = z
+  .object({
+    offeringType: z.enum(offeringTypes).optional(),
+    audience: z.string().max(2000).optional(),
+    billingPeriod: z.enum(["none", "monthly", "annual", "other"]).optional(),
+    trial: z.string().max(1000).optional(),
+    benefits: z.string().max(4000).optional(),
+    ownership: z.enum(["own", "third_party"]).optional(),
+    pricing: z
+      .enum(["fixed", "starting_at", "hourly", "recurring", "quote"])
+      .default("quote"),
+    duration: z.string().max(200).default(""),
+    area: z.string().max(500).default(""),
+    delivery: z.enum(["onsite", "remote", "both"]).default("both"),
+    packages: z.string().max(3000).default(""),
+    cta: z
+      .enum([
+        "Book now",
+        "Get a quote",
+        "Contact us",
+        "Learn more",
+        "Sign up",
+        "Start trial",
+        "Claim listing",
+        "Explore directory",
+      ])
+      .default("Get a quote"),
+  })
+  .refine(
+    value =>
+      value.offeringType !== "directory_listing" ||
+      value.ownership === "third_party",
+    "Directory listings must be marked as third-party offerings."
+  );
 export const catalogEntrySchema = z.object({
   name: z.string().trim().min(1).max(300),
   description: z.string().max(10000).default(""),

@@ -273,6 +273,7 @@ export const creativeSetupSchema = z
         })
       )
       .max(12),
+    promotionMode: z.enum(["offerings", "platform"]).optional(),
     productMode: z.enum(["separate", "together"]),
     shot: z.enum(["product", "female", "male", "lifestyle"]),
     person: z
@@ -417,14 +418,17 @@ export function defaultCreativeSetup(): CreativeSetup {
 export function outputCount(setup: CreativeSetup) {
   return (
     setup.formatIds.length *
-    (setup.productMode === "together"
-      ? Math.min(1, setup.products.length)
-      : setup.products.length)
+    (setup.promotionMode === "platform"
+      ? 1
+      : setup.productMode === "together"
+        ? Math.min(1, setup.products.length)
+        : setup.products.length)
   );
 }
 export function generationSetupIssues(setup: CreativeSetup) {
   const issues: string[] = [];
-  if (!setup.products.length) issues.push("Select at least one product.");
+  if (setup.promotionMode !== "platform" && !setup.products.length)
+    issues.push("Select at least one offering, or promote the platform.");
   if (!setup.formatIds.length) issues.push("Select at least one size.");
   if (!setup.copy.headline.trim() || !setup.copy.cta.trim())
     issues.push("Add a headline and call to action.");

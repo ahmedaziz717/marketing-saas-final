@@ -121,6 +121,20 @@ export const contentSchema = z.object({
     .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
     .max(10)
     .optional(),
+  textVariants: z
+    .object({
+      messages: z.array(z.string().trim().min(1).max(5000)).max(4),
+      headlines: z.array(z.string().trim().min(1).max(200)).max(4),
+      descriptions: z.array(z.string().trim().min(1).max(300)).max(4),
+    })
+    .optional(),
+  promotion: z
+    .object({
+      audience: z.string().trim().max(2000),
+      goal: z.string().trim().max(2000),
+      offer: z.string().trim().max(2000),
+    })
+    .optional(),
   campaignLabel: z.string().trim().max(180).default(""),
   adSetId: z.string().regex(/^\d*$/).max(100).default(""),
 });

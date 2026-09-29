@@ -1,3 +1,4 @@
+import { brandKits } from "../../drizzle/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -638,8 +639,17 @@ export const crawlRouter = router({
           productsFound: 0,
         };
       }
+      const [businessBrand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      const directoryBusiness = ["directory", "membership", "saas"].includes(
+        businessBrand?.businessProfile?.model ?? ""
+      );
       const productPages = pages.filter(
         page =>
+          !directoryBusiness &&
           page.pageType === "product" &&
           !isExcludedProductUrl(page.url) &&
           Boolean(

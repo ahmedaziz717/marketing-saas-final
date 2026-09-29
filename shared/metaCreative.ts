@@ -68,3 +68,33 @@ export function metaPlacementFeed(
     ],
   };
 }
+
+export function hasTextVariants(content: PublicationContent) {
+  return (
+    !!content.textVariants &&
+    Object.values(content.textVariants).some(values => values.length > 0)
+  );
+}
+export function metaTextFeed(content: PublicationContent) {
+  if (
+    !hasTextVariants(content) ||
+    content.placementAssetKeys ||
+    content.carouselAssetKeys?.length
+  )
+    throw new Error("Multiple text options require a single-image ad.");
+  const texts = (first: string, rest: string[]) =>
+    Array.from(new Set([first, ...rest].filter(t => t.trim()))).map(text => ({
+      text,
+    }));
+  return {
+    optimization_type: "DEGREES_OF_FREEDOM",
+    bodies: texts(content.message, content.textVariants!.messages),
+    titles: texts(content.headline, content.textVariants!.headlines),
+    descriptions: texts(content.description, content.textVariants!.descriptions)
+      .length
+      ? texts(content.description, content.textVariants!.descriptions)
+      : [{ text: " " }],
+    link_urls: [{ website_url: content.link }],
+    call_to_action_types: [content.callToAction],
+  };
+}

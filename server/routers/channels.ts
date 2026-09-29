@@ -1,5 +1,12 @@
+import sharp from "sharp";
+import { marketingJson } from "../lib/marketingDrafts";
+import { assetBytes } from "../lib/publications";
 import { metaChangeSchema } from "../../shared/metaManagement";
-import { readMetaObject, reviewMetaChange, applyMetaChange } from "../lib/metaManagement";
+import {
+  readMetaObject,
+  reviewMetaChange,
+  applyMetaChange,
+} from "../lib/metaManagement";
 import { graphCollection } from "../lib/channelGraph";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -386,30 +393,88 @@ export const channelsRouter = router({
         throw upstream(e);
       }
     }),
-  metaObject: protectedProcedure.input(destination.extend({ kind: z.enum(["campaign", "adset", "ad"]), objectId: z.string().regex(/^\d+$/) })).query(async ({ ctx, input }) => {
-    await requireOrganizationRole(ctx.user.id, input.organizationId);
-    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
-    const object = await readMetaObject(c, input.kind, input.objectId);
-    let advantage: Record<string, unknown> | null = null;
-    if (input.kind === "campaign") { try { advantage = await graphRequest(input.objectId, connectionToken(c), { fields: "advantage_state" }); } catch { /* Optional eligibility info is not supported by every campaign. */ } }
-    return { object, advantage, liveEnabled: liveDeliveryEnabled("meta_ads") };
-  }),
-  metaPixels: protectedProcedure.input(destination).query(async ({ ctx, input }) => {
-    await requireOrganizationRole(ctx.user.id, input.organizationId);
-    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
-    return graphCollection(`act_${c.accountId}/adspixels`, connectionToken(c), { fields: "id,name" });
-  }),
-  reviewMetaChange: protectedProcedure.input(destination.extend({ change: metaChangeSchema })).mutation(async ({ ctx, input }) => {
-    await requireOrganizationRole(ctx.user.id, input.organizationId, [...publishers]);
-    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
-    return reviewMetaChange(c, ctx.user.id, input.change);
-  }),
-  applyMetaChange: protectedProcedure.input(destination.extend({ change: metaChangeSchema, ticket: z.string().max(10000) })).mutation(async ({ ctx, input }) => {
-    await requireOrganizationRole(ctx.user.id, input.organizationId, [...publishers]);
-    const db = await libraryDatabase();
-    const c = await getConnection(db, input.organizationId, input.connectionId, "meta_ads");
-    return applyMetaChange(db, c, ctx.user.id, input.ticket, input.change);
-  }),
+  metaObject: protectedProcedure
+    .input(
+      destination.extend({
+        kind: z.enum(["campaign", "adset", "ad"]),
+        objectId: z.string().regex(/^\d+$/),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const c = await getConnection(
+        await libraryDatabase(),
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      const object = await readMetaObject(c, input.kind, input.objectId);
+      let advantage: Record<string, unknown> | null = null;
+      if (input.kind === "campaign") {
+        try {
+          advantage = await graphRequest(input.objectId, connectionToken(c), {
+            fields: "advantage_state",
+          });
+        } catch {
+          /* Optional eligibility info is not supported by every campaign. */
+        }
+      }
+      return {
+        object,
+        advantage,
+        liveEnabled: liveDeliveryEnabled("meta_ads"),
+      };
+    }),
+  metaPixels: protectedProcedure
+    .input(destination)
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const c = await getConnection(
+        await libraryDatabase(),
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      return graphCollection(
+        `act_${c.accountId}/adspixels`,
+        connectionToken(c),
+        { fields: "id,name" }
+      );
+    }),
+  reviewMetaChange: protectedProcedure
+    .input(destination.extend({ change: metaChangeSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...publishers,
+      ]);
+      const c = await getConnection(
+        await libraryDatabase(),
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      return reviewMetaChange(c, ctx.user.id, input.change);
+    }),
+  applyMetaChange: protectedProcedure
+    .input(
+      destination.extend({
+        change: metaChangeSchema,
+        ticket: z.string().max(10000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...publishers,
+      ]);
+      const db = await libraryDatabase();
+      const c = await getConnection(
+        db,
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      return applyMetaChange(db, c, ctx.user.id, input.ticket, input.change);
+    }),
   report: protectedProcedure
     .input(destination.extend({ range: rangeSchema }))
     .query(async ({ ctx, input }) => {
@@ -511,6 +576,110 @@ export const channelsRouter = router({
         return { success: true };
       });
     }),
+  draftAssetCopy: protectedProcedure
+    .input(
+      scopeSchema.extend({
+        assetKeys: z
+          .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
+          .min(1)
+          .max(10),
+        direction: z.string().trim().max(2000).default(""),
+        promotion: z
+          .object({
+            audience: z.string().max(2000),
+            goal: z.string().max(2000),
+            offer: z.string().max(2000),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editors,
+      ]);
+      const db = await libraryDatabase();
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      if (!brand)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your brand first.",
+        });
+      const assets = [];
+      const images: string[] = [];
+      for (const key of Array.from(new Set(input.assetKeys))) {
+        const asset = await readLibraryAsset(db, input.organizationId, key);
+        if (
+          asset.state !== "approved" ||
+          asset.mediaType !== "image" ||
+          asset.purpose !== "finished"
+        )
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Choose approved finished images.",
+          });
+        assets.push({
+          name: asset.name,
+          headline: asset.headline,
+          primaryText: asset.primaryText,
+        });
+        const bytes = await assetBytes(db, {
+          organizationId: input.organizationId,
+          assetKey: key,
+        });
+        const image = await sharp(bytes, { limitInputPixels: 40_000_000 })
+          .rotate()
+          .resize({
+            width: 1024,
+            height: 1024,
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+        images.push("data:image/jpeg;base64," + image.toString("base64"));
+      }
+      const drafts = await marketingJson(
+        "Write three alternative ad copy sets based on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
+        {
+          assets,
+          brand: {
+            name: brand.name,
+            voice: brand.voice,
+            requiredClaims: brand.requiredClaims,
+            prohibitedContent: brand.prohibitedContent,
+            businessProfile: brand.businessProfile,
+          },
+          direction: input.direction,
+          promotion: input.promotion,
+        },
+        z.object({
+          options: z
+            .array(
+              z.object({
+                message: z.string().min(1).max(2000),
+                headline: z.string().min(1).max(200),
+                description: z.string().max(300),
+              })
+            )
+            .min(1)
+            .max(3),
+        }),
+        images
+      );
+      await appendActivity({
+        organizationId: input.organizationId,
+        actorUserId: ctx.user.id,
+        action: "publication.copy_drafted",
+        entityType: "asset",
+        entityId: input.assetKeys[0],
+        payload: { assetKeys: input.assetKeys },
+      });
+      return drafts;
+    }),
   draftCaptions: protectedProcedure
     .input(
       scopeSchema.extend({
@@ -607,6 +776,7 @@ export const channelsRouter = router({
                 count: input.slots.length,
                 direction: input.direction,
                 brand: {
+                  businessProfile: brand.businessProfile,
                   name: brand.name,
                   voice: brand.voice,
                   requiredClaims: brand.requiredClaims,

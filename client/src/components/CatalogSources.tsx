@@ -1,3 +1,4 @@
+import { OfferingDiscovery } from "./OfferingDiscovery";
 import { PartnerLogo } from "./PartnerLogo";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -107,7 +108,7 @@ export function CatalogSources({
               <p className="mt-1 text-3xl font-semibold">
                 {catalog.data ? catalog.data.total.toLocaleString() : "…"}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  products and services
+                  products, services, and subscriptions
                 </span>
               </p>
             </div>
@@ -115,6 +116,7 @@ export function CatalogSources({
               View catalog
             </Link>
           </div>
+          <OfferingDiscovery organizationId={organizationId} />
           <div className="grid gap-4 md:grid-cols-3">
             <Link
               href="/app/import"
@@ -131,7 +133,7 @@ export function CatalogSources({
               onClick={() => setManual(true)}
             >
               <Plus className="mb-4 text-primary" />
-              <h3 className="font-semibold">Add product or service</h3>
+              <h3 className="font-semibold">Add an offering</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 Describe what you sell, with accurate facts and images.
               </p>
@@ -142,7 +144,7 @@ export function CatalogSources({
                 Import CSV
               </Label>
               <p className="my-2 text-sm text-muted-foreground">
-                Required columns: name, productUrl. Optional: recordType
+                Required columns: name, productUrl. Optional: offeringType (subscription, membership, platform, directory_category, directory_listing, free_offer), audience, billingPeriod, trial, benefits, recordType
                 (service or standalone), description, sku, price, currency,
                 imageUrl, category, pricing, duration, area, delivery, packages,
                 cta.
@@ -454,7 +456,7 @@ export function CatalogSources({
       <Dialog open={manual} onOpenChange={setManual}>
         <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add a product or service</DialogTitle>
+            <DialogTitle>Add an offering</DialogTitle>
           </DialogHeader>
           <CatalogEntryForm
             organizationId={organizationId}

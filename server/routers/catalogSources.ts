@@ -1,3 +1,5 @@
+import { discoverOfferings } from "../lib/marketingDrafts";
+import { brandKits } from "../../drizzle/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -19,6 +21,17 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  discoverOfferings: protectedProcedure
+    .input(org.extend({ website: z.string().url() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      return discoverOfferings(input.website, brand?.businessProfile);
+    }),
   list: protectedProcedure.input(org).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     const db = await getDb();

@@ -1,3 +1,4 @@
+import { BusinessProfileForm } from "@/components/BusinessProfileForm";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -223,8 +224,8 @@ function Settings() {
             Platform website &amp; public requests
           </a>
           <p className="mt-1 text-muted-foreground">
-            Manage EvokeLoop's public company information and support/privacy inbox.
-            Platform administrator only.
+            Manage EvokeLoop's public company information and support/privacy
+            inbox. Platform administrator only.
           </p>
         </div>
       )}
@@ -704,10 +705,16 @@ function Settings() {
               <Link href="~/app/brand" className="text-primary underline">
                 Manage brand identity and saved assets ↗
               </Link>
-              <p className="mt-5 text-sm text-muted-foreground">
-                Planned: company profile, business type, locale, time zone,
-                currency, and workspace name editing.
-              </p>
+              <div className="mt-6">
+                {organizationId && (
+                  <BusinessProfileForm
+                    organizationId={organizationId}
+                    disabled={
+                      !["owner", "admin"].includes(membership?.role ?? "")
+                    }
+                  />
+                )}
+              </div>
             </section>
           ) : (
             <section className="surface p-6">

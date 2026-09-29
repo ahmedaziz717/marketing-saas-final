@@ -41,11 +41,22 @@ export function parseCatalogCsv(text: string): CatalogEntry[] {
       try {
         return catalogEntrySchema.parse({
           ...item,
-          recordType: item.recordType || "standalone",
+          recordType: item.offeringType
+            ? "service"
+            : item.recordType || "standalone",
           specifications: {},
           serviceDetails:
-            item.recordType === "service"
+            item.recordType === "service" || item.offeringType
               ? {
+                  offeringType: item.offeringType || "service",
+                  ownership:
+                    item.offeringType === "directory_listing"
+                      ? "third_party"
+                      : "own",
+                  audience: item.audience || "",
+                  billingPeriod: item.billingPeriod || "none",
+                  trial: item.trial || "",
+                  benefits: item.benefits || "",
                   pricing: item.pricing || "quote",
                   duration: item.duration || "",
                   area: item.area || "",

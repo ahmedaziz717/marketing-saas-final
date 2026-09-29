@@ -1,3 +1,4 @@
+import { offeringLabel } from "@shared/businessProfile";
 import { CatalogSources } from "@/components/CatalogSources";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -40,14 +41,11 @@ import { trpc } from "@/lib/trpc";
 import { getCatalogApprovalAction } from "./catalogReviewState";
 
 type Editable = {
-  serviceDetails: {
-    pricing: "fixed" | "starting_at" | "hourly" | "recurring" | "quote";
-    duration: string;
-    area: string;
-    delivery: "onsite" | "remote" | "both";
-    packages: string;
-    cta: "Book now" | "Get a quote" | "Contact us" | "Learn more";
-  } | null;
+  serviceDetails:
+    | import("zod").z.infer<
+        typeof import("@shared/catalog").serviceDetailsSchema
+      >
+    | null;
   id: number;
   name: string;
   sku: string;
@@ -252,7 +250,7 @@ function CatalogContent() {
             setOffset(0);
           }}
         >
-          {t}
+          {t === "services" ? "Services & subscriptions" : t}
         </Button>
       ))}
     </div>
@@ -274,7 +272,7 @@ function CatalogContent() {
       <PageHeader
         eyebrow="Approved product truth"
         title="Catalog"
-        description="Your products and services, connected to every creative. Review facts and approve what your team can use."
+        description="Your products, services, subscriptions, and platform offerings, connected to every creative. Review facts and approve what your team can use."
         action={
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setTab("sources")}>
@@ -450,7 +448,7 @@ function CatalogContent() {
                         </h2>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {product.category || "Uncategorized"} ·{" "}
-                          {product.recordType.replaceAll("_", " ")}
+                          {offeringLabel(product)}
                           {product.variantCount > 1
                             ? ` · ${product.variantCount} variants`
                             : ""}
@@ -694,6 +692,12 @@ function CatalogContent() {
                 <div className="sm:col-span-2 grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-2">
                   {(
                     [
+                      "offeringType",
+                      "audience",
+                      "billingPeriod",
+                      "trial",
+                      "benefits",
+                      "ownership",
                       "pricing",
                       "duration",
                       "area",
@@ -706,11 +710,18 @@ function CatalogContent() {
                       <Label htmlFor={"edit-service-" + key}>
                         {key === "cta" ? "Call to action" : key}
                       </Label>
-                      {["pricing", "delivery", "cta"].includes(key) ? (
+                      {[
+                        "pricing",
+                        "delivery",
+                        "cta",
+                        "offeringType",
+                        "ownership",
+                        "billingPeriod",
+                      ].includes(key) ? (
                         <select
                           id={"edit-service-" + key}
                           className="w-full rounded-lg border p-2"
-                          value={editing.serviceDetails![key]}
+                          value={editing.serviceDetails![key] ?? ""}
                           onChange={e =>
                             setEditing({
                               ...editing,
@@ -721,22 +732,40 @@ function CatalogContent() {
                             })
                           }
                         >
-                          {(key === "pricing"
+                          {(key === "offeringType"
                             ? [
-                                "fixed",
-                                "starting_at",
-                                "hourly",
-                                "recurring",
-                                "quote",
+                                "service",
+                                "subscription",
+                                "membership",
+                                "platform",
+                                "directory_category",
+                                "directory_listing",
+                                "free_offer",
                               ]
-                            : key === "delivery"
-                              ? ["onsite", "remote", "both"]
-                              : [
-                                  "Book now",
-                                  "Get a quote",
-                                  "Contact us",
-                                  "Learn more",
-                                ]
+                            : key === "ownership"
+                              ? ["own", "third_party"]
+                              : key === "billingPeriod"
+                                ? ["none", "monthly", "annual", "other"]
+                                : key === "pricing"
+                                  ? [
+                                      "fixed",
+                                      "starting_at",
+                                      "hourly",
+                                      "recurring",
+                                      "quote",
+                                    ]
+                                  : key === "delivery"
+                                    ? ["onsite", "remote", "both"]
+                                    : [
+                                        "Book now",
+                                        "Get a quote",
+                                        "Contact us",
+                                        "Learn more",
+                                        "Sign up",
+                                        "Start trial",
+                                        "Claim listing",
+                                        "Explore directory",
+                                      ]
                           ).map(v => (
                             <option key={v} value={v}>
                               {v}
@@ -746,7 +775,7 @@ function CatalogContent() {
                       ) : (
                         <Input
                           id={"edit-service-" + key}
-                          value={editing.serviceDetails![key]}
+                          value={editing.serviceDetails![key] ?? ""}
                           onChange={e =>
                             setEditing({
                               ...editing,

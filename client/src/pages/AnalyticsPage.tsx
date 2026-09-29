@@ -215,6 +215,33 @@ function ReportPanel({
           currency={d.currency}
         />
       </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          title="Registrations"
+          value={d.summary.registrations}
+          previous={prior?.summary.registrations}
+        />
+        <Metric
+          title="Leads"
+          value={d.summary.leads}
+          previous={prior?.summary.leads}
+        />
+        <Metric
+          title="Trial starts"
+          value={d.summary.trials}
+          previous={prior?.summary.trials}
+        />
+        <Metric
+          title="Subscriptions started"
+          value={d.summary.subscriptions}
+          previous={prior?.summary.subscriptions}
+        />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Conversion events are reported by Meta when your website sends them.
+        Subscription events are not active subscriber counts, recurring revenue,
+        or retention; those require billing data.
+      </p>
       <p className="mt-4 text-xs leading-5 text-muted-foreground">
         {d.attribution} Reporting time zone: {d.timezone ?? "not supplied"}.
         Currency:{" "}

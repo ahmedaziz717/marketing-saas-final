@@ -135,6 +135,20 @@ export async function loadInputs(
         message: "Choose an approved person reference from this workspace.",
       });
   }
+  if (
+    setup.promotionMode === "platform" &&
+    !kit[0]?.businessProfile?.summary?.trim()
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Save your business description in Settings → Company & brand before creating platform creatives.",
+    });
+  if (setup.promotionMode === "platform" && setup.products.length)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Platform promotion cannot also select catalog offerings.",
+    });
   return {
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
@@ -170,9 +184,11 @@ export async function runBuilderJob(
     if (setup.person && !personSource)
       throw new Error("Selected person reference is unavailable");
     const groups =
-      setup.productMode === "together"
-        ? [resolved.products]
-        : resolved.products.map(product => [product]);
+      setup.promotionMode === "platform"
+        ? [[]]
+        : setup.productMode === "together"
+          ? [resolved.products]
+          : resolved.products.map(product => [product]);
     const generated: Array<typeof creativeVariants.$inferInsert> = [];
     for (const group of groups) {
       await renewBuilderJob(db, organizationId, jobId);
@@ -217,7 +233,8 @@ export async function runBuilderJob(
           briefId: briefId,
           jobId,
           name: (
-            group.map(product => product.name).join(" + ") +
+            (group.map(product => product.name).join(" + ") ||
+              resolved.brand.name) +
             " · " +
             format.name
           ).slice(0, 180),
@@ -710,6 +727,7 @@ export const creativeBuilderRouter = router({
                 extraDirection: input.setup.extraDirection,
                 priorCopy: input.setup.copy,
                 brand: {
+                  businessProfile: resolved.brand.businessProfile,
                   name: resolved.brand.name,
                   voice: resolved.brand.voice,
                   requiredClaims: resolved.brand.requiredClaims,
