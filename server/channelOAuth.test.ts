@@ -219,11 +219,22 @@ describe.sequential("Meta OAuth consent boundary", () => {
     expect(row.stateHash).toHaveLength(64);
     expect(r.state).toBe(r.cookie);
     expect(new URL(r.url).searchParams.get("scope")?.split(",")).toContain(
+      "business_management"
+    );
+    expect(new URL(r.url).searchParams.get("scope")?.split(",")).toContain(
       "pages_read_user_content"
     );
     expect(new URL(r.url).searchParams.get("redirect_uri")).toBe(
       "https://example.test/api/channels/meta/callback"
     );
+  });
+  it("requests business asset access when connecting Meta ads", async () => {
+    const result = await beginMetaOAuth(fixture.db, org, owner, "meta_ads", { cookie: () => {} } as any);
+    const scopes = new URL(result.url).searchParams.get("scope")!.split(",");
+    expect(scopes).toContain("business_management");
+    expect(scopes).toContain("pages_show_list");
+    expect(scopes).toContain("ads_read");
+    expect(scopes).not.toContain("pages_manage_posts");
   });
   it("rejects mismatched callback cookies before contacting Meta", async () => {
     const r = await begin();
