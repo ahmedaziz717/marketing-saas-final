@@ -65,8 +65,9 @@ export const assetLibraryRouter = router({
     if (!mimeType || mimeType !== input.mimeType) throw new TRPCError({ code: "BAD_REQUEST", message: "The file contents do not match a supported image or video format." });
     const limit = mimeType.startsWith("video/") ? 20 : 12;
     if (bytes.length > limit * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: `This file must be ${limit} MB or smaller.` });
+    let dimensions: { width?: number; height?: number } = {};
     if (mimeType.startsWith("image/")) {
-      try { const info = await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata(); if (!info.width || !info.height || info.width * info.height > 40_000_000) throw new Error("Image too large"); }
+      try { const info = await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata(); if (!info.width || !info.height || info.width * info.height > 40_000_000) throw new Error("Image too large"); dimensions = { width: info.width, height: info.height }; }
       catch { throw new TRPCError({ code: "BAD_REQUEST", message: "This image is damaged or exceeds the image-size limit." }); }
     }
     const db = await libraryDatabase();
@@ -78,7 +79,7 @@ export const assetLibraryRouter = router({
     try {
       return await withOrganizationTransaction(db, input.organizationId, async tx => {
         const now = Date.now();
-        const [asset] = await tx.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: input.name, type: input.purpose === "source" ? input.sourceType : "other", storageKey: stored.key, url: stored.url, mimeType, status: "pending", metadata: { library: { purpose: input.purpose, isUgc: input.isUgc, digest: createHash("sha256").update(bytes).digest("hex"), ...(input.isUgc ? { rightsConfirmedAtMs: now, rightsConfirmedByUserId: ctx.user.id } : {}), ...(input.parentKey ? { parentKey: input.parentKey } : {}) } }, uploadedByUserId: ctx.user.id, createdAtMs: now }).returning({ id: brandAssets.id });
+        const [asset] = await tx.insert(brandAssets).values({ organizationId: input.organizationId, brandKitId: kit.id, name: input.name, type: input.purpose === "source" ? input.sourceType : "other", storageKey: stored.key, url: stored.url, mimeType, status: "pending", metadata: { ...dimensions, library: { purpose: input.purpose, isUgc: input.isUgc, digest: createHash("sha256").update(bytes).digest("hex"), ...(input.isUgc ? { rightsConfirmedAtMs: now, rightsConfirmedByUserId: ctx.user.id } : {}), ...(input.parentKey ? { parentKey: input.parentKey } : {}) } }, uploadedByUserId: ctx.user.id, createdAtMs: now }).returning({ id: brandAssets.id });
         const key = `asset:${asset.id}` as const;
         await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "asset_library.uploaded", entityType: "library_asset", entityId: key, payload: { mimeType, purpose: input.purpose, isUgc: input.isUgc, parentKey: input.parentKey ?? null } }, tx);
         const saved = input.disposition === "draft" ? await readLibraryAsset(tx, input.organizationId, key) : await handoff(tx, input.organizationId, ctx.user.id, key, input.disposition);

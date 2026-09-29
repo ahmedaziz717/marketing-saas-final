@@ -231,7 +231,7 @@ export async function advertisingObjects(c: ChannelConnection, filters?: AdBrows
   const definitions = [
     { edge: "campaigns", level: "campaign", id: "campaign_id", fields: "id,name,objective,status,effective_status,daily_budget,lifetime_budget" },
     { edge: "adsets", level: "adset", id: "adset_id", fields: "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,targeting,optimization_goal" },
-    { edge: "ads", level: "ad", id: "ad_id", fields: "id,name,adset_id,campaign_id,status,effective_status" },
+    { edge: "ads", level: "ad", id: "ad_id", fields: "id,name,adset_id,campaign_id,status,effective_status,creative{id,name,thumbnail_url}" },
   ];
   const results = await Promise.all(definitions.map(async definition => {
     // Campaigns cannot inherit a parent's paused status.
@@ -243,14 +243,17 @@ export async function advertisingObjects(c: ChannelConnection, filters?: AdBrows
       ...(status === "all" ? {} : { effective_status: JSON.stringify(allowed) }),
     });
     let data = objects.data.filter(row => status === "all" || allowed.includes(String(row.effective_status || row.status)));
-    if (!filters?.range) return { ...objects, data };
+    const reportRange = filters?.performanceRange ?? filters?.range;
+    if (!reportRange) return { ...objects, data };
     const delivery = await graphCollection(`${account}/insights`, token, {
       level: definition.level,
-      fields: `${definition.id},impressions`,
-      time_range: JSON.stringify(filters.range),
+      fields: `${definition.id},${fields},reach,frequency`,
+      time_range: JSON.stringify(reportRange),
     });
     const delivered = new Set(delivery.data.filter(row => Number(row.impressions) > 0).map(row => String(row[definition.id])));
-    data = data.filter(row => delivered.has(String(row.id)));
+    if (filters?.range) data = data.filter(row => delivered.has(String(row.id)));
+    const metrics = new Map(delivery.data.map(row => [String(row[definition.id]), { ...adMetrics(row), reach: finiteMetric(row.reach), frequency: finiteMetric(row.frequency) }]));
+    data = data.map(row => ({ ...row, performance: metrics.get(String(row.id)) ?? null }));
     return { data, truncated: objects.truncated || delivery.truncated };
   }));
   return {

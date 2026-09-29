@@ -136,7 +136,7 @@ beforeAll(async () => {
       url: "/media/image.png",
       mimeType: "image/png",
       status: "approved",
-      metadata: { library: { purpose: "finished" } },
+      metadata: { width: 1080, height: 1080, library: { purpose: "finished" } },
       uploadedByUserId: ownerId,
       createdAtMs: now,
     })
@@ -202,7 +202,7 @@ beforeAll(async () => {
   ]);
   state.image = (
     await sharp({
-      create: { width: 8, height: 8, channels: 4, background: "white" },
+      create: { width: 1080, height: 1080, channels: 4, background: "white" },
     })
       .png()
       .toBuffer()
@@ -505,6 +505,42 @@ describe.sequential(
       await publicationTick(state.db);
       expect((await current(bad.id)).state).toBe("failed");
       expect(state.graph).toHaveBeenCalledTimes(1);
+    });
+    it("delivers ordered carousel images paused and invalidates approval when any card changes", async () => {
+      vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
+      const [base] = await state.db.select().from(brandAssets).where(eq(brandAssets.id, assetId));
+      const {id: ignored, ...fields} = base;
+      const [second] = await state.db.insert(brandAssets).values({...fields, name: "Second card", storageKey: "org-" + org + "/second.png"}).returning();
+      const extra = { channel: "meta_ads", connectionId: adsId, assetKey: `asset:${assetId}`, content: contentSchema.parse({title:"Carousel",message:"Caption",headline:"Shop",link:"https://example.test",adSetId:"777",carouselAssetKeys:[`asset:${assetId}`,`asset:${second.id}`]}) };
+      let uploads=0;
+      state.graph.mockImplementation(async (path: string) => path === "777" ? {account_id:"456"} : path.endsWith('/adimages') ? {images:{image:{hash:`card-${++uploads}`}}} : {id:"999"});
+      const p = await queued(extra);
+      await publicationTick(state.db);
+      expect((await current(p.id)).state, (await current(p.id)).error ?? "").toBe("published");
+      const creative = state.graph.mock.calls.find(c => c[0] === 'act_456/adcreatives');
+      const link = JSON.parse(creative![3].get('object_story_spec')).link_data;
+      expect(link.child_attachments.map((a: any) => a.image_hash)).toEqual(['card-1','card-2']);
+      expect(link.multi_share_optimized).toBe(false);
+      expect(state.graph.mock.calls.find(c => c[0] === 'act_456/ads')![3].get('status')).toBe('PAUSED');
+      const stale = await approved(extra);
+      await state.db.update(brandAssets).set({name:'Changed second card'}).where(eq(brandAssets.id,second.id));
+      await expect(owner.publishing.queue({...version(stale),confirm:true})).rejects.toThrow();
+    });
+    it("requires a matching, unused review for Meta management writes", async () => {
+      vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
+      const [c] = await state.db.select().from(channelConnections).where(eq(channelConnections.id,adsId));
+      await state.db.update(channelConnections).set({details:{...c.details,permissions:['ads_management']}}).where(eq(channelConnections.id,adsId));
+      const scope={organizationId:org,connectionId:adsId};
+      const change={kind:'create_campaign' as const,name:'Paused test campaign',budgetMode:'campaign' as const,dailyBudget:25};
+      await expect(creator.channels.reviewMetaChange({...scope,change})).rejects.toThrow();
+      const review=await owner.channels.reviewMetaChange({...scope,change});
+      await expect(owner.channels.applyMetaChange({...scope,change:{...change,dailyBudget:50},ticket:review.ticket})).rejects.toThrow('does not belong');
+      state.graph.mockResolvedValue({id:'888'});
+      await owner.channels.applyMetaChange({...scope,change,ticket:review.ticket});
+      expect(state.graph.mock.calls.at(-1)?.[3].get('status')).toBe('PAUSED');
+      const count=state.graph.mock.calls.length;
+      await expect(owner.channels.applyMetaChange({...scope,change,ticket:review.ticket})).rejects.toThrow('already been submitted');
+      expect(state.graph).toHaveBeenCalledTimes(count);
     });
     it("disconnect cancels queued authorization without deleting remote posts", async () => {
       const p = await queued();

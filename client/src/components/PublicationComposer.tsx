@@ -1,3 +1,4 @@
+import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -46,6 +47,8 @@ export function PublicationComposer({
   item,
   initialChannel = "facebook",
   initialAssetKey,
+  initialConnectionId,
+  initialAdSetId,
   initialTime,
   initialTimezone,
   onClose,
@@ -54,6 +57,8 @@ export function PublicationComposer({
   item?: Publication;
   initialChannel?: Channel;
   initialAssetKey?: string;
+  initialConnectionId?: string;
+  initialAdSetId?: string;
   initialTime?: string;
   initialTimezone?: string;
   onClose: () => void;
@@ -65,12 +70,22 @@ export function PublicationComposer({
   const [channel, setChannel] = useState<Channel>(
     item?.channel ?? initialChannel
   );
-  const [connectionId, setConnection] = useState(item?.connectionId ?? "");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [carousel, setCarousel] = useState(
+    !!item?.content.carouselAssetKeys?.length
+  );
+  const [connectionId, setConnection] = useState(
+    item?.connectionId ?? initialConnectionId ?? ""
+  );
   const [assetKey, setAsset] = useState(
     item?.assetKey ?? initialAssetKey ?? ""
   );
   const [content, setContent] = useState<PublicationContent>(
-    item?.content ?? contentSchema.parse({ title: "Untitled post" })
+    item?.content ??
+      contentSchema.parse({
+        title: "Untitled post",
+        adSetId: initialAdSetId ?? "",
+      })
   );
   const [timezone, setTimezone] = useState(
     item?.timezone ??
@@ -125,7 +140,13 @@ export function PublicationComposer({
         channel,
         connectionId: connectionId || null,
         assetKey: assetKey || null,
-        content,
+        content: {
+          ...content,
+          carouselAssetKeys:
+            channel === "meta_ads" && carousel
+              ? content.carouselAssetKeys
+              : undefined,
+        },
         timezone,
         scheduledAtMs: at,
       });
@@ -162,6 +183,9 @@ export function PublicationComposer({
               value={channel}
               onChange={e => {
                 setChannel(e.target.value as Channel);
+                setCarousel(false);
+                setAsset("");
+                setContent(c => ({ ...c, carouselAssetKeys: undefined }));
                 setConnection("");
                 setField("adSetId", "");
               }}
@@ -217,37 +241,128 @@ export function PublicationComposer({
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="pub-asset">Approved finished asset</Label>
-            <select
-              id="pub-asset"
-              className={channelInput}
-              value={assetKey}
-              onChange={e => setAsset(e.target.value)}
+            {channel === "meta_ads" && (
+              <select
+                aria-label="Ad format"
+                className={channelInput + " mb-3"}
+                value={carousel ? "carousel" : "single"}
+                onChange={e => {
+                  setCarousel(e.target.value === "carousel");
+                  setAsset("");
+                  setContent(c => ({ ...c, carouselAssetKeys: undefined }));
+                }}
+              >
+                <option value="single">Single image</option>
+                <option value="carousel">Carousel · 2–10 images</option>
+              </select>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setPickerOpen(true)}
             >
-              <option value="">
-                {channel === "facebook"
-                  ? "No media - text or link post"
-                  : "Choose an approved image"}
-              </option>
-              {assets.data
-                ?.filter(
-                  a =>
-                    a.state === "approved" &&
-                    a.purpose === "finished" &&
-                    (a.mediaType === "image" ||
-                      (channel === "facebook" && a.mediaType === "video"))
-                )
-                .map(a => (
-                  <option key={a.key} value={a.key}>
-                    {a.name}
-                  </option>
-                ))}
-            </select>
+              Browse approved assets
+              {carousel
+                ? ` (${content.carouselAssetKeys?.length ?? 0} selected)`
+                : ""}
+            </Button>
+            {channel === "facebook" && assetKey && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setAsset("")}
+              >
+                Remove media
+              </Button>
+            )}
+            {pickerOpen && (
+              <ApprovedAssetPicker
+                assets={assets.data ?? []}
+                channel={channel}
+                multiple={channel === "meta_ads" && carousel}
+                selected={
+                  carousel
+                    ? (content.carouselAssetKeys ?? [])
+                    : assetKey
+                      ? [assetKey]
+                      : []
+                }
+                onClose={() => setPickerOpen(false)}
+                onSelect={keys => {
+                  setAsset(keys[0]);
+                  setContent(c => ({
+                    ...c,
+                    carouselAssetKeys: carousel ? keys : undefined,
+                  }));
+                }}
+              />
+            )}
+            {carousel && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                {content.carouselAssetKeys?.map((key, index) => {
+                  const a = assets.data?.find(a => a.key === key);
+                  return (
+                    <div key={key} className="w-28 rounded-xl border p-2">
+                      <img
+                        src={a?.url}
+                        alt={a?.name ?? "Carousel image"}
+                        className="h-24 w-full object-contain"
+                      />
+                      <p className="text-xs">Card {index + 1}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={!index}
+                          aria-label="Move card earlier"
+                          onClick={() => {
+                            const keys = [...content.carouselAssetKeys!];
+                            [keys[index - 1], keys[index]] = [
+                              keys[index],
+                              keys[index - 1],
+                            ];
+                            setAsset(keys[0]);
+                            setContent(c => ({
+                              ...c,
+                              carouselAssetKeys: keys,
+                            }));
+                          }}
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            index === content.carouselAssetKeys!.length - 1
+                          }
+                          aria-label="Move card later"
+                          onClick={() => {
+                            const keys = [...content.carouselAssetKeys!];
+                            [keys[index + 1], keys[index]] = [
+                              keys[index],
+                              keys[index + 1],
+                            ];
+                            setAsset(keys[0]);
+                            setContent(c => ({
+                              ...c,
+                              carouselAssetKeys: keys,
+                            }));
+                          }}
+                        >
+                          →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {assets.error && (
               <p role="alert" className="text-xs">
                 The approved library could not be loaded.
               </p>
             )}
-            {selectedAsset && (
+            {selectedAsset && !carousel && (
               <div className="mt-3 rounded-xl bg-muted/50 p-3">
                 {selectedAsset.mediaType === "video" ? (
                   <video
@@ -447,10 +562,12 @@ export function PublicationDetails({
 }) {
   const { organizationId, membership } = useWorkspace();
   const utils = trpc.useUtils();
+  const [confirmQueue, setConfirmQueue] = useState(false);
   const [note, setNote] = useState(""),
     [externalId, setExternalId] = useState("");
   const scope = { organizationId: organizationId! };
   const version = { ...scope, id: item.id, revision: item.revision };
+  const reviewAssets = trpc.assetLibrary.list.useQuery(scope);
   const history = trpc.publishing.history.useQuery({ ...scope, id: item.id });
   const connections = trpc.channels.connections.useQuery(scope);
   const canEdit = ["owner", "admin", "creator", "publisher"].includes(
@@ -566,7 +683,32 @@ export function PublicationDetails({
             Destination URL: {item.content.link}
           </p>
         )}
-        {item.assetKey && (
+        {!!item.content.carouselAssetKeys?.length && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {item.content.carouselAssetKeys.map((key, index) => {
+              const a = reviewAssets.data?.find(a => a.key === key);
+              return (
+                <div key={key}>
+                  <img
+                    src={a?.url}
+                    alt={a?.name ?? "Carousel card"}
+                    className="h-32 w-full rounded-lg object-contain"
+                  />
+                  <p className="text-xs">
+                    Card {index + 1} · {a?.name ?? key}
+                  </p>
+                  <Link
+                    href={"/app/library?asset=" + encodeURIComponent(key)}
+                    className="text-xs text-primary"
+                  >
+                    Review asset
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {item.assetKey && !item.content.carouselAssetKeys?.length && (
           <Link
             href={"/app/library?asset=" + encodeURIComponent(item.assetKey)}
             className="text-sm text-primary"
@@ -630,18 +772,7 @@ export function PublicationDetails({
               live)) && (
             <Button
               disabled={busy || connections.isLoading}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    live
-                      ? item.channel === "facebook"
-                        ? "Queue this approved Facebook post for live delivery?"
-                        : "Queue this approved ad to be created PAUSED in Meta?"
-                      : "Save this as a test schedule? No content will be sent."
-                  )
-                )
-                  queue.mutate({ ...version, confirm: true });
-              }}
+              onClick={() => setConfirmQueue(true)}
             >
               {live
                 ? item.scheduledAtMs
@@ -650,6 +781,40 @@ export function PublicationDetails({
                 : "Save test schedule"}
             </Button>
           )}
+        {confirmQueue && (
+          <Dialog open onOpenChange={setConfirmQueue}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm delivery</DialogTitle>
+                <DialogDescription>
+                  {live
+                    ? item.channel === "facebook"
+                      ? "Queue this approved Facebook post for live delivery?"
+                      : "Create this approved ad in Meta with its status set to paused?"
+                    : "Save this as a test schedule? No content will be sent."}
+                </DialogDescription>
+              </DialogHeader>
+              <p className="font-medium">{item.content.title}</p>
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmQueue(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirmQueue(false);
+                    queue.mutate({ ...version, confirm: true });
+                  }}
+                >
+                  Confirm delivery
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
         {canPublish && reviewable && (
           <>
             <Label htmlFor="publication-feedback">Review feedback</Label>

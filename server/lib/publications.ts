@@ -1,3 +1,5 @@
+import { assetFit } from "../../shared/assetFit";
+import { metaLinkData } from "../../shared/metaCreative";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -140,6 +142,18 @@ export async function dependencies(db: Runner, item: Publication) {
           "Meta ads require an ad set, destination URL, headline, primary text and a connection with a Facebook Page.",
       });
   }
+  const carouselKeys = item.content.carouselAssetKeys ?? [];
+  const carouselAssets = [];
+  if (carouselKeys.length) {
+    if (item.channel !== "meta_ads" || carouselKeys.length < 2 || carouselKeys.length > 10 || new Set(carouselKeys).size !== carouselKeys.length || carouselKeys[0] !== item.assetKey)
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Choose 2–10 unique carousel images in order." });
+    for (const key of carouselKeys) {
+      const card = await readLibraryAsset(db, item.organizationId, key);
+      if (card.state !== "approved" || !assetFit(card, "meta_ads", true))
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Each carousel card must be an approved square finished image." });
+      carouselAssets.push(card);
+    }
+  }
   const hash = stableHash({
     channel: item.channel,
     connection: {
@@ -151,10 +165,11 @@ export async function dependencies(db: Runner, item: Publication) {
     content: item.content,
     assetKey: item.assetKey,
     assetRevision: asset?.revision ?? null,
+    ...(carouselAssets.length ? { carouselRevisions: carouselAssets.map(a => ({ key: a.key, revision: a.revision })) } : {}),
     scheduledAtMs: item.scheduledAtMs,
     timezone: item.timezone,
   });
-  return { connection, asset, hash };
+  return { connection, asset, hash, carouselAssets };
 }
 export async function approvedDependencies(db: Runner, item: Publication) {
   const d = await dependencies(db, item);
@@ -451,23 +466,22 @@ export async function executePublication(
         throw new Error(
           "The selected ad set belongs to a different ad account."
         );
-      if (!result.imageHash) {
-        const bytes = await sharp(await assetBytes(db, item), {
-          limitInputPixels: 40000000,
-        })
-          .rotate()
-          .png()
-          .toBuffer();
-        const uploaded = await graphPost(
-          `act_${remoteId(connection.accountId)}/adimages`,
-          token,
-          { bytes: bytes.toString("base64") }
-        );
-        const image = Object.values(uploaded.images ?? {})[0] as
-          | { hash?: string }
-          | undefined;
-        if (!image?.hash) throw new Error("Meta did not confirm the ad image.");
-        result.imageHash = image.hash;
+      const keys = item.content.carouselAssetKeys?.length ? item.content.carouselAssetKeys : [item.assetKey!];
+      const hashes = (result.imageHashes as Record<string, string> | undefined) ?? {};
+      if (keys.length === 1 && result.imageHash) hashes[keys[0]] = String(result.imageHash);
+      for (const key of keys) {
+        if (hashes[key]) continue;
+        const image = sharp(await assetBytes(db, { ...item, assetKey: key }), { limitInputPixels: 40000000 }).rotate();
+        const bytes = await image.png().toBuffer();
+        const info = await sharp(bytes).metadata();
+        if (keys.length > 1 && (!info.width || !info.height || Math.abs(info.width / info.height - 1) > .02 || Math.min(info.width, info.height) < 600))
+          throw new Error("Carousel images must be square and at least 600 × 600 pixels. Choose an approved square version.");
+        const uploaded = await graphPost(`act_${remoteId(connection.accountId)}/adimages`, token, { bytes: bytes.toString("base64") });
+        const stored = Object.values(uploaded.images ?? {})[0] as { hash?: string } | undefined;
+        if (!stored?.hash) throw new Error("Meta did not confirm the ad image.");
+        hashes[key] = stored.hash;
+        result.imageHashes = hashes;
+        result.imageHash = hashes[keys[0]];
         await checkpoint(db, item, result);
       }
       if (!result.creativeId) {
@@ -475,20 +489,10 @@ export async function executePublication(
           `act_${remoteId(connection.accountId)}/adcreatives`,
           token,
           {
-            name: item.content.title + " - Frame",
+            name: item.content.title + " - EvokeLoop",
             object_story_spec: JSON.stringify({
               page_id: connection.details.pageId,
-              link_data: {
-                image_hash: result.imageHash,
-                link: item.content.link,
-                message: item.content.message,
-                name: item.content.headline,
-                description: item.content.description,
-                call_to_action: {
-                  type: item.content.callToAction,
-                  value: { link: item.content.link },
-                },
-              },
+              link_data: metaLinkData(item.content, keys.map(key => hashes[key])),
             }),
           }
         );

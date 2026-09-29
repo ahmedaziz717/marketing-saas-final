@@ -1,3 +1,6 @@
+import { metaChangeSchema } from "../../shared/metaManagement";
+import { readMetaObject, reviewMetaChange, applyMetaChange } from "../lib/metaManagement";
+import { graphCollection } from "../lib/channelGraph";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -383,6 +386,30 @@ export const channelsRouter = router({
         throw upstream(e);
       }
     }),
+  metaObject: protectedProcedure.input(destination.extend({ kind: z.enum(["campaign", "adset", "ad"]), objectId: z.string().regex(/^\d+$/) })).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
+    const object = await readMetaObject(c, input.kind, input.objectId);
+    let advantage: Record<string, unknown> | null = null;
+    if (input.kind === "campaign") { try { advantage = await graphRequest(input.objectId, connectionToken(c), { fields: "advantage_state" }); } catch { /* Optional eligibility info is not supported by every campaign. */ } }
+    return { object, advantage, liveEnabled: liveDeliveryEnabled("meta_ads") };
+  }),
+  metaPixels: protectedProcedure.input(destination).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
+    return graphCollection(`act_${c.accountId}/adspixels`, connectionToken(c), { fields: "id,name" });
+  }),
+  reviewMetaChange: protectedProcedure.input(destination.extend({ change: metaChangeSchema })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, [...publishers]);
+    const c = await getConnection(await libraryDatabase(), input.organizationId, input.connectionId, "meta_ads");
+    return reviewMetaChange(c, ctx.user.id, input.change);
+  }),
+  applyMetaChange: protectedProcedure.input(destination.extend({ change: metaChangeSchema, ticket: z.string().max(10000) })).mutation(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, [...publishers]);
+    const db = await libraryDatabase();
+    const c = await getConnection(db, input.organizationId, input.connectionId, "meta_ads");
+    return applyMetaChange(db, c, ctx.user.id, input.ticket, input.change);
+  }),
   report: protectedProcedure
     .input(destination.extend({ range: rangeSchema }))
     .query(async ({ ctx, input }) => {

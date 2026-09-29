@@ -1,3 +1,6 @@
+import { MetaChangeDialog } from "@/components/MetaChangeDialog";
+import { PublicationComposer } from "@/components/PublicationComposer";
+import type { MetaChange } from "@shared/metaManagement";
 import { useState } from "react";
 import { Link } from "wouter";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -15,7 +18,17 @@ import {
   type DateRange,
 } from "@shared/channels";
 function CampaignObjects({ connectionId }: { connectionId: string }) {
-  const { organizationId } = useWorkspace();
+  const { organizationId, membership } = useWorkspace();
+  const canManage = ["owner", "admin", "publisher"].includes(
+    membership?.role ?? ""
+  );
+  const [change, setChange] = useState<{
+    kind: MetaChange["kind"];
+    objectId?: string;
+    campaignId?: string;
+  } | null>(null);
+  const [adSet, setAdSet] = useState("");
+  const [compose, setCompose] = useState<string | null>(null);
   const [view, setView] = useState<"campaigns" | "adsets" | "ads">("campaigns"),
     [campaign, setCampaign] = useState("");
   const [status, setStatus] = useState<AdBrowseFilters["status"]>("active");
@@ -31,21 +44,116 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
     {
       organizationId: organizationId!,
       connectionId,
-      filters: { status, range },
+      filters: {
+        status,
+        range,
+        performanceRange: range ?? {
+          since: moveDate(today, -29),
+          until: today,
+        },
+      },
     },
     { retry: false, staleTime: 60000 }
   );
   const items = (query.data?.[view] ?? []).filter(
-    i => !campaign || String(i.campaign_id || i.id) === campaign
+    i =>
+      (!campaign || String(i.campaign_id || i.id) === campaign) &&
+      (view !== "ads" || !adSet || String(i.adset_id) === adSet)
   );
   return (
     <section className="mt-6 space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          onClick={() => {
+            setView("campaigns");
+            setCampaign("");
+            setAdSet("");
+          }}
+        >
+          All campaigns
+        </Button>
+        {campaign && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setView("adsets");
+              setAdSet("");
+            }}
+          >
+            Campaign{" "}
+            {query.data?.campaigns.find(c => String(c.id) === campaign)?.name ??
+              campaign}
+          </Button>
+        )}
+        {adSet && (
+          <span className="text-sm">
+            Ad set{" "}
+            {query.data?.adsets.find(a => String(a.id) === adSet)?.name ??
+              adSet}
+          </span>
+        )}
+        <Button
+          className="ml-auto"
+          disabled={!canManage}
+          onClick={() => setChange({ kind: "create_campaign" })}
+        >
+          New campaign
+        </Button>
+        {campaign && (
+          <Button
+            disabled={!canManage}
+            onClick={() =>
+              setChange({ kind: "create_adset", campaignId: campaign })
+            }
+          >
+            New ad set
+          </Button>
+        )}
+        {adSet && (
+          <Button disabled={!canManage} onClick={() => setCompose(adSet)}>
+            New ad
+          </Button>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Performance: {range?.since ?? moveDate(today, -29)} through{" "}
+        {range?.until ?? today}. Spend and conversion values use the account
+        currency and Meta attribution; ROAS is attributed purchase value ÷
+        spend.
+      </p>
+      {change && (
+        <MetaChangeDialog
+          connectionId={connectionId}
+          {...change}
+          onClose={() => setChange(null)}
+          onSaved={() => {
+            void query.refetch();
+          }}
+        />
+      )}
+      {compose !== null && (
+        <PublicationComposer
+          initialChannel="meta_ads"
+          initialConnectionId={connectionId}
+          initialAdSetId={compose}
+          onClose={() => setCompose(null)}
+          onSaved={() => {
+            setCompose(null);
+            window.location.assign("/app/publishing");
+          }}
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {(["campaigns", "adsets", "ads"] as const).map(v => (
           <Button
             key={v}
             variant={view === v ? "default" : "outline"}
-            onClick={() => setView(v)}
+            onClick={() => {
+              setView(v);
+              if (v !== "ads") setAdSet("");
+            }}
           >
             {v === "adsets" ? "Ad sets" : v === "ads" ? "Ads" : "Campaigns"}
           </Button>
@@ -69,6 +177,7 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
             onChange={e => {
               setStatus(e.target.value as AdBrowseFilters["status"]);
               setCampaign("");
+              setAdSet("");
             }}
           >
             <option value="active">Active</option>
@@ -89,6 +198,7 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
               setPeriod(value);
               setRangeError("");
               setCampaign("");
+              setAdSet("");
               if (value === "all") setRange(undefined);
               else if (value !== "custom") {
                 const next = {
@@ -140,6 +250,7 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
                 setRangeError("");
                 setRange(parsed.data);
                 setCampaign("");
+                setAdSet("");
               }}
             >
               Apply dates
@@ -162,7 +273,10 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
         aria-label="Filter by campaign"
         className={channelInput + " max-w-md"}
         value={campaign}
-        onChange={e => setCampaign(e.target.value)}
+        onChange={e => {
+          setCampaign(e.target.value);
+          setAdSet("");
+        }}
       >
         <option value="">All campaigns</option>
         {query.data?.campaigns.map(c => (
@@ -189,13 +303,52 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
                 <th className="p-3">Name</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Details</th>
-                <th className="p-3">Meta ID</th>
+                <th className="p-3">Budget</th>
+                <th className="p-3">Spend</th>
+                <th className="p-3">Purchases</th>
+                <th className="p-3">Revenue</th>
+                <th className="p-3">ROAS</th>
+                <th className="p-3">CPC</th>
+                <th className="p-3">CTR</th>
+                <th className="p-3">Impressions</th>
+                <th className="p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map(i => (
                 <tr key={i.id} className="border-t">
-                  <td className="max-w-sm break-words p-3">{String(i.name)}</td>
+                  <td className="max-w-sm break-words p-3">
+                    <button
+                      className="text-left font-medium text-primary underline"
+                      onClick={() => {
+                        if (view === "campaigns") {
+                          setCampaign(String(i.id));
+                          setAdSet("");
+                          setView("adsets");
+                        } else if (view === "adsets") {
+                          setCampaign(String(i.campaign_id));
+                          setAdSet(String(i.id));
+                          setView("ads");
+                        } else
+                          setChange({
+                            kind: "update_ad",
+                            objectId: String(i.id),
+                          });
+                      }}
+                    >
+                      {String(i.name)}
+                    </button>
+                    {i.creative?.thumbnail_url && (
+                      <img
+                        src={i.creative.thumbnail_url}
+                        alt="Ad creative"
+                        className="mt-2 h-16 w-20 rounded object-contain"
+                      />
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {String(i.id)}
+                    </p>
+                  </td>
                   <td className="p-3">
                     {String(i.effective_status || i.status || "Unavailable")}
                   </td>
@@ -210,7 +363,93 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
                           ? "Creative " + i.creative.id
                           : "Creative unavailable"}
                   </td>
-                  <td className="p-3 text-xs">{String(i.id)}</td>
+                  <td className="p-3 text-xs">
+                    {i.daily_budget
+                      ? `${(Number(i.daily_budget) / 100).toFixed(2)} ${query.data?.currency ?? ""}/day`
+                      : i.lifetime_budget
+                        ? `${(Number(i.lifetime_budget) / 100).toFixed(2)} lifetime`
+                        : view === "campaigns"
+                          ? "ABO · ad-set budgets"
+                          : "Parent budget"}
+                    {view === "campaigns" &&
+                    (i.daily_budget || i.lifetime_budget)
+                      ? " · CBO"
+                      : ""}
+                  </td>
+                  <td className="p-3">
+                    {i.performance?.spend?.toFixed(2) ?? "—"}
+                  </td>
+                  <td className="p-3">{i.performance?.purchases ?? "—"}</td>
+                  <td className="p-3">
+                    {i.performance?.purchaseValue?.toFixed(2) ?? "—"}
+                  </td>
+                  <td className="p-3">
+                    {i.performance?.roas != null
+                      ? i.performance.roas.toFixed(2) + "×"
+                      : "—"}
+                  </td>
+                  <td className="p-3">
+                    {i.performance?.clicks > 0 && i.performance?.spend != null
+                      ? (i.performance.spend / i.performance.clicks).toFixed(2)
+                      : "—"}
+                  </td>
+                  <td className="p-3">
+                    {i.performance?.impressions > 0 &&
+                    i.performance?.clicks != null
+                      ? (
+                          (100 * i.performance.clicks) /
+                          i.performance.impressions
+                        ).toFixed(2) + "%"
+                      : "—"}
+                  </td>
+                  <td className="p-3">
+                    {i.performance?.impressions?.toLocaleString() ?? "—"}
+                  </td>
+                  <td className="p-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!canManage}
+                      onClick={() =>
+                        setChange({
+                          kind:
+                            view === "campaigns"
+                              ? "update_campaign"
+                              : view === "adsets"
+                                ? "update_adset"
+                                : "update_ad",
+                          objectId: String(i.id),
+                        })
+                      }
+                    >
+                      Settings
+                    </Button>
+                    {view === "campaigns" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!canManage}
+                        onClick={() =>
+                          setChange({
+                            kind: "create_adset",
+                            campaignId: String(i.id),
+                          })
+                        }
+                      >
+                        Add ad set
+                      </Button>
+                    )}
+                    {view === "adsets" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!canManage}
+                        onClick={() => setCompose(String(i.id))}
+                      >
+                        Add ad
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -224,9 +463,10 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        These are read-only views of existing Meta objects. Prepare paused image
-        ads through Publishing; campaign creation, audience editing, budget
-        changes and activation remain in Meta Ads Manager for this release.
+        New campaigns, ad sets, and ads start paused. Changes require a fresh
+        review and explicit approval. Some specialized objectives,
+        lifetime-budget edits, and switching existing campaigns between ABO and
+        CBO still require Meta Ads Manager.
       </p>
     </section>
   );
@@ -281,10 +521,10 @@ function Advertising() {
                 Approved creative, controlled delivery
               </h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Choose an approved image, write channel-specific ad copy, and
+                Choose approved images, write channel-specific ad copy, and
                 select an existing ad set. Publishing records the final approval
-                and delivers the new ad paused. Review budgets, targeting and
-                launch in Meta Ads Manager.
+                and delivers the new ad paused. Explore performance and review
+                budgets, targeting, and delivery settings below.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link href="/app/publishing?new=1&channel=meta_ads">

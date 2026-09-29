@@ -14,6 +14,7 @@ export type LibraryAsset = {
   state: AssetState; revision: string; fingerprint: string;
   parentKey: AssetKey | null; createdAtMs: number;
   reviewedAtMs: number | null; reviewedByUserId: number | null;
+  width?: number; height?: number; channel?: string;
   headline?: string; primaryText?: string; format?: string; copyText?: string;
   sourceType?: "logo" | "product" | "reference" | "other";
 };

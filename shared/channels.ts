@@ -76,6 +76,7 @@ export const postRangeSchema = z
 export const adBrowseFiltersSchema = z.object({
   status: z.enum(["all", "active", "paused", "archived", "deleted"]).default("all"),
   range: postRangeSchema.optional(),
+  performanceRange: postRangeSchema.optional(),
 });
 export type AdBrowseFilters = z.infer<typeof adBrowseFiltersSchema>;
 export type DateRange = z.infer<typeof rangeSchema>;
@@ -105,6 +106,7 @@ export const contentSchema = z.object({
   callToAction: z
     .enum(["SHOP_NOW", "LEARN_MORE", "SIGN_UP", "GET_OFFER"])
     .default("LEARN_MORE"),
+  carouselAssetKeys: z.array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/)).max(10).optional(),
   campaignLabel: z.string().trim().max(180).default(""),
   adSetId: z.string().regex(/^\d*$/).max(100).default(""),
 });
