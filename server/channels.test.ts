@@ -7,6 +7,7 @@ import {
   previousRange,
   publicationDraftSchema,
   rangeSchema,
+  postRangeSchema,
   weekStart,
 } from "../shared/channels";
 import { adMetrics } from "./lib/channelReports";
@@ -21,6 +22,14 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("channel dates, metrics and provider boundary", () => {
+  it("allows a leap year of post history without expanding analytics ranges", () => {
+    const year = { since: "2028-01-01", until: "2028-12-31" };
+    expect(postRangeSchema.safeParse(year).success).toBe(true);
+    expect(rangeSchema.safeParse(year).success).toBe(false);
+    expect(postRangeSchema.safeParse({ ...year, until: "2029-01-01" }).success).toBe(false);
+    expect(postRangeSchema.safeParse({ since: "2028-02-30", until: "2028-03-01" }).success).toBe(false);
+    expect(postRangeSchema.safeParse({ since: "2028-03-01", until: "2028-02-29" }).success).toBe(false);
+  });
   it("supports arbitrary future weeks, leap dates and non-hour timezone offsets", () => {
     expect(
       dateInZone(

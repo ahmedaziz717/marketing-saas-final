@@ -8,7 +8,7 @@ import { channelInput } from "@/components/ChannelConnections";
 import { PublishingCalendar } from "@/components/PublishingCalendar";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { dateInZone, moveDate, rangeSchema } from "@shared/channels";
+import { dateInZone, moveDate, postRangeSchema } from "@shared/channels";
 function FacebookPosts({ connectionId }: { connectionId: string }) {
   const { organizationId } = useWorkspace();
   const today = dateInZone(Date.now(), "UTC").slice(0, 10);
@@ -62,6 +62,7 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
             <option value="90">Last 90 days</option>
+            <option value="365">Last year (365 days)</option>
             <option value="custom">Custom dates</option>
           </select>
         </label>
@@ -91,10 +92,10 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
             </label>
             <Button
               onClick={() => {
-                const parsed = rangeSchema.safeParse(custom);
+                const parsed = postRangeSchema.safeParse(custom);
                 if (!parsed.success) {
                   setRangeError(
-                    "Choose valid dates in order, up to 93 days per range."
+                    "Choose valid dates in order, up to one year (366 days) per range."
                   );
                   return;
                 }
@@ -105,7 +106,7 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
               Apply dates
             </Button>
             <p className="w-full text-xs text-muted-foreground">
-              Choose any historical period, up to 93 days at a time.
+              Choose any historical period, up to one year (366 days) at a time.
             </p>
           </>
         )}
@@ -193,7 +194,7 @@ function FacebookPosts({ connectionId }: { connectionId: string }) {
       )}
       {query.data?.truncated && (
         <p className="text-xs">
-          Provider pagination limit reached. This is a partial post list.
+          Only part of this period could be loaded. Choose a shorter date range to see more posts.
         </p>
       )}
     </section>

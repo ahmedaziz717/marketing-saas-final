@@ -65,6 +65,14 @@ export const rangeSchema = z
       until >= since && Date.parse(until) - Date.parse(since) < 93 * 86400000,
     "Select a range of 1 to 93 days."
   );
+// Post history is independent of the shorter analytics reporting window.
+export const postRangeSchema = z
+  .object({ since: dateSchema, until: dateSchema })
+  .refine(
+    ({ since, until }) =>
+      until >= since && Date.parse(until) - Date.parse(since) < 366 * 86400000,
+    "Select a range of up to one year (366 days)."
+  );
 export type DateRange = z.infer<typeof rangeSchema>;
 export const linkSchema = z
   .string()

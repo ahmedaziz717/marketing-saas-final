@@ -21,6 +21,7 @@ import {
   planSchema,
   publicationDraftSchema,
   rangeSchema,
+  postRangeSchema,
   scopeSchema,
   timezoneSchema,
 } from "../../shared/channels";
@@ -346,7 +347,7 @@ export const channelsRouter = router({
       });
     }),
   posts: protectedProcedure
-    .input(destination.extend({ range: rangeSchema }))
+    .input(destination.extend({ range: postRangeSchema }))
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       try {
