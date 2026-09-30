@@ -72,7 +72,9 @@ const setup = () => ({
 describe("creative setup and trusted catalog inputs", () => {
   it("provides an expanded collection of uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
     expect(CREATIVE_THEME_LIST.length).toBeGreaterThan(100);
-    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(CREATIVE_THEME_LIST.length);
+    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(
+      CREATIVE_THEME_LIST.length
+    );
     expect(CREATIVE_THEME_GROUPS.map(group => group.name)).toEqual([
       "Always On",
       "General / Evergreen",
@@ -108,7 +110,11 @@ describe("creative setup and trusted catalog inputs", () => {
         expect(setup.copy.headline).toBe(variant.headline);
       }
     }
-    expect(CREATIVE_THEME_LIST.some(t => /gaming|workstation|women in tech|CES Tech/i.test(t.name))).toBe(false);
+    expect(
+      CREATIVE_THEME_LIST.some(t =>
+        /gaming|workstation|women in tech|CES Tech/i.test(t.name)
+      )
+    ).toBe(false);
   });
 
   it("provides stable icon-led mood and art-style options", () => {
@@ -409,4 +415,47 @@ it("allows an approved service without a product image and carries service facts
       [logo]
     )
   ).toThrow();
+});
+
+describe("business promotions without catalog products", () => {
+  it("defaults directory and subscription accounts to one promotion per size", () => {
+    for (const model of ["directory", "membership", "saas", "services"]) {
+      const draft = defaultCreativeSetup(model);
+      expect(draft.promotionMode).toBe("platform");
+      expect(draft.products).toEqual([]);
+      expect(outputCount(draft)).toBe(3);
+      expect(generationSetupIssues(draft)).toEqual([]);
+      expect(creativeSetupSchema.safeParse(draft).success).toBe(true);
+    }
+    expect(defaultCreativeSetup().promotionMode).toBeUndefined();
+    expect(outputCount(defaultCreativeSetup())).toBe(0);
+  });
+  it("requires details for a category or provider and preserves attribution in the prompt", () => {
+    const draft = defaultCreativeSetup("directory");
+    draft.promotion = {
+      kind: "listing",
+      title: "Music teacher",
+      description: "Independent piano teacher listed in our directory.",
+    };
+    expect(generationSetupIssues(draft)).toEqual([]);
+    const prompt = buildCreativePrompt({
+      setup: draft,
+      brand,
+      products: [],
+      formatId: "square_1_1",
+      hasLogo: false,
+    });
+    expect(prompt).toContain("third-party provider/listing");
+    expect(prompt).toContain("does not deliver those services");
+    expect(prompt).toContain("Independent piano teacher");
+    expect(prompt).toContain("No physical product is selected");
+    draft.promotion.description = "";
+    expect(generationSetupIssues(draft)).toContain(
+      "Add a promotion name and description so the creative has accurate context."
+    );
+    expect(
+      creativeSetupSchema.safeParse({ ...draft, products: setup().products })
+        .success
+    ).toBe(false);
+  });
 });

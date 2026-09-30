@@ -16,6 +16,7 @@ export type LibraryAsset = {
   reviewedAtMs: number | null; reviewedByUserId: number | null;
   width?: number; height?: number; channel?: string;
   headline?: string; primaryText?: string; format?: string; copyText?: string;
+  promotion?: import("./creativeBuilder").CreativeSetup["promotion"];
   sourceType?: "logo" | "product" | "reference" | "other";
 };
 export type WorkflowSnapshot = { id: number; action: string; payload: Record<string, unknown> | null; actorUserId: number; createdAtMs: number };

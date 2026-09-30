@@ -1,3 +1,4 @@
+import { CreativeBuilder } from "../../client/src/components/CreativeBuilder";
 import PlatformAdminPage from "../../client/src/pages/PlatformAdminPage";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -107,6 +108,7 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
+  if (path === "creativeBuilder.options") return {products:[],logos:[],references:[],drafts:[],brand:{status:"active",name:"Learn Like This",businessProfile:{model:"directory",summary:"Discover independent learning providers through our directory."}}};
   if(path === "platformAdmin.openaiCosts" || path === "platformAdmin.syncOpenaiCosts") return { range: input.range, syncedAtMs: now, amountUsd: 12.5, rows: [{date: input.range.since, projectId:"proj_demo", lineItem:"Image generation", amountUsd:12.5, quantity:null, quantityUnit:null}] };
   if(path === "platformAdmin.customerCredits") return {tier:"Trial",period:"2026-09",allowance:100,remaining:80,enforced:true,paused:false};
   if(path === "platformAdmin.config") return {tiers:[{id:"trial",name:"Trial",monthlyCredits:100,monthlyPriceMicros:0}],rates:[]};
@@ -284,6 +286,7 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "directory-creative": "/app/creatives/directory",
   "platform-admin": "/admin",
   "product-home": "/app",
   login: "/login",
@@ -335,6 +338,7 @@ function RoutedPage() {
         resetPassword={path === "/reset-password"}
       />
     );
+  if(path === "/app/creatives/directory") return <DashboardLayout><h1>Image assets</h1><CreativeBuilder onGenerated={() => {}} /></DashboardLayout>;
   if(path === "/admin" || path.startsWith("/admin/")) return <PlatformAdminPage/>;
   const Page =
     path === "/app"
@@ -586,6 +590,13 @@ function layout() {
         ),
         "Unavailable video is clearly marked"
       );
+    }
+    if (which === "directory-creative") {
+      check((document.querySelector('select') as HTMLSelectElement) !== null, "Creator renders");
+      check(!document.querySelector('[aria-label="Search products or SKU"]'), "Directory does not require catalog selection");
+      check(document.body.textContent?.includes("No catalog required"), "Catalog-free promotion is selected");
+      check(document.body.textContent?.includes("3 images"), "Promotion has one image per size");
+      layout();
     }
     if (which === "platform-admin") {
       check(document.body.textContent?.includes("Business health"),"Admin overview renders");

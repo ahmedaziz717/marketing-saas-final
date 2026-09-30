@@ -39,3 +39,22 @@ The exact required image ID is configured privately in `server/lib/models.ts`. I
 The GitHub workflow also provisions an **isolated MySQL 8 database**, applies all migrations and runs the full suite, including persistent builder, legacy generation and catalog integration tests. Providers are mocked in those tests; no advertising accounts, paid generation or production data are used. Do not point integration tests at a customer database.
 
 Local checks cannot establish live Forge availability or the rendered Manus preview. Complete the environment checks above before calling this production-ready.
+
+## Business and directory promotions
+
+Non-product business profiles now start with a business/platform promotion. The
+creator can instead select a subscription, directory category, third-party
+listing, or custom promotion. Catalog offerings remain an explicit optional
+path. Existing product businesses and saved product selections retain their flow.
+Empty legacy directory drafts are adapted in the editor and saved before use.
+
+The promotion title and facts are saved in the brief, passed to copy and image
+generation, and copied into the finished asset metadata for later ad-copy drafts.
+Third-party listing services must be attributed to the provider, not the directory.
+A no-catalog promotion creates one image per selected size. Category, subscription,
+listing and custom promotions require a name and description; a platform promotion
+can use the saved business description. Up to three approved workspace reference
+images are optional. Server queries enforce workspace ownership and approval.
+
+Generation, asset review and publishing remain separate actions. This feature
+creates no placeholder products and does not auto-publish anything.

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  PROMOTION_TYPES,
   CREATIVE_ART_STYLES,
   CREATIVE_CHANNELS,
   CREATIVE_FORMATS,
@@ -138,7 +139,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
     { organizationId: organizationId! },
     { enabled: !!organizationId }
   );
-  const [setup, setSetup] = useState<CreativeSetup>(defaultCreativeSetup);
+  const [setup, setSetup] = useState<CreativeSetup>(() =>
+    defaultCreativeSetup()
+  );
   const [saved, setSaved] = useState<{
     briefId: number;
     updatedAtMs: number;
@@ -161,6 +164,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
   const refresh = trpc.creativeBuilder.refreshCopy.useMutation();
   const generate = trpc.creativeBuilder.generate.useMutation();
   const busy = save.isPending || generate.isPending;
+  const businessModel =
+    options.data?.brand?.businessProfile?.model ?? "products";
+  const nonProductBusiness = !["products", "mixed"].includes(businessModel);
   const catalog = options.data?.products ?? [];
   const logos = options.data?.logos ?? [];
   const selected = setup.products.map(selection => ({
@@ -176,6 +182,14 @@ export function CreativeBuilder({ onGenerated }: Props) {
   const logo = logos.find(asset => asset.id === setup.logoAssetId);
   const count = outputCount(setup);
   const issues = generationSetupIssues(setup);
+  if (
+    setup.promotionMode === "platform" &&
+    !options.data?.brand?.businessProfile?.summary?.trim() &&
+    !setup.promotion?.description.trim()
+  )
+    issues.push(
+      "Add promotion details or complete your business profile first."
+    );
   const structural = creativeSetupSchema.safeParse(setup);
   if (!structural.success) issues.push(structural.error.issues[0].message);
   if (
@@ -210,10 +224,18 @@ export function CreativeBuilder({ onGenerated }: Props) {
     const parsed = creativeSetupSchema.safeParse(draft.setup);
     if (!parsed.success)
       return toast.error("This setup could not be loaded. Create a new setup.");
+    const adapted =
+      nonProductBusiness &&
+      !parsed.data.promotionMode &&
+      !parsed.data.products.length;
+    if (adapted) {
+      parsed.data.promotionMode = "platform";
+      parsed.data.promotion = { kind: "platform", title: "", description: "" };
+    }
     setupRef.current = parsed.data;
     setSetup(parsed.data);
     setSaved({ briefId: draft.id, updatedAtMs: draft.updatedAtMs });
-    setDirty(false);
+    setDirty(adapted);
     setUndoCopy(null);
     setFocusedId(parsed.data.products[0]?.productId ?? null);
   }
@@ -227,7 +249,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
     initialized.current = organizationId;
     if (options.data.drafts[0]) loadDraft(options.data.drafts[0].id);
     else {
-      const next = defaultCreativeSetup();
+      const next = defaultCreativeSetup(
+        options.data?.brand?.businessProfile?.model
+      );
       setupRef.current = next;
       setSetup(next);
       setSaved(null);
@@ -404,7 +428,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
                 )
               )
                 return;
-              const next = defaultCreativeSetup();
+              const next = defaultCreativeSetup(
+                options.data?.brand?.businessProfile?.model
+              );
               setupRef.current = next;
               setSetup(next);
               setSaved(null);
@@ -663,168 +689,326 @@ export function CreativeBuilder({ onGenerated }: Props) {
                 3. What are you promoting?
               </h2>
               <span className="text-xs text-muted-foreground">
-                {setup.products.length} selected
+                {setup.promotionMode === "platform"
+                  ? "No catalog required"
+                  : `${setup.products.length} selected`}
               </span>
             </div>
             <label className="mb-3 block text-sm">
               Promotion type
               <select
-                className="mt-1 w-full rounded-lg border p-3"
-                value={setup.promotionMode ?? "offerings"}
+                className={selectClass + " mt-1"}
+                value={
+                  setup.promotionMode === "platform"
+                    ? (setup.promotion?.kind ?? "platform")
+                    : "offerings"
+                }
                 onChange={e =>
                   change({
                     ...setup,
-                    promotionMode: e.target.value as "offerings" | "platform",
+                    promotionMode:
+                      e.target.value === "offerings" ? "offerings" : "platform",
+                    promotion:
+                      e.target.value === "offerings"
+                        ? undefined
+                        : {
+                            kind: e.target.value as NonNullable<
+                              CreativeSetup["promotion"]
+                            >["kind"],
+                            title: "",
+                            description: "",
+                          },
                     products:
-                      e.target.value === "platform" ? [] : setup.products,
+                      e.target.value === "offerings" ? setup.products : [],
                   })
                 }
               >
+                {nonProductBusiness &&
+                  PROMOTION_TYPES.filter(
+                    t =>
+                      businessModel === "directory" ||
+                      !["category", "listing"].includes(t.id)
+                  ).map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
                 <option value="offerings">
-                  Selected products, services, or plans
+                  {nonProductBusiness
+                    ? "Saved catalog offering (optional)"
+                    : "Selected products, services, or plans"}
                 </option>
-                <option value="platform">The platform / business</option>
+                {!nonProductBusiness &&
+                  PROMOTION_TYPES.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
               </select>
             </label>
             {setup.promotionMode === "platform" && (
-              <p className="mb-3 text-sm text-muted-foreground">
-                Uses your saved business profile and brand. No product image is
-                required. Selecting an offering below switches back to selected
-                offerings.
-              </p>
-            )}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                aria-label="Search products or SKU"
-                placeholder="Search products or SKU…"
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-              />
-            </div>
-            <div className="mt-3 grid max-h-72 gap-1 overflow-y-auto overscroll-contain rounded-xl border border-border p-1 sm:grid-cols-2">
-              {filtered.map(product => (
-                <label
-                  key={product.id}
-                  className={
-                    "flex min-w-0 cursor-pointer items-center gap-3 rounded-lg p-2.5 " +
-                    (setup.products.some(item => item.productId === product.id)
-                      ? "bg-primary/5"
-                      : "hover:bg-muted/50")
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    className="accent-primary"
-                    checked={setup.products.some(
-                      item => item.productId === product.id
-                    )}
-                    disabled={
-                      !product.images.length && product.recordType !== "service"
-                    }
-                    onChange={() => toggleProduct(product)}
-                  />
-                  <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-md bg-white">
-                    {product.images[0] ? (
-                      <img
-                        src={product.images[0].url}
-                        alt=""
-                        className="h-full w-full object-contain"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <ImageIcon className="h-5 w-5 text-slate-400" />
-                    )}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="line-clamp-2 text-sm font-medium">
-                      {product.name}
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">
-                      {product.images.length
-                        ? product.sku || "No SKU"
-                        : product.recordType === "service"
-                          ? "Service · image optional"
-                          : "Needs a catalog image"}
-                    </span>
-                  </span>
-                </label>
-              ))}
-              {!filtered.length && (
-                <p className="p-4 text-sm text-muted-foreground sm:col-span-2">
-                  {catalog.length ? (
-                    "No matching products."
-                  ) : (
-                    <>
-                      Approve products in your{" "}
-                      <Link
-                        href="/app/catalog"
-                        className="text-primary underline"
-                      >
-                        catalog
-                      </Link>{" "}
-                      to use them here.
-                    </>
-                  )}
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Use your business profile and campaign details. No catalog
+                  item or product photo is required.
                 </p>
-              )}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selected.map(({ selection, product }) => (
-                <button
-                  type="button"
-                  key={selection.productId}
-                  className="flex max-w-full items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-xs"
-                  aria-label={
-                    "Remove " + (product?.name ?? "unavailable product")
-                  }
-                  onClick={() =>
-                    change({
-                      ...setup,
-                      products: setup.products.filter(
-                        item => item.productId !== selection.productId
-                      ),
-                    })
-                  }
-                >
-                  {product?.images.find(
-                    image => image.id === selection.imageId
-                  ) && (
-                    <img
-                      src={
-                        product.images.find(
-                          image => image.id === selection.imageId
-                        )!.url
-                      }
-                      alt=""
-                      className="h-6 w-6 rounded bg-white object-contain"
-                    />
+                <label className="block text-sm">
+                  {setup.promotion?.kind === "listing"
+                    ? "Provider / listing name"
+                    : "Promotion name"}
+                  <Input
+                    className="mt-1"
+                    placeholder={
+                      setup.promotion?.kind === "category"
+                        ? "e.g. Music lessons"
+                        : setup.promotion?.kind === "subscription"
+                          ? "e.g. Provider membership"
+                          : "e.g. Discover Learn Like This"
+                    }
+                    value={setup.promotion?.title ?? ""}
+                    onChange={e =>
+                      change({
+                        ...setup,
+                        promotion: {
+                          kind: setup.promotion?.kind ?? "platform",
+                          description: setup.promotion?.description ?? "",
+                          title: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="block text-sm">
+                  What should this promotion communicate?
+                  <Textarea
+                    className="mt-1"
+                    placeholder="Describe the audience, offering, and verified benefits. Include only confirmed prices or offers."
+                    value={setup.promotion?.description ?? ""}
+                    onChange={e =>
+                      change({
+                        ...setup,
+                        promotion: {
+                          kind: setup.promotion?.kind ?? "platform",
+                          title: setup.promotion?.title ?? "",
+                          description: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                {setup.promotion?.kind === "listing" && (
+                  <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                    This promotes a third-party provider. Copy will distinguish
+                    their services from the directory's role.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Business profile:{" "}
+                  {options.data?.brand?.businessProfile?.summary ||
+                    "Add promotion details above or complete your business profile."}{" "}
+                  <Link
+                    href="/app/settings/company"
+                    className="text-primary underline"
+                  >
+                    Edit business profile
+                  </Link>
+                </p>
+                <div>
+                  <p className="text-sm font-medium">
+                    Reference images{" "}
+                    <span className="font-normal text-muted-foreground">
+                      (optional, up to 3)
+                    </span>
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {options.data?.references?.map(r => (
+                      <label
+                        key={r.id}
+                        className="rounded-lg border p-2 text-xs"
+                      >
+                        <img
+                          src={r.url}
+                          alt={r.name}
+                          className="mb-2 h-20 w-full rounded object-contain"
+                        />
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={
+                            setup.referenceAssetIds?.includes(r.id) ?? false
+                          }
+                          disabled={
+                            !setup.referenceAssetIds?.includes(r.id) &&
+                            (setup.referenceAssetIds?.length ?? 0) >= 3
+                          }
+                          onChange={e =>
+                            change({
+                              ...setup,
+                              referenceAssetIds: e.target.checked
+                                ? [...(setup.referenceAssetIds ?? []), r.id]
+                                : setup.referenceAssetIds?.filter(
+                                    id => id !== r.id
+                                  ),
+                            })
+                          }
+                        />
+                        {r.name}
+                      </label>
+                    ))}
+                  </div>
+                  {!options.data?.references?.length && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      You can generate without images. Approved brand reference
+                      images will appear here when available.
+                    </p>
                   )}
-                  <span className="truncate">
-                    {product?.name ?? "Unavailable product"}
-                  </span>
-                  <X className="h-3 w-3 shrink-0" />
-                </button>
-              ))}
-            </div>
-            {setup.products.length > 1 && (
-              <div className="mt-4 flex flex-wrap gap-3">
-                {(["separate", "together"] as const).map(mode => (
-                  <label key={mode} className="flex items-center gap-2 text-sm">
-                    <input
-                      name="product-mode"
-                      type="radio"
-                      className="accent-primary"
-                      checked={setup.productMode === mode}
-                      onChange={() => change({ ...setup, productMode: mode })}
-                    />
-                    {mode === "separate"
-                      ? "Separate set per product"
-                      : "Products together"}
-                  </label>
-                ))}
+                </div>
               </div>
+            )}
+            {setup.promotionMode !== "platform" && (
+              <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    aria-label="Search products or SKU"
+                    placeholder="Search products or SKU…"
+                    value={search}
+                    onChange={event => setSearch(event.target.value)}
+                  />
+                </div>
+                <div className="mt-3 grid max-h-72 gap-1 overflow-y-auto overscroll-contain rounded-xl border border-border p-1 sm:grid-cols-2">
+                  {filtered.map(product => (
+                    <label
+                      key={product.id}
+                      className={
+                        "flex min-w-0 cursor-pointer items-center gap-3 rounded-lg p-2.5 " +
+                        (setup.products.some(
+                          item => item.productId === product.id
+                        )
+                          ? "bg-primary/5"
+                          : "hover:bg-muted/50")
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-primary"
+                        checked={setup.products.some(
+                          item => item.productId === product.id
+                        )}
+                        disabled={
+                          !product.images.length &&
+                          product.recordType !== "service"
+                        }
+                        onChange={() => toggleProduct(product)}
+                      />
+                      <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-md bg-white">
+                        {product.images[0] ? (
+                          <img
+                            src={product.images[0].url}
+                            alt=""
+                            className="h-full w-full object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <ImageIcon className="h-5 w-5 text-slate-400" />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="line-clamp-2 text-sm font-medium">
+                          {product.name}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {product.images.length
+                            ? product.sku || "No SKU"
+                            : product.recordType === "service"
+                              ? "Service · image optional"
+                              : "Needs a catalog image"}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {!filtered.length && (
+                    <p className="p-4 text-sm text-muted-foreground sm:col-span-2">
+                      {catalog.length ? (
+                        "No matching products."
+                      ) : (
+                        <>
+                          Approve products in your{" "}
+                          <Link
+                            href="/app/catalog"
+                            className="text-primary underline"
+                          >
+                            catalog
+                          </Link>{" "}
+                          to use them here.
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selected.map(({ selection, product }) => (
+                    <button
+                      type="button"
+                      key={selection.productId}
+                      className="flex max-w-full items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-xs"
+                      aria-label={
+                        "Remove " + (product?.name ?? "unavailable product")
+                      }
+                      onClick={() =>
+                        change({
+                          ...setup,
+                          products: setup.products.filter(
+                            item => item.productId !== selection.productId
+                          ),
+                        })
+                      }
+                    >
+                      {product?.images.find(
+                        image => image.id === selection.imageId
+                      ) && (
+                        <img
+                          src={
+                            product.images.find(
+                              image => image.id === selection.imageId
+                            )!.url
+                          }
+                          alt=""
+                          className="h-6 w-6 rounded bg-white object-contain"
+                        />
+                      )}
+                      <span className="truncate">
+                        {product?.name ?? "Unavailable product"}
+                      </span>
+                      <X className="h-3 w-3 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+                {setup.products.length > 1 && (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {(["separate", "together"] as const).map(mode => (
+                      <label
+                        key={mode}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          name="product-mode"
+                          type="radio"
+                          className="accent-primary"
+                          checked={setup.productMode === mode}
+                          onChange={() =>
+                            change({ ...setup, productMode: mode })
+                          }
+                        />
+                        {mode === "separate"
+                          ? "Separate set per product"
+                          : "Products together"}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </section>
           <section className={sectionClass}>
@@ -847,7 +1031,11 @@ export function CreativeBuilder({ onGenerated }: Props) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label>
-                <span className={`${labelClass} mt-5`}>Product setting</span>
+                <span className={`${labelClass} mt-5`}>
+                  {setup.promotionMode === "platform"
+                    ? "Visual setting"
+                    : "Product setting"}
+                </span>
                 <select
                   className={selectClass}
                   value={setup.shot}
@@ -859,14 +1047,18 @@ export function CreativeBuilder({ onGenerated }: Props) {
                     })
                   }
                 >
-                  <option value="product">Product only</option>
+                  <option value="product">
+                    {setup.promotionMode === "platform"
+                      ? "Brand / concept"
+                      : "Product only"}
+                  </option>
                   <option value="female">Lifestyle · female</option>
                   <option value="male">Lifestyle · male</option>
                   <option value="lifestyle">Lifestyle · no person</option>
                 </select>
               </label>
               <label>
-                <span className={`${labelClass} mt-5`}>Product placement</span>
+                <span className={`${labelClass} mt-5`}>{setup.promotionMode === "platform" ? "Subject placement" : "Product placement"}</span>
                 <select
                   className={selectClass}
                   value={setup.placement}
@@ -1042,7 +1234,9 @@ export function CreativeBuilder({ onGenerated }: Props) {
         <aside className="min-w-0 space-y-5">
           <section className={sectionClass + " xl:sticky xl:top-6"}>
             <h2 className="mb-4 text-base font-semibold">
-              Product images & specifications
+              {setup.promotionMode === "platform"
+                ? "Promotion brief"
+                : "Product images & specifications"}
             </h2>
             {active?.product ? (
               <>
@@ -1199,8 +1393,15 @@ export function CreativeBuilder({ onGenerated }: Props) {
               <div className="py-12 text-center">
                 <PackageSearch className="mx-auto h-8 w-8 text-muted-foreground/60" />
                 <p className="mt-4 text-sm text-muted-foreground">
-                  Select a product to preview its images and choose
-                  specifications.
+                  {setup.promotionMode === "platform"
+                    ? (setup.promotion?.title ||
+                        options.data?.brand?.name ||
+                        "Business promotion") +
+                      " — " +
+                      (setup.promotion?.description ||
+                        options.data?.brand?.businessProfile?.summary ||
+                        "Add details in the promotion section.")
+                    : "Select a product to preview its images and choose specifications."}
                 </p>
               </div>
             )}
@@ -1214,9 +1415,11 @@ export function CreativeBuilder({ onGenerated }: Props) {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {setup.formatIds.length} sizes
-            {setup.productMode === "separate"
-              ? " × " + setup.products.length + " products"
-              : " · products together"}
+            {setup.promotionMode === "platform"
+              ? " · one promotion"
+              : setup.productMode === "separate"
+                ? " × " + setup.products.length + " products"
+                : " · products together"}
           </p>
           {issues.length > 0 && (
             <p className="mt-2 text-xs text-amber-700">{issues[0]}</p>
@@ -1266,6 +1469,22 @@ export function CreativeBuilder({ onGenerated }: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
+            {setup.promotionMode === "platform" && (
+              <div className="rounded-xl border p-4 text-sm">
+                <p className="font-semibold">
+                  {setup.promotion?.title || options.data?.brand?.name} ·{" "}
+                  {
+                    PROMOTION_TYPES.find(
+                      t => t.id === (setup.promotion?.kind ?? "platform")
+                    )?.name
+                  }
+                </p>
+                <p className="mt-2 whitespace-pre-wrap">
+                  {setup.promotion?.description ||
+                    options.data?.brand?.businessProfile?.summary}
+                </p>
+              </div>
+            )}
             {selected.map(({ selection, product }) => (
               <div
                 key={selection.productId}

@@ -520,6 +520,7 @@ export const creativeVariants = appSchema.table("creative_variants", {
   imageStorageKey: varchar("imageStorageKey", { length: 500 }),
   renderMetadata: json("renderMetadata").$type<{
     productIds: number[];
+    promotion?: import("../shared/creativeBuilder").CreativeSetup["promotion"];
     copy: import("../shared/creativeBuilder").CreativeCopy;
     mood?: import("../shared/creativeBuilder").CreativeMood;
     artStyle?: import("../shared/creativeBuilder").CreativeArtStyle;

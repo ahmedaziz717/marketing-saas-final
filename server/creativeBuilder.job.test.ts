@@ -206,3 +206,28 @@ it("sends the selected person as the final image reference for master and every 
     ).toBe(true);
   }
 });
+
+it("generates directory promotions without product images and retains their references", async () => {
+  const { db, args, written } = fixture();
+  args.setup = {
+    ...defaultCreativeSetup("directory"),
+    promotion: {
+      kind: "category",
+      title: "Music lessons",
+      description: "Discover independent music teachers.",
+    },
+    referenceAssetIds: [44],
+  };
+  args.resolved.products = [];
+  args.resolved.references = [{ id: 44, storageKey: "learning-reference.png" }];
+  await runBuilderJob(db, args);
+  expect(mocked.generate).toHaveBeenCalledTimes(3);
+  expect(mocked.generate.mock.calls[0][0].originalImages[0].b64Json).toBe(
+    "learning-reference.png"
+  );
+  expect(mocked.generate.mock.calls[0][0].prompt).toContain("Music lessons");
+  const variants = written.flat().filter((r: any) => r.name);
+  expect(variants.some((r: any) => r.name.startsWith("Music lessons"))).toBe(
+    true
+  );
+});

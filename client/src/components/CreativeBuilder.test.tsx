@@ -342,3 +342,19 @@ describe("Creative Builder controls", () => {
     ).toBe(true);
   });
 });
+
+it("defaults a directory to a catalog-free workflow and saves a listing brief", async () => {
+  api.options.products = [];
+  api.options.brand = {status:"active",name:"Learn Like This",businessProfile:{model:"directory",summary:"A directory for discovering learning providers."}};
+  render(<CreativeBuilder onGenerated={vi.fn()} />);
+  await waitFor(() => expect((screen.getByLabelText("Promotion type") as HTMLSelectElement).value).toBe("platform"));
+  expect(screen.queryByLabelText("Search products or SKU")).toBeNull();
+  expect(screen.queryByText(/Approve products in your/)).toBeNull();
+  expect(screen.getByText(/3 images/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Promotion type"), {target:{value:"listing"}});
+  fireEvent.change(screen.getByLabelText("Provider / listing name"), {target:{value:"Music teacher"}});
+  fireEvent.change(screen.getByLabelText("What should this promotion communicate?"), {target:{value:"Discover independent piano lessons through our directory."}});
+  fireEvent.click(screen.getByRole("button", {name:"Save setup"}));
+  await waitFor(() => expect(api.save.mutateAsync).toHaveBeenCalled());
+  expect(api.save.mutateAsync.mock.calls[0][0].setup).toMatchObject({promotionMode:"platform",products:[],promotion:{kind:"listing",title:"Music teacher"}});
+});

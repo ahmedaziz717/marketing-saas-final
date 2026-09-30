@@ -625,6 +625,7 @@ export const channelsRouter = router({
           name: asset.name,
           headline: asset.headline,
           primaryText: asset.primaryText,
+          promotion: asset.promotion,
         });
         const bytes = await assetBytes(db, {
           organizationId: input.organizationId,
@@ -643,7 +644,7 @@ export const channelsRouter = router({
         images.push("data:image/jpeg;base64," + image.toString("base64"));
       }
       const drafts = await marketingJson(
-        "Write three alternative ad copy sets based on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
+        "Write three alternative ad copy sets based on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
         {
           assets,
           brand: {

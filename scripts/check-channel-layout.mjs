@@ -155,6 +155,7 @@ try {
   const results = [];
   const cases = [
     ...[
+      "directory-creative",
       "platform-admin",
       "login",
       "signup",
