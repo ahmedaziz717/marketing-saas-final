@@ -2,7 +2,7 @@ import { z } from "zod";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { requireLatestGptTextModel } from "./models";
 import { safeFetchText, extractPageEvidence, sameSite } from "./websiteCrawler";
-import { businessProfileSchema } from "../../shared/businessProfile";
+import { suggestedBusinessProfileSchema } from "../../shared/businessProfile";
 import { catalogEntrySchema } from "../../shared/catalog";
 export async function marketingJson<T>(
   instruction: string,
@@ -47,9 +47,9 @@ export async function websiteEvidence(url: string) {
 export async function suggestProfile(url: string) {
   const page = await websiteEvidence(url);
   return marketingJson(
-    "Suggest a business profile for review. Return keys model (products, services, directory, membership, saas, mixed), website, summary, audiences, goals, primaryOffer, timezone, currency. Distinguish a directory operator from listed businesses. Use empty text for unknown claims; timezone America/New_York and currency USD are editable defaults, not website facts.",
+    "Suggest a business profile for review. Return keys model (products, services, directory, membership, saas, mixed), website, summary, audiences, goals, primaryOffer, timezone, currency. All fields must be strings, including audiences and goals (use newline-separated text, never arrays). Distinguish a directory operator from listed businesses. Use empty text for unknown claims; timezone America/New_York and currency USD are editable defaults, not website facts.",
     { url: page.url, text: page.text.slice(0, 14000) },
-    businessProfileSchema
+    suggestedBusinessProfileSchema
   );
 }
 export async function discoverOfferings(url: string, profile: unknown) {

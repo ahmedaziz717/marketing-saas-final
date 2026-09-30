@@ -1,5 +1,5 @@
 import { suggestProfile } from "../lib/marketingDrafts";
-import { businessProfileSchema } from "../../shared/businessProfile";
+import { businessProfileSchema, websiteAddressSchema } from "../../shared/businessProfile";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -29,7 +29,7 @@ export const brandRouter = router({
     .input(
       z.object({
         organizationId: z.number().int().positive(),
-        website: z.string().url(),
+        website: websiteAddressSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -37,7 +37,13 @@ export const brandRouter = router({
         "owner",
         "admin",
       ]);
-      return suggestProfile(input.website);
+      try {
+        return await suggestProfile(input.website);
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({ code: "BAD_GATEWAY", message:
+          "We couldn't prepare answers from this website. Try again or fill in the profile manually. Your saved answers have not changed." });
+      }
     }),
   saveProfile: protectedProcedure
     .input(

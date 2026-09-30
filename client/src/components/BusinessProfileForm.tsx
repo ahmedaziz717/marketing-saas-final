@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { channelInput } from "./ChannelConnections";
 import {
   businessProfileSchema,
+  websiteAddressSchema,
   businessModels,
   businessModelLabels,
   type BusinessProfile,
@@ -94,7 +95,9 @@ export function BusinessProfileForm({
           Website
           <input
             className={channelInput + " mt-1"}
-            type="url"
+            type="text"
+            inputMode="url"
+            placeholder="learnlikethis.com"
             value={profile.website}
             onChange={e => update("website", e.target.value)}
           />
@@ -103,9 +106,15 @@ export function BusinessProfileForm({
           type="button"
           variant="outline"
           disabled={!profile.website}
-          onClick={() =>
-            suggest.mutate({ organizationId, website: profile.website })
-          }
+          onClick={() => {
+            const parsed = websiteAddressSchema.safeParse(profile.website);
+            if (!parsed.success) {
+              toast.error(parsed.error.issues[0].message);
+              return;
+            }
+            update("website", parsed.data);
+            suggest.mutate({ organizationId, website: parsed.data });
+          }}
         >
           {suggest.isPending
             ? "Reading website…"

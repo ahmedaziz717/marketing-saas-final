@@ -1,3 +1,4 @@
+import { syncPublishedPricing } from "../lib/publishedPricing";
 import { randomBytes, createHash } from "node:crypto";
 import { and, eq, desc, sql, gte, lt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
@@ -92,6 +93,10 @@ export const platformAdminRouter = router({
         });
       }
     }),
+  syncPublishedPricing: adminProcedure.mutation(async () => {
+    await syncPublishedPricing(true);
+    return { ok: true };
+  }),
   config: adminProcedure.query(async () => {
     const db = await libraryDatabase();
     return {
@@ -111,11 +116,39 @@ export const platformAdminRouter = router({
         .object({
           search: z.string().max(160).default(""),
           after: org.optional(),
+          tierId: z.string().optional(),
+          status: z.enum(["all", "paused", "enabled", "invited"]).optional(),
         })
         .default({ search: "" })
     )
     .query(async ({ input }) => {
       const db = await libraryDatabase();
+      const filters = and(
+        input.search
+          ? or(
+              ilike(organizations.name, `%${input.search}%`),
+              ilike(platformAccounts.ownerEmail, `%${input.search}%`)
+            )
+          : undefined,
+        input.tierId ? eq(platformAccounts.tierId, input.tierId) : undefined,
+        input.status === "paused"
+          ? eq(platformAccounts.aiPaused, 1)
+          : undefined,
+        input.status === "enabled"
+          ? sql`coalesce(${platformAccounts.aiPaused},0)=0`
+          : undefined,
+        input.status === "invited"
+          ? sql`${platformAccounts.inviteHash} is not null`
+          : undefined
+      );
+      const [count] = await db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(organizations)
+        .leftJoin(
+          platformAccounts,
+          eq(platformAccounts.organizationId, organizations.id)
+        )
+        .where(filters);
       const rows = await db
         .select({
           organization: organizations,
@@ -130,19 +163,15 @@ export const platformAdminRouter = router({
         .leftJoin(platformTiers, eq(platformTiers.id, platformAccounts.tierId))
         .where(
           and(
-            input.search
-              ? or(
-                  ilike(organizations.name, `%${input.search}%`),
-                  ilike(platformAccounts.ownerEmail, `%${input.search}%`)
-                )
-              : undefined,
+            filters,
             input.after ? sql`${organizations.id}>${input.after}` : undefined
           )
         )
         .orderBy(organizations.id)
-        .limit(101);
+        .limit(51);
       return {
-        items: rows.slice(0, 100).map(({ account, ...r }) => ({
+        total: count.total,
+        items: rows.slice(0, 50).map(({ account, ...r }) => ({
           ...r,
           account: account
             ? {
@@ -155,7 +184,7 @@ export const platformAdminRouter = router({
               }
             : null,
         })),
-        next: rows.length > 100 ? rows[99].organization.id : undefined,
+        next: rows.length > 50 ? rows[49].organization.id : undefined,
       };
     }),
   account: adminProcedure
@@ -498,7 +527,12 @@ export const platformAdminRouter = router({
           provider: input.provider,
           model: input.model,
           kind: input.kind,
-          config: input,
+          config: {
+            ...input,
+            automaticPricing: input.automaticPricing ?? false,
+            pricingVerifiedAt: undefined,
+            pricingError: undefined,
+          },
           updatedAtMs: Date.now(),
         })
         .onConflictDoUpdate({
@@ -507,7 +541,15 @@ export const platformAdminRouter = router({
             providerRates.model,
             providerRates.kind,
           ],
-          set: { config: input, updatedAtMs: Date.now() },
+          set: {
+            config: {
+              ...input,
+              automaticPricing: input.automaticPricing ?? false,
+              pricingVerifiedAt: undefined,
+              pricingError: undefined,
+            },
+            updatedAtMs: Date.now(),
+          },
         });
       await audit(tx, ctx.user.id, "provider_rate.updated", input);
       return { ok: true };
@@ -572,6 +614,7 @@ export const platformAdminRouter = router({
       const groups = await db
         .select({
           organizationId: aiUsage.organizationId,
+          organizationName: organizations.name,
           provider: aiUsage.provider,
           model: aiUsage.model,
           kind: aiUsage.kind,
@@ -597,8 +640,10 @@ export const platformAdminRouter = router({
             ),
         })
         .from(aiUsage)
+        .leftJoin(organizations, eq(organizations.id, aiUsage.organizationId))
         .where(where)
         .groupBy(
+          organizations.name,
           aiUsage.organizationId,
           aiUsage.provider,
           aiUsage.model,

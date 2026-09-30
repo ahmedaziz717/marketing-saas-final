@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { useRoute } from "wouter";
+import { useState, useEffect } from "react";
+import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import PlatformAdminLayout from "@/components/PlatformAdminLayout";
+import PlatformAdminLayout, {
+  adminSections,
+} from "@/components/PlatformAdminLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,12 @@ import { utcCreditMonth, type ProviderRate } from "@shared/platformAdmin";
 import { toast } from "sonner";
 import { rememberWorkspace } from "@/lib/workspaceSelection";
 import { OpenAIBilling } from "@/components/OpenAIBilling";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 const field = "w-full rounded-xl border bg-background px-3 py-2";
 const usd = (micros: number) =>
   new Intl.NumberFormat("en-US", {
@@ -98,17 +106,43 @@ const blankRate: ProviderRate = {
 };
 function Administration() {
   const utils = trpc.useUtils();
-  const [tab, setTab] = useState("Overview"),
-    [search, setSearch] = useState(""),
+  const [path, navigate] = useLocation();
+  const tab =
+    adminSections.find(s => path === (s.slug ? `/admin/${s.slug}` : "/admin"))
+      ?.title ?? "Overview";
+  const [showCreate, setShowCreate] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [tierFilter, setTierFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "paused" | "enabled" | "invited"
+  >("all");
+  const [history, setHistory] = useState<(number | undefined)[]>([]);
+  const [usagePage, setUsagePage] = useState(0);
+  const [search, setSearch] = useState(""),
     [after, setAfter] = useState<number>(),
     [selected, setSelected] = useState<number>(),
     [range, setRange] = useState(() => presetRange("this_month"));
   const config = trpc.platformAdmin.config.useQuery(),
-    accounts = trpc.platformAdmin.accounts.useQuery({ search, after }),
-    report = trpc.platformAdmin.report.useQuery({
-      range,
-      organizationId: selected,
+    accounts = trpc.platformAdmin.accounts.useQuery({
+      search,
+      after,
+      tierId: tierFilter || undefined,
+      status: statusFilter,
     }),
+    report = trpc.platformAdmin.report.useQuery(
+      {
+        range,
+        organizationId: selected,
+      },
+      {
+        enabled: [
+          "Overview",
+          "Usage & costs",
+          "Provider rates",
+          "Financial entries",
+        ].includes(tab),
+      }
+    ),
     details = trpc.platformAdmin.account.useQuery(
       { organizationId: selected! },
       { enabled: !!selected }
@@ -176,6 +210,10 @@ function Administration() {
     },
     onError: failure,
   });
+  const syncPrices = trpc.platformAdmin.syncPublishedPricing.useMutation({
+    onSuccess: success,
+    onError: failure,
+  });
   const saveAccount = trpc.platformAdmin.saveAccount.useMutation({
       onSuccess: success,
       onError: failure,
@@ -227,10 +265,21 @@ function Administration() {
       id === null
         ? "Platform / unattributed"
         : (items.find(a => a.organization.id === id)?.organization.name ??
+          groups.find(g => g.organizationId === id)?.organizationName ??
           `Account #${id}`);
-  const selectedItem = items.find(a => a.organization.id === selected);
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<(typeof items)[number]>();
+  const selectedItem =
+    items.find(a => a.organization.id === selected) ??
+    (selectedSnapshot?.organization.id === selected
+      ? selectedSnapshot
+      : undefined);
+  useEffect(() => {
+    setUsagePage(0);
+  }, [range, selected]);
   function selectAccount(id: number | undefined) {
     setSelected(id);
+    setSelectedSnapshot(items.find(a => a.organization.id === id));
     const a = items.find(a => a.organization.id === id)?.account;
     setAccount({
       tierId: a?.tierId ?? "",
@@ -243,34 +292,26 @@ function Administration() {
   return (
     <>
       <PageHeader
-        eyebrow="Platform administration"
-        title="SaaS control panel"
-        description="Accounts, AI credits, provider costs and business performance across EvokeLoop."
+        eyebrow="EvokeLoop administration"
+        title={tab}
+        description={
+          {
+            Overview: "Business health and cost coverage at a glance.",
+            Accounts:
+              "Find a customer, manage access, and adjust their plan or AI credits.",
+            "Usage & costs":
+              "Customer-level requests, token usage, and calculated provider costs.",
+            "OpenAI billing":
+              "Actual provider charges, synced using your read-only Admin API key.",
+            "Provider rates":
+              "Published model pricing and historical cost snapshots.",
+            Tiers: "Credit allowances and planned subscription prices.",
+            "Financial entries":
+              "Manually recorded revenue and operating expenses.",
+            Audit: "Administrative changes and their recorded reasons.",
+          }[tab] ?? "Platform management"
+        }
       />
-      <div className="mb-5 flex flex-wrap gap-2">
-        {[
-          "Overview",
-          "Accounts",
-          "Tiers",
-          "Provider rates",
-          "Financial entries",
-          "Audit",
-        ].map(t => (
-          <Button
-            key={t}
-            variant={tab === t ? "default" : "outline"}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </Button>
-        ))}
-      </div>
-      <p className="mb-5 rounded-xl border p-4 text-sm text-muted-foreground">
-        Stripe is not connected. Tier prices are planning values; no customer is
-        charged. AI credits are separate from provider tokens. Default rates: 1
-        credit per text request and 10 per image request until you configure a
-        model override.
-      </p>
       {(config.error || accounts.error || report.error) && (
         <p role="alert" className="mb-4 text-destructive">
           {config.error?.message ||
@@ -278,30 +319,58 @@ function Administration() {
             report.error?.message}
         </p>
       )}
-      {["Overview", "Financial entries"].includes(tab) && (
+      {[
+        "Overview",
+        "Usage & costs",
+        "OpenAI billing",
+        "Financial entries",
+      ].includes(tab) && (
         <div className="mb-5 flex flex-wrap gap-4">
           <DateRangeFilter value={range} onChange={r => r && setRange(r)} />
-          <Field label="Account">
-            <select
-              className={field}
-              value={selected ?? ""}
-              onChange={e =>
-                selectAccount(
-                  e.target.value ? Number(e.target.value) : undefined
-                )
-              }
-            >
-              <option value="">All accounts / platform</option>
-              {items.map(a => (
-                <option key={a.organization.id} value={a.organization.id}>
-                  {a.organization.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {tab !== "OpenAI billing" && (
+            <Field label="Find account">
+              <Input
+                aria-label="Find account for report"
+                placeholder="Search name or owner email"
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                  setAfter(undefined);
+                  setTierFilter("");
+                  setStatusFilter("all");
+                }}
+              />
+            </Field>
+          )}
+          {tab !== "OpenAI billing" && (
+            <Field label="Account">
+              <select
+                className={field}
+                value={selected ?? ""}
+                onChange={e =>
+                  selectAccount(
+                    e.target.value ? Number(e.target.value) : undefined
+                  )
+                }
+              >
+                <option value="">All accounts / platform</option>
+                {selectedItem &&
+                  !items.some(a => a.organization.id === selected) && (
+                    <option value={selected}>
+                      {selectedItem.organization.name}
+                    </option>
+                  )}
+                {items.map(a => (
+                  <option key={a.organization.id} value={a.organization.id}>
+                    {a.organization.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
       )}
-      {tab === "Overview" && (
+      {["Overview", "Usage & costs"].includes(tab) && (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
@@ -343,387 +412,584 @@ function Administration() {
               </section>
             ))}
           </div>
-          <p className="mb-5 text-sm text-muted-foreground">
-            Calculated account costs include AI request estimates and any
-            manually recorded expenses. {report.data?.coverage} Contribution is
-            revenue minus recorded costs, not audited net profit. Unknown costs
-            are excluded, not treated as free.
-          </p>
-          <section className="surface overflow-x-auto p-5">
-            <h2 className="mb-4 text-xl font-semibold">
-              Usage by account and provider
-            </h2>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr>
-                  {[
-                    "Account",
-                    "Provider / model",
-                    "Status",
-                    "Requests",
-                    "Input / output tokens",
-                    "Credits",
-                    "Known cost",
-                    "Unpriced",
-                  ].map(h => (
-                    <th className="p-2" key={h}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{name(g.organizationId)}</td>
-                    <td className="p-2">
-                      {g.provider}
-                      <br />
-                      {g.model}
-                      <br />
-                      {g.kind}
-                    </td>
-                    <td className="p-2">{g.status}</td>
-                    <td className="p-2">{g.requests}</td>
-                    <td className="p-2">
-                      {g.inputTokens} / {g.outputTokens}
-                    </td>
-                    <td className="p-2">{g.credits}</td>
-                    <td className="p-2">
-                      {g.unpriced === g.requests
-                        ? "Unavailable"
-                        : usd(g.costMicros) + (g.unpriced ? " (partial)" : "")}
-                    </td>
-                    <td className="p-2">{g.unpriced}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!groups.length && (
-              <p className="py-5 text-muted-foreground">
-                No tracked requests in this period. Historical tokens and costs
-                cannot be reconstructed from saved images.
-              </p>
-            )}
-          </section>
-          <section className="surface mt-5 p-5">
-            <h2 className="text-xl font-semibold">Latest requests</h2>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Pending requests reserve credits. Requests left pending after an
-              interruption need investigation; credits can be adjusted with a
-              recorded reason.
+          <details className="mb-5 text-sm text-muted-foreground">
+            <summary className="cursor-pointer">
+              How costs and contribution are calculated
+            </summary>
+            <p className="mt-2">
+              Calculated account costs include AI request estimates and any
+              manually recorded expenses. {report.data?.coverage} Contribution
+              is revenue minus recorded costs, not audited net profit. Unknown
+              costs are excluded, not treated as free.
             </p>
-            {report.data?.recent.map(r => (
-              <div key={r.id} className="border-t py-3 text-sm">
-                <p>
-                  {new Date(r.createdAtMs).toLocaleString()} ·{" "}
-                  {name(r.organizationId)} · {r.operation} · {r.status}
-                </p>
-                <p className="text-muted-foreground">
-                  {r.provider} / {r.model} ·{" "}
-                  {r.costMicros === null
-                    ? "Cost unavailable"
-                    : usd(r.costMicros)}{" "}
-                  · {r.id}
-                </p>
-                <ImagePriceDetails usage={r.usage} rate={r.rateSnapshot} />
-              </div>
-            ))}
-          </section>
-          <div className="mt-6">
-            <OpenAIBilling range={range} />
-          </div>
-        </>
-      )}
-      {tab === "Accounts" && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <section className="surface min-w-0 p-5">
-            <h2 className="mb-4 text-xl font-semibold">All accounts</h2>
-            <Input
-              aria-label="Search accounts"
-              placeholder="Search account or owner email"
-              value={search}
-              onChange={e => {
-                setSearch(e.target.value);
-                setAfter(undefined);
-              }}
-            />
-            <div className="my-4 space-y-2">
-              {items.map(a => (
-                <button
-                  key={a.organization.id}
-                  className={`w-full rounded-xl border p-4 text-left ${selected === a.organization.id ? "border-primary bg-primary/5" : ""}`}
-                  onClick={() => selectAccount(a.organization.id)}
-                >
-                  <p className="font-medium">
-                    {a.organization.name} · #{a.organization.id}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {a.tier?.name ?? "No tier"} ·{" "}
-                    {a.account?.enforceCredits
-                      ? "Credit limits enabled"
-                      : "Tracking only"}
-                    {a.account?.aiPaused ? " · AI paused" : ""}
-                  </p>
-                  <p className="break-all text-sm">{a.account?.ownerEmail}</p>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {after && (
-                <Button variant="outline" onClick={() => setAfter(undefined)}>
-                  First page
+          </details>
+          {tab === "Overview" && (
+            <section className="surface p-6">
+              <h2 className="text-lg font-semibold">Next actions</h2>
+              <p className="my-3 text-sm text-muted-foreground">
+                {total("unpriced")
+                  ? `${total("unpriced")} requests need pricing attention.`
+                  : "All tracked requests in this period have cost estimates."}{" "}
+                These estimates are not reconciled customer invoices.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => navigate("/admin/accounts")}>
+                  Manage accounts
                 </Button>
-              )}
-              {accounts.data?.next && (
                 <Button
                   variant="outline"
-                  onClick={() => setAfter(accounts.data!.next)}
+                  onClick={() => navigate("/admin/usage")}
+                >
+                  Explore usage
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/admin/billing")}
+                >
+                  Review OpenAI bill
+                </Button>
+              </div>
+            </section>
+          )}
+          {tab === "Usage & costs" && (
+            <>
+              <section className="surface overflow-x-auto p-5">
+                <h2 className="mb-4 text-xl font-semibold">
+                  Usage by account and provider
+                </h2>
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr>
+                      {[
+                        "Account",
+                        "Provider / model",
+                        "Status",
+                        "Requests",
+                        "Input / output tokens",
+                        "Credits",
+                        "Known cost",
+                        "Unpriced",
+                      ].map(h => (
+                        <th className="p-2" key={h}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups
+                      .slice(usagePage * 50, (usagePage + 1) * 50)
+                      .map((g, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2">{name(g.organizationId)}</td>
+                          <td className="p-2">
+                            {g.provider}
+                            <br />
+                            {g.model}
+                            <br />
+                            {g.kind}
+                          </td>
+                          <td className="p-2">{g.status}</td>
+                          <td className="p-2">{g.requests}</td>
+                          <td className="p-2">
+                            {g.inputTokens} / {g.outputTokens}
+                          </td>
+                          <td className="p-2">{g.credits}</td>
+                          <td className="p-2">
+                            {g.unpriced === g.requests
+                              ? "Unavailable"
+                              : usd(g.costMicros) +
+                                (g.unpriced ? " (partial)" : "")}
+                          </td>
+                          <td className="p-2">{g.unpriced}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <div className="mt-4 flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    disabled={usagePage === 0}
+                    onClick={() => setUsagePage(p => p - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm">
+                    {groups.length} groups · Page {usagePage + 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    disabled={(usagePage + 1) * 50 >= groups.length}
+                    onClick={() => setUsagePage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+                {!groups.length && (
+                  <p className="py-5 text-muted-foreground">
+                    No tracked requests in this period. Historical tokens and
+                    costs cannot be reconstructed from saved images.
+                  </p>
+                )}
+              </section>
+              <section className="surface mt-5 p-5">
+                <h2 className="text-xl font-semibold">Latest requests</h2>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Pending requests reserve credits. Requests left pending after
+                  an interruption need investigation; credits can be adjusted
+                  with a recorded reason.
+                </p>
+                {report.data?.recent.map(r => (
+                  <div key={r.id} className="border-t py-3 text-sm">
+                    <p>
+                      {new Date(r.createdAtMs).toLocaleString()} ·{" "}
+                      {name(r.organizationId)} · {r.operation} · {r.status}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {r.provider} / {r.model} ·{" "}
+                      {r.costMicros === null
+                        ? "Cost unavailable"
+                        : usd(r.costMicros)}{" "}
+                      · {r.id}
+                    </p>
+                    <ImagePriceDetails usage={r.usage} rate={r.rateSnapshot} />
+                  </div>
+                ))}
+              </section>
+            </>
+          )}
+        </>
+      )}
+      {tab === "OpenAI billing" && <OpenAIBilling range={range} />}
+      {tab === "Accounts" && (
+        <div>
+          <section className="surface min-w-0 p-5">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">
+                Customer directory{" "}
+                <span className="text-sm font-normal text-muted-foreground">
+                  {accounts.data?.total ?? items.length} accounts
+                </span>
+              </h2>
+              <Button
+                onClick={() => {
+                  setInvite("");
+                  setShowCreate(true);
+                }}
+              >
+                Create account
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Input
+                aria-label="Search accounts"
+                placeholder="Search account or owner email"
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                  setAfter(undefined);
+                  setHistory([]);
+                }}
+              />
+              <select
+                aria-label="Filter tier"
+                className={field}
+                value={tierFilter}
+                onChange={e => {
+                  setTierFilter(e.target.value);
+                  setAfter(undefined);
+                  setHistory([]);
+                }}
+              >
+                <option value="">All tiers</option>
+                {config.data?.tiers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter account status"
+                className={field}
+                value={statusFilter}
+                onChange={e => {
+                  setStatusFilter(e.target.value as typeof statusFilter);
+                  setAfter(undefined);
+                  setHistory([]);
+                }}
+              >
+                <option value="all">All AI access</option>
+                <option value="enabled">AI enabled</option>
+                <option value="paused">AI paused</option>
+                <option value="invited">Invitation pending</option>
+              </select>
+            </div>
+            <div className="my-5 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    {["Account", "Owner", "Tier", "AI access", "Credits"].map(
+                      h => (
+                        <th key={h} className="p-3 font-medium">
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(a => (
+                    <tr
+                      key={a.organization.id}
+                      className="border-t hover:bg-slate-50"
+                    >
+                      <td className="p-3">
+                        <button
+                          className="text-left font-semibold text-primary hover:underline"
+                          onClick={() => {
+                            selectAccount(a.organization.id);
+                            setShowDetails(true);
+                          }}
+                        >
+                          {a.organization.name}
+                        </button>
+                        <div className="text-xs text-muted-foreground">
+                          #{a.organization.id}
+                        </div>
+                      </td>
+                      <td className="p-3 break-all">
+                        {a.account?.ownerEmail || "—"}
+                        {a.account?.invitationPending && (
+                          <span className="block text-xs text-amber-700">
+                            Invitation pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">{a.tier?.name ?? "No tier"}</td>
+                      <td className="p-3">
+                        <span
+                          className={`whitespace-nowrap rounded-full px-2 py-1 text-xs ${a.account?.aiPaused ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}
+                        >
+                          {a.account?.aiPaused ? "Paused" : "Enabled"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {a.account?.enforceCredits
+                          ? "Limited"
+                          : "Tracking only"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {accounts.isLoading ? (
+              <p role="status">Loading accounts…</p>
+            ) : (
+              !items.length && (
+                <p className="py-8 text-center text-muted-foreground">
+                  No matching accounts. Try another search or filter.
+                </p>
+              )
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">
+                Page {history.length + 1} · Up to 50 accounts per page
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!history.length}
+                  onClick={() => {
+                    setAfter(history[history.length - 1]);
+                    setHistory(h => h.slice(0, -1));
+                  }}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!accounts.data?.next}
+                  onClick={() => {
+                    setHistory(h => [...h, after]);
+                    setAfter(accounts.data!.next);
+                  }}
                 >
                   Next accounts
                 </Button>
-              )}
-            </div>
-            <h2 className="mb-4 mt-8 text-xl font-semibold">Create account</h2>
-            <form
-              className="space-y-3"
-              onSubmit={e => {
-                e.preventDefault();
-                create.mutate(newAccount);
-              }}
-            >
-              <Field label="Company / account name">
-                <Input
-                  required
-                  value={newAccount.name}
-                  onChange={e =>
-                    setNewAccount({ ...newAccount, name: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Owner email">
-                <Input
-                  required
-                  type="email"
-                  value={newAccount.ownerEmail}
-                  onChange={e =>
-                    setNewAccount({ ...newAccount, ownerEmail: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Tier">
-                <select
-                  className={field}
-                  value={newAccount.tierId}
-                  onChange={e =>
-                    setNewAccount({ ...newAccount, tierId: e.target.value })
-                  }
-                >
-                  {config.data?.tiers.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={newAccount.enforceCredits}
-                  onChange={e =>
-                    setNewAccount({
-                      ...newAccount,
-                      enforceCredits: e.target.checked,
-                    })
-                  }
-                />
-                Enforce AI credit limit
-              </label>
-              <Button disabled={create.isPending}>Create account</Button>
-            </form>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Existing users are linked as owners. New users receive a copyable,
-              email-bound invitation valid for 7 days. No email is sent
-              automatically.
-            </p>
-            {invite && (
-              <div className="mt-4 rounded-xl border p-3">
-                <p className="mb-2 text-sm">Owner invitation</p>
-                <Input readOnly value={invite} />
-                <Button
-                  className="mt-2"
-                  variant="outline"
-                  onClick={() =>
-                    navigator.clipboard
-                      .writeText(invite)
-                      .then(() => toast.success("Copied"))
-                      .catch(() =>
-                        toast.error("Select and copy the link manually")
-                      )
-                  }
-                >
-                  Copy link
-                </Button>
               </div>
-            )}
+            </div>
           </section>
-          <section className="surface min-w-0 p-5">
-            {selectedItem ? (
-              <>
-                <h2 className="mb-4 text-xl font-semibold">
-                  {selectedItem.organization.name}
-                </h2>
-                <form
-                  className="space-y-3"
-                  onSubmit={e => {
-                    e.preventDefault();
-                    saveAccount.mutate({
-                      organizationId: selected!,
-                      ...account,
-                      tierId: account.tierId || null,
-                    });
-                  }}
-                >
-                  <Field label="Tier">
-                    <select
-                      className={field}
-                      value={account.tierId}
-                      onChange={e =>
-                        setAccount({ ...account, tierId: e.target.value })
-                      }
-                    >
-                      <option value="">No tier</option>
-                      {config.data?.tiers.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <label className="flex gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={account.enforceCredits}
-                      onChange={e =>
-                        setAccount({
-                          ...account,
-                          enforceCredits: e.target.checked,
-                        })
-                      }
-                    />
-                    Enforce credit limits
-                  </label>
-                  <label className="flex gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={account.aiPaused}
-                      onChange={e =>
-                        setAccount({ ...account, aiPaused: e.target.checked })
-                      }
-                    />
-                    Pause new AI requests
-                  </label>
-                  <Field label="Internal notes">
-                    <textarea
-                      className={field}
-                      value={account.notes}
-                      onChange={e =>
-                        setAccount({ ...account, notes: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Reason for change">
-                    <Input
-                      required
-                      minLength={3}
-                      value={account.reason}
-                      onChange={e =>
-                        setAccount({ ...account, reason: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <p className="text-xs text-muted-foreground">
-                    Tier changes apply immediately to this month's allowance.
-                    They do not erase usage or grants.
-                  </p>
-                  <Button disabled={saveAccount.isPending}>Save account</Button>
-                </form>
-                {selectedItem.account?.invitationPending && (
+          <Dialog open={showCreate} onOpenChange={setShowCreate}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+              <DialogTitle>Create account</DialogTitle>
+              <DialogDescription>
+                Set up the owner, plan, and initial credit policy.
+              </DialogDescription>
+
+              <form
+                className="space-y-3"
+                onSubmit={e => {
+                  e.preventDefault();
+                  create.mutate(newAccount);
+                }}
+              >
+                <Field label="Company / account name">
+                  <Input
+                    required
+                    value={newAccount.name}
+                    onChange={e =>
+                      setNewAccount({ ...newAccount, name: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Owner email">
+                  <Input
+                    required
+                    type="email"
+                    value={newAccount.ownerEmail}
+                    onChange={e =>
+                      setNewAccount({
+                        ...newAccount,
+                        ownerEmail: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Tier">
+                  <select
+                    className={field}
+                    value={newAccount.tierId}
+                    onChange={e =>
+                      setNewAccount({ ...newAccount, tierId: e.target.value })
+                    }
+                  >
+                    {config.data?.tiers.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={newAccount.enforceCredits}
+                    onChange={e =>
+                      setNewAccount({
+                        ...newAccount,
+                        enforceCredits: e.target.checked,
+                      })
+                    }
+                  />
+                  Enforce AI credit limit
+                </label>
+                <Button disabled={create.isPending}>Create account</Button>
+              </form>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Existing users are linked as owners. New users receive a
+                copyable, email-bound invitation valid for 7 days. No email is
+                sent automatically.
+              </p>
+              {invite && (
+                <div className="mt-4 rounded-xl border p-3">
+                  <p className="mb-2 text-sm">Owner invitation</p>
+                  <Input readOnly value={invite} />
+                  <Button
+                    className="mt-2"
+                    variant="outline"
+                    onClick={() =>
+                      navigator.clipboard
+                        .writeText(invite)
+                        .then(() => toast.success("Copied"))
+                        .catch(() =>
+                          toast.error("Select and copy the link manually")
+                        )
+                    }
+                  >
+                    Copy link
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          <Dialog open={showDetails} onOpenChange={setShowDetails}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+              <DialogTitle>
+                {selectedItem?.organization.name ?? "Account details"}
+              </DialogTitle>
+              <DialogDescription>
+                Manage this customer's access and monthly AI credits.
+              </DialogDescription>
+              {selectedItem ? (
+                <>
                   <Button
                     variant="outline"
-                    className="mt-3"
-                    disabled={renew.isPending}
-                    onClick={() => renew.mutate({ organizationId: selected! })}
+                    onClick={() => {
+                      setShowDetails(false);
+                      navigate("/admin/usage");
+                    }}
                   >
-                    Renew owner invitation
+                    View account usage & costs
                   </Button>
-                )}
-                <h3 className="mb-3 mt-8 text-lg font-semibold">AI credits</h3>
-                <p className="mb-3 text-sm">
-                  {details.data?.period}: {details.data?.remaining ?? "—"}{" "}
-                  remaining · {details.data?.allowance ?? 0} tier allowance.
-                  Grants expire at the end of their UTC calendar month.
+                  <form
+                    className="space-y-3"
+                    onSubmit={e => {
+                      e.preventDefault();
+                      saveAccount.mutate({
+                        organizationId: selected!,
+                        ...account,
+                        tierId: account.tierId || null,
+                      });
+                    }}
+                  >
+                    <Field label="Tier">
+                      <select
+                        className={field}
+                        value={account.tierId}
+                        onChange={e =>
+                          setAccount({ ...account, tierId: e.target.value })
+                        }
+                      >
+                        <option value="">No tier</option>
+                        {config.data?.tiers.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <label className="flex gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={account.enforceCredits}
+                        onChange={e =>
+                          setAccount({
+                            ...account,
+                            enforceCredits: e.target.checked,
+                          })
+                        }
+                      />
+                      Enforce credit limits
+                    </label>
+                    <label className="flex gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={account.aiPaused}
+                        onChange={e =>
+                          setAccount({ ...account, aiPaused: e.target.checked })
+                        }
+                      />
+                      Pause new AI requests
+                    </label>
+                    <Field label="Internal notes">
+                      <textarea
+                        className={field}
+                        value={account.notes}
+                        onChange={e =>
+                          setAccount({ ...account, notes: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Reason for change">
+                      <Input
+                        required
+                        minLength={3}
+                        value={account.reason}
+                        onChange={e =>
+                          setAccount({ ...account, reason: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <p className="text-xs text-muted-foreground">
+                      Tier changes apply immediately to this month's allowance.
+                      They do not erase usage or grants.
+                    </p>
+                    <Button disabled={saveAccount.isPending}>
+                      Save account
+                    </Button>
+                  </form>
+                  {selectedItem.account?.invitationPending && (
+                    <Button
+                      variant="outline"
+                      className="mt-3"
+                      disabled={renew.isPending}
+                      onClick={() =>
+                        renew.mutate({ organizationId: selected! })
+                      }
+                    >
+                      Renew owner invitation
+                    </Button>
+                  )}
+                  <h3 className="mb-3 mt-8 text-lg font-semibold">
+                    AI credits
+                  </h3>
+                  <p className="mb-3 text-sm">
+                    {details.data?.period}: {details.data?.remaining ?? "—"}{" "}
+                    remaining · {details.data?.allowance ?? 0} tier allowance.
+                    Grants expire at the end of their UTC calendar month.
+                  </p>
+                  <form
+                    className="space-y-3"
+                    onSubmit={e => {
+                      e.preventDefault();
+                      adjust.mutate({
+                        organizationId: selected!,
+                        ...grant,
+                        requestId: crypto.randomUUID(),
+                      });
+                    }}
+                  >
+                    <Field label="Credit month (UTC)">
+                      <Input
+                        type="month"
+                        required
+                        value={grant.period}
+                        onChange={e =>
+                          setGrant({ ...grant, period: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <NumberField
+                      label="Credit adjustment (+ grant / − remove)"
+                      value={grant.amount}
+                      onChange={amount => setGrant({ ...grant, amount })}
+                    />
+                    <Field label="Reason">
+                      <Input
+                        required
+                        minLength={3}
+                        value={grant.reason}
+                        onChange={e =>
+                          setGrant({ ...grant, reason: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Button disabled={adjust.isPending}>
+                      Apply credit adjustment
+                    </Button>
+                  </form>
+                  <h3 className="mt-8 font-semibold">Members</h3>
+                  {details.data?.members.map((m, i) => (
+                    <p key={i} className="mt-2 break-all text-sm">
+                      {m.email} · {m.role} · {m.status}
+                    </p>
+                  ))}
+                  <h3 className="mt-6 font-semibold">Recent credit ledger</h3>
+                  {details.data?.ledger.map(l => (
+                    <p key={l.id} className="mt-2 text-sm">
+                      {l.period} · {l.amount > 0 ? "+" : ""}
+                      {l.amount} · {l.reason}
+                    </p>
+                  ))}
+                </>
+              ) : (
+                <p>
+                  Select an account to manage its tier, credits and AI access.
                 </p>
-                <form
-                  className="space-y-3"
-                  onSubmit={e => {
-                    e.preventDefault();
-                    adjust.mutate({
-                      organizationId: selected!,
-                      ...grant,
-                      requestId: crypto.randomUUID(),
-                    });
-                  }}
-                >
-                  <Field label="Credit month (UTC)">
-                    <Input
-                      type="month"
-                      required
-                      value={grant.period}
-                      onChange={e =>
-                        setGrant({ ...grant, period: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <NumberField
-                    label="Credit adjustment (+ grant / − remove)"
-                    value={grant.amount}
-                    onChange={amount => setGrant({ ...grant, amount })}
-                  />
-                  <Field label="Reason">
-                    <Input
-                      required
-                      minLength={3}
-                      value={grant.reason}
-                      onChange={e =>
-                        setGrant({ ...grant, reason: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Button disabled={adjust.isPending}>
-                    Apply credit adjustment
-                  </Button>
-                </form>
-                <h3 className="mt-8 font-semibold">Members</h3>
-                {details.data?.members.map((m, i) => (
-                  <p key={i} className="mt-2 break-all text-sm">
-                    {m.email} · {m.role} · {m.status}
-                  </p>
-                ))}
-                <h3 className="mt-6 font-semibold">Recent credit ledger</h3>
-                {details.data?.ledger.map(l => (
-                  <p key={l.id} className="mt-2 text-sm">
-                    {l.period} · {l.amount > 0 ? "+" : ""}
-                    {l.amount} · {l.reason}
-                  </p>
-                ))}
-              </>
-            ) : (
-              <p>
-                Select an account to manage its tier, credits and AI access.
-              </p>
-            )}
-          </section>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       )}
       {tab === "Tiers" && (
@@ -815,6 +1081,65 @@ function Administration() {
         </div>
       )}
       {tab === "Provider rates" && (
+        <section className="surface mb-5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Pricing verification</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Official standard rates are checked daily. Updates affect new
+                requests only. Billing API totals remain the source for actual
+                charges.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={syncPrices.isPending}
+              onClick={() => syncPrices.mutate()}
+            >
+              {syncPrices.isPending
+                ? "Checking sources…"
+                : "Check published rates now"}
+            </Button>
+          </div>
+          {config.data?.rates.map(r => (
+            <div key={r.id} className="mt-4 border-t pt-3 text-sm">
+              <p className="font-semibold break-all">{r.model}</p>
+              <p className="text-muted-foreground">
+                {r.config.automaticPricing
+                  ? "Automatic published pricing"
+                  : "Configured rate — automatic verification not yet confirmed"}{" "}
+                ·{" "}
+                {r.config.pricingVerifiedAt
+                  ? `Verified ${new Date(r.config.pricingVerifiedAt).toLocaleString()}`
+                  : "Awaiting verification"}
+              </p>
+              {r.config.pricingError && (
+                <p role="alert" className="text-amber-800">
+                  {r.config.pricingError}
+                </p>
+              )}
+              {r.config.pricingVerifiedAt &&
+                Date.now() - r.config.pricingVerifiedAt > 2 * 86400000 && (
+                  <p className="text-amber-800">
+                    Verification is over 48 hours old. Check rates before
+                    customer billing.
+                  </p>
+                )}
+              {r.config.sourceUrl && (
+                <a
+                  className="text-primary underline"
+                  href={r.config.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Official pricing source
+                </a>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+      {tab === "Provider rates" && (
         <div className="grid gap-5 lg:grid-cols-2">
           <section className="surface min-w-0 p-5">
             <h2 className="text-xl font-semibold">Provider cost estimates</h2>
@@ -868,6 +1193,17 @@ function Administration() {
               saveRate.mutate(rate);
             }}
           >
+            <label className="flex gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={rate.automaticPricing ?? false}
+                onChange={e =>
+                  setRate({ ...rate, automaticPricing: e.target.checked })
+                }
+              />
+              Automatically follow published standard pricing (supported OpenAI
+              models). Disable for a contract override.
+            </label>
             <Field label="Provider">
               <Input
                 required

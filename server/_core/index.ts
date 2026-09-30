@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { registerChannelOAuth } from "../lib/channelConnections";
 import { getDb, closeDb } from "../db";
 import { startWebsiteNotificationDelivery } from "../lib/websiteNotifications";
+import { startPublishedPricingChecks } from "../lib/publishedPricing";
 import { verifyOpenAIBilling } from "../lib/openaiCosts";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -97,6 +98,7 @@ async function startServer() {
   });
   const stopNotifications = startWebsiteNotificationDelivery();
   verifyOpenAIBilling();
+  startPublishedPricingChecks();
   process.on("SIGTERM", () => {
     server.close(() => {
       void stopNotifications()

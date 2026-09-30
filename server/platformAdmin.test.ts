@@ -392,3 +392,15 @@ it("records idempotent manual costs/revenue and includes adjustments in account 
   const accounts = await admin.accounts({ search: "Known" });
   expect(JSON.stringify(accounts)).not.toContain("inviteHash");
 });
+it("paginates and filters large account directories without exposing invitation secrets", async () => {
+  const inserted = await state.db.insert(organizations).values(Array.from({length: 61}, (_, i) => ({ name: `Scale fixture ${String(i).padStart(3,"0")}`, slug: `scale-fixture-${i}`, createdByUserId: 1, createdAtMs: Date.now() }))).returning();
+  await state.db.insert(platformAccounts).values(inserted.map((row: any, i: number) => ({organizationId: row.id, tierId: "trial", aiPaused: i % 2, enforceCredits: 1, ownerEmail: `scale-${i}@test.com`, notes: "", updatedAtMs: Date.now()})));
+  const first = await admin.accounts({search:"Scale fixture"});
+  expect(first.total).toBe(61); expect(first.items).toHaveLength(50);
+  const next = await admin.accounts({search:"Scale fixture", after:first.next});
+  expect(next.items).toHaveLength(11); expect(next.total).toBe(61); expect(next.next).toBeUndefined();
+  expect(new Set([...first.items,...next.items].map((r:any) => r.organization.id)).size).toBe(61);
+  const paused = await admin.accounts({search:"Scale fixture",status:"paused",tierId:"trial"});
+  expect(paused.total).toBe(30); expect(paused.items.every((r:any)=> r.account.aiPaused===1)).toBe(true);
+  expect(JSON.stringify(first)).not.toContain("inviteHash");
+});

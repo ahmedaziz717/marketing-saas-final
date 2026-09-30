@@ -1,4 +1,6 @@
-import PlatformAdminPage, { AccountInvitePage } from "./pages/PlatformAdminPage";
+import PlatformAdminPage, {
+  AccountInvitePage,
+} from "./pages/PlatformAdminPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -42,9 +44,12 @@ function Router() {
       </Route>
       <Route path="/admin" component={PlatformAdminPage} />
       <Route path="/admin/website" component={PlatformWebsitePage} />
+      <Route path="/admin/:section" component={PlatformAdminPage} />
       <Route path="/account-invite/:token" component={AccountInvitePage} />
       <Route path="/app" component={WorkspaceApp} />
-      <Route path="/app/platform/website"><Redirect to="/admin/website" /></Route>
+      <Route path="/app/platform/website">
+        <Redirect to="/admin/website" />
+      </Route>
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={ProductOverviewPage} />

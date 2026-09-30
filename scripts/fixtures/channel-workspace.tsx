@@ -335,7 +335,7 @@ function RoutedPage() {
         resetPassword={path === "/reset-password"}
       />
     );
-  if(path === "/admin") return <PlatformAdminPage/>;
+  if(path === "/admin" || path.startsWith("/admin/")) return <PlatformAdminPage/>;
   const Page =
     path === "/app"
       ? WorkspaceApp
@@ -588,12 +588,13 @@ function layout() {
       );
     }
     if (which === "platform-admin") {
-      check(document.body.textContent?.includes("SaaS control panel"),"Admin overview renders");
+      check(document.body.textContent?.includes("Business health"),"Admin overview renders");
       check(!!document.querySelector("[data-platform-admin-shell]"), "Dedicated admin shell renders");
       check(!document.querySelector('[aria-label="Switch account"]'), "No customer account switcher in admin");
       check(!document.body.textContent?.includes("Content Studio"), "Customer navigation is absent from admin");
-      for(const tab of ["Accounts","Tiers","Provider rates","Financial entries","Audit","Overview"]){await click(tab);layout();}
-      await click("Accounts");
+      const nav = async (title: string) => { const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('nav a')).find(a => a.textContent?.trim() === title); check(!!link, `Navigation ${title}`); link!.click(); await pause(); };
+      for(const tab of ["Accounts","Usage & costs","OpenAI billing","Tiers","Provider rates","Financial entries","Audit","Overview"]){await nav(tab);layout();}
+      await nav("Accounts");
       const accountButton=Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.includes('Demo customer account'));
       check(!!accountButton,"Account is available"); accountButton!.click(); await pause(); layout();
       check(!!button('Apply credit adjustment'),"Credit controls render");
