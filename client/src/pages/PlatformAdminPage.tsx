@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { presetRange } from "@shared/reportDates";
 import { utcCreditMonth, type ProviderRate } from "@shared/platformAdmin";
 import { toast } from "sonner";
+import { rememberWorkspace } from "@/lib/workspaceSelection";
 const field = "w-full rounded-xl border bg-background px-3 py-2";
 const usd = (micros: number) =>
   new Intl.NumberFormat("en-US", {
@@ -1038,10 +1039,13 @@ export default function PlatformAdminPage() {
   );
 }
 export function AccountInvitePage() {
+  const { user } = useAuth();
   const [, params] = useRoute("/account-invite/:token");
-  const [, navigate] = useLocation();
   const accept = trpc.platformAdmin.acceptAccount.useMutation({
-    onSuccess: () => navigate("/app"),
+    onSuccess: r => {
+      if (user) rememberWorkspace(user.id, r.organizationId);
+      window.location.assign("/app");
+    },
     onError: e => toast.error(e.message),
   });
   return (

@@ -1,4 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { rememberWorkspace } from "@/lib/workspaceSelection";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -91,6 +93,7 @@ function DashboardLayoutContent({
   setSidebarWidth: (width: number) => void;
 }) {
   const { user, logout } = useAuth();
+  const { workspaces = [], organizationId } = useWorkspace();
   const [location] = useLocation();
   const search = useSearch();
   const { state, toggleSidebar, isMobile: sidebarMobile } = useSidebar();
@@ -150,6 +153,28 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
           <SidebarContent className="gap-0 pt-4">
+            {workspaces.length > 1 && (
+              <label className="mx-3 mb-4 block min-w-0 text-xs group-data-[collapsible=icon]:hidden">
+                Account
+                <select
+                  aria-label="Switch account"
+                  value={organizationId ?? ""}
+                  className="mt-1 w-full min-w-0 rounded-lg border bg-background p-2 text-sm"
+                  onChange={e => {
+                    if (user) {
+                      rememberWorkspace(user.id, Number(e.target.value));
+                      window.location.assign("/app");
+                    }
+                  }}
+                >
+                  {workspaces.map(w => (
+                    <option key={w.organization.id} value={w.organization.id}>
+                      {w.organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="px-4 pb-2 text-[10px] font-semibold uppercase tracking-[.18em] text-muted-foreground group-data-[collapsible=icon]:hidden">
               Workspace
             </div>
