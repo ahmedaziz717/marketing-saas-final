@@ -92,7 +92,7 @@ export async function generateSunburstImage(
     data?: Array<{ b64_json?: string }>; usage?: Record<string, unknown>;
   };
   if (!parsed.data?.[0]?.b64_json) throw new Error("Image provider returned no image");
-  return { value: parsed, usage: parsed.usage };
+  return { value: parsed, usage: { ...parsed.usage, _evokeloop_api: "images" } };
   });
   const encoded = parsed.data?.[0]?.b64_json;
   if (!encoded)

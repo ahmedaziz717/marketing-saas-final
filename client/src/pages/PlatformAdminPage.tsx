@@ -18,8 +18,39 @@ const usd = (micros: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 6,
   }).format(micros / 1000000);
+function ImagePriceDetails({
+  usage,
+  rate,
+}: {
+  usage: Record<string, unknown> | null;
+  rate: ProviderRate | null;
+}) {
+  if (usage?._evokeloop_api !== "images" || !rate) return null;
+  const input = usage.input_tokens_details as
+    | Record<string, unknown>
+    | undefined;
+  if (
+    typeof input?.text_tokens !== "number" ||
+    typeof input?.image_tokens !== "number" ||
+    typeof usage.output_tokens !== "number"
+  )
+    return null;
+  return (
+    <p className="mt-1 text-xs text-muted-foreground">
+      Text input: {input.text_tokens.toLocaleString()} tokens × $
+      {rate.inputPerMillion ?? "?"}/M · Image input:{" "}
+      {input.image_tokens.toLocaleString()} tokens × $
+      {rate.imageInputPerMillion ?? "?"}/M · Image output:{" "}
+      {usage.output_tokens.toLocaleString()} tokens × $
+      {rate.imageOutputPerMillion ?? "?"}/M
+      {rate.perRequestUsd !== null
+        ? " · Per-request price override applies"
+        : ""}
+    </p>
+  );
+}
 function Field({
   label,
   children,
@@ -272,7 +303,6 @@ function Administration() {
       )}
       {tab === "Overview" && (
         <>
-          <OpenAIBilling range={range} />
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Provider requests", total("requests").toLocaleString()],
@@ -281,7 +311,7 @@ function Administration() {
                 `${total("inputTokens").toLocaleString()} / ${total("outputTokens").toLocaleString()}`,
               ],
               [
-                "Known estimated costs",
+                "Calculated account costs",
                 total("unpriced") &&
                 total("unpriced") === total("requests") &&
                 !manualCosts
@@ -314,9 +344,10 @@ function Administration() {
             ))}
           </div>
           <p className="mb-5 text-sm text-muted-foreground">
-            {report.data?.coverage} Contribution is revenue minus recorded
-            costs, not audited net profit. Unknown costs are excluded, not
-            treated as free.
+            Calculated account costs include AI request estimates and any
+            manually recorded expenses. {report.data?.coverage} Contribution is
+            revenue minus recorded costs, not audited net profit. Unknown costs
+            are excluded, not treated as free.
           </p>
           <section className="surface overflow-x-auto p-5">
             <h2 className="mb-4 text-xl font-semibold">
@@ -395,9 +426,13 @@ function Administration() {
                     : usd(r.costMicros)}{" "}
                   · {r.id}
                 </p>
+                <ImagePriceDetails usage={r.usage} rate={r.rateSnapshot} />
               </div>
             ))}
           </section>
+          <div className="mt-6">
+            <OpenAIBilling range={range} />
+          </div>
         </>
       )}
       {tab === "Accounts" && (
@@ -784,11 +819,13 @@ function Administration() {
           <section className="surface min-w-0 p-5">
             <h2 className="text-xl font-semibold">Provider cost estimates</h2>
             <p className="my-3 text-sm text-muted-foreground">
-              Enter rates from your provider agreement. Blank rates mean
-              unknown, not zero. New rates apply only to future requests;
-              historical estimates keep their original rate. Image requests use
-              a per-request estimate because image and text token categories
-              have different prices.
+              Verified standard rates are configured for the models we use. Each
+              request is priced from its recorded tokens and assigned to its
+              account. Image requests use separate text-input, image-input and
+              image-output rates. You can override rates for a provider
+              agreement. Blank rates mean unknown, not zero. Edits apply to
+              future requests; historical estimates retain their pricing
+              snapshot.
             </p>
             {config.data?.rates.map(r => (
               <button
@@ -872,16 +909,20 @@ function Administration() {
                 "cachedInputPerMillion",
                 "outputPerMillion",
                 "perRequestUsd",
+                "imageInputPerMillion",
+                "imageOutputPerMillion",
               ] as const
             ).map((key, i) => (
               <Field
                 key={key}
                 label={
                   [
-                    "USD per million input tokens",
-                    "USD per million cached input tokens",
-                    "USD per million output tokens",
+                    "USD per million text input tokens",
+                    "USD per million cached text input tokens (text requests)",
+                    "USD per million text output tokens",
                     "USD per request (overrides token estimate)",
+                    "USD per million image input tokens (Images API)",
+                    "USD per million image output tokens (Images API)",
                   ][i]
                 }
               >

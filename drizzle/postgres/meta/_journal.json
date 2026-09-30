@@ -57,6 +57,13 @@
       "when": 1790727036766,
       "tag": "0007_real_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790732465998,
+      "tag": "0008_verified_image_token_rates",
+      "breakpoints": true
     }
   ]
 }

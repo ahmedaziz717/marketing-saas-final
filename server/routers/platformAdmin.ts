@@ -660,7 +660,7 @@ export const platformAdminRouter = router({
         recent,
         entries,
         coverage:
-          "Tracking begins with this deployment. Costs use the rate saved at request time. Unpriced and failed requests may have provider costs not included in estimates. Revenue is manually recorded; Stripe is not connected. Platform overhead is included only when recorded as a cost.",
+          "Account costs are calculated from recorded request tokens and each request's pricing snapshot. Image estimates include text input, image input and image output separately. Historical requests with complete usage were backfilled using verified standard pricing, with an audit record. Provider discounts and billing adjustments may differ. Older assets without token records cannot be priced reliably. Unpriced and failed requests may have additional costs. Revenue and overhead are manually recorded; Stripe is not connected.",
       };
     }),
   audit: adminProcedure.query(async () =>

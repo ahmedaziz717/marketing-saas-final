@@ -13,9 +13,11 @@ import {
   aiUsage,
   platformAccounts,
   creditLedger,
+  platformAudit,
 } from "../drizzle/platformSchema";
 import {
   estimateCostMicros,
+  estimateImageCostMicros,
   type ProviderRate,
   utcCreditMonth,
 } from "../shared/platformAdmin";
@@ -218,6 +220,117 @@ it("prices the configured text model including cached tokens and long context", 
   expect(estimateCostMicros(rate, 1000, 100, 200)).toBe(7100);
   expect(estimateCostMicros(rate, 272000, 100, 0)).toBe(1363000);
   expect(estimateCostMicros(rate, 272001, 100, 0)).toBe(2724510);
+});
+it("prices image usage automatically within the requesting account and snapshots the verified rates", async () => {
+  const { organizationId } = await admin.createAccount({
+    name: "Image cost account",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  const usage = {
+    _evokeloop_api: "images",
+    input_tokens: 2932,
+    input_tokens_details: { text_tokens: 1283, image_tokens: 1649 },
+    output_tokens: 628,
+    output_tokens_details: { text_tokens: 0, image_tokens: 628 },
+  };
+  await aiScope.run(
+    { organizationId, actorUserId: 2, operation: "image-test" },
+    () =>
+      meteredCall("openai", "gpt-image-2.5-sunburst", "image", async () => ({
+        value: "image",
+        usage,
+      }))
+  );
+  const [saved] = await state.db
+    .select()
+    .from(aiUsage)
+    .where(eq(aiUsage.organizationId, organizationId));
+  expect(saved.costMicros).toBe(38447);
+  expect(saved.rateSnapshot.imageInputPerMillion).toBe(8);
+  expect(saved.rateSnapshot.sourceUrl).toContain("gpt-image-2.5-sunburst");
+  expect((await creditState(state.db, organizationId)).remaining).toBe(90);
+});
+it("backfills valid historical usage without repricing existing costs or changing credits, and audits once", async () => {
+  const { organizationId } = await admin.createAccount({
+    name: "Historical costs",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  const ids = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const usage = {
+    input_tokens: 2932,
+    input_tokens_details: { text_tokens: 1283, image_tokens: 1649 },
+    output_tokens: 628,
+    output_tokens_details: { text_tokens: 0, image_tokens: 628 },
+  };
+  for (let i = 0; i < ids.length; i++)
+    await state.db
+      .insert(aiUsage)
+      .values({
+        id: ids[i],
+        organizationId,
+        actorUserId: 2,
+        operation: "legacy-image",
+        provider: "openai",
+        model: "gpt-image-2.5-sunburst",
+        kind: "image",
+        status: "succeeded",
+        credits: 10,
+        period: "2026-09",
+        createdAtMs: Date.parse("2026-09-29T23:00:00Z"),
+        usage:
+          i === 2
+            ? { ...usage, input_tokens: 5 }
+            : i === 3
+              ? {
+                  ...usage,
+                  input_tokens_details: { text_tokens: "bad", image_tokens: 1 },
+                }
+              : usage,
+        costMicros: i === 1 ? 123 : null,
+        rateSnapshot: {
+          provider: "openai",
+          model: "gpt-image-2.5-sunburst",
+          kind: "image",
+          credits: 10,
+          inputPerMillion: null,
+          outputPerMillion: null,
+          cachedInputPerMillion: null,
+          perRequestUsd: null,
+          note: "old unpriced",
+        },
+      });
+  const migration = readFileSync(
+    "drizzle/postgres/0008_verified_image_token_rates.sql",
+    "utf8"
+  );
+  await engine.exec(migration);
+  await engine.exec(migration);
+  const rows = await state.db
+    .select()
+    .from(aiUsage)
+    .where(eq(aiUsage.organizationId, organizationId));
+  const first = rows.find((r: any) => r.id === ids[0]);
+  expect(first.costMicros).toBe(38447);
+  expect(
+    first.usage._evokeloop_pricing_backfill.previousRateSnapshot.note
+  ).toBe("old unpriced");
+  expect(first.costMicros).toBe(
+    estimateImageCostMicros(first.rateSnapshot, first.usage)
+  );
+  expect(rows.find((r: any) => r.id === ids[1]).costMicros).toBe(123);
+  expect(rows.find((r: any) => r.id === ids[2]).costMicros).toBeNull();
+  expect(rows.find((r: any) => r.id === ids[3]).costMicros).toBeNull();
+  expect(
+    (
+      await state.db
+        .select()
+        .from(platformAudit)
+        .where(eq(platformAudit.action, "usage.cost_backfilled"))
+    ).filter((r: any) => r.organizationId === organizationId)
+  ).toHaveLength(1);
+  expect((await creditState(state.db, organizationId)).remaining).toBe(100);
 });
 it("holds the last credit while a provider request is still running", async () => {
   const { organizationId } = await admin.createAccount({

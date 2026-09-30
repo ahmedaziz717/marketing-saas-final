@@ -14,12 +14,74 @@ export const rateInput = z.object({
   cachedInputPerMillion: z.number().min(0).max(1000000).nullable(),
   outputPerMillion: z.number().min(0).max(1000000).nullable(),
   perRequestUsd: z.number().min(0).max(1000000).nullable(),
+  imageInputPerMillion: z.number().min(0).max(1000000).nullable().optional(),
+  imageOutputPerMillion: z.number().min(0).max(1000000).nullable().optional(),
+  sourceUrl: z.string().url().optional(),
+  pricingVersion: z.string().max(100).optional(),
   longContextThreshold: z.number().int().positive().nullable().optional(),
   longContextInputMultiplier: z.number().positive().max(100).optional(),
   longContextOutputMultiplier: z.number().positive().max(100).optional(),
   note: z.string().max(1000),
 });
 export type ProviderRate = z.infer<typeof rateInput>;
+const validTokens = (n: unknown): n is number =>
+  typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+
+/** Direct Images API bills text/image inputs separately and has no cache discount.
+ * Responses API image caching cannot be recovered from its usage response, so
+ * do not silently apply this calculation to that API.
+ */
+export function estimateImageCostMicros(
+  rate: ProviderRate | undefined,
+  usage: Record<string, unknown>
+) {
+  if (!rate) return null;
+  if (rate.perRequestUsd !== null)
+    return Math.round(rate.perRequestUsd * 1000000);
+  if (usage._evokeloop_api !== "images") return null;
+  const input = usage.input_tokens_details as
+    | Record<string, unknown>
+    | undefined;
+  const output = usage.output_tokens_details as
+    | Record<string, unknown>
+    | undefined;
+  const textIn = input?.text_tokens,
+    imageIn = input?.image_tokens;
+  // Direct Images API defines output_tokens as image output. Some responses
+  // provide an additional breakdown; validate it when present.
+  const imageOut = output ? output.image_tokens : usage.output_tokens;
+  const textOut = output ? output.text_tokens : 0;
+  if (
+    ![
+      textIn,
+      imageIn,
+      imageOut,
+      textOut,
+      usage.input_tokens,
+      usage.output_tokens,
+    ].every(validTokens)
+  )
+    return null;
+  if (
+    (textIn as number) + (imageIn as number) !== usage.input_tokens ||
+    (imageOut as number) + (textOut as number) !== usage.output_tokens
+  )
+    return null;
+  const pairs = [
+    [textIn, rate.inputPerMillion],
+    [imageIn, rate.imageInputPerMillion],
+    [imageOut, rate.imageOutputPerMillion],
+    [textOut, rate.outputPerMillion],
+  ];
+  let micros = 0;
+  for (const [count, price] of pairs) {
+    if (count === 0) continue;
+    if (typeof price !== "number" || !Number.isFinite(price) || price < 0)
+      return null;
+    micros += (count as number) * price;
+  }
+  return Number.isSafeInteger(Math.round(micros)) ? Math.round(micros) : null;
+}
 export function estimateCostMicros(
   rate: ProviderRate | undefined,
   input: number | null,
@@ -29,6 +91,13 @@ export function estimateCostMicros(
   if (!rate) return null;
   if (rate.perRequestUsd !== null)
     return Math.round(rate.perRequestUsd * 1000000);
+  if (
+    !validTokens(input) ||
+    !validTokens(output) ||
+    !validTokens(cached) ||
+    cached > input
+  )
+    return null;
   if (
     input === null ||
     output === null ||

@@ -13,6 +13,7 @@ import {
 import { withOrganizationTransaction } from "./activity";
 import {
   estimateCostMicros,
+  estimateImageCostMicros,
   utcCreditMonth,
   type ProviderRate,
 } from "../../shared/platformAdmin";
@@ -103,34 +104,30 @@ export async function meteredCall<T>(
           code: "FORBIDDEN",
           message: `Insufficient AI credits. This request needs ${credits} credits; ${Math.max(0, state.remaining)} remain.`,
         });
-      await tx
-        .insert(creditLedger)
-        .values({
-          id,
-          organizationId: scope.organizationId,
-          period,
-          amount: -credits,
-          reason: `Reserved: ${kind} generation`,
-          actorUserId: scope.actorUserId,
-          createdAtMs,
-        });
-    }
-    await tx
-      .insert(aiUsage)
-      .values({
+      await tx.insert(creditLedger).values({
         id,
-        organizationId: scope?.organizationId ?? null,
-        actorUserId: scope?.actorUserId ?? null,
-        operation: scope?.operation ?? "unattributed",
-        provider,
-        model,
-        kind,
-        status: "pending",
-        credits,
+        organizationId: scope.organizationId,
         period,
+        amount: -credits,
+        reason: `Reserved: ${kind} generation`,
+        actorUserId: scope.actorUserId,
         createdAtMs,
-        rateSnapshot: rate ?? null,
       });
+    }
+    await tx.insert(aiUsage).values({
+      id,
+      organizationId: scope?.organizationId ?? null,
+      actorUserId: scope?.actorUserId ?? null,
+      operation: scope?.operation ?? "unattributed",
+      provider,
+      model,
+      kind,
+      status: "pending",
+      credits,
+      period,
+      createdAtMs,
+      rateSnapshot: rate ?? null,
+    });
   };
   if (scope) await withOrganizationTransaction(db, scope.organizationId, start);
   else await db.transaction(start);
@@ -169,11 +166,9 @@ export async function meteredCall<T>(
     | Record<string, unknown>
     | undefined;
   const cached = Math.min(input ?? 0, token(detail?.cached_tokens) ?? 0);
-  // Image token categories have different prices. Require a configured per-request
-  // estimate for images rather than multiplying blended tokens by a text rate.
   const cost =
-    kind === "image" && rate?.perRequestUsd == null
-      ? null
+    kind === "image"
+      ? estimateImageCostMicros(rate, usage)
       : estimateCostMicros(rate, input, output, cached);
   await db
     .update(aiUsage)
