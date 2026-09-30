@@ -1113,7 +1113,7 @@ export const crawlRouter = router({
                   .slice(0, 1)
               : [];
           const downloaded = await Promise.allSettled(
-            selectedImages.map(safeFetchImage)
+            selectedImages.map(url => safeFetchImage(url))
           );
           for (
             let imageIndex = 0;

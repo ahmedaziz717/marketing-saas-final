@@ -318,7 +318,8 @@ export async function safeFetchText(
 
 export async function safeFetchImage(
   value: string,
-  redirects = 0
+  redirects = 0,
+  allowSvg = false
 ): Promise<{ finalUrl: string; contentType: string; data: Buffer }> {
   if (redirects > MAX_REDIRECTS)
     throw new Error("Image redirected too many times");
@@ -331,13 +332,14 @@ export async function safeFetchImage(
   if (response.status >= 300 && response.status < 400 && response.location)
     return safeFetchImage(
       new URL(response.location, url).toString(),
-      redirects + 1
+      redirects + 1,
+      allowSvg
     );
   if (response.status >= 400)
     throw new Error(`Image request failed with HTTP ${response.status}`);
   const contentType = response.contentType.split(";")[0]!.trim();
   if (
-    !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
+    !["image/jpeg", "image/png", "image/webp", "image/gif", ...(allowSvg ? ["image/svg+xml"] : [])].includes(
       contentType
     )
   )

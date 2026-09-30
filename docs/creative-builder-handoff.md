@@ -58,3 +58,11 @@ images are optional. Server queries enforce workspace ownership and approval.
 
 Generation, asset review and publishing remain separate actions. This feature
 creates no placeholder products and does not auto-publish anything.
+
+## Brand Kit website scan
+
+Brand Kit now has its own Scan website flow, replacing the link to the product-only import page. Owners/admins enter a public website address (scheme optional), preview detected identity, colors, fonts, logo candidates, and a suggested writing voice, then apply the results to the editable form. Scanning alone never saves the kit. Missing fields preserve current values; existing claims, restrictions, and business profile are preserved.
+
+The scanner reads homepage HTML, organization/website structured data, header logos, inline styles and up to four prioritized linked stylesheets. Directory provider logos are excluded from generic body-image matching. Suggestions can select only detected colors/fonts. Partial failures are surfaced. No product catalog is required. AI calls use the existing account-scoped metering.
+
+Saving imports selected public logos through the pinned safe image fetcher. Self-contained SVG logos are rasterized to PNG with bounded dimensions; externally referenced SVGs are rejected. Imported assets remain pending in the shared Asset Library and require review before generation. Failed imports are reported and can be retried; successful imports use content-addressed storage and existing source URLs are reused.

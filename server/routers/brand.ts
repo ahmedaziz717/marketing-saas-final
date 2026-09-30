@@ -1,5 +1,10 @@
+import { scanBrandWebsite } from "../lib/brandWebsiteScan";
+import { importBrandLogos } from "../lib/brandLogoImport";
 import { suggestProfile } from "../lib/marketingDrafts";
-import { businessProfileSchema, websiteAddressSchema } from "../../shared/businessProfile";
+import {
+  businessProfileSchema,
+  websiteAddressSchema,
+} from "../../shared/businessProfile";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -22,9 +27,33 @@ const brandInput = z.object({
   requiredClaims: z.string().max(6000).optional().default(""),
   prohibitedContent: z.string().max(6000).optional().default(""),
   activate: z.boolean().default(false),
+  websiteLogoUrls: z.array(z.string().url().max(2048)).max(6).default([]),
 });
 
 export const brandRouter = router({
+  scanWebsite: protectedProcedure
+    .input(
+      z.object({
+        organizationId: z.number().int().positive(),
+        website: websiteAddressSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+      ]);
+      try {
+        return await scanBrandWebsite(input.website);
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            "We couldn't read this website. Check the address and that it is publicly accessible, then retry. Your saved brand kit has not changed.",
+        });
+      }
+    }),
   suggestProfile: protectedProcedure
     .input(
       z.object({
@@ -41,8 +70,11 @@ export const brandRouter = router({
         return await suggestProfile(input.website);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        throw new TRPCError({ code: "BAD_GATEWAY", message:
-          "We couldn't prepare answers from this website. Try again or fill in the profile manually. Your saved answers have not changed." });
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            "We couldn't prepare answers from this website. Try again or fill in the profile manually. Your saved answers have not changed.",
+        });
       }
     }),
   saveProfile: protectedProcedure
@@ -108,6 +140,25 @@ export const brandRouter = router({
       ]);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const kit = (
+        await db
+          .select()
+          .from(brandKits)
+          .where(eq(brandKits.organizationId, input.organizationId))
+          .limit(1)
+      )[0];
+      if (!kit)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand kit not found",
+        });
+      const logos = await importBrandLogos(
+        db,
+        input.organizationId,
+        kit.id,
+        ctx.user.id,
+        input.websiteLogoUrls
+      );
       await db
         .update(brandKits)
         .set({
@@ -129,7 +180,11 @@ export const brandRouter = router({
         entityType: "brand_kit",
         entityId: input.organizationId,
       });
-      return { success: true };
+      return {
+        success: true,
+        importedLogos: logos.imported,
+        failedLogoUrls: logos.failed,
+      };
     }),
 
   assets: protectedProcedure

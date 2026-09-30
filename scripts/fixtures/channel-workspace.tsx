@@ -1,3 +1,4 @@
+import BrandPage from "../../client/src/pages/BrandPage";
 import { CreativeBuilder } from "../../client/src/components/CreativeBuilder";
 import PlatformAdminPage from "../../client/src/pages/PlatformAdminPage";
 import { Router, useLocation } from "wouter";
@@ -222,6 +223,8 @@ function respond(path: string, input: any) {
             truncated: false,
           },
         };
+  if (path === "brand.get") return {name:"Learn Like This Brand",colors:["#15141A"],fonts:["Manrope"],voice:"",requiredClaims:"",prohibitedContent:"",status:"draft",businessProfile:{website:"learnlikethis.com"}};
+  if (path === "brand.scanWebsite") { mutations.push(path); return {sourceUrl:"https://learnlikethis.com",name:"Learn Like This",colors:["#0F414C","#88A34A","#D25A12"],fonts:["Montserrat"],voice:"Welcoming and practical. Help families discover independent educational resources. Attribute services to the listed providers.",logoUrls:[],warnings:[]}; }
   if (path === "assetLibrary.list") return [];
   if (path.startsWith("catalog.")) return [];
   if (
@@ -286,6 +289,7 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "brand-kit": "/app/brand",
   "directory-creative": "/app/creatives/directory",
   "platform-admin": "/admin",
   "product-home": "/app",
@@ -338,6 +342,7 @@ function RoutedPage() {
         resetPassword={path === "/reset-password"}
       />
     );
+  if(path === "/app/brand") return <BrandPage />;
   if(path === "/app/creatives/directory") return <DashboardLayout><h1>Image assets</h1><CreativeBuilder onGenerated={() => {}} /></DashboardLayout>;
   if(path === "/admin" || path.startsWith("/admin/")) return <PlatformAdminPage/>;
   const Page =
@@ -590,6 +595,15 @@ function layout() {
         ),
         "Unavailable video is clearly marked"
       );
+    }
+    if (which === "brand-kit") {
+      button("Scan website")!.click(); await pause(); layout();
+      (document.querySelector("#brand-website")!.closest("form") as HTMLFormElement).requestSubmit(); await pause(); layout();
+      check(!!button("Use scanned details"), "Scan results can be reviewed");
+      check(mutations.length === 1 && mutations[0] === "brand.scanWebsite", "Scan does not save the brand kit");
+      button("Use scanned details")!.click(); await pause(); layout();
+      check((document.querySelector("#brand-name") as HTMLInputElement).value === "Learn Like This", "Detected identity is editable");
+      check((document.querySelector("#brand-voice") as HTMLTextAreaElement).value.includes("Welcoming"), "Suggested voice is ready for review");
     }
     if (which === "directory-creative") {
       check((document.querySelector('select') as HTMLSelectElement) !== null, "Creator renders");
