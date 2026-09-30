@@ -16,7 +16,7 @@ export function useWorkspace() {
 export function useAuth() {
   return {
     loading: false,
-    user: { name: "Test user", email: "test@example.test" },
+    user: { name: "Test user", email: "test@example.test", role: new URLSearchParams((window as any).__fixtureQuery ?? location.search).get("page") === "platform-admin" ? "admin" : "user" },
     logout: async () => undefined,
   };
 }

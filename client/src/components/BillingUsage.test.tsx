@@ -21,6 +21,7 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ billing: { summary: { invalidate: vi.fn() } } }),
+    platformAdmin: { customerCredits: { useQuery: () => ({data: {tier:"Not assigned",period:"2026-09",allowance:0,remaining:0,enforced:false,paused:false}}) } },
     billing: {
       summary: {
         useQuery: (_input: any, opts: any) => {
@@ -63,7 +64,7 @@ function tab(name: string) {
 it("shows real counters without a fabricated credit balance", () => {
   render(<BillingUsage />);
   expect(screen.getByText("12")).toBeTruthy();
-  expect(screen.getByText("AI credits are not calculated yet")).toBeTruthy();
+  expect(screen.getByText("Current AI credit allowance")).toBeTruthy();
   expect(screen.getByText("Preview only - no charges")).toBeTruthy();
   expect(screen.queryByText(/credits remaining/i)).toBeNull();
 });

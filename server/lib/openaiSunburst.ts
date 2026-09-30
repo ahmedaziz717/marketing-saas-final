@@ -1,3 +1,4 @@
+import { meteredCall } from "./aiMetering";
 import { storagePut } from "../storage";
 import { ENV } from "../_core/env";
 import { prepareCreativeOutput } from "./creativeImages";
@@ -42,6 +43,7 @@ export async function generateSunburstImage(
   const endpoint = sources.length
     ? "https://api.openai.com/v1/images/edits"
     : "https://api.openai.com/v1/images/generations";
+  const parsed = await meteredCall("openai", REQUIRED_IMAGE_MODEL_ID, "image", async () => {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -87,8 +89,11 @@ export async function generateSunburstImage(
     );
   }
   const parsed = JSON.parse(body) as {
-    data?: Array<{ b64_json?: string }>;
+    data?: Array<{ b64_json?: string }>; usage?: Record<string, unknown>;
   };
+  if (!parsed.data?.[0]?.b64_json) throw new Error("Image provider returned no image");
+  return { value: parsed, usage: parsed.usage };
+  });
   const encoded = parsed.data?.[0]?.b64_json;
   if (!encoded)
     throw new Error("GPT Image 2.5 Sunburst returned no image data");

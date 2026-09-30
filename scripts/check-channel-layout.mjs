@@ -155,6 +155,7 @@ try {
   const results = [];
   const cases = [
     ...[
+      "platform-admin",
       "login",
       "signup",
       "reset-password",

@@ -1,3 +1,4 @@
+import { aiScope } from "../lib/aiMetering";
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
@@ -19,7 +20,8 @@ export const protectedProcedure = t.procedure.use(requireUser).use(async opts =>
   if (hasLibraryPolicy(opts.path)) {
     await assertLibraryConsumer(opts.path, await opts.getRawInput(), opts.ctx.user.id);
   }
-  return opts.next();
+  const raw = await opts.getRawInput() as { organizationId?: number } | undefined;
+  return raw?.organizationId ? aiScope.run({ organizationId: raw.organizationId, actorUserId: opts.ctx.user.id, operation: opts.path }, () => opts.next()) : opts.next();
 });
 
 export const adminProcedure = t.procedure.use(t.middleware(async ({ ctx, next }) => {

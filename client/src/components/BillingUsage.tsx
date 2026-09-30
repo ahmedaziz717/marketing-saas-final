@@ -35,6 +35,7 @@ export function BillingUsage() {
     { organizationId: organizationId!, month },
     { enabled: !!organizationId && allowed, retry: false }
   );
+  const credits = trpc.platformAdmin.customerCredits.useQuery({organizationId: organizationId!}, {enabled: !!organizationId && allowed});
   const utils = trpc.useUtils();
   const save = trpc.billing.selectPreviewPlan.useMutation({
     onSuccess: () => {
@@ -161,18 +162,13 @@ export function BillingUsage() {
                   ))}
                 </div>
                 <section className="surface p-5">
-                  <h3 className="font-semibold">
-                    AI credits are not calculated yet
-                  </h3>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {selected?.credits
-                      ? `The ${selected.name} proposal includes ${number(selected.credits)} credits per month. `
-                      : "A credit allowance is part of the proposed plans. "}
-                    Credit costs per operation, video allowances and overage
-                    rules are not configured. An image or caption count is not a
-                    credit charge; no remaining-credit balance or overage is
-                    being inferred.
-                  </p>
+                  <h3 className="font-semibold">Current AI credit allowance</h3>
+                  {credits.error ? <p role="alert">Credit balance could not be loaded.</p> : credits.data ? <>
+                    <p className="mt-3 text-sm">Assigned tier: {credits.data.tier} · {credits.data.period} (UTC)</p>
+                    <p className="mt-2 text-sm">{credits.data.enforced ? `${Math.max(0, credits.data.remaining)} credits remaining · ${credits.data.allowance} monthly tier credits` : 'Tracking only — credit limits are not enabled for this account.'}</p>
+                    {credits.data.paused && <p className="mt-2 text-destructive">AI generation is paused. Contact your platform administrator.</p>}
+                    <p className="mt-3 text-xs text-muted-foreground">Your assigned allowance is controlled by the platform administrator, separately from plan previews. Credits apply to AI requests and reset each UTC calendar month. Failed provider requests refund credits; interrupted requests may remain reserved until reviewed.</p>
+                  </> : <p className="mt-3 text-sm">Loading credit allowance...</p>}
                 </section>
                 <section className="surface p-5">
                   <h3 className="font-semibold">Current workspace inventory</h3>

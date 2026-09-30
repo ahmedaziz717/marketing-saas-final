@@ -1,3 +1,4 @@
+import { platformAdminRouter } from "./routers/platformAdmin";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -21,6 +22,7 @@ import { publicWebsiteAdminRouter } from "./routers/publicWebsite";
 
 export const appRouter = router({
   system: systemRouter,
+  platformAdmin: platformAdminRouter,
   publicWebsiteAdmin: publicWebsiteAdminRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

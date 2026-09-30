@@ -27,6 +27,7 @@ vi.mock("@/lib/trpc", () => ({
         invites: { invalidate: vi.fn() },
       },
     }),
+    platformAdmin: { customerCredits: {useQuery:()=>({data:null})} },
     billing: {
       summary: { useQuery: () => ({ data: null, isLoading: false }) },
       selectPreviewPlan: {

@@ -220,6 +220,7 @@ function Settings() {
       />
       {platformUser?.role === "admin" && (
         <div className="mb-5 rounded-xl border p-4 text-sm">
+          <a className="mr-5 font-medium text-primary" href="/admin">SaaS control panel</a>
           <a className="font-medium text-primary" href="/app/platform/website">
             Platform website &amp; public requests
           </a>

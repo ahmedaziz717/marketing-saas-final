@@ -1,3 +1,4 @@
+import PlatformAdminPage from "../../client/src/pages/PlatformAdminPage";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import DashboardLayout from "../../client/src/components/DashboardLayout";
@@ -106,6 +107,13 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
+  if(path === "platformAdmin.customerCredits") return {tier:"Trial",period:"2026-09",allowance:100,remaining:80,enforced:true,paused:false};
+  if(path === "platformAdmin.config") return {tiers:[{id:"trial",name:"Trial",monthlyCredits:100,monthlyPriceMicros:0}],rates:[]};
+  if(path === "platformAdmin.accounts") return {items:[{organization:{id:1,name:"Demo customer account"},account:{tierId:"trial",enforceCredits:1,aiPaused:0,ownerEmail:"owner@example.test",notes:""},tier:{name:"Trial"}}]};
+  if(path === "platformAdmin.account") return {period:"2026-09",allowance:100,remaining:80,ledger:[],members:[]};
+  if(path === "platformAdmin.audit") return [];
+  if(path === "platformAdmin.report") return {groups:[{organizationId:1,provider:"openai",model:"sample-text-model",kind:"text",status:"succeeded",requests:12,inputTokens:42000,outputTokens:1000,costMicros:100000,unpriced:0,credits:12}],financial:[],recent:[],entries:[],coverage:"Fixture: measured costs only."};
+
   if (path === "workspace.members" || path === "workspace.invites") return [];
   if (path === "billing.summary")
     return {
@@ -275,6 +283,7 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "platform-admin": "/admin",
   "product-home": "/app",
   login: "/login",
   signup: "/signup",
@@ -325,6 +334,7 @@ function RoutedPage() {
         resetPassword={path === "/reset-password"}
       />
     );
+  if(path === "/admin") return <PlatformAdminPage/>;
   const Page =
     path === "/app"
       ? WorkspaceApp
@@ -576,6 +586,15 @@ function layout() {
         "Unavailable video is clearly marked"
       );
     }
+    if (which === "platform-admin") {
+      check(document.body.textContent?.includes("SaaS control panel"),"Admin overview renders");
+      for(const tab of ["Accounts","Tiers","Provider rates","Financial entries","Audit","Overview"]){await click(tab);layout();}
+      await click("Accounts");
+      const accountButton=Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.includes('Demo customer account'));
+      check(!!accountButton,"Account is available"); accountButton!.click(); await pause(); layout();
+      check(!!button('Apply credit adjustment'),"Credit controls render");
+      check(mutations.length===0,"Browsing admin does not mutate accounts");
+    }
     if (which === "billing-usage" || which === "billing-plans") {
       if (role === "creator") {
         check(
@@ -588,7 +607,7 @@ function layout() {
       } else {
         check(
           document.body.textContent?.includes(
-            "AI credits are not calculated yet"
+            "Current AI credit allowance"
           ),
           "No fabricated credit balance"
         );

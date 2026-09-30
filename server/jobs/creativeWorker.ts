@@ -1,3 +1,4 @@
+import { aiScope } from "../lib/aiMetering";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { creativeJobs } from "../../drizzle/schema";
 import { creativeSetupSchema } from "../../shared/creativeBuilder";
@@ -34,7 +35,7 @@ export async function processNextBuilderJob(db: Database) {
     if (stableHash(resolved) !== stableHash(job.briefSnapshot.resolved)) {
       throw new Error("Selected source data changed while this job was queued. Review the setup and retry.");
     }
-    await runBuilderJob(db, { organizationId: job.organizationId, actorUserId: job.requestedByUserId, briefId: job.briefId, jobId: job.id, setup, resolved });
+    await aiScope.run({ organizationId: job.organizationId, actorUserId: job.requestedByUserId, operation: "creativeBuilder.generate" }, () => runBuilderJob(db, { organizationId: job.organizationId, actorUserId: job.requestedByUserId, briefId: job.briefId, jobId: job.id, setup, resolved }));
   } catch {
     await withOrganizationTransaction(db, job.organizationId, async tx => {
       const changed = await tx.update(creativeJobs).set({ status: "failed", leaseExpiresAtMs: null, completedAtMs: Date.now(), errorMessage: "Queued generation could not be started. Review the source approvals and setup, then retry." })

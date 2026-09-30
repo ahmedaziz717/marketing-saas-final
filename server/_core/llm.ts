@@ -1,3 +1,4 @@
+import { meteredCall } from "../lib/aiMetering";
 import { ENV } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -393,6 +394,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
+  return meteredCall("openai", String(model || "unspecified"), "text", async () => {
   const response = await fetchWithBackoff(resolveApiUrl(), {
     method: "POST",
     headers: {
@@ -409,7 +411,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = (await response.json()) as InvokeResult;
+  return { value: result, usage: result.usage as unknown as Record<string, unknown> };
+  });
 }
 
 export type ModelInfo = {

@@ -1,3 +1,4 @@
+import PlatformAdminPage, { AccountInvitePage } from "./pages/PlatformAdminPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -39,6 +40,8 @@ function Router() {
       <Route path="/reset-password">
         <LoginPage resetPassword />
       </Route>
+      <Route path="/admin" component={PlatformAdminPage} />
+      <Route path="/account-invite/:token" component={AccountInvitePage} />
       <Route path="/app" component={WorkspaceApp} />
       <Route path="/app/platform/website" component={PlatformWebsitePage} />
       <Route path="/app/briefs" component={BriefsPage} />

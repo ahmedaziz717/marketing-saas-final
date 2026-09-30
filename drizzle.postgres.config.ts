@@ -10,6 +10,7 @@ export default defineConfig({
     "./drizzle/schema.ts",
     "./drizzle/channelSchema.ts",
     "./drizzle/websiteSchema.ts",
+    "./drizzle/platformSchema.ts",
   ],
   out: "./drizzle/postgres",
   dialect: "postgresql",
