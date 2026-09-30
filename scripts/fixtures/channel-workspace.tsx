@@ -107,6 +107,7 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
+  if(path === "platformAdmin.openaiCosts" || path === "platformAdmin.syncOpenaiCosts") return { range: input.range, syncedAtMs: now, amountUsd: 12.5, rows: [{date: input.range.since, projectId:"proj_demo", lineItem:"Image generation", amountUsd:12.5, quantity:null, quantityUnit:null}] };
   if(path === "platformAdmin.customerCredits") return {tier:"Trial",period:"2026-09",allowance:100,remaining:80,enforced:true,paused:false};
   if(path === "platformAdmin.config") return {tiers:[{id:"trial",name:"Trial",monthlyCredits:100,monthlyPriceMicros:0}],rates:[]};
   if(path === "platformAdmin.accounts") return {items:[{organization:{id:1,name:"Demo customer account"},account:{tierId:"trial",enforceCredits:1,aiPaused:0,ownerEmail:"owner@example.test",notes:""},tier:{name:"Trial"}}]};

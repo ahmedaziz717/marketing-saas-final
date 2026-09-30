@@ -29,6 +29,7 @@ import { libraryDatabase } from "../lib/assetLibrary";
 import { withOrganizationTransaction } from "../lib/activity";
 import { creditState } from "../lib/aiMetering";
 import { requireOrganizationRole } from "../lib/access";
+import { openAICosts, BillingError } from "../lib/openaiCosts";
 const org = z.number().int().positive(),
   reason = z.string().trim().min(3).max(1000);
 const period = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/);
@@ -40,15 +41,13 @@ async function audit(
   payload: Record<string, unknown>,
   organizationId?: number
 ) {
-  await tx
-    .insert(platformAudit)
-    .values({
-      actorUserId,
-      action,
-      payload,
-      organizationId: organizationId ?? null,
-      createdAtMs: Date.now(),
-    });
+  await tx.insert(platformAudit).values({
+    actorUserId,
+    action,
+    payload,
+    organizationId: organizationId ?? null,
+    createdAtMs: Date.now(),
+  });
 }
 async function requireOrg(tx: any, id: number) {
   if (
@@ -63,6 +62,36 @@ async function requireOrg(tx: any, id: number) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
 }
 export const platformAdminRouter = router({
+  openaiCosts: adminProcedure
+    .input(z.object({ range: rangeSchema }))
+    .query(async ({ input }) => {
+      try {
+        return await openAICosts(input.range);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            error instanceof BillingError
+              ? error.message
+              : "OpenAI billing is temporarily unavailable.",
+        });
+      }
+    }),
+  syncOpenaiCosts: adminProcedure
+    .input(z.object({ range: rangeSchema }))
+    .mutation(async ({ input }) => {
+      try {
+        return await openAICosts(input.range, true);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            error instanceof BillingError
+              ? error.message
+              : "OpenAI billing is temporarily unavailable.",
+        });
+      }
+    }),
   config: adminProcedure.query(async () => {
     const db = await libraryDatabase();
     return {
@@ -113,21 +142,19 @@ export const platformAdminRouter = router({
         .orderBy(organizations.id)
         .limit(101);
       return {
-        items: rows
-          .slice(0, 100)
-          .map(({ account, ...r }) => ({
-            ...r,
-            account: account
-              ? {
-                  tierId: account.tierId,
-                  enforceCredits: account.enforceCredits,
-                  aiPaused: account.aiPaused,
-                  ownerEmail: account.ownerEmail,
-                  notes: account.notes,
-                  invitationPending: !!account.inviteHash,
-                }
-              : null,
-          })),
+        items: rows.slice(0, 100).map(({ account, ...r }) => ({
+          ...r,
+          account: account
+            ? {
+                tierId: account.tierId,
+                enforceCredits: account.enforceCredits,
+                aiPaused: account.aiPaused,
+                ownerEmail: account.ownerEmail,
+                notes: account.notes,
+                invitationPending: !!account.inviteHash,
+              }
+            : null,
+        })),
         next: rows.length > 100 ? rows[99].organization.id : undefined,
       };
     }),
@@ -205,37 +232,31 @@ export const platformAdminRouter = router({
           })
           .returning();
         if (owner)
-          await tx
-            .insert(organizationMemberships)
-            .values({
-              organizationId: workspace.id,
-              userId: owner.id,
-              role: "owner",
-              status: "active",
-              createdAtMs: now,
-            });
-        await tx
-          .insert(brandKits)
-          .values({
+          await tx.insert(organizationMemberships).values({
             organizationId: workspace.id,
-            name: `${input.name} Brand`,
-            colors: ["#15141A", "#F4F1EA"],
-            fonts: ["Manrope"],
-            status: "draft",
-            updatedByUserId: ctx.user.id,
-            updatedAtMs: now,
+            userId: owner.id,
+            role: "owner",
+            status: "active",
+            createdAtMs: now,
           });
-        await tx
-          .insert(platformAccounts)
-          .values({
-            organizationId: workspace.id,
-            tierId: input.tierId,
-            enforceCredits: input.enforceCredits ? 1 : 0,
-            ownerEmail: email,
-            inviteHash: owner ? null : hash(token),
-            inviteExpiresAtMs: owner ? null : now + 7 * 86400000,
-            updatedAtMs: now,
-          });
+        await tx.insert(brandKits).values({
+          organizationId: workspace.id,
+          name: `${input.name} Brand`,
+          colors: ["#15141A", "#F4F1EA"],
+          fonts: ["Manrope"],
+          status: "draft",
+          updatedByUserId: ctx.user.id,
+          updatedAtMs: now,
+        });
+        await tx.insert(platformAccounts).values({
+          organizationId: workspace.id,
+          tierId: input.tierId,
+          enforceCredits: input.enforceCredits ? 1 : 0,
+          ownerEmail: email,
+          inviteHash: owner ? null : hash(token),
+          inviteExpiresAtMs: owner ? null : now + 7 * 86400000,
+          updatedAtMs: now,
+        });
         await audit(
           tx,
           ctx.user.id,

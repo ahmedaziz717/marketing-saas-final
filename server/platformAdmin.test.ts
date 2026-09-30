@@ -49,6 +49,14 @@ afterAll(async () => engine?.close());
 it("restricts the platform API to platform administrators, not workspace owners", async () => {
   await expect(owner.config()).rejects.toMatchObject({ code: "FORBIDDEN" });
   await expect(
+    owner.openaiCosts({ range: { since: "2026-09-01", until: "2026-09-30" } })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
+    owner.syncOpenaiCosts({
+      range: { since: "2026-09-01", until: "2026-09-30" },
+    })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
     owner.createAccount({
       name: "Nope",
       ownerEmail: "owner@test.com",

@@ -12,6 +12,7 @@ import { presetRange } from "@shared/reportDates";
 import { utcCreditMonth, type ProviderRate } from "@shared/platformAdmin";
 import { toast } from "sonner";
 import { rememberWorkspace } from "@/lib/workspaceSelection";
+import { OpenAIBilling } from "@/components/OpenAIBilling";
 const field = "w-full rounded-xl border bg-background px-3 py-2";
 const usd = (micros: number) =>
   new Intl.NumberFormat("en-US", {
@@ -271,6 +272,7 @@ function Administration() {
       )}
       {tab === "Overview" && (
         <>
+          <OpenAIBilling range={range} />
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Provider requests", total("requests").toLocaleString()],
@@ -278,9 +280,19 @@ function Administration() {
                 "Input / output tokens",
                 `${total("inputTokens").toLocaleString()} / ${total("outputTokens").toLocaleString()}`,
               ],
-              ["Known estimated costs", usd(cost)],
+              [
+                "Known estimated costs",
+                total("unpriced") &&
+                total("unpriced") === total("requests") &&
+                !manualCosts
+                  ? "Unavailable"
+                  : usd(cost) + (total("unpriced") ? " (partial)" : ""),
+              ],
               ["Manually recorded revenue", usd(revenue)],
-              ["Recorded contribution", usd(profit)],
+              [
+                "Recorded contribution",
+                total("unpriced") ? "Incomplete costs" : usd(profit),
+              ],
               [
                 "Requests without cost estimates",
                 total("unpriced").toLocaleString(),
@@ -288,7 +300,9 @@ function Administration() {
               ["Credits used / reserved", total("credits").toLocaleString()],
               [
                 "Recorded contribution margin",
-                revenue > 0 ? `${((profit / revenue) * 100).toFixed(1)}%` : "—",
+                revenue > 0 && !total("unpriced")
+                  ? `${((profit / revenue) * 100).toFixed(1)}%`
+                  : "—",
               ],
             ].map(([label, value]) => (
               <section key={label} className="surface min-w-0 p-5">
@@ -344,7 +358,11 @@ function Administration() {
                       {g.inputTokens} / {g.outputTokens}
                     </td>
                     <td className="p-2">{g.credits}</td>
-                    <td className="p-2">{usd(g.costMicros)}</td>
+                    <td className="p-2">
+                      {g.unpriced === g.requests
+                        ? "Unavailable"
+                        : usd(g.costMicros) + (g.unpriced ? " (partial)" : "")}
+                    </td>
                     <td className="p-2">{g.unpriced}</td>
                   </tr>
                 ))}
