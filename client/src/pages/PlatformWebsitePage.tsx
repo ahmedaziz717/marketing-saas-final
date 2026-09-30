@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
+import PlatformAdminLayout from "@/components/PlatformAdminLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -374,7 +374,7 @@ function WebsiteAdministration() {
 export default function PlatformWebsitePage() {
   const { user, loading } = useAuth();
   return (
-    <DashboardLayout>
+    <PlatformAdminLayout>
       {loading ? (
         <p role="status">Loading...</p>
       ) : user?.role === "admin" ? (
@@ -393,6 +393,6 @@ export default function PlatformWebsitePage() {
           </a>
         </section>
       )}
-    </DashboardLayout>
+    </PlatformAdminLayout>
   );
 }

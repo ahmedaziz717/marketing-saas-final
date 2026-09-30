@@ -41,9 +41,10 @@ function Router() {
         <LoginPage resetPassword />
       </Route>
       <Route path="/admin" component={PlatformAdminPage} />
+      <Route path="/admin/website" component={PlatformWebsitePage} />
       <Route path="/account-invite/:token" component={AccountInvitePage} />
       <Route path="/app" component={WorkspaceApp} />
-      <Route path="/app/platform/website" component={PlatformWebsitePage} />
+      <Route path="/app/platform/website"><Redirect to="/admin/website" /></Route>
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={ProductOverviewPage} />

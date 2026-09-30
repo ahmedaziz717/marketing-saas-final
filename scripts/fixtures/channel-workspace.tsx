@@ -588,6 +588,9 @@ function layout() {
     }
     if (which === "platform-admin") {
       check(document.body.textContent?.includes("SaaS control panel"),"Admin overview renders");
+      check(!!document.querySelector("[data-platform-admin-shell]"), "Dedicated admin shell renders");
+      check(!document.querySelector('[aria-label="Switch account"]'), "No customer account switcher in admin");
+      check(!document.body.textContent?.includes("Content Studio"), "Customer navigation is absent from admin");
       for(const tab of ["Accounts","Tiers","Provider rates","Financial entries","Audit","Overview"]){await click(tab);layout();}
       await click("Accounts");
       const accountButton=Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.includes('Demo customer account'));

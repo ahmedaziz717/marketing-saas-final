@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import PlatformAdminLayout from "@/components/PlatformAdminLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { Button } from "@/components/ui/button";
@@ -231,12 +232,6 @@ function Administration() {
             {t}
           </Button>
         ))}
-        <Link
-          href="/app/platform/website"
-          className="self-center px-3 text-sm text-primary"
-        >
-          Website & requests
-        </Link>
       </div>
       <p className="mb-5 rounded-xl border p-4 text-sm text-muted-foreground">
         Stripe is not connected. Tier prices are planning values; no customer is
@@ -1025,17 +1020,10 @@ function Administration() {
   );
 }
 export default function PlatformAdminPage() {
-  const { user } = useAuth();
   return (
-    <DashboardLayout>
-      {user?.role === "admin" ? (
-        <Administration />
-      ) : (
-        <p className="surface p-8">
-          Platform administrator access is required.
-        </p>
-      )}
-    </DashboardLayout>
+    <PlatformAdminLayout>
+      <Administration />
+    </PlatformAdminLayout>
   );
 }
 export function AccountInvitePage() {

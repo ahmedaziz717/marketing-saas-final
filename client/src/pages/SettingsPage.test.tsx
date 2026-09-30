@@ -100,10 +100,10 @@ it("keeps platform website administration out of ordinary workspace-owner settin
   render(<SettingsPage />);
   expect(document.querySelector('a[href="/app/platform/website"]')).toBeNull();
 });
-it("links the global platform administrator to public website details and requests", () => {
+it("keeps platform controls out of customer settings even for platform staff", () => {
   state.platformRole = "admin";
   render(<SettingsPage />);
   expect(
-    document.querySelector('a[href="/app/platform/website"]')
-  ).toBeTruthy();
+    document.querySelector('a[href="/admin"], a[href="/admin/website"], a[href="/app/platform/website"]')
+  ).toBeNull();
 });

@@ -1,5 +1,4 @@
 import { BusinessProfileForm } from "@/components/BusinessProfileForm";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
@@ -125,7 +124,6 @@ function RoleSelect({
   );
 }
 function Settings() {
-  const { user: platformUser } = useAuth();
   const { organizationId, organization, membership } = useWorkspace();
   const [location, navigate] = useLocation();
   const requestedSection = location.split("/").at(-1);
@@ -218,18 +216,6 @@ function Settings() {
         title="Settings"
         description="Manage your company, people, and workspace preferences."
       />
-      {platformUser?.role === "admin" && (
-        <div className="mb-5 rounded-xl border p-4 text-sm">
-          <a className="mr-5 font-medium text-primary" href="/admin">SaaS control panel</a>
-          <a className="font-medium text-primary" href="/app/platform/website">
-            Platform website &amp; public requests
-          </a>
-          <p className="mt-1 text-muted-foreground">
-            Manage EvokeLoop's public company information and support/privacy
-            inbox. Platform administrator only.
-          </p>
-        </div>
-      )}
       <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="space-y-1">
           {sections.map(({ id, label, icon: Icon }) => (
