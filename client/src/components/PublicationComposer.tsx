@@ -84,9 +84,7 @@ export function PublicationComposer({
   );
   const utils = trpc.useUtils();
   const [id] = useState(() => item?.id ?? crypto.randomUUID());
-  const [channel, setChannel] = useState<Channel>(
-    item?.channel ?? initialChannel
-  );
+  const channel = item?.channel ?? initialChannel;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [placement, setPlacement] = useState(
     !!item?.content.placementAssetKeys
@@ -103,7 +101,7 @@ export function PublicationComposer({
   const [content, setContent] = useState<PublicationContent>(
     item?.content ??
       contentSchema.parse({
-        title: initialChannel === "facebook" ? "Untitled post" : "Untitled ad",
+        title: channel === "facebook" ? "Untitled post" : "Untitled ad",
         campaignPlanId: initialPlanId,
         adSetId: initialAdSetId ?? "",
       })
@@ -125,6 +123,13 @@ export function PublicationComposer({
   const connections = trpc.channels.connections.useQuery(scope, {
     enabled: !!organizationId,
   });
+  const connectedAccounts = (connections.data?.items ?? []).filter(
+    c => c.channel === channel && c.status === "connected" && !c.expired
+  );
+  const selectedAccountUnavailable =
+    !!connectionId &&
+    !!connections.data &&
+    !connectedAccounts.some(c => c.id === connectionId);
   const assets = trpc.assetLibrary.list.useQuery(scope, {
     enabled: !!organizationId,
   });
@@ -242,7 +247,7 @@ export function PublicationComposer({
           </DialogTitle>
           <DialogDescription>
             {stage === "create"
-              ? "Write your content, choose media, and preview it. Continue to Activate when ready to choose the destination and schedule."
+              ? "Choose an account, write your content, and preview it. Continue to Activate when ready to review and schedule."
               : "Choose the destination and timing for this content, then review and approve delivery."}
           </DialogDescription>
         </DialogHeader>
@@ -250,69 +255,71 @@ export function PublicationComposer({
           className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2"
           disabled={save.isPending}
         >
-          {composing && (
-            <div>
-              <Label htmlFor="pub-channel">Channel</Label>
-              <select
-                id="pub-channel"
-                className={channelInput}
-                value={channel}
-                onChange={e => {
-                  setChannel(e.target.value as Channel);
-                  setCarousel(false);
-                  setPlacement(false);
-                  setAsset("");
-                  setContent(c => ({
-                    ...c,
-                    carouselAssetKeys: undefined,
-                    placementAssetKeys: undefined,
-                  }));
-                  setConnection("");
-                  setField("adSetId", "");
-                }}
-              >
-                <option value="facebook">Facebook - organic</option>
-                <option value="meta_ads">Meta Ads - paid</option>
-              </select>
-            </div>
-          )}
-          {stage === "activate" && (
-            <div>
-              <Label htmlFor="pub-destination">Destination</Label>
-              <select
-                id="pub-destination"
-                className={channelInput}
-                value={connectionId}
-                onChange={e => {
-                  setConnection(e.target.value);
-                  setField("adSetId", "");
-                }}
-              >
-                <option value="">Select a connected account</option>
-                {connections.data?.items
-                  .filter(
-                    c =>
-                      c.channel === channel &&
-                      c.status === "connected" &&
-                      !c.expired
-                  )
-                  .map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.details.capabilities.includes("publish")
-                        ? ""
-                        : " (read only)"}
-                    </option>
-                  ))}
-              </select>
-              <Link
-                href="/app/settings/integrations"
-                className="mt-1 inline-block text-xs text-primary"
-              >
-                Manage channel connections
-              </Link>
-            </div>
-          )}
+          <div className="sm:col-span-2">
+            <Label htmlFor="pub-destination">
+              {channel === "facebook" ? "Social account" : "Ad account"}
+            </Label>
+            <select
+              id="pub-destination"
+              className={channelInput}
+              value={connectionId}
+              disabled={connections.isLoading}
+              onChange={e => {
+                setConnection(e.target.value);
+                setField("adSetId", "");
+              }}
+            >
+              <option value="">
+                {connections.isLoading
+                  ? "Loading connected accounts…"
+                  : "Select a connected account"}
+              </option>
+              {selectedAccountUnavailable && (
+                <option value={connectionId} disabled>
+                  Previously selected account (unavailable)
+                </option>
+              )}
+              {connectedAccounts.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} · {channelNames[c.channel]}
+                  {c.details.capabilities.includes("publish")
+                    ? ""
+                    : " (read only)"}
+                </option>
+              ))}
+            </select>
+            {connections.error ? (
+              <p role="alert" className="mt-2 text-sm">
+                Connected accounts could not be loaded.{" "}
+                <button
+                  type="button"
+                  className="text-primary underline"
+                  onClick={() => void connections.refetch()}
+                >
+                  Try again
+                </button>
+              </p>
+            ) : !connections.isLoading && !connectedAccounts.length ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {channel === "facebook"
+                  ? "No Facebook Pages are connected for social publishing."
+                  : "No Meta ad accounts are connected."}{" "}
+                Connect an account in Integrations. You can still save a draft.
+              </p>
+            ) : null}
+            {selectedAccountUnavailable && (
+              <p role="alert" className="mt-2 text-sm">
+                Reconnect the previous account, choose another, or clear the
+                selection to save your draft without an account.
+              </p>
+            )}
+            <Link
+              href="/app/settings/integrations"
+              className="mt-1 inline-block text-xs text-primary"
+            >
+              Manage connections
+            </Link>
+          </div>
           {composing && (
             <>
               <div className="sm:col-span-2">

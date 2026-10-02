@@ -35,6 +35,7 @@ if (!crypto.randomUUID)
   crypto.randomUUID = () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const pageId = "11111111-1111-4111-8111-111111111111",
   adsId = "22222222-2222-4222-8222-222222222222";
+const secondPageId = "44444444-4444-4444-8444-444444444444";
 const id = "33333333-3333-4333-8333-333333333333";
 const now = Date.now();
 const empty = { items: [], truncated: false };
@@ -262,10 +263,40 @@ function respond(path: string, input: any) {
     return { success: true, previewOnly: true };
   }
 
-  if (path === "channels.connections")
-    return which === "advertising-empty" || which === "social-empty"
-      ? { ...connections, items: [] }
-      : connections;
+  if (path === "channels.connections") {
+    if (which === "advertising-empty" || which === "social-empty")
+      return { ...connections, items: [] };
+    if (which === "studio-post-empty")
+      return {
+        ...connections,
+        items: connections.items.filter(c => c.channel === "meta_ads"),
+      };
+    if (which === "studio-post" || which === "studio-ad")
+      return {
+        ...connections,
+        items: [
+          ...connections.items,
+          {
+            ...connections.items[0],
+            id: secondPageId,
+            name: "Second Facebook Page",
+          },
+          {
+            ...connections.items[0],
+            id: "55555555-5555-4555-8555-555555555555",
+            name: "Disconnected Page",
+            status: "disconnected",
+          },
+          {
+            ...connections.items[0],
+            id: "66666666-6666-4666-8666-666666666666",
+            name: "Expired Page",
+            expired: true,
+          },
+        ],
+      };
+    return connections;
+  }
   if (path === "publishing.list") return { items: posts, truncated: false };
   if (path === "publishing.history") return [];
   if (path === "channels.plan")
@@ -434,6 +465,7 @@ const routeForPage: Record<string, string> = {
   "studio-media": "/app/creatives/social?new=1",
   "studio-legacy": "/app/creatives/saved?asset=creative%3A42",
   "studio-post": "/app/creatives/social?new=1&plan=7",
+  "studio-post-empty": "/app/creatives/social?new=1",
   "studio-ad": "/app/creatives/ads?new=1",
   "campaign-plans": "/app/plans",
   "asset-library": "/app/library",
@@ -801,6 +833,18 @@ function layout() {
         mutations.length === 0,
         "Browsing media never starts a paid generation"
       );
+      await click("Browse approved assets");
+      const sizes = document.querySelector<HTMLSelectElement>(
+        '[aria-label="Asset dimensions"]'
+      )!;
+      check(
+        sizes.textContent?.includes("9:16 · e.g. 1080 × 1920 px"),
+        "Image filter explains ratio and pixel dimensions"
+      );
+      sizes.value = "story";
+      sizes.dispatchEvent(new Event("change", { bubbles: true }));
+      await pause();
+      layout();
     }
     if (which === "studio-legacy") {
       check(
@@ -815,10 +859,33 @@ function layout() {
       );
     }
     if (which === "studio-post" || which === "studio-ad") {
+      const destination =
+        document.querySelector<HTMLSelectElement>("#pub-destination")!;
       check(
-        !document.getElementById("pub-destination"),
-        "Destination belongs to Activate"
+        !document.getElementById("pub-channel"),
+        "Content mode cannot switch between organic posts and paid ads"
       );
+      const optionIds = Array.from(destination.options)
+        .map(o => o.value)
+        .filter(Boolean);
+      check(
+        JSON.stringify(optionIds) ===
+          JSON.stringify(
+            which === "studio-post" ? [pageId, secondPageId] : [adsId]
+          ),
+        "Account picker includes only active accounts for the content type"
+      );
+      check(
+        destination.textContent?.includes(
+          which === "studio-post"
+            ? "Demo Facebook Page · Facebook"
+            : "Demo ad account · Meta Ads"
+        ),
+        "Accounts are identified by name and platform"
+      );
+      destination.value = which === "studio-post" ? secondPageId : adsId;
+      destination.dispatchEvent(new Event("change", { bubbles: true }));
+      await pause();
       check(!document.getElementById("pub-date"), "Timing belongs to Activate");
       check(
         !!document.querySelector('[aria-label="Content preview"]'),
@@ -841,8 +908,16 @@ function layout() {
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
       );
       check(
-        saved && saved.state === "draft" && saved.connectionId === null,
-        "Creation saves a standalone draft"
+        saved &&
+          saved.state === "draft" &&
+          saved.connectionId ===
+            (which === "studio-post" ? secondPageId : adsId),
+        "Creation saves the selected account on the draft"
+      );
+      check(
+        document.querySelector<HTMLSelectElement>("#pub-destination")?.value ===
+          saved.connectionId,
+        "The chosen account is preserved when continuing to Activate"
       );
       check(
         !!document.getElementById("pub-destination") &&
@@ -875,12 +950,59 @@ function layout() {
         );
       layout();
     }
+    if (which === "studio-post-empty") {
+      const destination =
+        document.querySelector<HTMLSelectElement>("#pub-destination")!;
+      check(
+        destination.options.length === 1,
+        "Ad accounts never substitute for missing social accounts"
+      );
+      check(
+        document.body.textContent?.includes(
+          "No Facebook Pages are connected for social publishing."
+        ),
+        "Missing social connection is explained"
+      );
+      check(
+        !!document.querySelector('a[href="/app/settings/integrations"]'),
+        "Social account setup is available"
+      );
+      layout();
+      await click("Save draft");
+      const saved = posts.find(
+        p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      );
+      check(
+        saved?.channel === "facebook" &&
+          saved.connectionId === null &&
+          saved.state === "draft",
+        "A social draft can be saved before connecting an account"
+      );
+      check(
+        mutations.length === 1 && mutations[0] === "publishing.save",
+        "Saving an unconnected draft cannot publish"
+      );
+      layout();
+    }
     if (which === "campaign-plans") {
       await click("New plan");
       check(
         document.body.textContent?.includes("Objective & creative direction"),
         "Campaign plan captures intent"
       );
+      layout();
+    }
+    if (which === "asset-library") {
+      const sizes = document.querySelector<HTMLSelectElement>(
+        '[aria-label="Asset size"]'
+      )!;
+      check(
+        sizes.textContent?.includes("4:5 · e.g. 1080 × 1350 px"),
+        "Library uses the same clear size labels as the picker"
+      );
+      sizes.value = "portrait";
+      sizes.dispatchEvent(new Event("change", { bubbles: true }));
+      await pause();
       layout();
     }
     if (which === "brand-kit") {

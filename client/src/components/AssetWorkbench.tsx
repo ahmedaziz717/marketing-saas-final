@@ -6,6 +6,7 @@ import {
   assetFormat,
   assetSizeLabel,
   assetFormats,
+  assetFormatFilterLabel,
 } from "@shared/assetFit";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -377,7 +378,7 @@ export function AssetWorkbench({
       <div className="mb-5 flex flex-wrap gap-3">
         <select
           aria-label="Channel size match"
-          className="rounded-xl border p-2"
+          className="min-w-0 max-w-full rounded-xl border p-2"
           value={channelFilter}
           onChange={e => setChannelFilter(e.target.value)}
         >
@@ -390,18 +391,23 @@ export function AssetWorkbench({
         </select>
         <select
           aria-label="Asset size"
-          className="rounded-xl border p-2"
+          className="min-w-0 max-w-full rounded-xl border p-2"
           value={sizeFilter}
           onChange={e => setSizeFilter(e.target.value)}
         >
           <option value="all">All sizes</option>
           {[...assetFormats, "unknown", "other"].map(f => (
             <option key={f} value={f}>
-              {f}
+              {assetFormatFilterLabel(f)}
             </option>
           ))}
         </select>
       </div>
+      {sizeFilter !== "all" && (
+        <p className="mb-3 text-xs text-muted-foreground sm:hidden">
+          {assetFormatFilterLabel(sizeFilter)}
+        </p>
+      )}
       <p className="mb-5 text-xs text-muted-foreground">
         Channel filters match image dimensions for common placements. Ad format,
         file limits and content requirements still apply; a size match does not

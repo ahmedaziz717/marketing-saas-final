@@ -174,6 +174,7 @@ try {
       "product-home",
       "studio-overview",
       "studio-post",
+      "studio-post-empty",
       "studio-media",
       "studio-legacy",
       "studio-ad",

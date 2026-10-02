@@ -113,7 +113,7 @@ function Studio() {
       <PageHeader
         eyebrow="Create"
         title="Content Studio"
-        description="Create an image, a social post, or an ad. Keep drafts here, then choose the destination and schedule in Activate."
+        description="Create an image, a social post, or an ad. Keep drafts here, then review and schedule in Activate."
         action={
           <Link href="/app/plans" className="text-sm text-primary underline">
             Campaign Plans

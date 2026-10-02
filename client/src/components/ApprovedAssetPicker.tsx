@@ -5,6 +5,7 @@ import {
   assetFormat,
   assetSizeLabel,
   assetFormats,
+  assetFormatFilterLabel,
 } from "@shared/assetFit";
 import {
   Dialog,
@@ -62,28 +63,33 @@ export function ApprovedAssetPicker({
               : "Choose a finished asset. Only compatible approved assets are shown."}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-wrap gap-3">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <input
             aria-label="Search approved assets"
-            className={channelInput + " flex-1"}
+            className={channelInput + " min-w-0"}
             placeholder="Search assets…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
           <select
             aria-label="Asset dimensions"
-            className={channelInput + " w-auto"}
+            className={channelInput + " min-w-0 max-w-full"}
             value={format}
             onChange={e => setFormat(e.target.value)}
           >
             <option value="all">All sizes</option>
             {assetFormats.map(f => (
               <option key={f} value={f}>
-                {f}
+                {assetFormatFilterLabel(f)}
               </option>
             ))}
           </select>
         </div>
+        {format !== "all" && (
+          <p className="text-xs text-muted-foreground sm:hidden">
+            {assetFormatFilterLabel(format)}
+          </p>
+        )}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map(a => (
             <button
