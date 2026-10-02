@@ -137,6 +137,7 @@ export const contentSchema = z.object({
     })
     .optional(),
   campaignLabel: z.string().trim().max(180).default(""),
+  metaCampaignId: z.string().regex(/^\d*$/).max(100).optional(),
   adSetId: z.string().regex(/^\d*$/).max(100).default(""),
 });
 export type PublicationContent = z.infer<typeof contentSchema>;

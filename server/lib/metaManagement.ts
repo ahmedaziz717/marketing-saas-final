@@ -3,9 +3,18 @@ import { and, eq } from "drizzle-orm";
 import { activityEvents } from "../../drizzle/schema";
 import type { ChannelConnection } from "../../drizzle/channelSchema";
 import type { MetaChange } from "../../shared/metaManagement";
-import { budgetMinorUnits } from "../../shared/metaManagement";
+import {
+  budgetMinorUnits,
+  metaGoals,
+  metaPlacementOptions,
+} from "../../shared/metaManagement";
 import { connectionToken } from "./channelConnections";
-import { graphRequest, graphPost, remoteId } from "./channelGraph";
+import {
+  graphRequest,
+  graphCollection,
+  graphPost,
+  remoteId,
+} from "./channelGraph";
 import { stableHash } from "./policy";
 import { appendActivity, withOrganizationTransaction } from "./activity";
 import { liveDeliveryEnabled } from "./publications";
@@ -70,87 +79,158 @@ export async function prepareMetaChange(
   const warnings: string[] = [];
   const newCampaign = change.kind === "create_campaign",
     newSet = change.kind === "create_adset";
+  const ownsBudget =
+    campaign && Number(campaign.daily_budget || campaign.lifetime_budget) > 0;
   if (newCampaign) {
     Object.assign(params, {
       objective: change.objective,
+      buying_type: "AUCTION",
       special_ad_categories: JSON.stringify(change.specialCategories),
       status: "PAUSED",
     });
     if (change.budgetMode === "campaign") {
-      if (!change.dailyBudget)
-        throw new Error("Enter a campaign daily budget.");
-      params.bid_strategy = "LOWEST_COST_WITHOUT_CAP";
-    } else if (change.dailyBudget)
-      throw new Error("For ABO, set the budget when creating an ad set.");
+      if (!change.dailyBudget && !change.lifetimeBudget)
+        throw new Error("Enter a campaign budget.");
+      params.bid_strategy = change.bidStrategy ?? "LOWEST_COST_WITHOUT_CAP";
+    } else {
+      if (change.dailyBudget || change.lifetimeBudget)
+        throw new Error("For ABO, set the budget when creating an ad set.");
+      params.is_adset_budget_sharing_enabled = "0";
+    }
   }
-  if (change.dailyBudget !== undefined) {
+  if (change.dailyBudget !== undefined || change.lifetimeBudget !== undefined) {
     if (c.details.currency !== "USD")
-      throw new Error("Budget editing currently supports USD accounts only.");
+      throw new Error(
+        "Budget editing currently supports USD accounts only. Use Meta Ads Manager for this account's budget."
+      );
     if (change.kind === "update_ad")
       throw new Error("Budgets belong to campaigns or ad sets, not ads.");
-    if (before?.lifetime_budget && Number(before.lifetime_budget) > 0)
-      throw new Error(
-        "This object uses a lifetime budget. Edit that budget in Meta Ads Manager."
-      );
-    if (
-      campaign &&
-      Number(campaign.daily_budget || campaign.lifetime_budget) > 0
-    )
+    if (ownsBudget)
       throw new Error(
         "This campaign owns the budget (CBO). Edit the campaign budget instead."
       );
-    if (change.kind === "update_campaign" && !Number(before?.daily_budget))
+    if (
+      change.kind === "update_campaign" &&
+      !Number(before?.daily_budget || before?.lifetime_budget)
+    )
       throw new Error(
-        "This campaign uses ad-set budgets (ABO). Edit its ad sets; changing budget ownership requires a separate migration in Meta Ads Manager."
+        "This campaign uses ad-set budgets (ABO). Edit its ad sets; changing budget ownership requires Meta Ads Manager."
       );
-    params.daily_budget = String(budgetMinorUnits(change.dailyBudget));
+    if (
+      before &&
+      ((Number(before.lifetime_budget) > 0 && change.dailyBudget) ||
+        (Number(before.daily_budget) > 0 && change.lifetimeBudget))
+    )
+      throw new Error(
+        "Keep the existing budget type. Change budget type in Meta Ads Manager."
+      );
+    const amount = change.dailyBudget ?? change.lifetimeBudget!;
+    params[
+      change.dailyBudget !== undefined ? "daily_budget" : "lifetime_budget"
+    ] = String(budgetMinorUnits(amount));
     warnings.push(
-      `Daily budget: ${change.dailyBudget.toFixed(2)} USD. This can change spending if the object is active.`
+      `${change.dailyBudget !== undefined ? "Daily" : "Lifetime"} budget: ${amount.toFixed(2)} USD.`
     );
   }
   if (newSet) {
     if (!change.countries?.length)
       throw new Error("Select at least one target country.");
-    if (
-      !["OUTCOME_SALES", "OUTCOME_TRAFFIC"].includes(
-        String(campaign!.objective)
-      )
-    )
+    const objective = String(campaign!.objective);
+    const goals = metaGoals[objective];
+    if (!goals)
       throw new Error(
-        "New ad sets currently support Sales and Traffic campaigns."
+        "Create this objective's ad set in Meta Ads Manager, then refresh and select it here. App, catalog and messaging setup require their dedicated Meta tools."
       );
+    const goal = change.optimizationGoal ?? goals[0][0];
+    if (!goals.some(([value]) => value === goal))
+      throw new Error(
+        "This performance goal does not match the campaign objective."
+      );
+    if (!ownsBudget && !change.dailyBudget && !change.lifetimeBudget)
+      throw new Error("Enter an ad-set budget for this ABO campaign.");
     if (
-      !Number(campaign!.daily_budget || campaign!.lifetime_budget) &&
-      !change.dailyBudget
+      (change.lifetimeBudget || Number(campaign!.lifetime_budget) > 0) &&
+      !change.endTime
     )
-      throw new Error("Enter the ad-set daily budget for this ABO campaign.");
+      throw new Error("Lifetime budgets require an ad-set end date.");
+    if (change.endTime && Date.parse(change.endTime) <= Date.now())
+      throw new Error("Choose a future end date.");
+    if (change.startTime && Date.parse(change.startTime) <= Date.now())
+      throw new Error(
+        "Choose a future start date, or leave it blank to start when activated."
+      );
     Object.assign(params, {
       campaign_id: change.campaignId!,
       status: "PAUSED",
       billing_event: "IMPRESSIONS",
-      destination_type: "WEBSITE",
-      optimization_goal:
-        campaign!.objective === "OUTCOME_SALES"
-          ? "OFFSITE_CONVERSIONS"
-          : "LINK_CLICKS",
+      optimization_goal: goal,
     });
-    if (!Number(campaign!.daily_budget || campaign!.lifetime_budget))
-      params.bid_strategy = "LOWEST_COST_WITHOUT_CAP";
-    if (campaign!.objective === "OUTCOME_SALES") {
+    const needsPixel = goal === "OFFSITE_CONVERSIONS";
+    if (
+      ["OUTCOME_SALES", "OUTCOME_TRAFFIC", "OUTCOME_LEADS"].includes(objective)
+    )
+      params.destination_type = "WEBSITE";
+    else if (objective === "OUTCOME_ENGAGEMENT")
+      params.destination_type = "ON_AD";
+    const strategy = ownsBudget
+      ? String(campaign!.bid_strategy || "LOWEST_COST_WITHOUT_CAP")
+      : (change.bidStrategy ?? "LOWEST_COST_WITHOUT_CAP");
+    if (!ownsBudget) params.bid_strategy = strategy;
+    if (["COST_CAP", "LOWEST_COST_WITH_BID_CAP"].includes(strategy)) {
+      if (!change.bidAmount)
+        throw new Error(
+          "This bidding strategy requires a cost or bid cap on the ad set."
+        );
+      if (c.details.currency !== "USD")
+        throw new Error("Bid caps currently support USD accounts only.");
+      params.bid_amount = String(budgetMinorUnits(change.bidAmount));
+    } else if (change.bidAmount)
+      throw new Error("A bid cap cannot be used with Highest volume bidding.");
+    const promoted: Record<string, string> = {};
+    if (needsPixel) {
       if (!change.pixelId)
-        throw new Error("Select a purchase pixel for this Sales ad set.");
-      const pixels = await graphRequest(
+        throw new Error("Select a dataset / pixel for website conversions.");
+      const pixels = await graphCollection(
         `act_${remoteId(c.accountId)}/adspixels`,
         connectionToken(c),
-        { fields: "id", limit: "100" }
+        { fields: "id" }
       );
-      if (!pixels.data?.some((p: any) => String(p.id) === change.pixelId))
+      if (!pixels.data.some(p => String(p.id) === change.pixelId))
         throw new Error("The selected pixel is not available to this account.");
-      params.promoted_object = JSON.stringify({
+      Object.assign(promoted, {
         pixel_id: change.pixelId,
-        custom_event_type: "PURCHASE",
+        custom_event_type:
+          change.conversionEvent ??
+          (objective === "OUTCOME_LEADS" ? "LEAD" : "PURCHASE"),
       });
+      if (change.attribution)
+        params.attribution_spec = JSON.stringify([
+          {
+            event_type: "CLICK_THROUGH",
+            window_days: change.attribution.startsWith("7d") ? 7 : 1,
+          },
+          ...(change.attribution.endsWith("1d_view")
+            ? [{ event_type: "VIEW_THROUGH", window_days: 1 }]
+            : []),
+        ]);
+    } else if (
+      ["OUTCOME_AWARENESS", "OUTCOME_ENGAGEMENT"].includes(objective)
+    ) {
+      if (!c.details.pageId)
+        throw new Error("Connect a Facebook Page to this ad account first.");
+      promoted.page_id = c.details.pageId;
     }
+    if (Object.keys(promoted).length)
+      params.promoted_object = JSON.stringify(promoted);
+    if (change.startTime) params.start_time = change.startTime;
+    if (change.endTime) params.end_time = change.endTime;
+    if (
+      campaign!.special_ad_categories?.length &&
+      (change.ageMin || change.ageMax || change.genders?.length)
+    )
+      throw new Error(
+        "This special ad category has restricted demographic targeting. Leave age and gender unrestricted and review targeting in Meta."
+      );
   }
   if (newSet || change.kind === "update_adset") {
     const targeting = { ...(before?.targeting ?? {}) };
@@ -161,6 +241,44 @@ export async function prepareMetaChange(
         ...(targeting.targeting_automation ?? {}),
         advantage_audience: change.audienceMode === "advantage" ? 1 : 0,
       };
+    // The extended controls belong to creation. Legacy updates preserve unedited targeting.
+    if (newSet) {
+      if (change.ageMin) targeting.age_min = change.ageMin;
+      if (change.ageMax) targeting.age_max = change.ageMax;
+      if (change.genders?.length)
+        targeting.genders = change.genders.map(Number);
+      const requested = [
+        ...(change.includedAudiences ?? []),
+        ...(change.excludedAudiences ?? []),
+      ];
+      if (requested.length) {
+        const audiences = await graphCollection(
+          `act_${remoteId(c.accountId)}/customaudiences`,
+          connectionToken(c),
+          { fields: "id" }
+        );
+        if (
+          requested.some(id => !audiences.data.some(a => String(a.id) === id))
+        )
+          throw new Error(
+            "A selected audience is not available to this ad account. Refresh the audience list."
+          );
+        if (
+          change.includedAudiences?.some(id =>
+            change.excludedAudiences?.includes(id)
+          )
+        )
+          throw new Error("An audience cannot be both included and excluded.");
+        if (change.includedAudiences?.length)
+          targeting.custom_audiences = change.includedAudiences.map(id => ({
+            id,
+          }));
+        if (change.excludedAudiences?.length)
+          targeting.excluded_custom_audiences = change.excludedAudiences.map(
+            id => ({ id })
+          );
+      }
+    }
     if (change.placements !== "keep") {
       for (const field of [
         "publisher_platforms",
@@ -178,6 +296,19 @@ export async function prepareMetaChange(
           facebook_positions: ["feed"],
           device_platforms: ["mobile", "desktop"],
         });
+      if (change.placements === "manual") {
+        const selected = metaPlacementOptions.filter(([id]) =>
+          change.manualPlacements?.includes(id)
+        );
+        if (!selected.length) throw new Error("Choose at least one placement.");
+        targeting.publisher_platforms = Array.from(
+          new Set(selected.map(p => p[2]))
+        );
+        for (const platform of targeting.publisher_platforms)
+          targeting[`${platform}_positions`] = selected
+            .filter(p => p[2] === platform)
+            .map(p => p[3]);
+      }
     }
     if (
       newSet ||
@@ -186,9 +317,16 @@ export async function prepareMetaChange(
       change.placements !== "keep"
     )
       params.targeting = JSON.stringify(targeting);
-    if (change.audienceMode !== "keep" || change.placements !== "keep")
+    if (change.audienceMode === "advantage")
       warnings.push(
-        "Audience or placement changes may affect delivery and learning. Meta determines Advantage+ eligibility from the combined settings."
+        "Advantage+ may expand audience suggestions. Meta applies the audience controls and placement eligibility for this campaign."
+      );
+    if (
+      !newSet &&
+      (change.audienceMode !== "keep" || change.placements !== "keep")
+    )
+      warnings.push(
+        "Audience or placement changes may affect delivery and learning."
       );
   } else if (
     change.countries ||

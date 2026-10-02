@@ -148,6 +148,12 @@ function childActive(child: Child, location: string, search: string) {
 const matchesItem = (item: WorkspaceNavItem, location: string) =>
   matchesPath(item.path, location) ||
   !!item.aliases?.some(path => matchesPath(path, location));
+export function workspaceSection(location: string) {
+  return (
+    workspaceNavigation.find(item => matchesItem(item, location))?.group ??
+    "Home"
+  );
+}
 export function workspacePageLabel(location: string, search = "") {
   const parent = workspaceNavigation.find(item => matchesItem(item, location));
   const child = parent?.children?.find(item =>
@@ -217,14 +223,15 @@ export function WorkspaceNavigation({
               {item.group && items[index - 1]?.group !== item.group && (
                 <li
                   role="presentation"
-                  className="px-3 pb-2 pt-5 group-data-[collapsible=icon]:hidden"
+                  data-workflow={item.group}
+                  className="workspace-group-label px-3 pb-2 pt-5 group-data-[collapsible=icon]:hidden"
                 >
                   <span className="text-[10px] font-semibold uppercase tracking-[.18em] text-muted-foreground">
                     {item.group}
                   </span>
                 </li>
               )}
-              <SidebarMenuItem>
+              <SidebarMenuItem data-workflow={item.group ?? "Home"}>
                 {item.children ? (
                   <>
                     <SidebarMenuButton

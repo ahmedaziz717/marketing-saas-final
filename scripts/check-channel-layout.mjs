@@ -178,6 +178,8 @@ try {
       "studio-media",
       "studio-legacy",
       "studio-ad",
+      "studio-ad-setup",
+      "studio-ad-create",
       "campaign-plans",
       "asset-library",
       "roadmap",

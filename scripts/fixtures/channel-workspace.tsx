@@ -107,6 +107,52 @@ const metrics = {
   purchaseValue: 600,
   roas: 5,
 };
+const fixtureCampaigns: any[] = [
+  {
+    id: "8",
+    name: "Paused campaign",
+    status: "PAUSED",
+    objective: "OUTCOME_SALES",
+    account_id: "456",
+  },
+  {
+    id: "10",
+    name: "Prospecting · Gaming PCs",
+    status: "ACTIVE",
+    objective: "OUTCOME_TRAFFIC",
+    account_id: "456",
+  },
+  {
+    id: "12",
+    name: "Retargeting · CLX",
+    status: "ACTIVE",
+    objective: "OUTCOME_SALES",
+    account_id: "456",
+  },
+];
+const fixtureAdsets: any[] = [
+  {
+    id: "9",
+    name: "Paused ad set",
+    status: "PAUSED",
+    campaign_id: "8",
+    account_id: "456",
+  },
+  {
+    id: "11",
+    name: "US · Gaming enthusiasts",
+    status: "ACTIVE",
+    campaign_id: "10",
+    account_id: "456",
+  },
+  {
+    id: "13",
+    name: "Previous visitors",
+    status: "ACTIVE",
+    campaign_id: "12",
+    account_id: "456",
+  },
+];
 const mutations: string[] = [];
 const role =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
@@ -310,6 +356,61 @@ function respond(path: string, input: any) {
         { day: 5, time: "10:00" },
       ],
     };
+  if (path === "channels.metaObject") {
+    const object = (
+      input.kind === "campaign" ? fixtureCampaigns : fixtureAdsets
+    ).find(o => o.id === input.objectId);
+    if (!object) throw new Error("Missing fixture object " + input.objectId);
+    return { object, advantage: null, liveEnabled: true };
+  }
+  if (path === "channels.metaPixels")
+    return {
+      data: [{ id: "88", name: "CLX website dataset" }],
+      truncated: false,
+    };
+  if (path === "channels.metaAudiences")
+    return {
+      data: [{ id: "77", name: "Website visitors", subtype: "WEBSITE" }],
+      truncated: false,
+    };
+  if (path === "channels.reviewMetaChange") {
+    mutations.push(path);
+    return {
+      params: { status: "PAUSED" },
+      warnings: [],
+      liveEnabled: true,
+      ticket: "synthetic-review",
+    };
+  }
+  if (path === "channels.applyMetaChange") {
+    mutations.push(path);
+    const id = input.change.kind === "create_campaign" ? "20" : "21";
+    (input.change.kind === "create_campaign"
+      ? fixtureCampaigns
+      : fixtureAdsets
+    ).push({
+      id,
+      name: input.change.name,
+      status: "PAUSED",
+      objective: input.change.objective,
+      campaign_id: input.change.campaignId,
+      account_id: "456",
+    });
+    return { id, success: true };
+  }
+  if (path === "channels.adObjects" && which.startsWith("studio-ad")) {
+    const filter = (o: any) =>
+      !input.filters ||
+      input.filters.status === "all" ||
+      o.status.toLowerCase() === input.filters.status;
+    return {
+      campaigns: fixtureCampaigns.filter(filter),
+      adsets: fixtureAdsets.filter(filter),
+      ads: [],
+      truncated: false,
+      currency: "USD",
+    };
+  }
   if (path === "channels.adObjects")
     return {
       campaigns: [
@@ -467,6 +568,8 @@ const routeForPage: Record<string, string> = {
   "studio-post": "/app/creatives/social?new=1&plan=7",
   "studio-post-empty": "/app/creatives/social?new=1",
   "studio-ad": "/app/creatives/ads?new=1",
+  "studio-ad-setup": "/app/creatives/ads?new=1",
+  "studio-ad-create": "/app/creatives/ads?new=1",
   "campaign-plans": "/app/plans",
   "asset-library": "/app/library",
   roadmap: "/app/roadmap",
@@ -858,6 +961,149 @@ function layout() {
         "The legacy asset selection is retained, not silently discarded"
       );
     }
+    if (which === "studio-ad-setup" || which === "studio-ad-create") {
+      const select = async (selector: string, value: string) => {
+        const el = document.querySelector<HTMLSelectElement>(selector)!;
+        check(!!el, "Selector available: " + selector);
+        el.value = value;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        await pause();
+      };
+      const platform =
+        document.querySelector<HTMLSelectElement>("#pub-ad-platform")!;
+      check(
+        platform.options.length === 1 &&
+          platform.options[0].textContent?.includes("Meta Ads"),
+        "Only connected ad channels appear first"
+      );
+      check(
+        platform.compareDocumentPosition(
+          document.getElementById("pub-destination")!
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+        "Channel comes before its account"
+      );
+      await select("#pub-destination", adsId);
+      check(
+        document.querySelector<HTMLSelectElement>(
+          '[aria-label="Campaign and ad set status"]'
+        )?.value === "active",
+        "Campaigns default to Active"
+      );
+      check(
+        !document
+          .getElementById("pub-meta-campaign")
+          ?.textContent?.includes("Paused campaign"),
+        "Paused campaigns excluded by default"
+      );
+      await select("#pub-meta-campaign", "10");
+      check(
+        document
+          .getElementById("pub-adset")
+          ?.textContent?.includes("Gaming enthusiasts") &&
+          !document
+            .getElementById("pub-adset")
+            ?.textContent?.includes("Previous visitors"),
+        "Ad sets are scoped to selected campaign"
+      );
+      await select("#pub-adset", "11");
+      await select('[aria-label="Campaign and ad set status"]', "all");
+      await select("#pub-meta-campaign", "8");
+      check(
+        document.querySelector<HTMLSelectElement>("#pub-adset")?.value === "",
+        "Changing campaign clears its ad set"
+      );
+      await select("#pub-adset", "9");
+      await select('[aria-label="Campaign and ad set status"]', "active");
+      check(
+        document.querySelector<HTMLSelectElement>("#pub-adset")?.value === "9",
+        "Explicit paused selection survives status filtering"
+      );
+      layout();
+      await click("New campaign");
+      const dialog = () =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>('[role="dialog"]')
+        ).at(-1)!;
+      check(
+        dialog().querySelectorAll('[name="meta-objective"]').length === 6,
+        "All six campaign objectives are available"
+      );
+      await click("Review settings");
+      check(
+        mutations.length === 1 && mutations[0] === "channels.reviewMetaChange",
+        "Review does not create anything"
+      );
+      const approve = dialog().querySelector<HTMLInputElement>(
+        'input[type="checkbox"]'
+      )!;
+      approve.click();
+      await pause();
+      await click("Create paused campaign");
+      check(
+        document.querySelector<HTMLSelectElement>("#pub-meta-campaign")
+          ?.value === "20",
+        "New paused campaign is automatically selected"
+      );
+      await click("New ad set");
+      check(
+        dialog().textContent?.includes("Dataset / Meta Pixel") &&
+          dialog().textContent?.includes("Audience"),
+        "Ad set form follows the new Sales campaign objective"
+      );
+      if (which === "studio-ad-create") {
+        layout();
+      } else {
+        const budgetLabel = Array.from(dialog().querySelectorAll("label")).find(
+          l => l.textContent?.trim() === "Budget (USD)"
+        )!;
+        const amount = budgetLabel.querySelector("input")!;
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value"
+        )!.set!.call(amount, "20");
+        amount.dispatchEvent(new Event("input", { bubbles: true }));
+        const pixelLabel = Array.from(dialog().querySelectorAll("label")).find(
+          l => l.textContent?.includes("Dataset / Meta Pixel")
+        )!;
+        const pixel = pixelLabel.querySelector("select")!;
+        pixel.value = "88";
+        pixel.dispatchEvent(new Event("change", { bubbles: true }));
+        await pause();
+        await click("Review settings");
+        check(
+          dialog().textContent?.includes("USD 20 / day"),
+          "New ad set review shows the exact budget"
+        );
+        dialog()
+          .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+          .click();
+        await pause();
+        await click("Create paused ad set");
+        check(
+          document.querySelector<HTMLSelectElement>("#pub-adset")?.value ===
+            "21" &&
+            document.querySelector<HTMLSelectElement>("#pub-meta-campaign")
+              ?.value === "20",
+          "New paused ad set remains selected under its new campaign"
+        );
+        await select("#pub-meta-campaign", "10");
+        await select("#pub-adset", "11");
+        await select("#pub-destination", "");
+        check(
+          !document.getElementById("pub-adset"),
+          "No previous account campaigns leak into an unselected account"
+        );
+        await select("#pub-destination", adsId);
+        check(
+          document.querySelector<HTMLSelectElement>("#pub-meta-campaign")
+            ?.value === "",
+          "Account change clears campaign selection"
+        );
+        await select("#pub-meta-campaign", "10");
+        await select("#pub-adset", "11");
+        layout();
+      }
+    }
     if (which === "studio-post" || which === "studio-ad") {
       const destination =
         document.querySelector<HTMLSelectElement>("#pub-destination")!;
@@ -887,8 +1133,10 @@ function layout() {
       destination.dispatchEvent(new Event("change", { bubbles: true }));
       await pause();
       check(!document.getElementById("pub-date"), "Timing belongs to Activate");
+      if (which === "studio-ad") await click("Continue to creative");
       check(
-        !!document.querySelector('[aria-label="Content preview"]'),
+        which === "studio-ad" ||
+          !!document.querySelector('[aria-label="Content preview"]'),
         "Content has a live preview"
       );
       if (which === "studio-post")
@@ -903,6 +1151,7 @@ function layout() {
           "Ad mode supports copy and creative formats"
         );
       layout();
+      if (which === "studio-ad") await click("Preview ad");
       await click("Save & continue to Activate");
       const saved = posts.find(
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"

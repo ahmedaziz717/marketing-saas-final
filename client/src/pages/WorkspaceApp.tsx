@@ -40,8 +40,8 @@ function Dashboard() {
             to your <em>next campaign.</em>
           </h2>
           <p>
-            Start with your audience, your brand and a clear goal. Keep
-            working drafts in Studio until you choose what's ready for review.
+            Start with your audience, your brand and a clear goal. Keep working
+            drafts in Studio until you choose what's ready for review.
           </p>
           <div className="evoke-start-actions">
             <Link href="/app/creatives">
@@ -110,7 +110,11 @@ function Dashboard() {
         </div>
         <div className="evoke-stage-grid">
           {PRODUCT_STAGES.map((stage, i) => (
-            <article className="evoke-stage-card" key={stage.id}>
+            <article
+              className="evoke-stage-card"
+              data-workflow={stage.label}
+              key={stage.id}
+            >
               <div className="eyebrow">
                 0{i + 1} /{" "}
                 {"planned" in stage ? "ON THE ROADMAP" : "YOUR WORKFLOW"}

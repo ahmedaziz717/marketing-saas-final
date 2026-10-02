@@ -442,6 +442,22 @@ export const channelsRouter = router({
         { fields: "id,name" }
       );
     }),
+  metaAudiences: protectedProcedure
+    .input(destination)
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const c = await getConnection(
+        await libraryDatabase(),
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      return graphCollection(
+        `act_${c.accountId}/customaudiences`,
+        connectionToken(c),
+        { fields: "id,name,subtype" }
+      );
+    }),
   reviewMetaChange: protectedProcedure
     .input(destination.extend({ change: metaChangeSchema }))
     .mutation(async ({ ctx, input }) => {

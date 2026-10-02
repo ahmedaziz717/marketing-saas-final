@@ -1,3 +1,4 @@
+import { MetaCreateDialog } from "./MetaCreateDialog";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -11,7 +12,7 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { channelInput } from "./ChannelConnections";
-export function MetaChangeDialog({
+function MetaEditDialog({
   connectionId,
   kind,
   objectId,
@@ -465,5 +466,20 @@ export function MetaChangeDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function MetaChangeDialog(props: {
+  connectionId: string;
+  kind: MetaChange["kind"];
+  objectId?: string;
+  campaignId?: string;
+  onClose: () => void;
+  onSaved: (id?: string) => void;
+}) {
+  return props.kind === "create_campaign" || props.kind === "create_adset" ? (
+    <MetaCreateDialog {...props} kind={props.kind} />
+  ) : (
+    <MetaEditDialog {...props} />
   );
 }

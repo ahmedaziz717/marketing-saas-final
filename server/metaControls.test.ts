@@ -7,6 +7,7 @@ const graph = vi.hoisted(() => vi.fn());
 vi.mock("./lib/channelGraph", () => ({
   graphRequest: graph,
   graphPost: vi.fn(),
+  graphCollection: graph,
   remoteId: (id: string) => id,
 }));
 vi.mock("./lib/channelConnections", () => ({
@@ -142,6 +143,186 @@ describe("reviewed Meta management", () => {
         })
       )
     ).rejects.toThrow("ABO");
+  });
+  it("creates a Traffic ad set in the selected account and campaign, paused with its budget and manual placements", async () => {
+    graph.mockResolvedValueOnce({
+      account_id: "456",
+      id: "2",
+      objective: "OUTCOME_TRAFFIC",
+    });
+    const change = metaChangeSchema.parse({
+      kind: "create_adset",
+      name: "Traffic",
+      campaignId: "2",
+      dailyBudget: 12.25,
+      countries: ["US", "CA"],
+      audienceMode: "manual",
+      ageMin: 25,
+      ageMax: 55,
+      genders: ["2"],
+      placements: "manual",
+      manualPlacements: ["facebook_feed", "instagram_reels"],
+      optimizationGoal: "LANDING_PAGE_VIEWS",
+    });
+    const result = await prepareMetaChange(connection, change);
+    expect(result.path).toBe("act_456/adsets");
+    expect(result.params).toMatchObject({
+      campaign_id: "2",
+      status: "PAUSED",
+      daily_budget: "1225",
+      optimization_goal: "LANDING_PAGE_VIEWS",
+      destination_type: "WEBSITE",
+      billing_event: "IMPRESSIONS",
+    });
+    expect(JSON.parse(result.params.targeting)).toMatchObject({
+      age_min: 25,
+      age_max: 55,
+      genders: [2],
+      geo_locations: { countries: ["US", "CA"] },
+      publisher_platforms: ["facebook", "instagram"],
+      facebook_positions: ["feed"],
+      instagram_positions: ["reels"],
+    });
+  });
+  it("uses the parent CBO budget and validates the inherited bid cap", async () => {
+    graph.mockResolvedValue({
+      account_id: "456",
+      objective: "OUTCOME_TRAFFIC",
+      daily_budget: "5000",
+      bid_strategy: "COST_CAP",
+    });
+    const change = metaChangeSchema.parse({
+      kind: "create_adset",
+      name: "CBO child",
+      campaignId: "2",
+      countries: ["US"],
+      placements: "automatic",
+    });
+    await expect(prepareMetaChange(connection, change)).rejects.toThrow(
+      "requires a cost or bid cap"
+    );
+    const result = await prepareMetaChange(connection, {
+      ...change,
+      bidAmount: 3.45,
+    });
+    expect(result.params.bid_amount).toBe("345");
+    expect(result.params.daily_budget).toBeUndefined();
+    expect(result.params.bid_strategy).toBeUndefined();
+    await expect(
+      prepareMetaChange(connection, { ...change, dailyBudget: 10 })
+    ).rejects.toThrow("campaign owns the budget");
+  });
+  it("validates lifetime scheduling and preserves exact conversion attribution", async () => {
+    const endTime = new Date(Date.now() + 86400000).toISOString();
+    const raw = {
+      kind: "create_adset",
+      name: "Leads",
+      campaignId: "2",
+      countries: ["US"],
+      placements: "automatic",
+      lifetimeBudget: 200,
+      pixelId: "8",
+      conversionEvent: "LEAD",
+      attribution: "7d_click_1d_view",
+    };
+    expect(metaChangeSchema.safeParse(raw).success).toBe(false);
+    graph
+      .mockResolvedValueOnce({ account_id: "456", objective: "OUTCOME_LEADS" })
+      .mockResolvedValueOnce({ data: [{ id: "8" }] });
+    const result = await prepareMetaChange(
+      connection,
+      metaChangeSchema.parse({ ...raw, endTime })
+    );
+    expect(result.params).toMatchObject({
+      status: "PAUSED",
+      lifetime_budget: "20000",
+      end_time: endTime,
+    });
+    expect(JSON.parse(result.params.promoted_object)).toEqual({
+      pixel_id: "8",
+      custom_event_type: "LEAD",
+    });
+    expect(JSON.parse(result.params.attribution_spec)).toEqual([
+      { event_type: "CLICK_THROUGH", window_days: 7 },
+      { event_type: "VIEW_THROUGH", window_days: 1 },
+    ]);
+  });
+  it("rejects another account's pixel or audience and incompatible performance goals", async () => {
+    const change = metaChangeSchema.parse({
+      kind: "create_adset",
+      name: "Sales",
+      campaignId: "2",
+      countries: ["US"],
+      placements: "automatic",
+      dailyBudget: 25,
+      pixelId: "8",
+    });
+    graph
+      .mockResolvedValueOnce({ account_id: "456", objective: "OUTCOME_SALES" })
+      .mockResolvedValueOnce({ data: [{ id: "99" }] });
+    await expect(prepareMetaChange(connection, change)).rejects.toThrow(
+      "pixel is not available"
+    );
+    graph
+      .mockResolvedValueOnce({
+        account_id: "456",
+        objective: "OUTCOME_TRAFFIC",
+      })
+      .mockResolvedValueOnce({ data: [{ id: "99" }] });
+    await expect(
+      prepareMetaChange(connection, {
+        ...change,
+        pixelId: undefined,
+        includedAudiences: ["11"],
+      })
+    ).rejects.toThrow("audience is not available");
+    graph.mockResolvedValueOnce({
+      account_id: "456",
+      objective: "OUTCOME_SALES",
+    });
+    await expect(
+      prepareMetaChange(connection, { ...change, optimizationGoal: "REACH" })
+    ).rejects.toThrow("does not match");
+  });
+  it("creates all six campaign objectives paused without spending or silently substituting an objective", async () => {
+    for (const objective of [
+      "OUTCOME_AWARENESS",
+      "OUTCOME_TRAFFIC",
+      "OUTCOME_ENGAGEMENT",
+      "OUTCOME_LEADS",
+      "OUTCOME_APP_PROMOTION",
+      "OUTCOME_SALES",
+    ]) {
+      const result = await prepareMetaChange(
+        connection,
+        metaChangeSchema.parse({
+          kind: "create_campaign",
+          name: objective,
+          objective,
+        })
+      );
+      expect(result.params).toMatchObject({
+        objective,
+        status: "PAUSED",
+        buying_type: "AUCTION",
+      });
+    }
+    graph.mockResolvedValue({
+      account_id: "456",
+      objective: "OUTCOME_APP_PROMOTION",
+    });
+    await expect(
+      prepareMetaChange(
+        connection,
+        metaChangeSchema.parse({
+          kind: "create_adset",
+          name: "App",
+          campaignId: "2",
+          countries: ["US"],
+          placements: "automatic",
+        })
+      )
+    ).rejects.toThrow("dedicated Meta tools");
   });
   it("rejects expired and modified reviews", () => {
     const ticket = signMetaReview({

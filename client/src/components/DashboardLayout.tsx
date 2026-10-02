@@ -25,7 +25,11 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { WorkspaceNavigation, workspacePageLabel } from "./WorkspaceNavigation";
+import {
+  WorkspaceNavigation,
+  workspacePageLabel,
+  workspaceSection,
+} from "./WorkspaceNavigation";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 const SIDEBAR_WIDTH_KEY = "frame-sidebar-width";
@@ -45,6 +49,7 @@ export default function DashboardLayout({
       return DEFAULT_WIDTH;
     }
   });
+  const [location] = useLocation();
   const { loading, user } = useAuth();
   useEffect(() => {
     try {
@@ -77,6 +82,7 @@ export default function DashboardLayout({
   return (
     <SidebarProvider
       className="evoke-shell"
+      data-workflow={workspaceSection(location)}
       style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
     >
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
@@ -220,6 +226,7 @@ function DashboardLayoutContent({
         <div className="evoke-toolbar">
           <div className="evoke-toolbar-path">
             {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg" />}
+            <span className="workflow-current-dot" aria-hidden="true" />
             <span>{workspacePageLabel(location, search)}</span>
           </div>
           <div className="evoke-toolbar-actions">

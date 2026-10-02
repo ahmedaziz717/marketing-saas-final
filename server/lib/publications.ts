@@ -542,15 +542,23 @@ export async function executePublication(
         id: string;
         account_id: string;
         is_dynamic_creative?: boolean;
+        campaign_id?: string;
       }>(remoteId(item.content.adSetId), token, {
         fields:
           item.content.placementAssetKeys || hasTextVariants(item.content)
-            ? "id,account_id,is_dynamic_creative"
-            : "id,account_id",
+            ? "id,account_id,campaign_id,is_dynamic_creative"
+            : "id,account_id,campaign_id",
       });
       if (adSet.account_id !== connection.accountId)
         throw new Error(
           "The selected ad set belongs to a different ad account."
+        );
+      if (
+        item.content.metaCampaignId &&
+        adSet.campaign_id !== item.content.metaCampaignId
+      )
+        throw new Error(
+          "The selected ad set does not belong to the selected campaign. Update delivery settings."
         );
       const placement = item.content.placementAssetKeys;
       if (
