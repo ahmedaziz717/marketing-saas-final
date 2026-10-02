@@ -24,9 +24,9 @@ function Dashboard() {
         title="Make your next move."
         description="Create. Activate. Measure. Optimize. Keep your ideas, approvals and campaign plans connected."
         action={
-          <Link href="/app/creatives/images">
+          <Link href="/app/creatives">
             <Button>
-              <Sparkles size={15} /> New creative
+              <Sparkles size={15} /> Create content
             </Button>
           </Link>
         }
@@ -40,22 +40,22 @@ function Dashboard() {
             to your <em>next campaign.</em>
           </h2>
           <p>
-            Start with your product, your brand and a fresh direction. Keep
+            Start with your audience, your brand and a clear goal. Keep
             working drafts in Studio until you choose what's ready for review.
           </p>
           <div className="evoke-start-actions">
-            <Link href="/app/creatives/overview">
+            <Link href="/app/creatives">
               <Button>
                 Open Content Studio <ArrowRight size={15} />
               </Button>
             </Link>
-            <Link href="/app/creatives/saved">
-              <FolderOpen size={15} /> Saved work
+            <Link href="/app/creatives/drafts">
+              <FolderOpen size={15} /> Drafts
             </Link>
           </div>
           <div className="evoke-start-notes">
             <span>
-              <Check size={12} /> Product context
+              <Check size={12} /> Business context
             </span>
             <span>
               <Check size={12} /> Brand direction

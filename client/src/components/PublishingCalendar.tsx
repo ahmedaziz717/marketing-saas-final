@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { studioContentHref } from "@shared/contentWorkflow";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   CalendarDays,
@@ -28,6 +29,7 @@ import {
   type Publication,
 } from "./PublicationComposer";
 import {
+  editablePublication,
   channelNames,
   dateInZone,
   localScheduleToUtc,
@@ -71,7 +73,7 @@ export function ContentPlanEditor({ onClose }: { onClose: () => void }) {
   const save = trpc.channels.savePlan.useMutation({
     onSuccess: async () => {
       await utils.channels.plan.invalidate();
-      toast.success("Facebook content plan saved. No posts were scheduled.");
+      toast.success("Posting cadence saved. No posts were scheduled.");
       onClose();
     },
     onError: e => toast.error(e.message),
@@ -191,6 +193,11 @@ export function PublishingCalendar({
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
   const params = new URLSearchParams(useSearch());
+  const [campaignPlan, setCampaignPlan] = useState(params.get("plan") ?? "");
+  const plans = trpc.briefs.list.useQuery(
+    { organizationId: organizationId! },
+    { enabled: !!organizationId }
+  );
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [date, setDate] = useState(() =>
       dateInZone(Date.now(), zone).slice(0, 10)
@@ -241,13 +248,31 @@ export function PublishingCalendar({
   const dates = new Set(days);
   const filtered = items.filter(
     p =>
+      (!campaignPlan || p.content.campaignPlanId === Number(campaignPlan)) &&
       (channel === "all" || p.channel === channel) &&
       (status === "all" || p.state === status) &&
       `${p.content.title} ${p.content.message} ${p.content.campaignLabel}`
         .toLowerCase()
         .includes(search.toLowerCase())
   );
-  const chosen = items.find(p => p.id === selected);
+  const linked = trpc.publishing.get.useQuery(
+    { ...scope, id: selected ?? "00000000-0000-4000-8000-000000000000" },
+    { enabled: !!organizationId && !!selected, retry: false }
+  );
+  const chosen = items.find(p => p.id === selected) ?? linked.data;
+  const configured = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      params.has("configure") &&
+      chosen &&
+      canEdit &&
+      editablePublication(chosen.state) &&
+      configured.current !== chosen.id
+    ) {
+      configured.current = chosen.id;
+      setCompose({ item: chosen });
+    }
+  }, [chosen, canEdit]);
   const planned = useMemo(
     () =>
       (plan.data?.slots ?? []).flatMap(slot => {
@@ -292,7 +317,10 @@ export function PublishingCalendar({
   );
   const closeCompose = () => {
     setCompose(null);
-    if (params.has("new") || params.has("asset")) navigate("/app/publishing");
+    if (params.has("new") || params.has("asset") || params.has("configure"))
+      navigate(
+        "/app/publishing" + (selected ? "?publication=" + selected : "")
+      );
   };
   const next = (direction: number) => {
     if (view !== "month") setDate(moveDate(date, direction * 7));
@@ -304,6 +332,22 @@ export function PublishingCalendar({
   };
   return (
     <section className="min-w-0 space-y-5" aria-label="Publishing calendar">
+      <label className="block max-w-md text-sm">
+        Campaign plan
+        <select
+          aria-label="Filter by campaign plan"
+          className={channelInput + " mt-1"}
+          value={campaignPlan}
+          onChange={e => setCampaignPlan(e.target.value)}
+        >
+          <option value="">All plans & standalone content</option>
+          {plans.data?.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto flex flex-wrap gap-2">
           {(["week", "month", "list"] as const).map(v => (
@@ -320,11 +364,17 @@ export function PublishingCalendar({
         {canEdit && (
           <>
             <Button variant="outline" onClick={() => setPlanOpen(true)}>
-              Facebook content plan
+              Posting cadence
             </Button>
-            <Button onClick={() => setCompose({})}>
+            <Button
+              onClick={() =>
+                navigate(
+                  studioContentHref(channel === "all" ? "facebook" : channel)
+                )
+              }
+            >
               <Plus className="mr-2 h-4 w-4" />
-              New publication
+              New content
             </Button>
           </>
         )}
@@ -518,7 +568,12 @@ export function PublishingCalendar({
                     <button
                       aria-label={"Create publication on " + day}
                       onClick={() =>
-                        setCompose({ initialTime: day + "T10:00" })
+                        navigate(
+                          studioContentHref(
+                            channel === "all" ? "facebook" : channel,
+                            { time: day + "T10:00", timezone }
+                          )
+                        )
                       }
                       className="rounded p-1 hover:bg-muted"
                     >
@@ -561,7 +616,14 @@ export function PublishingCalendar({
                           key={s.local}
                           disabled={!canEdit}
                           className="w-full rounded-lg border border-dashed p-3 text-left text-xs text-muted-foreground"
-                          onClick={() => setCompose({ initialTime: s.local })}
+                          onClick={() =>
+                            navigate(
+                              studioContentHref("facebook", {
+                                time: s.local,
+                                timezone,
+                              })
+                            )
+                          }
                         >
                           Facebook slot / {s.local.slice(11)}
                           <span className="mt-2 block">
@@ -615,10 +677,16 @@ export function PublishingCalendar({
         ad is created paused; Facebook posts can go live only when live delivery
         is enabled and an authorized publisher queues them.
       </p>
+      {linked.error && (
+        <p role="alert">
+          The selected content could not be loaded: {linked.error.message}
+        </p>
+      )}
       {compose && (
         <PublicationComposer
           key={compose.item?.id ?? "new"}
           {...compose}
+          stage="activate"
           initialChannel={channel === "all" ? "facebook" : channel}
           initialTimezone={timezone}
           onClose={closeCompose}

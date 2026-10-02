@@ -13,6 +13,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
+  campaignBriefs,
   activityEvents,
   brandKits,
   metaConnections,
@@ -579,6 +580,7 @@ export const channelsRouter = router({
   draftAssetCopy: protectedProcedure
     .input(
       scopeSchema.extend({
+        channel: channelSchema.default("meta_ads"),
         assetKeys: z
           .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
           .min(1)
@@ -644,7 +646,10 @@ export const channelsRouter = router({
         images.push("data:image/jpeg;base64," + image.toString("base64"));
       }
       const drafts = await marketingJson(
-        "Write three alternative ad copy sets based on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
+        (input.channel === "facebook"
+          ? "Write three alternative organic Facebook post captions. Put each caption in message; headline and description are optional supporting suggestions. Keep a conversational voice and use hashtags sparingly. "
+          : "Write three alternative ad copy sets. ") +
+          "Base the copy on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
         {
           assets,
           brand: {
@@ -913,6 +918,14 @@ export const publishingRouter = router({
       .orderBy(desc(activityEvents.id))
       .limit(50);
   }),
+  get: protectedProcedure.input(reference).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    return publicationById(
+      await libraryDatabase(),
+      input.organizationId,
+      input.id
+    );
+  }),
   save: protectedProcedure
     .input(publicationDraftSchema)
     .mutation(async ({ ctx, input }) => {
@@ -921,6 +934,23 @@ export const publishingRouter = router({
       ]);
       const db = await libraryDatabase();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
+        if (input.content.campaignPlanId) {
+          const [plan] = await tx
+            .select()
+            .from(campaignBriefs)
+            .where(
+              and(
+                eq(campaignBriefs.id, input.content.campaignPlanId),
+                eq(campaignBriefs.organizationId, input.organizationId)
+              )
+            )
+            .limit(1);
+          if (!plan || plan.creativeSetup)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Choose a campaign plan in this workspace.",
+            });
+        }
         if (input.connectionId) {
           const c = await getConnection(
             tx,

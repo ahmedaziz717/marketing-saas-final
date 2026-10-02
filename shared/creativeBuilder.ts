@@ -268,6 +268,7 @@ export function promotionContext(setup: CreativeSetup) {
 
 export const creativeSetupSchema = z
   .object({
+    campaignPlanId: z.number().int().positive().optional(),
     version: z.literal(1),
     name: z.string().trim().min(1).max(180),
     theme: z.custom<CreativeThemeId>(
@@ -440,7 +441,9 @@ export function applyCreativeTheme(
 export function defaultCreativeSetup(
   businessModel = "products"
 ): CreativeSetup {
-  const theme = getCreativeTheme(["products", "mixed"].includes(businessModel) ? "spotlight" : "tech-blue");
+  const theme = getCreativeTheme(
+    ["products", "mixed"].includes(businessModel) ? "spotlight" : "tech-blue"
+  );
   return {
     version: 1,
     name:

@@ -3,21 +3,15 @@ import { Link, useLocation, useSearch } from "wouter";
 import {
   BarChart3,
   BookOpenText,
-  Boxes,
   ChevronDown,
   FolderOpen,
   Images,
   LayoutDashboard,
   Megaphone,
-  PackageSearch,
   Send,
   Settings,
-  Mail,
   Target,
-  FlaskConical,
   Lightbulb,
-  Coins,
-  Bot,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -55,22 +49,17 @@ export type WorkspaceNavItem = {
 export const workspaceNavigation: WorkspaceNavItem[] = [
   { icon: LayoutDashboard, label: "Home", path: "/app" },
   {
+    icon: BookOpenText,
+    label: "Campaign Plans",
+    path: "/app/plans",
+    aliases: ["/app/briefs"],
+    group: "Create",
+  },
+  {
     icon: Images,
     label: "Content Studio",
     path: "/app/creatives",
     group: "Create",
-    children: [
-      { label: "Overview", path: "/app/creatives/overview", exact: true },
-      { label: "Image assets", path: "/app/creatives/images" },
-      { label: "Ad creative", path: "/app/creatives/ads" },
-      { label: "Social content", path: "/app/creatives/social" },
-      { label: "Saved work", path: "/app/creatives/saved" },
-      { label: "UGC uploads", path: "/app/creatives/ugc" },
-      { label: "Video creation", path: "/app/creatives/video", planned: true },
-      { label: "Email builder", path: "/app/creatives/email", planned: true },
-      { label: "Landing pages", path: "/app/creatives/pages", planned: true },
-      { label: "Blog & insights", path: "/app/creatives/blog", planned: true },
-    ],
   },
   {
     icon: FolderOpen,
@@ -79,14 +68,6 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Create",
   },
   {
-    icon: PackageSearch,
-    label: "Catalog",
-    path: "/app/catalog",
-    group: "Create",
-    aliases: ["/app/import"],
-  },
-  { icon: BookOpenText, label: "Briefs", path: "/app/briefs", group: "Create" },
-  {
     icon: Megaphone,
     label: "Advertising",
     path: "/app/advertising",
@@ -94,39 +75,19 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     children: [
       { label: "Overview", path: "/app/advertising", exact: true },
       { label: "Meta Ads", path: "/app/advertising/meta" },
-      { label: "Google Ads", path: "/app/advertising/google", planned: true },
-      {
-        label: "Microsoft Ads",
-        path: "/app/advertising/microsoft",
-        planned: true,
-      },
     ],
   },
   {
     icon: Users,
-    label: "Social Media",
+    label: "Social Publishing",
     path: "/app/social",
     group: "Activate",
     children: [
       { label: "Overview", path: "/app/social", exact: true },
       { label: "Facebook", path: "/app/social/facebook" },
-      { label: "Instagram", path: "/app/social/instagram", planned: true },
-      { label: "TikTok", path: "/app/social/tiktok", planned: true },
     ],
   },
-  {
-    icon: Mail,
-    label: "Email",
-    path: "/app/email",
-    group: "Activate",
-    roadmap: true,
-  },
-  {
-    icon: Send,
-    label: "Publishing",
-    path: "/app/publishing",
-    group: "Activate",
-  },
+  { icon: Send, label: "Calendar", path: "/app/publishing", group: "Activate" },
   {
     icon: BarChart3,
     label: "Analytics",
@@ -140,84 +101,41 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
         analyticsView: "advertising",
       },
       {
-        label: "Social Media",
+        label: "Social",
         path: "/app/analytics/social",
         analyticsView: "social",
       },
     ],
   },
   {
-    icon: Target,
-    label: "Attribution",
-    path: "/app/attribution",
-    group: "Measure",
-    roadmap: true,
-  },
-  {
-    icon: FlaskConical,
-    label: "Incrementality",
-    path: "/app/incrementality",
-    group: "Measure",
-    roadmap: true,
-  },
-  {
     icon: Lightbulb,
-    label: "Recommendations",
-    path: "/app/optimize/recommendations",
+    label: "Optimization",
+    path: "/app/optimize",
     group: "Optimize",
-    roadmap: true,
-  },
-  {
-    icon: Coins,
-    label: "Budget Optimizer",
-    path: "/app/optimize/budgets",
-    group: "Optimize",
-    roadmap: true,
-  },
-  {
-    icon: FlaskConical,
-    label: "Experiments",
-    path: "/app/optimize/experiments",
-    group: "Optimize",
-    roadmap: true,
-  },
-  {
-    icon: Bot,
-    label: "AI Agent",
-    path: "/app/optimize/agent",
-    group: "Optimize",
-    roadmap: true,
   },
   {
     icon: Settings,
     label: "Settings",
     path: "/app/settings",
     group: "Settings",
-    aliases: ["/app/brand"],
+    aliases: ["/app/brand", "/app/catalog", "/app/import"],
     children: [
-      { label: "Workspace", path: "/app/settings/company" },
+      { label: "Business profile", path: "/app/settings/company" },
       { label: "Brand kit", path: "/app/brand" },
+      { label: "Catalog & offerings", path: "/app/catalog" },
+      { label: "Import sources", path: "/app/import" },
+      { label: "Integrations", path: "/app/settings/integrations" },
       { label: "Team & access", path: "/app/settings/team" },
       { label: "Billing & Usage", path: "/app/settings/billing" },
-      { label: "Integrations", path: "/app/settings/integrations" },
       { label: "Activity & audit", path: "/app/settings/activity" },
     ],
   },
+  { icon: Target, label: "Roadmap", path: "/app/roadmap", group: "Settings" },
 ];
 const storageKey = "frame-navigation-groups-v1";
 const matchesPath = (path: string, location: string) =>
   path === location || (path !== "/app" && location.startsWith(path + "/"));
 function childActive(child: Child, location: string, search: string) {
-  if (location === "/app/creatives") {
-    const params = new URLSearchParams(search);
-    const saved =
-      params.get("tab") === "saved" ||
-      params.has("asset") ||
-      params.has("revise");
-    return (
-      child.path === (saved ? "/app/creatives/saved" : "/app/creatives/images")
-    );
-  }
   if (child.exact) return !child.planned && child.path === location;
   return (
     !child.planned &&

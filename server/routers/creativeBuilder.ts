@@ -292,6 +292,7 @@ export async function runBuilderJob(
           imageUrl: image.url,
           imageStorageKey: image.storageKey,
           renderMetadata: {
+            campaignPlanId: setup.campaignPlanId,
             productIds: group.map(product => product.id),
             promotion:
               setup.promotionMode === "platform"
@@ -652,6 +653,23 @@ export const creativeBuilderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await loadInputs(db, input.organizationId, input.setup);
+      if (input.setup.campaignPlanId) {
+        const [plan] = await db
+          .select()
+          .from(campaignBriefs)
+          .where(
+            and(
+              eq(campaignBriefs.id, input.setup.campaignPlanId),
+              eq(campaignBriefs.organizationId, input.organizationId)
+            )
+          )
+          .limit(1);
+        if (!plan || plan.creativeSetup)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose a campaign plan in this workspace.",
+          });
+      }
       const now = Date.now();
       const fields = {
         name: input.setup.name,

@@ -173,6 +173,13 @@ try {
       "navigation-ten",
       "product-home",
       "studio-overview",
+      "studio-post",
+      "studio-media",
+      "studio-legacy",
+      "studio-ad",
+      "campaign-plans",
+      "asset-library",
+      "roadmap",
       "advertising-overview",
       "social-overview",
       "billing-usage",
@@ -187,7 +194,11 @@ try {
     { width: 375, height: 750, role: "creator", page: "billing-usage" },
     { width: 375, height: 750, role: "creator", page: "publishing" },
   ];
-  for (const item of cases) {
+  for (const item of cases.filter(
+    item =>
+      !process.env.LAYOUT_PAGES ||
+      process.env.LAYOUT_PAGES.split(",").includes(item.page)
+  )) {
     await page("Emulation.setDeviceMetricsOverride", {
       width: item.width,
       height: item.height,

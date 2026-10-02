@@ -74,10 +74,8 @@ it("opens the active group and marks only its leaf current", () => {
   expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
   expect(screen.queryByRole("link", { name: "Google Ads" })).toBeNull();
   expect(
-    screen
-      .getByTitle("Google Ads - planned, not available yet")
-      .getAttribute("aria-disabled")
-  ).toBe("true");
+    screen.queryByTitle("Google Ads - planned, not available yet")
+  ).toBeNull();
 });
 it("toggles groups without navigating and Escape returns focus to the parent", () => {
   const router = setup();
@@ -94,13 +92,13 @@ it("toggles groups without navigating and Escape returns focus to the parent", (
 });
 it("keeps independent collapse state and restores it on remount", () => {
   setup();
-  fireEvent.click(screen.getByRole("button", { name: "Social Media" }));
+  fireEvent.click(screen.getByRole("button", { name: "Social Publishing" }));
   expect(screen.getByRole("link", { name: "Facebook" })).toBeTruthy();
   cleanup();
   setup("/app");
   expect(
     screen
-      .getByRole("button", { name: "Social Media" })
+      .getByRole("button", { name: "Social Publishing" })
       .getAttribute("aria-expanded")
   ).toBe("true");
   expect(
@@ -114,9 +112,7 @@ it("recognizes legacy Analytics deep links and preserves date/comparison filters
     "/app/analytics?tab=social&since=2026-09-01&until=2026-09-20&compare=1&account=page1&channel=facebook"
   );
   expect(
-    screen
-      .getByRole("link", { name: "Social Media" })
-      .getAttribute("aria-current")
+    screen.getByRole("link", { name: "Social" }).getAttribute("aria-current")
   ).toBe("page");
   fireEvent.click(screen.getByRole("link", { name: "Advertising" }));
   expect(router.history?.at(-1)).toBe(
@@ -177,7 +173,7 @@ it("does not crash if local storage is unavailable", () => {
     throw new Error("Unavailable");
   });
   setup();
-  fireEvent.click(screen.getByRole("button", { name: "Social Media" }));
+  fireEvent.click(screen.getByRole("button", { name: "Social Publishing" }));
   expect(screen.getByRole("link", { name: "Facebook" })).toBeTruthy();
 });
 it("labels direct and historical nested pages correctly", () => {
@@ -188,30 +184,54 @@ it("labels direct and historical nested pages correctly", () => {
     "Analytics / Advertising"
   );
   expect(workspacePageLabel("/app/social/facebook")).toBe(
-    "Social Media / Facebook"
+    "Social Publishing / Facebook"
   );
 });
 it("groups tools under the four product stages and keeps administration separate", () => {
   setup("/app");
-  for (const name of ["Create", "Activate", "Measure", "Optimize"]) expect(screen.getByText(name)).toBeTruthy();
-  expect(workspaceNavigation.find(item => item.path === "/app/creatives")?.group).toBe("Create");
-  expect(workspaceNavigation.find(item => item.path === "/app/advertising")?.group).toBe("Activate");
-  expect(workspaceNavigation.find(item => item.path === "/app/analytics")?.group).toBe("Measure");
-  expect(workspaceNavigation.find(item => item.path === "/app/optimize/agent")?.roadmap).toBe(true);
+  for (const name of ["Create", "Activate", "Measure", "Optimize"])
+    expect(screen.getByText(name)).toBeTruthy();
+  expect(
+    workspaceNavigation.find(item => item.path === "/app/creatives")?.group
+  ).toBe("Create");
+  expect(
+    workspaceNavigation.find(item => item.path === "/app/advertising")?.group
+  ).toBe("Activate");
+  expect(
+    workspaceNavigation.find(item => item.path === "/app/analytics")?.group
+  ).toBe("Measure");
+  expect(
+    workspaceNavigation.find(item => item.path === "/app/optimize")?.group
+  ).toBe("Optimize");
+  expect(workspaceNavigation.some(item => item.roadmap)).toBe(false);
 });
 it("opens Settings for the retained Brand route and highlights billing", () => {
   setup("/app/brand");
-  expect(screen.getByRole("button", { name: "Settings" }).getAttribute("aria-expanded")).toBe("true");
-  expect(screen.getByRole("link", { name: "Brand kit" }).getAttribute("aria-current")).toBe("page");
+  expect(
+    screen
+      .getByRole("button", { name: "Settings" })
+      .getAttribute("aria-expanded")
+  ).toBe("true");
+  expect(
+    screen.getByRole("link", { name: "Brand kit" }).getAttribute("aria-current")
+  ).toBe("page");
   expect(screen.getByRole("link", { name: "Billing & Usage" })).toBeTruthy();
 });
-it("maps old saved-work deep links to the Studio subsection", () => {
+it("keeps historical Studio deep links in the single Studio destination", () => {
   setup("/app/creatives?tab=saved&asset=creative%3A42");
-  expect(screen.getByRole("link", { name: "Saved work" }).getAttribute("aria-current")).toBe("page");
+  expect(
+    screen
+      .getByRole("link", { name: "Content Studio" })
+      .getAttribute("aria-current")
+  ).toBe("page");
   expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 });
 it("keeps channel Overview separate from the individual Meta route", () => {
   setup("/app/advertising");
-  expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
-  expect(screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")).toBeNull();
+  expect(
+    screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")
+  ).toBe("page");
+  expect(
+    screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")
+  ).toBeNull();
 });

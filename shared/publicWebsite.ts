@@ -81,7 +81,7 @@ export const PILLARS = [
     items: [
       "AI images and copy assistance",
       "Brand and product source assets",
-      "Saved work and version reviews",
+      "Content drafts and version reviews",
       "Image, video and UGC uploads",
     ],
     next: "Keep your brand, product information and approved source assets together as you create.",

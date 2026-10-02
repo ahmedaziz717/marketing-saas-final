@@ -20,4 +20,4 @@ export function libraryAssetLink(key: string, state: AssetState) {
   const view = state === "needs_review" ? "needs_review" : state === "approved" ? "approved" : "history";
   return `/app/library?view=${view}&asset=${encodeURIComponent(key)}`;
 }
-export const studioAssetLink = (key: string) => `/app/creatives?tab=saved&asset=${encodeURIComponent(key)}`;
+export const studioAssetLink = (key: string) => `/app/creatives/drafts?asset=${encodeURIComponent(key)}`;

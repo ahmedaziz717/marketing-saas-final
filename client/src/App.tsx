@@ -50,10 +50,12 @@ function Router() {
       <Route path="/app/platform/website">
         <Redirect to="/admin/website" />
       </Route>
+      <Route path="/app/plans" component={BriefsPage} />
       <Route path="/app/briefs" component={BriefsPage} />
+      <Route path="/app/roadmap" component={ProductOverviewPage} />
       <Route path="/app/creatives" component={CreativesPage} />
-      <Route path="/app/creatives/overview" component={ProductOverviewPage} />
-      {["images", "ads", "social", "saved", "ugc"].map(view => (
+      <Route path="/app/creatives/overview" component={CreativesPage} />
+      {["images", "ads", "social", "saved", "ugc", "drafts"].map(view => (
         <Route
           key={view}
           path={"/app/creatives/" + view}

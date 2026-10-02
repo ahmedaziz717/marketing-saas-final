@@ -140,7 +140,7 @@ function SocialMedia() {
   return (
     <>
       <PageHeader
-        eyebrow="Social Media / Meta"
+        eyebrow="Activate / Social Publishing"
         title="Facebook"
         description="Manage organic content separately from paid advertising. Use the same approved assets and central publishing calendar."
       />
@@ -181,7 +181,7 @@ function SocialMedia() {
                 approve the final Facebook post.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/app/publishing?new=1&channel=facebook">
+                <Link href="/app/creatives/social?new=1">
                   <Button>New Facebook post</Button>
                 </Link>
                 <Button variant="outline" onClick={() => setTab("calendar")}>

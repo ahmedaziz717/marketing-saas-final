@@ -1,3 +1,4 @@
+import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -65,7 +66,7 @@ const selectClass =
   "h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm";
 const labelClass = "mb-2 block text-sm font-medium";
 const sectionClass = "surface p-5 sm:p-6";
-type Props = { onGenerated: () => void };
+type Props = { onGenerated: () => void; initialPlanId?: number };
 
 const visualDirectionIcons: Record<string, LucideIcon> = {
   sparkles: Sparkles,
@@ -132,12 +133,16 @@ function VisualDirectionOptions<T extends string>({
   );
 }
 
-export function CreativeBuilder({ onGenerated }: Props) {
+export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   const { organizationId, membership } = useWorkspace();
   const utils = trpc.useUtils();
   const options = trpc.creativeBuilder.options.useQuery(
     { organizationId: organizationId! },
     { enabled: !!organizationId }
+  );
+  const initialPlan = trpc.briefs.get.useQuery(
+    { organizationId: organizationId!, briefId: initialPlanId ?? 1 },
+    { enabled: !!organizationId && !!initialPlanId }
   );
   const [setup, setSetup] = useState<CreativeSetup>(() =>
     defaultCreativeSetup()
@@ -247,11 +252,13 @@ export function CreativeBuilder({ onGenerated }: Props) {
     )
       return;
     initialized.current = organizationId;
-    if (options.data.drafts[0]) loadDraft(options.data.drafts[0].id);
+    if (options.data.drafts[0] && !initialPlanId)
+      loadDraft(options.data.drafts[0].id);
     else {
       const next = defaultCreativeSetup(
         options.data?.brand?.businessProfile?.model
       );
+      next.campaignPlanId = initialPlanId;
       setupRef.current = next;
       setSetup(next);
       setSaved(null);
@@ -260,6 +267,23 @@ export function CreativeBuilder({ onGenerated }: Props) {
       setFocusedId(null);
     }
   }, [options.data, organizationId]);
+
+  const appliedPlan = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      !initialPlanId ||
+      !initialPlan.data ||
+      initialized.current !== organizationId ||
+      appliedPlan.current === initialPlanId
+    )
+      return;
+    appliedPlan.current = initialPlanId;
+    if (!setupRef.current.extraDirection)
+      change({
+        ...setupRef.current,
+        extraDirection: initialPlan.data.creativeDirection.slice(0, 4000),
+      });
+  }, [initialPlanId, initialPlan.data, options.data, organizationId]);
 
   function toggleProduct(product: (typeof catalog)[number]) {
     if (setup.products.some(item => item.productId === product.id)) {
@@ -389,6 +413,19 @@ export function CreativeBuilder({ onGenerated }: Props) {
 
   return (
     <div className="space-y-5">
+      <CampaignPlanSelect
+        value={setup.campaignPlanId}
+        onChange={(id, plan) =>
+          change({
+            ...setup,
+            campaignPlanId: id,
+            extraDirection:
+              setup.extraDirection ||
+              plan?.creativeDirection?.slice(0, 4000) ||
+              "",
+          })
+        }
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="saved-creative-setup">
@@ -1058,7 +1095,11 @@ export function CreativeBuilder({ onGenerated }: Props) {
                 </select>
               </label>
               <label>
-                <span className={`${labelClass} mt-5`}>{setup.promotionMode === "platform" ? "Subject placement" : "Product placement"}</span>
+                <span className={`${labelClass} mt-5`}>
+                  {setup.promotionMode === "platform"
+                    ? "Subject placement"
+                    : "Product placement"}
+                </span>
                 <select
                   className={selectClass}
                   value={setup.placement}

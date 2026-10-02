@@ -7,12 +7,14 @@ import type { PublicationContent } from "@shared/channels";
 type Copy = { message: string; headline: string; description: string };
 export function AdCopyAssistant({
   organizationId,
+  channel = "meta_ads",
   assetKeys,
   promotion,
   allowVariants,
   onUse,
 }: {
   organizationId: number;
+  channel?: "facebook" | "meta_ads";
   assetKeys: string[];
   promotion?: PublicationContent["promotion"];
   allowVariants: boolean;
@@ -21,7 +23,7 @@ export function AdCopyAssistant({
   const [direction, setDirection] = useState("");
   const [options, setOptions] = useState<Copy[]>([]);
   const [source, setSource] = useState("");
-  const key = JSON.stringify({ assetKeys, promotion });
+  const key = JSON.stringify({ assetKeys, promotion, channel });
   const current = useRef(key);
   current.current = key;
   const generate = trpc.channels.draftAssetCopy.useMutation({
@@ -29,6 +31,7 @@ export function AdCopyAssistant({
       const requested = JSON.stringify({
         assetKeys: variables.assetKeys,
         promotion: variables.promotion,
+        channel: variables.channel ?? "meta_ads",
       });
       if (current.current !== requested) {
         toast.info("Selection changed. Generate fresh copy for these assets.");
@@ -57,10 +60,20 @@ export function AdCopyAssistant({
         variant="outline"
         disabled={!assetKeys.length || generate.isPending}
         onClick={() =>
-          generate.mutate({ organizationId, assetKeys, promotion, direction })
+          generate.mutate({
+            organizationId,
+            assetKeys,
+            promotion,
+            direction,
+            channel,
+          })
         }
       >
-        {generate.isPending ? "Creating suggestions…" : "Generate ad copy"}
+        {generate.isPending
+          ? "Creating suggestions…"
+          : channel === "facebook"
+            ? "Generate post copy"
+            : "Generate ad copy"}
       </Button>
       <p className="text-xs text-muted-foreground">
         Uses the actual selected images and saved business/brand context. Review

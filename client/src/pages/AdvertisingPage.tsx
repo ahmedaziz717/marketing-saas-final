@@ -456,8 +456,8 @@ function Advertising() {
                 budgets, targeting, and delivery settings below.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/app/publishing?new=1&channel=meta_ads">
-                  <Button>Prepare an image ad</Button>
+                <Link href="/app/creatives/ads?new=1">
+                  <Button>Create an ad</Button>
                 </Link>
                 <Link href="/app/advertising/meta/legacy">
                   <Button variant="outline">

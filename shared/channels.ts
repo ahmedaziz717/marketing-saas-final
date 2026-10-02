@@ -93,6 +93,7 @@ export const linkSchema = z
     }
   }, "Use an HTTP or HTTPS destination URL.");
 export const contentSchema = z.object({
+  campaignPlanId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().max(5000).default(""),
   link: linkSchema.default(""),

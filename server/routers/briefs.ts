@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { brandAssets, campaignBriefs, products } from "../../drizzle/schema";
@@ -28,7 +28,7 @@ export const briefsRouter = router({
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(campaignBriefs).where(eq(campaignBriefs.organizationId, input.organizationId)).orderBy(desc(campaignBriefs.updatedAtMs));
+    return db.select().from(campaignBriefs).where(and(eq(campaignBriefs.organizationId, input.organizationId), isNull(campaignBriefs.creativeSetup))).orderBy(desc(campaignBriefs.updatedAtMs));
   }),
 
   get: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), briefId: z.number().int().positive() })).query(async ({ ctx, input }) => {

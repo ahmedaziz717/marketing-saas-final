@@ -23,13 +23,18 @@ import { Button } from "@/components/ui/button";
 export function ProductFeatureCards({
   stage,
   studioOnly = false,
+  plannedOnly = false,
 }: {
   stage: ProductStage;
   studioOnly?: boolean;
+  plannedOnly?: boolean;
 }) {
   const features = PRODUCT_FEATURES.filter(
     feature =>
       feature.stage === stage &&
+      (plannedOnly
+        ? feature.availability === "planned"
+        : feature.availability !== "planned") &&
       (!studioOnly || !["asset_library", "catalog"].includes(feature.id))
   );
   return (
@@ -99,7 +104,9 @@ function ChannelOverview({ kind }: { kind: "advertising" | "social" }) {
     <>
       <PageHeader
         eyebrow="Activate"
-        title={advertising ? "Advertising overview" : "Social Media overview"}
+        title={
+          advertising ? "Advertising overview" : "Social Publishing overview"
+        }
         description={
           advertising
             ? "Manage paid destinations without mixing campaign delivery with creative production."
@@ -108,7 +115,7 @@ function ChannelOverview({ kind }: { kind: "advertising" | "social" }) {
       />
       <div className="mb-6 flex flex-wrap gap-3">
         <Link href="/app/publishing">
-          <Button>Open Publishing</Button>
+          <Button>Open Calendar</Button>
         </Link>
         <Link
           href={
@@ -181,14 +188,30 @@ function ChannelOverview({ kind }: { kind: "advertising" | "social" }) {
       </section>
       <p className="mt-6 text-sm text-muted-foreground">
         {advertising
-          ? "Google Ads and Microsoft Ads are planned. Choose channels from the left navigation."
-          : "Instagram and TikTok are planned. Choose channels from the left navigation."}
+          ? "Google Ads and Microsoft Ads are planned. See the Roadmap for planned channels."
+          : "Instagram and TikTok are planned. See the Roadmap for planned channels."}
       </p>
     </>
   );
 }
 export default function ProductOverviewPage() {
   const [path] = useLocation();
+  if (path === "/app/roadmap")
+    return (
+      <WorkspaceGate>
+        <PageHeader
+          eyebrow="Workspace"
+          title="Roadmap"
+          description="Upcoming tools, grouped by the stage they will support. These features are not available yet."
+        />
+        {PRODUCT_STAGES.map(stage => (
+          <section key={stage.id} className="mb-8">
+            <h2 className="mb-4 text-xl font-semibold">{stage.label}</h2>
+            <ProductFeatureCards stage={stage.id} plannedOnly />
+          </section>
+        ))}
+      </WorkspaceGate>
+    );
   if (path === "/app/advertising" || path === "/app/social")
     return (
       <WorkspaceGate>
@@ -212,8 +235,8 @@ export default function ProductOverviewPage() {
       />
       {stage === "create" && (
         <div className="mb-6 flex flex-wrap gap-3">
-          <Link href="/app/creatives/saved">
-            <Button>Open saved work</Button>
+          <Link href="/app/creatives/drafts">
+            <Button>Open drafts</Button>
           </Link>
           <Link href="/app/library">
             <Button variant="outline">Open Asset Library</Button>
@@ -227,7 +250,34 @@ export default function ProductOverviewPage() {
           experiments, publish content or change budgets yet.
         </p>
       )}
-      <ProductFeatureCards stage={stage} studioOnly={stage === "create"} />
+      {stage === "optimize" ? (
+        <div className="surface p-6">
+          <h2 className="text-xl font-semibold">
+            Turn results into the next campaign
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Review performance in Measure, choose what to improve, and capture
+            the next test in a Campaign Plan. Automated recommendations,
+            experiment management and budget optimization are on the roadmap.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/app/analytics">
+              <Button>Review performance</Button>
+            </Link>
+            <Link href="/app/plans?new=1">
+              <Button variant="outline">Plan the next improvement</Button>
+            </Link>
+            <Link
+              href="/app/roadmap"
+              className="self-center text-sm text-primary underline"
+            >
+              See roadmap
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <ProductFeatureCards stage={stage} studioOnly />
+      )}
     </WorkspaceGate>
   );
 }

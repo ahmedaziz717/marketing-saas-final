@@ -1,3 +1,6 @@
+import CreativesPage from "../../client/src/pages/CreativesPage";
+import BriefsPage from "../../client/src/pages/BriefsPage";
+import AssetLibraryPage from "../../client/src/pages/AssetLibraryPage";
 import BrandPage from "../../client/src/pages/BrandPage";
 import { CreativeBuilder } from "../../client/src/components/CreativeBuilder";
 import PlatformAdminPage from "../../client/src/pages/PlatformAdminPage";
@@ -109,14 +112,131 @@ const role =
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
-  if (path === "creativeBuilder.options") return {products:[],logos:[],references:[],drafts:[],brand:{status:"active",name:"Learn Like This",businessProfile:{model:"directory",summary:"Discover independent learning providers through our directory."}}};
-  if(path === "platformAdmin.openaiCosts" || path === "platformAdmin.syncOpenaiCosts") return { range: input.range, syncedAtMs: now, amountUsd: 12.5, rows: [{date: input.range.since, projectId:"proj_demo", lineItem:"Image generation", amountUsd:12.5, quantity:null, quantityUnit:null}] };
-  if(path === "platformAdmin.customerCredits") return {tier:"Trial",period:"2026-09",allowance:100,remaining:80,enforced:true,paused:false};
-  if(path === "platformAdmin.config") return {tiers:[{id:"trial",name:"Trial",monthlyCredits:100,monthlyPriceMicros:0}],rates:[]};
-  if(path === "platformAdmin.accounts") return {items:[{organization:{id:1,name:"Demo customer account"},account:{tierId:"trial",enforceCredits:1,aiPaused:0,ownerEmail:"owner@example.test",notes:""},tier:{name:"Trial"}}]};
-  if(path === "platformAdmin.account") return {period:"2026-09",allowance:100,remaining:80,ledger:[],members:[]};
-  if(path === "platformAdmin.audit") return [];
-  if(path === "platformAdmin.report") return {groups:[{organizationId:1,provider:"openai",model:"sample-text-model",kind:"text",status:"succeeded",requests:12,inputTokens:42000,outputTokens:1000,costMicros:100000,unpriced:0,credits:12}],financial:[],recent:[],entries:[],coverage:"Fixture: measured costs only."};
+  if (path === "briefs.list")
+    return [
+      {
+        id: 7,
+        name: "Autumn learning",
+        audience: "Families seeking classes",
+        offer: "Directory subscription",
+        creativeDirection: "Grow qualified member registrations",
+        formats: [],
+        placements: [],
+        assetIds: [],
+        productIds: [],
+        status: "draft",
+        destinationUrl: "",
+        requiredClaims: "",
+      },
+    ];
+  if (path === "briefs.get") return respond("briefs.list", input)[0];
+  if (path === "creatives.overview") return { jobs: [] };
+  if (path === "assetLibrary.studioList" || path === "brand.assets") return [];
+  if (path === "catalog.overview") return { products: [] };
+  if (path === "publishing.get") return posts.find(p => p.id === input.id);
+  if (path === "creativeBuilder.options")
+    return {
+      products: [],
+      logos: [],
+      references: [],
+      drafts: [],
+      brand: {
+        status: "active",
+        name: "Learn Like This",
+        businessProfile: {
+          model: "directory",
+          summary:
+            "Discover independent learning providers through our directory.",
+        },
+      },
+    };
+  if (
+    path === "platformAdmin.openaiCosts" ||
+    path === "platformAdmin.syncOpenaiCosts"
+  )
+    return {
+      range: input.range,
+      syncedAtMs: now,
+      amountUsd: 12.5,
+      rows: [
+        {
+          date: input.range.since,
+          projectId: "proj_demo",
+          lineItem: "Image generation",
+          amountUsd: 12.5,
+          quantity: null,
+          quantityUnit: null,
+        },
+      ],
+    };
+  if (path === "platformAdmin.customerCredits")
+    return {
+      tier: "Trial",
+      period: "2026-09",
+      allowance: 100,
+      remaining: 80,
+      enforced: true,
+      paused: false,
+    };
+  if (path === "platformAdmin.config")
+    return {
+      tiers: [
+        {
+          id: "trial",
+          name: "Trial",
+          monthlyCredits: 100,
+          monthlyPriceMicros: 0,
+        },
+      ],
+      rates: [],
+    };
+  if (path === "platformAdmin.accounts")
+    return {
+      items: [
+        {
+          organization: { id: 1, name: "Demo customer account" },
+          account: {
+            tierId: "trial",
+            enforceCredits: 1,
+            aiPaused: 0,
+            ownerEmail: "owner@example.test",
+            notes: "",
+          },
+          tier: { name: "Trial" },
+        },
+      ],
+    };
+  if (path === "platformAdmin.account")
+    return {
+      period: "2026-09",
+      allowance: 100,
+      remaining: 80,
+      ledger: [],
+      members: [],
+    };
+  if (path === "platformAdmin.audit") return [];
+  if (path === "platformAdmin.report")
+    return {
+      groups: [
+        {
+          organizationId: 1,
+          provider: "openai",
+          model: "sample-text-model",
+          kind: "text",
+          status: "succeeded",
+          requests: 12,
+          inputTokens: 42000,
+          outputTokens: 1000,
+          costMicros: 100000,
+          unpriced: 0,
+          credits: 12,
+        },
+      ],
+      financial: [],
+      recent: [],
+      entries: [],
+      coverage: "Fixture: measured costs only.",
+    };
 
   if (path === "workspace.members" || path === "workspace.invites") return [];
   if (path === "billing.summary")
@@ -223,8 +343,30 @@ function respond(path: string, input: any) {
             truncated: false,
           },
         };
-  if (path === "brand.get") return {name:"Learn Like This Brand",colors:["#15141A"],fonts:["Manrope"],voice:"",requiredClaims:"",prohibitedContent:"",status:"draft",businessProfile:{website:"learnlikethis.com"}};
-  if (path === "brand.scanWebsite") { mutations.push(path); return {sourceUrl:"https://learnlikethis.com",name:"Learn Like This",colors:["#0F414C","#88A34A","#D25A12"],fonts:["Montserrat"],voice:"Welcoming and practical. Help families discover independent educational resources. Attribute services to the listed providers.",logoUrls:[],warnings:[]}; }
+  if (path === "brand.get")
+    return {
+      name: "Learn Like This Brand",
+      colors: ["#15141A"],
+      fonts: ["Manrope"],
+      voice: "",
+      requiredClaims: "",
+      prohibitedContent: "",
+      status: "draft",
+      businessProfile: { website: "learnlikethis.com" },
+    };
+  if (path === "brand.scanWebsite") {
+    mutations.push(path);
+    return {
+      sourceUrl: "https://learnlikethis.com",
+      name: "Learn Like This",
+      colors: ["#0F414C", "#88A34A", "#D25A12"],
+      fonts: ["Montserrat"],
+      voice:
+        "Welcoming and practical. Help families discover independent educational resources. Attribute services to the listed providers.",
+      logoUrls: [],
+      warnings: [],
+    };
+  }
   if (path === "assetLibrary.list") return [];
   if (path.startsWith("catalog.")) return [];
   if (
@@ -289,6 +431,13 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "studio-media": "/app/creatives/social?new=1",
+  "studio-legacy": "/app/creatives/saved?asset=creative%3A42",
+  "studio-post": "/app/creatives/social?new=1&plan=7",
+  "studio-ad": "/app/creatives/ads?new=1",
+  "campaign-plans": "/app/plans",
+  "asset-library": "/app/library",
+  roadmap: "/app/roadmap",
   "brand-kit": "/app/brand",
   "directory-creative": "/app/creatives/directory",
   "platform-admin": "/admin",
@@ -342,34 +491,49 @@ function RoutedPage() {
         resetPassword={path === "/reset-password"}
       />
     );
-  if(path === "/app/brand") return <BrandPage />;
-  if(path === "/app/creatives/directory") return <DashboardLayout><h1>Image assets</h1><CreativeBuilder onGenerated={() => {}} /></DashboardLayout>;
-  if(path === "/admin" || path.startsWith("/admin/")) return <PlatformAdminPage/>;
+  if (path === "/app/brand") return <BrandPage />;
+  if (path === "/app/creatives/directory")
+    return (
+      <DashboardLayout>
+        <h1>Image assets</h1>
+        <CreativeBuilder onGenerated={() => {}} />
+      </DashboardLayout>
+    );
+  if (path === "/admin" || path.startsWith("/admin/"))
+    return <PlatformAdminPage />;
   const Page =
     path === "/app"
       ? WorkspaceApp
-      : path === "/app/settings/billing"
-        ? SettingsPage
-        : [
-              "/app/creatives/overview",
-              "/app/optimize",
-              "/app/advertising",
-              "/app/social",
-            ].includes(path)
-          ? ProductOverviewPage
-          : PRODUCT_FEATURES.some(
-                f => f.availability === "planned" && f.href === path
-              )
-            ? PlannedFeaturePage
-            : path.startsWith("/app/analytics")
-              ? AnalyticsPage
-              : path.startsWith("/app/social")
-                ? SocialMediaPage
-                : path.startsWith("/app/advertising")
-                  ? AdvertisingPage
-                  : path.startsWith("/app/settings")
-                    ? IntegrationsPage
-                    : PublishingPage;
+      : path.startsWith("/app/creatives")
+        ? CreativesPage
+        : path === "/app/plans"
+          ? BriefsPage
+          : path === "/app/library"
+            ? AssetLibraryPage
+            : path === "/app/roadmap"
+              ? ProductOverviewPage
+              : path === "/app/settings/billing"
+                ? SettingsPage
+                : [
+                      "/app/creatives/overview",
+                      "/app/optimize",
+                      "/app/advertising",
+                      "/app/social",
+                    ].includes(path)
+                  ? ProductOverviewPage
+                  : PRODUCT_FEATURES.some(
+                        f => f.availability === "planned" && f.href === path
+                      )
+                    ? PlannedFeaturePage
+                    : path.startsWith("/app/analytics")
+                      ? AnalyticsPage
+                      : path.startsWith("/app/social")
+                        ? SocialMediaPage
+                        : path.startsWith("/app/advertising")
+                          ? AdvertisingPage
+                          : path.startsWith("/app/settings")
+                            ? IntegrationsPage
+                            : PublishingPage;
   return (
     <DashboardLayout>
       <Page />
@@ -450,10 +614,12 @@ function layout() {
         button("Week")?.getAttribute("aria-pressed") === "true",
         "Weekly view is default"
       );
-      await click("New publication");
+      await click("New content");
       check(!!document.getElementById("pub-title"), "Real composer opens");
       layout();
       await click("Cancel");
+      fixtureRouter.navigate("/app/publishing");
+      await pause();
       await click("List");
       const post = Array.from(
         document.querySelectorAll<HTMLButtonElement>("button")
@@ -469,8 +635,14 @@ function layout() {
       } else {
         await click("Approve publication");
         await click("Save test schedule");
-        check(posts[0].state === "approved", "Opening confirmation cannot queue delivery");
-        check(!!button("Confirm delivery"), "EvokeLoop confirmation dialog is shown");
+        check(
+          posts[0].state === "approved",
+          "Opening confirmation cannot queue delivery"
+        );
+        check(
+          !!button("Confirm delivery"),
+          "EvokeLoop confirmation dialog is shown"
+        );
         layout();
         await click("Confirm delivery");
         check(
@@ -482,7 +654,9 @@ function layout() {
       layout();
     } else if (which === "social")
       check(
-        Array.from(document.querySelectorAll("h2")).some(h => h.textContent === "Facebook posts"),
+        Array.from(document.querySelectorAll("h2")).some(
+          h => h.textContent === "Facebook posts"
+        ),
         "Facebook posts render"
       );
     else if (which === "advertising")
@@ -585,45 +759,228 @@ function layout() {
     }
     if (which === "studio-overview") {
       check(
-        document.body.textContent?.includes("Image assets") &&
-          document.body.textContent?.includes("Video creation"),
-        "Studio separates creative formats"
+        document.body.textContent?.includes("Social post") &&
+          document.body.textContent?.includes("Ad"),
+        "Real creation modes render"
+      );
+      check(
+        !document.body.textContent?.includes("Saved work") &&
+          !document.body.textContent?.includes("Video creation"),
+        "Studio removes redundant and unavailable modes"
+      );
+    }
+    if (which === "studio-media") {
+      const caption =
+        document.querySelector<HTMLTextAreaElement>("#pub-message")!;
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value"
+      )!.set!.call(caption, "This caption survives media creation.");
+      caption.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause();
+      await click("Create or upload media");
+      layout();
+      check(
+        !!button("Upload assets"),
+        "Uploader is available without leaving the composer"
+      );
+      await click("Generate image");
+      layout();
+      check(
+        !!document.getElementById("saved-creative-setup"),
+        "Uses the shared image builder"
+      );
+      await click("Back to content");
+      layout();
+      check(
+        document.querySelector<HTMLTextAreaElement>("#pub-message")?.value ===
+          "This caption survives media creation.",
+        "Copy is retained across nested media creation"
+      );
+      check(
+        mutations.length === 0,
+        "Browsing media never starts a paid generation"
+      );
+    }
+    if (which === "studio-legacy") {
+      check(
+        document.body.textContent?.includes("Image & upload drafts"),
+        "Old saved-work link redirects to image drafts"
       );
       check(
         document.body.textContent?.includes(
-          "Video generation and editing are not available yet"
+          "This version is not in this collection"
         ),
-        "Unavailable video is clearly marked"
+        "The legacy asset selection is retained, not silently discarded"
       );
     }
+    if (which === "studio-post" || which === "studio-ad") {
+      check(
+        !document.getElementById("pub-destination"),
+        "Destination belongs to Activate"
+      );
+      check(!document.getElementById("pub-date"), "Timing belongs to Activate");
+      check(
+        !!document.querySelector('[aria-label="Content preview"]'),
+        "Content has a live preview"
+      );
+      if (which === "studio-post")
+        check(
+          !document.getElementById("pub-headline"),
+          "Post mode has organic fields"
+        );
+      else
+        check(
+          !!document.getElementById("pub-headline") &&
+            !!document.querySelector('[aria-label="Ad format"]'),
+          "Ad mode supports copy and creative formats"
+        );
+      layout();
+      await click("Save & continue to Activate");
+      const saved = posts.find(
+        p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      );
+      check(
+        saved && saved.state === "draft" && saved.connectionId === null,
+        "Creation saves a standalone draft"
+      );
+      check(
+        !!document.getElementById("pub-destination") &&
+          !!document.getElementById("pub-date"),
+        "The same record opens in delivery settings"
+      );
+      check(
+        !document.getElementById("pub-message"),
+        "Delivery settings do not duplicate the content editor"
+      );
+      layout();
+      await click("Save delivery settings");
+      check(
+        posts.filter(p => p.id === saved.id).length === 1 &&
+          saved.revision === 1,
+        "Handoff never copies the content record"
+      );
+      check(
+        mutations.every(m => m === "publishing.save"),
+        "Neither saving nor handoff calls approval or publishing"
+      );
+      check(
+        posts.find(p => p.id === saved.id).revision === 2,
+        "Delivery configuration updates the existing version"
+      );
+      if (which === "studio-post")
+        check(
+          posts.find(p => p.id === saved.id).content.campaignPlanId === 7,
+          "Plan association survives the handoff"
+        );
+      layout();
+    }
+    if (which === "campaign-plans") {
+      await click("New plan");
+      check(
+        document.body.textContent?.includes("Objective & creative direction"),
+        "Campaign plan captures intent"
+      );
+      layout();
+    }
     if (which === "brand-kit") {
-      button("Scan website")!.click(); await pause(); layout();
-      (document.querySelector("#brand-website")!.closest("form") as HTMLFormElement).requestSubmit(); await pause(); layout();
+      button("Scan website")!.click();
+      await pause();
+      layout();
+      (
+        document
+          .querySelector("#brand-website")!
+          .closest("form") as HTMLFormElement
+      ).requestSubmit();
+      await pause();
+      layout();
       check(!!button("Use scanned details"), "Scan results can be reviewed");
-      check(mutations.length === 1 && mutations[0] === "brand.scanWebsite", "Scan does not save the brand kit");
-      button("Use scanned details")!.click(); await pause(); layout();
-      check((document.querySelector("#brand-name") as HTMLInputElement).value === "Learn Like This", "Detected identity is editable");
-      check((document.querySelector("#brand-voice") as HTMLTextAreaElement).value.includes("Welcoming"), "Suggested voice is ready for review");
+      check(
+        mutations.length === 1 && mutations[0] === "brand.scanWebsite",
+        "Scan does not save the brand kit"
+      );
+      button("Use scanned details")!.click();
+      await pause();
+      layout();
+      check(
+        (document.querySelector("#brand-name") as HTMLInputElement).value ===
+          "Learn Like This",
+        "Detected identity is editable"
+      );
+      check(
+        (
+          document.querySelector("#brand-voice") as HTMLTextAreaElement
+        ).value.includes("Welcoming"),
+        "Suggested voice is ready for review"
+      );
     }
     if (which === "directory-creative") {
-      check((document.querySelector('select') as HTMLSelectElement) !== null, "Creator renders");
-      check(!document.querySelector('[aria-label="Search products or SKU"]'), "Directory does not require catalog selection");
-      check(document.body.textContent?.includes("No catalog required"), "Catalog-free promotion is selected");
-      check(document.body.textContent?.includes("3 images"), "Promotion has one image per size");
+      check(
+        (document.querySelector("select") as HTMLSelectElement) !== null,
+        "Creator renders"
+      );
+      check(
+        !document.querySelector('[aria-label="Search products or SKU"]'),
+        "Directory does not require catalog selection"
+      );
+      check(
+        document.body.textContent?.includes("No catalog required"),
+        "Catalog-free promotion is selected"
+      );
+      check(
+        document.body.textContent?.includes("3 images"),
+        "Promotion has one image per size"
+      );
       layout();
     }
     if (which === "platform-admin") {
-      check(document.body.textContent?.includes("Business health"),"Admin overview renders");
-      check(!!document.querySelector("[data-platform-admin-shell]"), "Dedicated admin shell renders");
-      check(!document.querySelector('[aria-label="Switch account"]'), "No customer account switcher in admin");
-      check(!document.body.textContent?.includes("Content Studio"), "Customer navigation is absent from admin");
-      const nav = async (title: string) => { const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('nav a')).find(a => a.textContent?.trim() === title); check(!!link, `Navigation ${title}`); link!.click(); await pause(); };
-      for(const tab of ["Accounts","Usage & costs","OpenAI billing","Tiers","Provider rates","Financial entries","Audit","Overview"]){await nav(tab);layout();}
+      check(
+        document.body.textContent?.includes("Business health"),
+        "Admin overview renders"
+      );
+      check(
+        !!document.querySelector("[data-platform-admin-shell]"),
+        "Dedicated admin shell renders"
+      );
+      check(
+        !document.querySelector('[aria-label="Switch account"]'),
+        "No customer account switcher in admin"
+      );
+      check(
+        !document.body.textContent?.includes("Content Studio"),
+        "Customer navigation is absent from admin"
+      );
+      const nav = async (title: string) => {
+        const link = Array.from(
+          document.querySelectorAll<HTMLAnchorElement>("nav a")
+        ).find(a => a.textContent?.trim() === title);
+        check(!!link, `Navigation ${title}`);
+        link!.click();
+        await pause();
+      };
+      for (const tab of [
+        "Accounts",
+        "Usage & costs",
+        "OpenAI billing",
+        "Tiers",
+        "Provider rates",
+        "Financial entries",
+        "Audit",
+        "Overview",
+      ]) {
+        await nav(tab);
+        layout();
+      }
       await nav("Accounts");
-      const accountButton=Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.includes('Demo customer account'));
-      check(!!accountButton,"Account is available"); accountButton!.click(); await pause(); layout();
-      check(!!button('Apply credit adjustment'),"Credit controls render");
-      check(mutations.length===0,"Browsing admin does not mutate accounts");
+      const accountButton = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("button")
+      ).find(b => b.textContent?.includes("Demo customer account"));
+      check(!!accountButton, "Account is available");
+      accountButton!.click();
+      await pause();
+      layout();
+      check(!!button("Apply credit adjustment"), "Credit controls render");
+      check(mutations.length === 0, "Browsing admin does not mutate accounts");
     }
     if (which === "billing-usage" || which === "billing-plans") {
       if (role === "creator") {
@@ -636,9 +993,7 @@ function layout() {
         check(!button("Preview Growth"), "Creator has no plan actions");
       } else {
         check(
-          document.body.textContent?.includes(
-            "Current AI credit allowance"
-          ),
+          document.body.textContent?.includes("Current AI credit allowance"),
           "No fabricated credit balance"
         );
         if (which === "billing-plans") {
@@ -666,7 +1021,8 @@ function layout() {
     }
     if (which === "planned-attribution" || which === "optimize-overview") {
       check(
-        document.body.textContent?.includes("Planned"),
+        document.body.textContent?.includes("Planned") ||
+          document.body.textContent?.includes("on the roadmap"),
         "Roadmap is labeled"
       );
       check(
@@ -743,15 +1099,15 @@ async function navigationChecks(ten: boolean) {
     );
     return;
   }
-  parent("Social Media").click();
+  parent("Social Publishing").click();
   await pause();
   check(
     parent("Advertising").getAttribute("aria-expanded") === "true",
     "Groups expand independently"
   );
-  const facebook = children("Social Media").querySelector<HTMLAnchorElement>(
-    'a[href="/app/social/facebook"]'
-  )!;
+  const facebook = children(
+    "Social Publishing"
+  ).querySelector<HTMLAnchorElement>('a[href="/app/social/facebook"]')!;
   facebook.scrollIntoView({ block: "center" });
   facebook.click();
   await pause();

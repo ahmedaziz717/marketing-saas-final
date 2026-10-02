@@ -1,8 +1,12 @@
+import { CampaignPlanSelect } from "./CampaignPlanSelect";
+import { ContentPreview } from "./ContentPreview";
+import { StudioMediaDialog } from "./StudioMediaDialog";
+import { studioContentHref } from "@shared/contentWorkflow";
 import { AdCopyAssistant, TextVariantFields } from "./AdCopyAssistant";
 import { PlacementAssetPicker } from "./PlacementAssetPicker";
 import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -48,6 +52,8 @@ export function PublicationStatus({
 }
 export function PublicationComposer({
   item,
+  stage = "create",
+  initialPlanId,
   initialChannel = "facebook",
   initialAssetKey,
   initialConnectionId,
@@ -58,6 +64,8 @@ export function PublicationComposer({
   onSaved,
 }: {
   item?: Publication;
+  stage?: "create" | "activate";
+  initialPlanId?: number;
   initialChannel?: Channel;
   initialAssetKey?: string;
   initialConnectionId?: string;
@@ -65,9 +73,15 @@ export function PublicationComposer({
   initialTime?: string;
   initialTimezone?: string;
   onClose: () => void;
-  onSaved: (id: string) => void;
+  onSaved: (id: string, next?: "activate", channel?: Channel) => void;
 }) {
-  const { organizationId } = useWorkspace();
+  const { organizationId, membership } = useWorkspace();
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const nextAction = useRef<"activate" | undefined>(undefined);
+  const composing = stage === "create" || !item;
+  const canMakeMedia = ["owner", "admin", "creator"].includes(
+    membership?.role ?? ""
+  );
   const utils = trpc.useUtils();
   const [id] = useState(() => item?.id ?? crypto.randomUUID());
   const [channel, setChannel] = useState<Channel>(
@@ -89,7 +103,8 @@ export function PublicationComposer({
   const [content, setContent] = useState<PublicationContent>(
     item?.content ??
       contentSchema.parse({
-        title: "Untitled post",
+        title: initialChannel === "facebook" ? "Untitled post" : "Untitled ad",
+        campaignPlanId: initialPlanId,
         adSetId: initialAdSetId ?? "",
       })
   );
@@ -126,19 +141,48 @@ export function PublicationComposer({
   );
   const save = trpc.publishing.save.useMutation({
     onSuccess: async result => {
-      await utils.publishing.list.invalidate();
+      await Promise.all([
+        utils.publishing.list.invalidate(),
+        utils.publishing.get.invalidate(),
+      ]);
       toast.success("Draft saved. Nothing has been scheduled or published.");
-      onSaved(result.id);
+      onSaved(result.id, nextAction.current, result.channel);
     },
     onError: e => toast.error(e.message),
   });
+  const initialPlan = trpc.briefs.get.useQuery(
+    { ...scope, briefId: initialPlanId ?? 1 },
+    { enabled: !!organizationId && !!initialPlanId && !item }
+  );
+  const planApplied = useRef(false);
+  useEffect(() => {
+    if (!initialPlan.data || planApplied.current) return;
+    planApplied.current = true;
+    const p = initialPlan.data;
+    setContent(c => ({
+      ...c,
+      promotion: {
+        audience: c.promotion?.audience || p.audience.slice(0, 2000),
+        goal: c.promotion?.goal || p.creativeDirection.slice(0, 2000),
+        offer: c.promotion?.offer || p.offer.slice(0, 2000),
+      },
+      link: c.link || p.destinationUrl || "",
+    }));
+  }, [initialPlan.data]);
   const selectedAsset = assets.data?.find(a => a.key === assetKey);
   const setField = (key: keyof PublicationContent, value: string) =>
     setContent(c => ({ ...c, [key]: value }));
-  function submit() {
+  function submit(next?: "activate") {
+    nextAction.current = next;
     try {
-      const at = local ? localScheduleToUtc(local, timezone) : null;
-      if (at && at <= Date.now())
+      const at =
+        stage === "create"
+          ? (item?.scheduledAtMs ??
+            (local ? localScheduleToUtc(local, timezone) : null))
+          : local
+            ? localScheduleToUtc(local, timezone)
+            : null;
+      if (stage === "activate" && at && at <= Date.now())
         throw new Error(
           "Choose a future date, or clear the schedule to use Publish now."
         );
@@ -189,497 +233,577 @@ export function PublicationComposer({
         if (!open && !save.isPending) onClose();
       }}
     >
-      <DialogContent className="max-h-[92dvh] overflow-x-hidden overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[92dvh] overflow-x-hidden overflow-y-auto sm:max-w-3xl [&>*]:min-w-0">
         <DialogHeader className="pr-8">
           <DialogTitle>
-            {item ? "Edit publication" : "Create publication"}
+            {stage === "activate"
+              ? "Delivery settings"
+              : `${item ? "Edit" : "Create"} ${channel === "facebook" ? "social post" : "ad"}`}
           </DialogTitle>
           <DialogDescription>
-            Assemble a channel-specific post or ad using approved assets. Saving
-            a draft is not publishing approval.
+            {stage === "create"
+              ? "Write your content, choose media, and preview it. Continue to Activate when ready to choose the destination and schedule."
+              : "Choose the destination and timing for this content, then review and approve delivery."}
           </DialogDescription>
         </DialogHeader>
         <fieldset
-          className="grid min-w-0 gap-4 sm:grid-cols-2"
+          className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2"
           disabled={save.isPending}
         >
-          <div>
-            <Label htmlFor="pub-channel">Channel</Label>
-            <select
-              id="pub-channel"
-              className={channelInput}
-              value={channel}
-              onChange={e => {
-                setChannel(e.target.value as Channel);
-                setCarousel(false);
-                setPlacement(false);
-                setAsset("");
-                setContent(c => ({
-                  ...c,
-                  carouselAssetKeys: undefined,
-                  placementAssetKeys: undefined,
-                }));
-                setConnection("");
-                setField("adSetId", "");
-              }}
-            >
-              <option value="facebook">Facebook - organic</option>
-              <option value="meta_ads">Meta Ads - paid</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="pub-destination">Destination</Label>
-            <select
-              id="pub-destination"
-              className={channelInput}
-              value={connectionId}
-              onChange={e => {
-                setConnection(e.target.value);
-                setField("adSetId", "");
-              }}
-            >
-              <option value="">Select a connected account</option>
-              {connections.data?.items
-                .filter(
-                  c =>
-                    c.channel === channel &&
-                    c.status === "connected" &&
-                    !c.expired
-                )
-                .map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.details.capabilities.includes("publish")
-                      ? ""
-                      : " (read only)"}
-                  </option>
-                ))}
-            </select>
-            <Link
-              href="/app/settings/integrations"
-              className="mt-1 inline-block text-xs text-primary"
-            >
-              Manage channel connections
-            </Link>
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="pub-title">Internal title</Label>
-            <input
-              id="pub-title"
-              className={channelInput}
-              maxLength={180}
-              value={content.title}
-              onChange={e => setField("title", e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="pub-asset">Approved finished asset</Label>
-            {channel === "meta_ads" && (
+          {composing && (
+            <div>
+              <Label htmlFor="pub-channel">Channel</Label>
               <select
-                aria-label="Ad format"
-                className={channelInput + " mb-3"}
-                value={
-                  placement ? "placement" : carousel ? "carousel" : "single"
-                }
+                id="pub-channel"
+                className={channelInput}
+                value={channel}
                 onChange={e => {
-                  setCarousel(e.target.value === "carousel");
-                  setPlacement(e.target.value === "placement");
+                  setChannel(e.target.value as Channel);
+                  setCarousel(false);
+                  setPlacement(false);
                   setAsset("");
                   setContent(c => ({
                     ...c,
                     carouselAssetKeys: undefined,
                     placementAssetKeys: undefined,
                   }));
+                  setConnection("");
+                  setField("adSetId", "");
                 }}
               >
-                <option value="single">Single image</option>
-                <option value="placement">
-                  Placement images · 1:1, 4:5, 9:16
-                </option>
-                <option value="carousel">Carousel · 2–10 images</option>
+                <option value="facebook">Facebook - organic</option>
+                <option value="meta_ads">Meta Ads - paid</option>
               </select>
-            )}
-            {!placement && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => setPickerOpen(true)}
-              >
-                Browse approved assets
-                {carousel
-                  ? ` (${content.carouselAssetKeys?.length ?? 0} selected)`
-                  : ""}
-              </Button>
-            )}
-            {placement && (
-              <PlacementAssetPicker
-                assets={assets.data ?? []}
-                value={content.placementAssetKeys}
-                onChange={value => {
-                  setAsset(value.square ?? "");
-                  setContent(c => ({ ...c, placementAssetKeys: value }));
+            </div>
+          )}
+          {stage === "activate" && (
+            <div>
+              <Label htmlFor="pub-destination">Destination</Label>
+              <select
+                id="pub-destination"
+                className={channelInput}
+                value={connectionId}
+                onChange={e => {
+                  setConnection(e.target.value);
+                  setField("adSetId", "");
                 }}
-              />
-            )}
-            {channel === "facebook" && assetKey && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setAsset("")}
               >
-                Remove media
-              </Button>
-            )}
-            {pickerOpen && (
-              <ApprovedAssetPicker
-                assets={assets.data ?? []}
-                channel={channel}
-                multiple={channel === "meta_ads" && carousel}
-                selected={
-                  carousel
-                    ? (content.carouselAssetKeys ?? [])
-                    : assetKey
-                      ? [assetKey]
-                      : []
-                }
-                onClose={() => setPickerOpen(false)}
-                onSelect={keys => {
-                  setAsset(keys[0]);
-                  setContent(c => ({
-                    ...c,
-                    carouselAssetKeys: carousel ? keys : undefined,
-                  }));
-                }}
-              />
-            )}
-            {carousel && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                {content.carouselAssetKeys?.map((key, index) => {
-                  const a = assets.data?.find(a => a.key === key);
-                  return (
-                    <div key={key} className="w-28 rounded-xl border p-2">
-                      <img
-                        src={a?.url}
-                        alt={a?.name ?? "Carousel image"}
-                        className="h-24 w-full object-contain"
-                      />
-                      <p className="text-xs">Card {index + 1}</p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={!index}
-                          aria-label="Move card earlier"
-                          onClick={() => {
-                            const keys = [...content.carouselAssetKeys!];
-                            [keys[index - 1], keys[index]] = [
-                              keys[index],
-                              keys[index - 1],
-                            ];
-                            setAsset(keys[0]);
-                            setContent(c => ({
-                              ...c,
-                              carouselAssetKeys: keys,
-                            }));
-                          }}
-                        >
-                          ←
-                        </button>
-                        <button
-                          type="button"
-                          disabled={
-                            index === content.carouselAssetKeys!.length - 1
-                          }
-                          aria-label="Move card later"
-                          onClick={() => {
-                            const keys = [...content.carouselAssetKeys!];
-                            [keys[index + 1], keys[index]] = [
-                              keys[index],
-                              keys[index + 1],
-                            ];
-                            setAsset(keys[0]);
-                            setContent(c => ({
-                              ...c,
-                              carouselAssetKeys: keys,
-                            }));
-                          }}
-                        >
-                          →
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {assets.error && (
-              <p role="alert" className="text-xs">
-                The approved library could not be loaded.
-              </p>
-            )}
-            {selectedAsset && !carousel && !placement && (
-              <div className="mt-3 rounded-xl bg-muted/50 p-3">
-                {selectedAsset.mediaType === "video" ? (
-                  <video
-                    src={selectedAsset.url}
-                    controls
-                    preload="metadata"
-                    className="mx-auto max-h-52 max-w-full"
-                  />
-                ) : (
-                  <img
-                    src={selectedAsset.url}
-                    alt={selectedAsset.name}
-                    className="mx-auto max-h-52 max-w-full object-contain"
-                  />
-                )}
-              </div>
-            )}
-          </div>
-          <div className="sm:col-span-2 rounded-xl border p-4 space-y-3">
-            <h3 className="font-semibold">Campaign purpose</h3>
-            <p className="text-xs text-muted-foreground">
-              Promote a product, service, plan, listing, category, or the whole
-              platform.
-            </p>
-            {(
-              [
-                ["audience", "Audience"],
-                ["goal", "Goal"],
-                ["offer", "What are you promoting?"],
-              ] as const
-            ).map(([key, label]) => (
-              <label className="block text-sm" key={key}>
-                {label}
-                <input
-                  className={channelInput + " mt-1"}
-                  value={content.promotion?.[key] ?? ""}
-                  placeholder={
-                    key === "audience"
-                      ? businessBrand.data?.businessProfile?.audiences
-                      : key === "goal"
-                        ? businessBrand.data?.businessProfile?.goals
-                        : businessBrand.data?.businessProfile?.primaryOffer
-                  }
-                  maxLength={2000}
-                  onChange={e =>
+                <option value="">Select a connected account</option>
+                {connections.data?.items
+                  .filter(
+                    c =>
+                      c.channel === channel &&
+                      c.status === "connected" &&
+                      !c.expired
+                  )
+                  .map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.details.capabilities.includes("publish")
+                        ? ""
+                        : " (read only)"}
+                    </option>
+                  ))}
+              </select>
+              <Link
+                href="/app/settings/integrations"
+                className="mt-1 inline-block text-xs text-primary"
+              >
+                Manage channel connections
+              </Link>
+            </div>
+          )}
+          {composing && (
+            <>
+              <div className="sm:col-span-2">
+                <CampaignPlanSelect
+                  value={content.campaignPlanId}
+                  onChange={(planId, plan) =>
                     setContent(c => ({
                       ...c,
+                      campaignPlanId: planId,
                       promotion: {
-                        audience: "",
-                        goal: "",
-                        offer: "",
-                        ...c.promotion,
-                        [key]: e.target.value,
+                        audience:
+                          c.promotion?.audience ||
+                          plan?.audience?.slice(0, 2000) ||
+                          "",
+                        goal:
+                          c.promotion?.goal ||
+                          plan?.creativeDirection?.slice(0, 2000) ||
+                          "",
+                        offer:
+                          c.promotion?.offer ||
+                          plan?.offer?.slice(0, 2000) ||
+                          "",
                       },
+                      link: c.link || plan?.destinationUrl || "",
                     }))
                   }
                 />
-              </label>
-            ))}
-          </div>
-          {organizationId && (
-            <div className="sm:col-span-2">
-              <AdCopyAssistant
-                organizationId={organizationId}
-                assetKeys={
-                  placement
-                    ? Object.values(content.placementAssetKeys ?? {}).filter(
-                        (v): v is string => !!v
-                      )
-                    : carousel
-                      ? (content.carouselAssetKeys ?? [])
-                      : assetKey
-                        ? [assetKey]
-                        : []
-                }
-                promotion={content.promotion}
-                allowVariants={
-                  channel === "meta_ads" && !placement && !carousel
-                }
-                onUse={(copy, rest) =>
-                  setContent(c => ({
-                    ...c,
-                    ...copy,
-                    textVariants: rest
-                      ? {
-                          messages: rest.map(o => o.message),
-                          headlines: rest.map(o => o.headline),
-                          descriptions: rest
-                            .map(o => o.description)
-                            .filter(Boolean),
-                        }
-                      : undefined,
-                  }))
-                }
-              />
-            </div>
-          )}
-          <div className="sm:col-span-2">
-            <Label htmlFor="pub-message">
-              {channel === "facebook"
-                ? "Post text / caption"
-                : "Primary ad text"}
-            </Label>
-            <textarea
-              id="pub-message"
-              className={channelInput + " min-h-28"}
-              maxLength={5000}
-              value={content.message}
-              onChange={e => setField("message", e.target.value)}
-            />
-          </div>
-          {channel === "meta_ads" && (
-            <div className="sm:col-span-2">
-              {!placement && !carousel ? (
-                <TextVariantFields
-                  value={content.textVariants}
-                  onChange={value =>
-                    setContent(c => ({ ...c, textVariants: value }))
-                  }
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="pub-title">Internal title</Label>
+                <input
+                  id="pub-title"
+                  className={channelInput}
+                  maxLength={180}
+                  value={content.title}
+                  onChange={e => setField("title", e.target.value)}
                 />
-              ) : (
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="pub-asset">Approved finished asset</Label>
+                {channel === "meta_ads" && (
+                  <select
+                    aria-label="Ad format"
+                    className={channelInput + " mb-3"}
+                    value={
+                      placement ? "placement" : carousel ? "carousel" : "single"
+                    }
+                    onChange={e => {
+                      setCarousel(e.target.value === "carousel");
+                      setPlacement(e.target.value === "placement");
+                      setAsset("");
+                      setContent(c => ({
+                        ...c,
+                        carouselAssetKeys: undefined,
+                        placementAssetKeys: undefined,
+                      }));
+                    }}
+                  >
+                    <option value="single">Single image</option>
+                    <option value="placement">
+                      Placement images · 1:1, 4:5, 9:16
+                    </option>
+                    <option value="carousel">Carousel · 2–10 images</option>
+                  </select>
+                )}
+                {!placement && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    Browse approved assets
+                    {carousel
+                      ? ` (${content.carouselAssetKeys?.length ?? 0} selected)`
+                      : ""}
+                  </Button>
+                )}
+                {placement && (
+                  <PlacementAssetPicker
+                    assets={assets.data ?? []}
+                    value={content.placementAssetKeys}
+                    onChange={value => {
+                      setAsset(value.square ?? "");
+                      setContent(c => ({ ...c, placementAssetKeys: value }));
+                    }}
+                  />
+                )}
+                {canMakeMedia && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="mt-2"
+                    onClick={() => setMediaOpen(true)}
+                  >
+                    Create or upload media
+                  </Button>
+                )}
+                {channel === "facebook" && !assetKey && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    No media selected. You can publish a text-only post, or add
+                    a link below.
+                  </p>
+                )}
+                {channel === "facebook" && assetKey && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setAsset("")}
+                  >
+                    Remove media
+                  </Button>
+                )}
+                {pickerOpen && (
+                  <ApprovedAssetPicker
+                    assets={assets.data ?? []}
+                    channel={channel}
+                    multiple={channel === "meta_ads" && carousel}
+                    selected={
+                      carousel
+                        ? (content.carouselAssetKeys ?? [])
+                        : assetKey
+                          ? [assetKey]
+                          : []
+                    }
+                    onClose={() => setPickerOpen(false)}
+                    onSelect={keys => {
+                      setAsset(keys[0]);
+                      setContent(c => ({
+                        ...c,
+                        carouselAssetKeys: carousel ? keys : undefined,
+                      }));
+                    }}
+                  />
+                )}
+                {carousel && (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {content.carouselAssetKeys?.map((key, index) => {
+                      const a = assets.data?.find(a => a.key === key);
+                      return (
+                        <div key={key} className="w-28 rounded-xl border p-2">
+                          <img
+                            src={a?.url}
+                            alt={a?.name ?? "Carousel image"}
+                            className="h-24 w-full object-contain"
+                          />
+                          <p className="text-xs">Card {index + 1}</p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={!index}
+                              aria-label="Move card earlier"
+                              onClick={() => {
+                                const keys = [...content.carouselAssetKeys!];
+                                [keys[index - 1], keys[index]] = [
+                                  keys[index],
+                                  keys[index - 1],
+                                ];
+                                setAsset(keys[0]);
+                                setContent(c => ({
+                                  ...c,
+                                  carouselAssetKeys: keys,
+                                }));
+                              }}
+                            >
+                              ←
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                index === content.carouselAssetKeys!.length - 1
+                              }
+                              aria-label="Move card later"
+                              onClick={() => {
+                                const keys = [...content.carouselAssetKeys!];
+                                [keys[index + 1], keys[index]] = [
+                                  keys[index],
+                                  keys[index + 1],
+                                ];
+                                setAsset(keys[0]);
+                                setContent(c => ({
+                                  ...c,
+                                  carouselAssetKeys: keys,
+                                }));
+                              }}
+                            >
+                              →
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {assets.error && (
+                  <p role="alert" className="text-xs">
+                    The approved library could not be loaded.
+                  </p>
+                )}
+                {selectedAsset && !carousel && !placement && (
+                  <div className="mt-3 rounded-xl bg-muted/50 p-3">
+                    {selectedAsset.mediaType === "video" ? (
+                      <video
+                        src={selectedAsset.url}
+                        controls
+                        preload="metadata"
+                        className="mx-auto max-h-52 max-w-full"
+                      />
+                    ) : (
+                      <img
+                        src={selectedAsset.url}
+                        alt={selectedAsset.name}
+                        className="mx-auto max-h-52 max-w-full object-contain"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="sm:col-span-2 rounded-xl border p-4 space-y-3">
+                <h3 className="font-semibold">Campaign purpose</h3>
                 <p className="text-xs text-muted-foreground">
-                  Carousel and placement-image ads use one copy set here.
-                  Multiple text options are available with Single image.
+                  Promote a product, service, plan, listing, category, or the
+                  whole platform.
+                </p>
+                {(
+                  [
+                    ["audience", "Audience"],
+                    ["goal", "Goal"],
+                    ["offer", "What are you promoting?"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label className="block text-sm" key={key}>
+                    {label}
+                    <input
+                      className={channelInput + " mt-1"}
+                      value={content.promotion?.[key] ?? ""}
+                      placeholder={
+                        key === "audience"
+                          ? businessBrand.data?.businessProfile?.audiences
+                          : key === "goal"
+                            ? businessBrand.data?.businessProfile?.goals
+                            : businessBrand.data?.businessProfile?.primaryOffer
+                      }
+                      maxLength={2000}
+                      onChange={e =>
+                        setContent(c => ({
+                          ...c,
+                          promotion: {
+                            audience: "",
+                            goal: "",
+                            offer: "",
+                            ...c.promotion,
+                            [key]: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              {organizationId && (
+                <div className="sm:col-span-2">
+                  <AdCopyAssistant
+                    organizationId={organizationId}
+                    channel={channel}
+                    assetKeys={
+                      placement
+                        ? Object.values(
+                            content.placementAssetKeys ?? {}
+                          ).filter((v): v is string => !!v)
+                        : carousel
+                          ? (content.carouselAssetKeys ?? [])
+                          : assetKey
+                            ? [assetKey]
+                            : []
+                    }
+                    promotion={content.promotion}
+                    allowVariants={
+                      channel === "meta_ads" && !placement && !carousel
+                    }
+                    onUse={(copy, rest) =>
+                      setContent(c => ({
+                        ...c,
+                        ...copy,
+                        textVariants: rest
+                          ? {
+                              messages: rest.map(o => o.message),
+                              headlines: rest.map(o => o.headline),
+                              descriptions: rest
+                                .map(o => o.description)
+                                .filter(Boolean),
+                            }
+                          : undefined,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <Label htmlFor="pub-message">
+                  {channel === "facebook"
+                    ? "Post text / caption"
+                    : "Primary ad text"}
+                </Label>
+                <textarea
+                  id="pub-message"
+                  className={channelInput + " min-h-28"}
+                  maxLength={5000}
+                  value={content.message}
+                  onChange={e => setField("message", e.target.value)}
+                />
+              </div>
+              {channel === "meta_ads" && (
+                <div className="sm:col-span-2">
+                  {!placement && !carousel ? (
+                    <TextVariantFields
+                      value={content.textVariants}
+                      onChange={value =>
+                        setContent(c => ({ ...c, textVariants: value }))
+                      }
+                    />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Carousel and placement-image ads use one copy set here.
+                      Multiple text options are available with Single image.
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <Label htmlFor="pub-link">
+                  {channel === "facebook"
+                    ? "Link preview URL (text/link posts only)"
+                    : "Destination URL"}
+                </Label>
+                <input
+                  id="pub-link"
+                  type="url"
+                  className={channelInput}
+                  placeholder="https://"
+                  value={content.link}
+                  onChange={e => setField("link", e.target.value)}
+                />
+                {channel === "facebook" && assetKey && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    For a media post, leave this field empty and include any URL
+                    in the caption.
+                  </p>
+                )}
+              </div>
+              {channel === "meta_ads" && (
+                <>
+                  <div>
+                    <Label htmlFor="pub-headline">Headline</Label>
+                    <input
+                      id="pub-headline"
+                      className={channelInput}
+                      maxLength={200}
+                      value={content.headline}
+                      onChange={e => setField("headline", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pub-cta">Call to action</Label>
+                    <select
+                      id="pub-cta"
+                      className={channelInput}
+                      value={content.callToAction}
+                      onChange={e => setField("callToAction", e.target.value)}
+                    >
+                      {["LEARN_MORE", "SHOP_NOW", "SIGN_UP", "GET_OFFER"].map(
+                        c => (
+                          <option key={c} value={c}>
+                            {statusLabel(c.toLowerCase())}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="pub-description">Description</Label>
+                    <input
+                      id="pub-description"
+                      className={channelInput}
+                      maxLength={300}
+                      value={content.description}
+                      onChange={e => setField("description", e.target.value)}
+                    />
+                  </div>
+                  <p className="rounded-xl bg-muted p-3 text-sm sm:col-span-2">
+                    This release creates an image ad as <strong>PAUSED</strong>{" "}
+                    in the selected existing ad set. It does not create a
+                    campaign, set a budget, or activate spending. Launch in Meta
+                    Ads Manager after reviewing the campaign and budget.
+                  </p>
+                </>
+              )}
+            </>
+          )}
+          <ContentPreview
+            channel={channel}
+            content={content}
+            asset={selectedAsset}
+            assets={assets.data ?? []}
+          />
+          {!composing && item && (
+            <p className="sm:col-span-2 text-sm">
+              <Link
+                href={studioContentHref(channel, { id: item.id })}
+                className="text-primary underline"
+              >
+                Edit content in Studio
+              </Link>
+            </p>
+          )}
+          {stage === "activate" && channel === "meta_ads" && (
+            <div className="sm:col-span-2">
+              <Label htmlFor="pub-adset">Existing Meta ad set</Label>
+              <select
+                id="pub-adset"
+                className={channelInput}
+                value={content.adSetId}
+                onChange={e => setField("adSetId", e.target.value)}
+              >
+                <option value="">Select an ad set</option>
+                {objects.data?.adsets.map(a => (
+                  <option key={a.id} value={String(a.id)}>
+                    {String(a.name)} ({String(a.status)})
+                  </option>
+                ))}
+              </select>
+              {objects.isFetching && (
+                <p className="text-xs" role="status">
+                  Loading ad sets...
+                </p>
+              )}
+              {objects.error && (
+                <p role="alert" className="text-xs">
+                  {objects.error.message}
                 </p>
               )}
             </div>
           )}
-          <div className="sm:col-span-2">
-            <Label htmlFor="pub-link">
-              {channel === "facebook"
-                ? "Link preview URL (text/link posts only)"
-                : "Destination URL"}
-            </Label>
-            <input
-              id="pub-link"
-              type="url"
-              className={channelInput}
-              placeholder="https://"
-              value={content.link}
-              onChange={e => setField("link", e.target.value)}
-            />
-            {channel === "facebook" && assetKey && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                For a media post, leave this field empty and include any URL in
-                the caption.
-              </p>
-            )}
-          </div>
-          {channel === "meta_ads" && (
+          {stage === "activate" && (
             <>
-              <div className="sm:col-span-2">
-                <Label htmlFor="pub-adset">Existing Meta ad set</Label>
-                <select
-                  id="pub-adset"
+              <div>
+                <Label htmlFor="pub-date">Scheduled date and time</Label>
+                <input
+                  id="pub-date"
+                  type="datetime-local"
                   className={channelInput}
-                  value={content.adSetId}
-                  onChange={e => setField("adSetId", e.target.value)}
+                  value={local}
+                  onChange={e => setLocal(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setLocal("")}
+                  className="mt-1 text-xs text-primary"
                 >
-                  <option value="">Select an ad set</option>
-                  {objects.data?.adsets.map(a => (
-                    <option key={a.id} value={String(a.id)}>
-                      {String(a.name)} ({String(a.status)})
-                    </option>
-                  ))}
-                </select>
-                {objects.isFetching && (
-                  <p className="text-xs" role="status">
-                    Loading ad sets...
-                  </p>
-                )}
-                {objects.error && (
-                  <p role="alert" className="text-xs">
-                    {objects.error.message}
-                  </p>
-                )}
+                  Clear time - queue after approval
+                </button>
               </div>
               <div>
-                <Label htmlFor="pub-headline">Headline</Label>
+                <Label htmlFor="pub-timezone">Time zone</Label>
                 <input
-                  id="pub-headline"
+                  id="pub-timezone"
                   className={channelInput}
-                  maxLength={200}
-                  value={content.headline}
-                  onChange={e => setField("headline", e.target.value)}
+                  value={timezone}
+                  placeholder="America/New_York"
+                  onChange={e => setTimezone(e.target.value)}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Time is interpreted in this time zone, not the account's
+                  reporting time zone.
+                </p>
               </div>
-              <div>
-                <Label htmlFor="pub-cta">Call to action</Label>
-                <select
-                  id="pub-cta"
-                  className={channelInput}
-                  value={content.callToAction}
-                  onChange={e => setField("callToAction", e.target.value)}
-                >
-                  {["LEARN_MORE", "SHOP_NOW", "SIGN_UP", "GET_OFFER"].map(c => (
-                    <option key={c} value={c}>
-                      {statusLabel(c.toLowerCase())}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="pub-description">Description</Label>
-                <input
-                  id="pub-description"
-                  className={channelInput}
-                  maxLength={300}
-                  value={content.description}
-                  onChange={e => setField("description", e.target.value)}
-                />
-              </div>
-              <p className="rounded-xl bg-muted p-3 text-sm sm:col-span-2">
-                This release creates an image ad as <strong>PAUSED</strong> in
-                the selected existing ad set. It does not create a campaign, set
-                a budget, or activate spending. Launch in Meta Ads Manager after
-                reviewing the campaign and budget.
-              </p>
             </>
           )}
-          <div>
-            <Label htmlFor="pub-date">Scheduled date and time</Label>
-            <input
-              id="pub-date"
-              type="datetime-local"
-              className={channelInput}
-              value={local}
-              onChange={e => setLocal(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => setLocal("")}
-              className="mt-1 text-xs text-primary"
-            >
-              Clear time - queue after approval
-            </button>
-          </div>
-          <div>
-            <Label htmlFor="pub-timezone">Time zone</Label>
-            <input
-              id="pub-timezone"
-              className={channelInput}
-              value={timezone}
-              placeholder="America/New_York"
-              onChange={e => setTimezone(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Time is interpreted in this time zone, not the account's reporting
-              time zone.
-            </p>
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="pub-campaign-label">
-              Campaign label (optional)
-            </Label>
-            <input
-              id="pub-campaign-label"
-              className={channelInput}
-              value={content.campaignLabel}
-              onChange={e => setField("campaignLabel", e.target.value)}
-            />
-          </div>
+          {composing && (
+            <div className="sm:col-span-2">
+              <Label htmlFor="pub-campaign-label">
+                Campaign label (optional)
+              </Label>
+              <input
+                id="pub-campaign-label"
+                className={channelInput}
+                value={content.campaignLabel}
+                onChange={e => setField("campaignLabel", e.target.value)}
+              />
+            </div>
+          )}
         </fieldset>
         {item && (
           <p className="text-sm text-muted-foreground">
@@ -687,17 +811,41 @@ export function PublicationComposer({
             any queued schedule. The asset's separate approval is unchanged.
           </p>
         )}
-        <div className="flex flex-wrap justify-end gap-3">
+        <div className="flex flex-wrap justify-end gap-3 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal">
           <Button variant="outline" disabled={save.isPending} onClick={onClose}>
             Cancel
           </Button>
           <Button
             disabled={save.isPending || !content.title.trim()}
-            onClick={submit}
+            onClick={() => submit()}
           >
-            {save.isPending ? "Saving..." : "Save draft"}
+            {save.isPending
+              ? "Saving..."
+              : stage === "activate"
+                ? "Save delivery settings"
+                : "Save draft"}
           </Button>
+          {stage === "create" && (
+            <Button
+              disabled={save.isPending || !content.title.trim()}
+              onClick={() => submit("activate")}
+            >
+              Save & continue to Activate
+            </Button>
+          )}
         </div>
+        {mediaOpen && (
+          <StudioMediaDialog
+            planId={content.campaignPlanId}
+            onClose={() => setMediaOpen(false)}
+            onChoose={key => {
+              setMediaOpen(false);
+              setPickerOpen(true);
+              void assets.refetch();
+              if (!carousel && !placement) setAsset(key);
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -734,6 +882,7 @@ export function PublicationDetails({
   const success = async () => {
     await Promise.all([
       utils.publishing.list.invalidate(),
+      utils.publishing.get.invalidate(),
       utils.publishing.history.invalidate(),
     ]);
     setNote("");
@@ -937,8 +1086,15 @@ export function PublicationDetails({
         )}
         <div className="flex flex-wrap gap-2">
           {canEdit && editablePublication(item.state) && (
+            <Link href={studioContentHref(item.channel, { id: item.id })}>
+              <Button variant="outline" disabled={busy}>
+                Edit content in Studio
+              </Button>
+            </Link>
+          )}
+          {canEdit && editablePublication(item.state) && (
             <Button variant="outline" disabled={busy} onClick={onEdit}>
-              Edit draft
+              Delivery settings
             </Button>
           )}
           {canEdit &&

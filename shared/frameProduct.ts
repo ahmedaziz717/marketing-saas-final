@@ -4,7 +4,7 @@ export const PRODUCT_STAGES = [
     id: "create",
     label: "Create",
     description: "Build content and organize approved assets.",
-    href: "/app/creatives/overview",
+    href: "/app/creatives",
   },
   {
     id: "activate",
@@ -30,30 +30,30 @@ export type ProductStage = (typeof PRODUCT_STAGES)[number]["id"];
 export const PRODUCT_FEATURES = [
   {
     id: "image_assets",
-    name: "Image assets",
+    name: "Image",
     stage: "create",
     availability: "available",
     href: "/app/creatives/images",
     description:
-      "Generate and refine images with the existing shared creative builder.",
+      "Generate and refine images and placement sizes in the shared image builder.",
   },
   {
     id: "ad_creative",
-    name: "Ad creative",
+    name: "Ad",
     stage: "create",
     availability: "available",
     href: "/app/creatives/ads",
     description:
-      "Create image-based advertising assets. Campaigns and budgets stay under Activate.",
+      "Compose ad copy, media, headlines and creative variants. Continue to Activate for destination and delivery.",
   },
   {
     id: "social_content",
-    name: "Social content",
+    name: "Social post",
     stage: "create",
     availability: "available",
     href: "/app/creatives/social",
     description:
-      "Create social images in the shared builder. Prepare captions and posts in Publishing.",
+      "Compose captions, media or links, then preview and save an organic post.",
   },
   {
     id: "video",
@@ -62,14 +62,14 @@ export const PRODUCT_FEATURES = [
     availability: "planned",
     href: "/app/creatives/video",
     description:
-      "Video generation and editing are not available yet. Upload existing video files in Saved work.",
+      "Video generation and editing are not available yet. Upload existing videos in Studio or Asset Library.",
   },
   {
     id: "ugc",
     name: "User-generated content",
     stage: "create",
     availability: "available",
-    href: "/app/creatives/saved?type=ugc",
+    href: "/app/creatives/drafts?kind=media&type=ugc",
     description:
       "Upload and classify creator or customer images and videos, then submit selected versions for review.",
   },
@@ -128,7 +128,7 @@ export const PRODUCT_FEATURES = [
   },
   {
     id: "social_media",
-    name: "Social Media",
+    name: "Social Publishing",
     stage: "activate",
     availability: "connection_required",
     href: "/app/social",
@@ -146,7 +146,7 @@ export const PRODUCT_FEATURES = [
   },
   {
     id: "publishing",
-    name: "Publishing",
+    name: "Calendar",
     stage: "activate",
     availability: "available",
     href: "/app/publishing",

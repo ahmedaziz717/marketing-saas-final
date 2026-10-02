@@ -55,7 +55,7 @@ export default function PlannedFeaturePage() {
               {feature.stage === "create"
                 ? "Back to Content Studio"
                 : feature.stage === "activate"
-                  ? "Open Publishing"
+                  ? "Open Calendar"
                   : "Open Analytics"}
             </Button>
           </Link>

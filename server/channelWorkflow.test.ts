@@ -45,6 +45,7 @@ vi.mock("./storage", async original => ({
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import {
+  campaignBriefs,
   activityEvents,
   brandAssets,
   brandKits,
@@ -53,6 +54,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { channelConnections, publications } from "../drizzle/channelSchema";
+import { defaultCreativeSetup } from "../shared/creativeBuilder";
 import { contentSchema } from "../shared/channels";
 import { encryptToken } from "./lib/secureToken";
 import { executePublication, publicationTick } from "./lib/publications";
@@ -316,6 +318,112 @@ describe.sequential(
         creator.publishing.save(input({ connectionId: foreignId }))
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
+    it("keeps one content record from a standalone Studio draft through delivery configuration", async () => {
+      const { briefId } = await creator.briefs.create({
+        organizationId: org,
+        name: "Autumn launch",
+        audience: "Directory members",
+        creativeDirection: "Increase qualified subscriptions",
+      });
+      const draft = await creator.publishing.save(
+        input({
+          connectionId: null,
+          content: contentSchema.parse({
+            title: "Directory story",
+            message: "Find your next class.",
+            campaignPlanId: briefId,
+          }),
+        })
+      );
+      expect(draft.connectionId).toBeNull();
+      expect(draft.state).toBe("draft");
+      const reopened = await owner.publishing.get({
+        organizationId: org,
+        id: draft.id,
+      });
+      const configured = await creator.publishing.save(
+        input({
+          id: reopened.id,
+          revision: reopened.revision,
+          connectionId: pageId,
+          content: reopened.content,
+        })
+      );
+      expect(configured.id).toBe(draft.id);
+      expect(configured.content.campaignPlanId).toBe(briefId);
+      expect(configured.state).toBe("draft");
+      expect(configured.approvedAtMs).toBeNull();
+      expect(
+        (await owner.publishing.list({ organizationId: org })).items
+      ).toHaveLength(1);
+      expect(state.graph).not.toHaveBeenCalled();
+      await expect(
+        creator.publishing.save(
+          input({
+            id: draft.id,
+            revision: draft.revision,
+            content: draft.content,
+          })
+        )
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      await expect(
+        outsider.publishing.get({ organizationId: otherOrg, id: draft.id })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    });
+    it("excludes saved image setups from plans and rejects foreign plan associations", async () => {
+      const { briefId } = await outsider.briefs.create({
+        organizationId: otherOrg,
+        name: "Foreign plan",
+      });
+      await expect(
+        creator.publishing.save(
+          input({
+            content: contentSchema.parse({
+              title: "Wrong workspace",
+              campaignPlanId: briefId,
+            }),
+          })
+        )
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      await expect(
+        creator.creativeBuilder.save({
+          organizationId: org,
+          setup: { ...defaultCreativeSetup(), campaignPlanId: briefId },
+        })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      const [setup] = await state.db
+        .insert(campaignBriefs)
+        .values({
+          organizationId: org,
+          name: "Image setup",
+          audience: "",
+          offer: "",
+          placements: [],
+          formats: [],
+          creativeDirection: "",
+          assetIds: [],
+          creativeSetup: { version: 1 },
+          createdByUserId: ownerId,
+          createdAtMs: Date.now(),
+          updatedAtMs: Date.now(),
+        })
+        .returning();
+      expect(
+        (await creator.briefs.list({ organizationId: org })).some(
+          p => p.id === setup.id
+        )
+      ).toBe(false);
+      await expect(
+        creator.publishing.save(
+          input({
+            content: contentSchema.parse({
+              title: "Wrong type",
+              campaignPlanId: setup.id,
+            }),
+          })
+        )
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    });
     it("denies creator approval, queueing, and connection management on the server", async () => {
       const p = await creator.publishing.save(input());
       await expect(
@@ -567,6 +675,14 @@ describe.sequential(
         assetKeys: [`asset:${assetId}`],
       });
       expect(result.options[0].headline).toBe("Find resources");
+      await creator.channels.draftAssetCopy({
+        organizationId: org,
+        channel: "facebook",
+        assetKeys: [`asset:${assetId}`],
+      });
+      expect(
+        JSON.stringify(state.llm.mock.calls.at(-1)?.[0].messages[0])
+      ).toContain("organic Facebook post captions");
       const prompt = state.llm.mock.calls.at(-1)?.[0];
       expect(prompt.messages[1].content[1].image_url.url).toMatch(
         /^data:image\/jpeg;base64,/
