@@ -1,21 +1,38 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let connection: ReturnType<typeof postgres> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const url = new URL(process.env.DATABASE_URL);
+      if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+        throw new Error('The migration build requires a PostgreSQL DATABASE_URL');
+      }
+      connection = postgres(process.env.DATABASE_URL, {
+        prepare: false,
+        max: Number(process.env.DATABASE_POOL_SIZE || 5),
+        connect_timeout: 10,
+      });
+      _db = drizzle(connection);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] PostgreSQL configuration is invalid");
       _db = null;
     }
   }
   return _db;
+}
+
+export async function closeDb() {
+  await connection?.end({ timeout: 10 });
+  connection = null;
+  _db = null;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -68,7 +85,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).returning({ insertId: users.id }).onConflictDoUpdate({ target: [users.openId],
       set: updateSet,
     });
   } catch (error) {

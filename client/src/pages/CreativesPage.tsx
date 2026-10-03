@@ -1,472 +1,329 @@
-import { useMemo, useState } from "react";
+import { VideoStudio } from "@/components/VideoStudio";
+import { Link, Redirect, useLocation, useSearch } from "wouter";
+import {
+  Image,
+  Clapperboard,
+  Megaphone,
+  MessageSquare,
+  ArrowRight,
+  ArrowLeft,
+  Plus,
+  FolderOpen,
+} from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusPill } from "@/components/StatusPill";
 import { CreativeBuilder } from "@/components/CreativeBuilder";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { StudioDrafts } from "@/components/StudioDrafts";
+import { PublicationComposer } from "@/components/PublicationComposer";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
-import { CREATIVE_CHANNELS, formatDetails } from "@shared/creativeBuilder";
+import { mayCreateAssets } from "@shared/assetWorkflow";
 import {
-  AlertTriangle,
-  Check,
-  Copy,
-  Download,
-  Images,
-  Loader2,
-  MessageSquare,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
+  activationHref,
+  legacyStudioHref,
+  studioContentHref,
+  studioDraftsHref,
+} from "@shared/contentWorkflow";
+import { editablePublication, type Channel } from "@shared/channels";
 
-function CreativeStudio() {
+const creationChoices = [
+  {
+    path: "video",
+    title: "Create a video",
+    icon: Clapperboard,
+    description:
+      "Create product videos or prepare UGC with selected models. Edit, extend, and build from your references.",
+  },
+  {
+    path: "images",
+    title: "Create an image",
+    icon: Image,
+    description:
+      "Generate reusable images for your posts and ads, with sizes for each placement.",
+  },
+  {
+    path: "social",
+    title: "Create a social post",
+    icon: MessageSquare,
+    description:
+      "Write your caption, add an image, video or link, and preview the finished post.",
+  },
+  {
+    path: "ads",
+    title: "Create an ad",
+    icon: Megaphone,
+    description:
+      "Combine your creative and ad copy, then choose a connected ad account and campaign.",
+  },
+] as const;
+
+function Studio() {
   const { organizationId, membership } = useWorkspace();
-  const utils = trpc.useUtils();
-  const [tab, setTab] = useState<"create" | "results">("create");
-  const query = trpc.creatives.overview.useQuery(
-    { organizationId: organizationId! },
-    {
-      enabled: !!organizationId,
-      refetchInterval: query =>
-        query.state.data?.jobs.some(job =>
-          ["running", "queued"].includes(job.status)
-        )
-          ? 5000
-          : false,
-    }
-  );
-  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
-    null
-  );
-  const [comment, setComment] = useState("");
-  const download = trpc.creatives.download.useMutation();
-  const canReview = ["owner", "admin", "reviewer"].includes(
+  const [path, navigate] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const mode = path.split("/").at(-1);
+  const channel: Channel = mode === "ads" ? "meta_ads" : "facebook";
+  const planId = Number(params.get("plan")) || undefined;
+  const editId = params.get("edit");
+  const isDrafts = mode === "drafts" || !!editId;
+  const canCreate = mayCreateAssets(membership?.role ?? "");
+  const canCompose = ["owner", "admin", "creator", "publisher"].includes(
     membership?.role ?? ""
   );
-  const review = trpc.creatives.reviewVariant.useMutation({
-    onSuccess: async () => {
-      await Promise.all([
-        utils.creatives.overview.invalidate(),
-        utils.meta.overview.invalidate(),
-        utils.activity.list.invalidate(),
-      ]);
-      toast.success("Review decision recorded");
+  const newContentHref = `/app/creatives${planId ? "?plan=" + planId : ""}`;
+  const draftsHref = studioDraftsHref({ plan: planId });
+  const editing = trpc.publishing.get.useQuery(
+    {
+      organizationId: organizationId!,
+      id: editId ?? "00000000-0000-4000-8000-000000000000",
     },
-    onError: error => toast.error(error.message),
-  });
-  const addComment = trpc.creatives.addComment.useMutation({
-    onSuccess: async () => {
-      setComment("");
-      await Promise.all([
-        utils.creatives.overview.invalidate(),
-        utils.activity.list.invalidate(),
-      ]);
-      toast.success("Comment added");
-    },
-    onError: error => toast.error(error.message),
-  });
-  const variants = query.data?.variants ?? [];
-  const selected =
-    variants.find(variant => variant.id === selectedVariantId) ??
-    variants[0] ??
-    null;
-  const comments = useMemo(
-    () =>
-      (query.data?.comments ?? []).filter(
-        item => item.variantId === selected?.id
-      ),
-    [query.data?.comments, selected?.id]
+    { enabled: !!organizationId && !!editId, retry: false }
   );
-  const latestJob = query.data?.jobs[0];
-  const exportCreative = async () => {
-    if (!selected) return;
-    try {
-      const file = await download.mutateAsync({
-        organizationId: organizationId!,
-        variantId: selected.id,
-      });
-      const bytes = Uint8Array.from(atob(file.base64), character =>
-        character.charCodeAt(0)
-      );
-      const url = URL.createObjectURL(
-        new Blob([bytes], { type: file.mimeType })
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = file.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Download failed.");
-    }
-  };
-  const copyPackage = async () => {
-    if (!selected) return;
-    try {
-      const copy = selected.renderMetadata?.copy;
-      await navigator.clipboard.writeText(
-        copy
-          ? [copy.headline, copy.subheadline, "CTA: " + copy.cta].join("\n")
-          : [
-              selected.primaryText,
-              "",
-              selected.headline,
-              selected.description ?? "",
-              "CTA: " + selected.callToAction,
-            ].join("\n")
-      );
-      toast.success("Creative copy copied");
-    } catch {
-      toast.error("Copy was unavailable. Select and copy the text directly.");
-    }
-  };
-  const submitComment = () => {
-    if (selected && comment.trim())
-      addComment.mutate({
-        organizationId: organizationId!,
-        variantId: selected.id,
-        body: comment.trim(),
-      });
-  };
+  const compose =
+    canCompose &&
+    ((params.has("new") && ["social", "ads"].includes(mode ?? "")) ||
+      (!!editing.data && editablePublication(editing.data.state)));
   return (
     <>
       <PageHeader
-        eyebrow="Content studio"
-        title="Creative Builder"
-        description="Choose a theme, bring your products and brand assets, and create one consistent idea in every size you need."
+        eyebrow="Create"
+        title="Content Studio"
+        description="Start something new or pick up where you left off."
+        action={
+          <Link href="/app/plans" className="text-sm text-primary underline">
+            Campaign Plans
+          </Link>
+        }
       />
-      <div
-        className="mb-6 flex gap-2 border-b border-border pb-3"
-        role="tablist"
-        aria-label="Creative workspace"
-      >
-        <Button
-          role="tab"
-          id="creative-create-tab"
-          aria-controls="creative-create-panel"
-          aria-selected={tab === "create"}
-          variant={tab === "create" ? "default" : "ghost"}
-          className="rounded-full"
-          onClick={() => setTab("create")}
-        >
-          Create
-        </Button>
-        <Button
-          role="tab"
-          id="creative-results-tab"
-          aria-controls="creative-results-panel"
-          aria-selected={tab === "results"}
-          variant={tab === "results" ? "default" : "ghost"}
-          className="rounded-full"
-          onClick={() => setTab("results")}
-        >
-          Results{variants.length ? " · " + variants.length : ""}
-        </Button>
-      </div>
-      <div
-        id="creative-create-panel"
-        role="tabpanel"
-        aria-labelledby="creative-create-tab"
-        hidden={tab !== "create"}
-      >
-        <CreativeBuilder
-          onGenerated={() => {
-            setSelectedVariantId(null);
-            setTab("results");
-          }}
-        />
-      </div>
-      <div
-        id="creative-results-panel"
-        role="tabpanel"
-        aria-labelledby="creative-results-tab"
-        hidden={tab !== "results"}
-      >
-        {query.isLoading && (
-          <p className="surface p-5 text-sm">
-            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-            Loading results…
+      <nav aria-label="Content Studio" className="mb-8 flex gap-1 border-b">
+        {[
+          {
+            label: "New content",
+            href: newContentHref,
+            active: !isDrafts,
+            icon: Plus,
+          },
+          {
+            label: "Drafts",
+            href: draftsHref,
+            active: isDrafts,
+            icon: FolderOpen,
+          },
+        ].map(({ label, href, active, icon: Icon }) => (
+          <Link
+            key={label}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`inline-flex min-h-12 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`}
+          >
+            <Icon size={17} aria-hidden="true" />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      {planId && (
+        <p className="mb-5 text-sm">
+          Showing work for campaign plan #{planId}.{" "}
+          <Link
+            href={isDrafts ? "/app/creatives/drafts" : "/app/creatives"}
+            className="text-primary underline"
+          >
+            Show all work
+          </Link>
+        </p>
+      )}
+      {isDrafts ? (
+        <StudioDrafts planId={planId} />
+      ) : mode === "video" ? (
+        <>
+          <Link
+            href={newContentHref}
+            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
+          >
+            <ArrowLeft size={16} />
+            Back to new content
+          </Link>
+          {canCreate ? (
+            <VideoStudio key={organizationId} initialPlanId={planId} />
+          ) : (
+            <p className="surface p-6">
+              Video creation requires a creator role.
+            </p>
+          )}
+        </>
+      ) : mode === "images" ? (
+        <>
+          <Link
+            href={newContentHref}
+            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
+          >
+            <ArrowLeft size={16} />
+            Back to new content
+          </Link>
+          {canCreate ? (
+            <CreativeBuilder
+              initialPlanId={planId}
+              onGenerated={() =>
+                navigate(studioDraftsHref({ filter: "images", plan: planId }))
+              }
+            />
+          ) : (
+            <p className="surface p-6">
+              Your role can view assets in the library. Image creation requires
+              a creator role.
+            </p>
+          )}
+        </>
+      ) : (
+        <section aria-labelledby="studio-create-heading">
+          <h2 id="studio-create-heading" className="text-xl font-semibold">
+            What would you like to create?
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Choose a starting point. Save a draft, then review it before
+            publishing.
           </p>
-        )}
-        {query.error && (
-          <div className="surface mb-5 p-5">
-            <p>Results could not be loaded.</p>
-            <Button
-              className="mt-3"
-              variant="outline"
-              onClick={() => query.refetch()}
-            >
-              Try again
-            </Button>
-          </div>
-        )}
-        {latestJob?.status === "failed" && (
-          <section className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <p className="font-medium">
-                The latest attempt could not finish.
-              </p>
-              <p className="mt-1 text-sm">{latestJob.errorMessage}</p>
-              <Button
-                variant="outline"
-                className="mt-3 bg-white"
-                onClick={() => setTab("create")}
-              >
-                Return to saved setups
-              </Button>
-            </div>
-          </section>
-        )}
-        {query.data?.jobs.some(job =>
-          ["running", "queued"].includes(job.status)
-        ) && (
-          <p role="status" className="mb-5 rounded-xl bg-primary/5 p-4 text-sm">
-            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />A creative
-            set is being generated. Results appear here when the whole set is
-            ready.
-          </p>
-        )}
-        {!query.isLoading && !query.error && !variants.length ? (
-          <div className="surface grid min-h-80 place-items-center p-6 text-center">
-            <div>
-              <Images className="mx-auto h-8 w-8 text-primary" />
-              <h2 className="mt-4 text-xl font-semibold">
-                Your creatives will appear here
-              </h2>
-              <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                Start with a theme and your products. Every generated image is
-                saved for review.
-              </p>
-              <Button
-                className="mt-5 rounded-full"
-                onClick={() => setTab("create")}
-              >
-                Create your first set
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_350px]">
-            <section className="min-w-0">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold">Creative results</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Review the full image, copy, product details, and logo before
-                  approving.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-2">
-                {variants.map(variant => {
-                  const format = formatDetails(variant.format);
-                  const channel =
-                    CREATIVE_CHANNELS.find(
-                      channel => channel.id === variant.channel
-                    )?.name ?? "Meta";
-                  return (
-                    <article
-                      key={variant.id}
-                      className={
-                        "overflow-hidden rounded-2xl border bg-card " +
-                        (selected?.id === variant.id
-                          ? "border-primary ring-2 ring-primary/10"
-                          : "border-border")
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="relative grid h-64 w-full place-items-center bg-muted/50 p-3"
-                        aria-label={"Inspect " + variant.name}
-                        onClick={() => setSelectedVariantId(variant.id)}
-                      >
-                        <img
-                          src={variant.imageUrl}
-                          alt={variant.name}
-                          className="max-h-full max-w-full object-contain"
-                          loading="lazy"
-                        />
-                        <span className="absolute left-2 top-2">
-                          <StatusPill status={variant.status} />
-                        </span>
-                      </button>
-                      <div className="p-4">
-                        <p className="text-xs text-muted-foreground">
-                          {channel} ·{" "}
-                          {format
-                            ? format.width + " × " + format.height
-                            : variant.format.replaceAll("_", " ")}
-                        </p>
-                        <button
-                          type="button"
-                          className="mt-2 block text-left font-medium"
-                          onClick={() => setSelectedVariantId(variant.id)}
-                        >
-                          {variant.name}
-                        </button>
-                        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                          {variant.headline}
-                        </p>
-                        {canReview && (
-                          <div className="mt-4 flex gap-2">
-                            <Button
-                              size="sm"
-                              className="flex-1"
-                              disabled={
-                                review.isPending ||
-                                variant.status === "approved"
-                              }
-                              onClick={() =>
-                                review.mutate({
-                                  organizationId: organizationId!,
-                                  variantId: variant.id,
-                                  decision: "approved",
-                                })
-                              }
-                            >
-                              <Check className="mr-1 h-3.5 w-3.5" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              aria-label={"Reject " + variant.name}
-                              disabled={
-                                review.isPending ||
-                                variant.status === "rejected"
-                              }
-                              onClick={() =>
-                                review.mutate({
-                                  organizationId: organizationId!,
-                                  variantId: variant.id,
-                                  decision: "rejected",
-                                })
-                              }
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-            {selected && (
-              <aside className="surface h-fit overflow-hidden 2xl:sticky 2xl:top-6">
-                <div className="border-b border-border p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <h2 className="text-lg font-medium">{selected.name}</h2>
-                    <StatusPill status={selected.status} />
+          <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            {creationChoices.map(({ path, title, icon: Icon, description }) => {
+              const allowed = ["images", "video"].includes(path)
+                ? canCreate
+                : canCompose;
+              const href = ["images", "video"].includes(path)
+                ? `/app/creatives/${path}${planId ? "?plan=" + planId : ""}`
+                : studioContentHref(path === "ads" ? "meta_ads" : "facebook", {
+                    plan: planId,
+                  });
+              const contents = (
+                <>
+                  <div className="mb-6 flex items-start justify-between gap-4">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon size={25} aria-hidden="true" />
+                    </span>
+                    {allowed && (
+                      <ArrowRight
+                        size={20}
+                        className="mt-3 text-primary transition-transform group-hover:translate-x-1"
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {selected.concept}
+                  <h3 className="text-xl font-semibold">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {description}
+                  </p>
+                </>
+              );
+              return allowed ? (
+                <Link
+                  key={path}
+                  href={href}
+                  aria-label={title}
+                  className="surface group min-w-0 p-6 transition-colors hover:border-primary/50 hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {contents}
+                </Link>
+              ) : (
+                <div key={path} className="surface min-w-0 p-6 opacity-70">
+                  {contents}
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Your workspace role does not allow this action.
                   </p>
                 </div>
-                <div className="space-y-5 p-5">
-                  <a
-                    href={selected.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block rounded-xl bg-muted/50 p-2"
-                    aria-label="Open full creative"
-                  >
-                    <img
-                      src={selected.imageUrl}
-                      alt={selected.name}
-                      className="max-h-96 w-full object-contain"
-                    />
-                  </a>
-                  <div>
-                    <p className="font-medium">{selected.headline}</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                      {selected.primaryText}
-                    </p>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {selected.renderMetadata?.copy.cta ??
-                        selected.callToAction.replaceAll("_", " ")}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={copyPackage}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy text
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={download.isPending}
-                      onClick={exportCreative}
-                    >
-                      {download.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="mr-2 h-4 w-4" />
-                      )}
-                      Export
-                    </Button>
-                  </div>
-                  <div className="border-t border-border pt-5">
-                    <p className="flex items-center gap-2 text-sm font-medium">
-                      <MessageSquare className="h-4 w-4" />
-                      Review comments
-                    </p>
-                    <div className="mt-3 max-h-44 space-y-2 overflow-y-auto">
-                      {comments.length ? (
-                        comments.map(item => (
-                          <div
-                            key={item.id}
-                            className="rounded-xl bg-muted/60 p-3 text-xs leading-5"
-                          >
-                            {item.body}
-                            <p className="mt-1 text-muted-foreground">
-                              {new Date(item.createdAtMs).toLocaleString()}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          No comments yet.
-                        </p>
-                      )}
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <Input
-                        aria-label="Review comment"
-                        value={comment}
-                        maxLength={3000}
-                        onChange={event => setComment(event.target.value)}
-                        placeholder="Add a review note…"
-                        onKeyDown={event => {
-                          if (event.key === "Enter" && !addComment.isPending)
-                            submitComment();
-                        }}
-                      />
-                      <Button
-                        size="icon"
-                        aria-label="Add review comment"
-                        disabled={!comment.trim() || addComment.isPending}
-                        onClick={submitComment}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </aside>
-            )}
+              );
+            })}
           </div>
-        )}
-      </div>
+        </section>
+      )}
+      {editId && editing.isLoading && (
+        <p role="status" className="mt-4">
+          Opening content…
+        </p>
+      )}
+      {editing.error && (
+        <p role="alert" className="mt-4">
+          This content could not be opened in this workspace.{" "}
+          {editing.error.message}
+        </p>
+      )}
+      {editing.data && !editablePublication(editing.data.state) && (
+        <p className="surface mt-4 p-5">
+          This content is {editing.data.state.replaceAll("_", " ")}.{" "}
+          <Link
+            href={`/app/publishing?publication=${editing.data.id}`}
+            className="text-primary underline"
+          >
+            View delivery record
+          </Link>
+        </p>
+      )}
+      {compose && (
+        <PublicationComposer
+          key={`${organizationId}:${editId ?? search}`}
+          stage="create"
+          item={editing.data ?? undefined}
+          initialChannel={channel}
+          initialAssetKey={params.get("asset") ?? undefined}
+          initialPlanId={planId}
+          initialConnectionId={params.get("connection") ?? undefined}
+          initialAdSetId={params.get("adset") ?? undefined}
+          initialTime={params.get("time") ?? undefined}
+          initialTimezone={params.get("timezone") ?? undefined}
+          onClose={() =>
+            navigate(
+              editId
+                ? studioDraftsHref({
+                    filter: channel === "facebook" ? "social" : "ads",
+                    plan: planId,
+                  })
+                : newContentHref
+            )
+          }
+          onSaved={(id, next, savedChannel) =>
+            navigate(
+              next === "activate"
+                ? activationHref(
+                    savedChannel ?? editing.data?.channel ?? channel,
+                    id
+                  )
+                : studioDraftsHref({
+                    filter:
+                      (savedChannel ?? channel) === "facebook"
+                        ? "social"
+                        : "ads",
+                    plan: planId,
+                  })
+            )
+          }
+        />
+      )}
     </>
   );
 }
 export default function CreativesPage() {
+  const [path] = useLocation();
+  const search = useSearch();
+  const legacy = legacyStudioHref(path, search);
+  if (legacy && legacy !== path + "?" + search)
+    return <Redirect to={legacy} replace />;
+  const params = new URLSearchParams(search);
+  if (
+    (path.endsWith("/social") || path.endsWith("/ads")) &&
+    !params.has("new") &&
+    !params.has("edit")
+  )
+    return (
+      <Redirect
+        to={studioDraftsHref({
+          filter: path.endsWith("/ads") ? "ads" : "social",
+          plan: Number(params.get("plan")) || undefined,
+        })}
+        replace
+      />
+    );
   return (
     <WorkspaceGate>
-      <CreativeStudio />
+      <Studio />
     </WorkspaceGate>
   );
 }

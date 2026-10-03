@@ -106,7 +106,7 @@ export const creativesRouter = router({
     const briefSnapshot = { ...brief, brand: { name: kit.name, voice: kit.voice, colors: kit.colors, fonts: kit.fonts, requiredClaims: kit.requiredClaims, prohibitedContent: kit.prohibitedContent }, products: productSnapshot };
     const assetSnapshot = assets.map(asset => ({ id: asset.id, name: asset.name, type: asset.type, url: asset.url, mimeType: asset.mimeType, storageKey: asset.storageKey, status: asset.status }));
     const inputHash = stableHash({ briefSnapshot, assetSnapshot });
-    const inserted = await db.insert(creativeJobs).values({ organizationId: input.organizationId, briefId: brief.id, status: "queued", inputHash, briefSnapshot, assetSnapshot, requestedByUserId: ctx.user.id, createdAtMs: Date.now() });
+    const inserted = await db.insert(creativeJobs).values({ organizationId: input.organizationId, briefId: brief.id, status: "queued", inputHash, briefSnapshot, assetSnapshot, requestedByUserId: ctx.user.id, createdAtMs: Date.now() }).returning({ insertId: creativeJobs.id });
     const jobId = Number(inserted[0].insertId);
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.requested", entityType: "creative_job", entityId: jobId, payload: { briefId: brief.id, inputHash, count: input.count } });
     await db.update(creativeJobs).set({ status: "running" }).where(eq(creativeJobs.id, jobId));
@@ -136,10 +136,10 @@ export const creativesRouter = router({
       const generated = await Promise.all(plan.concepts.slice(0, input.count).map(async (concept, index) => {
         const image = await generateImage({ model: imageModel, quality: "medium", originalImages: sourceImages, prompt: `${concept.imagePrompt}\n\nCreate a premium Meta advertising image for ${kit.name}. Preserve the supplied product and logo assets accurately. Use the approved palette ${kit.colors.join(", ")}. The intended output format is ${brief.formats[index % brief.formats.length]}. Render no words, letters, prices, badges, or invented marks in the image. No prohibited content: ${kit.prohibitedContent || "none specified"}.` });
         if (!image.url) throw new Error(`Image generation failed for ${concept.name}`);
-        return { concept, imageUrl: image.url, format: brief.formats[index % brief.formats.length] ?? "square_1_1" };
+        return { concept, imageUrl: image.url, imageStorageKey: image.storageKey, format: brief.formats[index % brief.formats.length] ?? "square_1_1" };
       }));
       for (const item of generated) {
-        await db.insert(creativeVariants).values({ organizationId: input.organizationId, jobId, briefId: brief.id, name: item.concept.name, concept: item.concept.concept, primaryText: item.concept.primaryText, headline: item.concept.headline, description: item.concept.description, callToAction: item.concept.callToAction, format: item.format, imageUrl: item.imageUrl, status: "pending", createdAtMs: Date.now() });
+        await db.insert(creativeVariants).values({ organizationId: input.organizationId, jobId, briefId: brief.id, name: item.concept.name, concept: item.concept.concept, primaryText: item.concept.primaryText, headline: item.concept.headline, description: item.concept.description, callToAction: item.concept.callToAction, format: item.format, imageUrl: item.imageUrl, imageStorageKey: item.imageStorageKey, status: "pending", createdAtMs: Date.now() }).returning({ insertId: creativeVariants.id });
       }
       await db.update(creativeJobs).set({ status: "completed", completedAtMs: Date.now() }).where(eq(creativeJobs.id, jobId));
       await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative_generation.completed", entityType: "creative_job", entityId: jobId, payload: { variantCount: generated.length, languageModel, imageModel, rasterSourceCount: sourceImages.length, unsupportedSourceCount: selectedSources.unsupportedCount } });
@@ -168,7 +168,7 @@ export const creativesRouter = router({
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const variant = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.id, input.variantId), eq(creativeVariants.organizationId, input.organizationId))).limit(1))[0];
     if (!variant) throw new TRPCError({ code: "NOT_FOUND" });
-    const inserted = await db.insert(reviewComments).values({ organizationId: input.organizationId, variantId: input.variantId, body: input.body, status: "open", authorUserId: ctx.user.id, createdAtMs: Date.now() });
+    const inserted = await db.insert(reviewComments).values({ organizationId: input.organizationId, variantId: input.variantId, body: input.body, status: "open", authorUserId: ctx.user.id, createdAtMs: Date.now() }).returning({ insertId: reviewComments.id });
     const commentId = Number(inserted[0].insertId);
     await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "creative.comment_added", entityType: "review_comment", entityId: commentId, payload: { variantId: input.variantId } });
     return { commentId };

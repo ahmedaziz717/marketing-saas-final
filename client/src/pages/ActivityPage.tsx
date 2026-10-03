@@ -1,3 +1,67 @@
-import { WorkspaceGate } from "@/components/WorkspaceGate"; import { PageHeader } from "@/components/PageHeader"; import { StatusPill } from "@/components/StatusPill"; import { useWorkspace } from "@/hooks/useWorkspace"; import { trpc } from "@/lib/trpc"; import { CheckCircle2,ShieldCheck } from "lucide-react";
-function Activity(){const{organizationId}=useWorkspace();const query=trpc.activity.list.useQuery({organizationId:organizationId!},{enabled:!!organizationId});return <><PageHeader eyebrow="Append-only record" title="Activity ledger" description="Every approval, generation request, and publishing action becomes part of a tamper-evident organization history." action={query.data?<div className={`flex items-center gap-2 text-sm font-medium ${query.data.verified?"text-emerald-700":"text-rose-700"}`}><ShieldCheck className="h-4 w-4"/>{query.data.verified?"Chain verified":"Verification failed"}</div>:undefined}/><div className="surface overflow-hidden">{!query.data?.events.length?<div className="grid min-h-72 place-items-center text-sm text-muted-foreground">Workspace events will appear here.</div>:query.data.events.map(event=><div key={event.id} className="grid gap-3 border-b hairline p-5 last:border-b-0 md:grid-cols-[36px_1fr_auto]"><div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-4 w-4"/></div><div><p className="font-medium">{event.action.replaceAll("."," · ")}</p><p className="mt-1 text-xs text-muted-foreground">{event.entityType} #{event.entityId} · {new Date(event.createdAtMs).toLocaleString()}</p></div><StatusPill status={event.outcome}/></div>)}</div></>}
-export default function ActivityPage(){return <WorkspaceGate><Activity/></WorkspaceGate>}
+import { WorkspaceGate } from "@/components/WorkspaceGate";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusPill } from "@/components/StatusPill";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { trpc } from "@/lib/trpc";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
+export function Activity() {
+  const { organizationId } = useWorkspace();
+  const query = trpc.activity.list.useQuery(
+    { organizationId: organizationId! },
+    { enabled: !!organizationId }
+  );
+  return (
+    <>
+      <PageHeader
+        eyebrow="Append-only record"
+        title="Activity & audit log"
+        description="Every approval, generation request, and publishing action becomes part of a tamper-evident organization history."
+        action={
+          query.data ? (
+            <div
+              className={`flex items-center gap-2 text-sm font-medium ${query.data.verified ? "text-emerald-700" : "text-rose-700"}`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              {query.data.verified ? "Chain verified" : "Verification failed"}
+            </div>
+          ) : undefined
+        }
+      />
+      <div className="surface overflow-hidden">
+        {!query.data?.events.length ? (
+          <div className="grid min-h-72 place-items-center text-sm text-muted-foreground">
+            Workspace events will appear here.
+          </div>
+        ) : (
+          query.data.events.map(event => (
+            <div
+              key={event.id}
+              className="grid gap-3 border-b hairline p-5 last:border-b-0 md:grid-cols-[36px_1fr_auto]"
+            >
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-medium">
+                  {event.action.replaceAll(".", " · ")}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {event.entityType} #{event.entityId} ·{" "}
+                  {new Date(event.createdAtMs).toLocaleString()}
+                </p>
+              </div>
+              <StatusPill status={event.outcome} />
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+export default function ActivityPage() {
+  return (
+    <WorkspaceGate>
+      <Activity />
+    </WorkspaceGate>
+  );
+}

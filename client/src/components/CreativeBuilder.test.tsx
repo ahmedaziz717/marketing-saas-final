@@ -33,7 +33,13 @@ vi.mock("@/lib/trpc", () => ({
       creatives: { overview: { invalidate: api.invalidate } },
       activity: { list: { invalidate: api.invalidate } },
     }),
+    briefs: {
+      get: { useQuery: () => ({ data: undefined }) },
+      list: { useQuery: () => ({ data: [] }) },
+    },
     creativeBuilder: {
+      people: { useQuery: () => ({ data: [] }) },
+      savePerson: { useMutation: () => ({ mutate: vi.fn() }) },
       options: { useQuery: () => ({ data: api.options, isLoading: false }) },
       save: { useMutation: () => api.save },
       refreshCopy: { useMutation: () => api.refresh },
@@ -88,25 +94,35 @@ afterEach(cleanup);
 describe("Creative Builder controls", () => {
   it("searches monthly themes and saves editable main and theme prompt layers", async () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
-    expect(screen.getByText(/100 directions/)).toBeTruthy();
+    expect(screen.getByText(/124 directions/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search creative themes"), {
       target: { value: "Cyber Monday" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Cyber Monday" }));
-    expect((screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value).toContain("Digital deal atmosphere");
+    expect(
+      (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
+    ).toBe(CREATIVE_THEMES["cyber-monday"].direction);
     fireEvent.change(screen.getByLabelText("Main prompt"), {
-      target: { value: "Create a precise premium commerce composition with generous safe space." },
+      target: {
+        value:
+          "Create a precise premium commerce composition with generous safe space.",
+      },
     });
     fireEvent.change(screen.getByLabelText("Theme prompt"), {
-      target: { value: "Use electric cyan data light with a restrained violet retail-event atmosphere." },
+      target: {
+        value:
+          "Use electric cyan data light with a restrained violet retail-event atmosphere.",
+      },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
     await waitFor(() => expect(api.save.mutateAsync).toHaveBeenCalled());
     expect(api.save.mutateAsync.mock.calls[0][0]).toMatchObject({
       setup: {
         theme: "cyber-monday",
-        basePrompt: "Create a precise premium commerce composition with generous safe space.",
-        themePrompt: "Use electric cyan data light with a restrained violet retail-event atmosphere.",
+        basePrompt:
+          "Create a precise premium commerce composition with generous safe space.",
+        themePrompt:
+          "Use electric cyan data light with a restrained violet retail-event atmosphere.",
       },
     });
   });
@@ -116,9 +132,12 @@ describe("Creative Builder controls", () => {
       ...defaultCreativeSetup(),
       theme: "cyber-monday" as const,
       basePrompt: "Saved main prompt for a premium retail composition.",
-      themePrompt: "Saved theme prompt with cyan data light and restrained violet depth.",
+      themePrompt:
+        "Saved theme prompt with cyan data light and restrained violet depth.",
       mood: "premium" as const,
       artStyle: "editorial" as const,
+      shot: "male" as const,
+      person: { kind: "library" as const, id: "male-brown-3" },
       copy: {
         headline: "Saved headline",
         subheadline: "Saved subheadline",
@@ -137,8 +156,20 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(savedSetup.themePrompt);
-    expect(screen.getByRole("button", { name: "Premium" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Editorial" }).getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: "Premium" })
+        .getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: "Editorial" })
+        .getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(
+      (screen.getByLabelText("Product setting") as HTMLSelectElement).value
+    ).toBe("multiple");
+    expect(screen.getByRole("img", { name: "Man · Brown 4" })).toBeTruthy();
     const resetButtons = screen.getAllByRole("button", { name: "Reset" });
     fireEvent.click(resetButtons[0]);
     fireEvent.click(resetButtons[1]);
@@ -167,6 +198,8 @@ describe("Creative Builder controls", () => {
       briefId: 44,
       setup: {
         theme: "holiday",
+        shot: "male",
+        person: savedSetup.person,
         themePrompt: CREATIVE_THEMES.holiday.direction,
         copy: {
           headline: CREATIVE_THEMES.holiday.headline,
@@ -230,13 +263,29 @@ describe("Creative Builder controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Vibrant" }));
     fireEvent.click(screen.getByRole("button", { name: "Animation" }));
     const setting = screen.getByLabelText("Product setting");
-    expect(screen.getByRole("option", { name: "Product only" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Lifestyle · female" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Lifestyle · male" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Lifestyle · no person" })).toBeTruthy();
+    expect(
+      Array.from((setting as HTMLSelectElement).options).map(
+        option => option.text
+      )
+    ).toEqual([
+      "Product only",
+      "Lifestyle · no person",
+      "Lifestyle · with person(s)",
+    ]);
+    expect(
+      screen.queryByRole("button", { name: "Browse 500 models" })
+    ).toBeNull();
+    fireEvent.change(setting, { target: { value: "multiple" } });
+    fireEvent.click(screen.getByRole("button", { name: "Browse 500 models" }));
+    fireEvent.click(screen.getByRole("button", { name: "Woman · Black 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use 1 model" }));
+    expect(screen.getByRole("img", { name: "Woman · Black 1" })).toBeTruthy();
     fireEvent.change(setting, {
       target: { value: "lifestyle" },
     });
+    expect(
+      screen.queryByRole("button", { name: "Browse 500 models" })
+    ).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Refresh copy" }));
     await waitFor(() =>
       expect(
@@ -264,6 +313,8 @@ describe("Creative Builder controls", () => {
         mood: "vibrant",
         artStyle: "animation",
         shot: "lifestyle",
+        person: null,
+        people: [],
         extraDirection: "Warm window light",
       },
     });
@@ -340,5 +391,47 @@ describe("Creative Builder controls", () => {
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true);
+  });
+});
+
+it("defaults a directory to a catalog-free workflow and saves a listing brief", async () => {
+  api.options.products = [];
+  api.options.brand = {
+    status: "active",
+    name: "Learn Like This",
+    businessProfile: {
+      model: "directory",
+      summary: "A directory for discovering learning providers.",
+    },
+  };
+  render(<CreativeBuilder onGenerated={vi.fn()} />);
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Promotion type") as HTMLSelectElement).value
+    ).toBe("platform")
+  );
+  expect(screen.queryByLabelText("Search products or SKU")).toBeNull();
+  expect(screen.queryByText(/Approve products in your/)).toBeNull();
+  expect(screen.getByText(/3 images/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Promotion type"), {
+    target: { value: "listing" },
+  });
+  fireEvent.change(screen.getByLabelText("Provider / listing name"), {
+    target: { value: "Music teacher" },
+  });
+  fireEvent.change(
+    screen.getByLabelText("What should this promotion communicate?"),
+    {
+      target: {
+        value: "Discover independent piano lessons through our directory.",
+      },
+    }
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+  await waitFor(() => expect(api.save.mutateAsync).toHaveBeenCalled());
+  expect(api.save.mutateAsync.mock.calls[0][0].setup).toMatchObject({
+    promotionMode: "platform",
+    products: [],
+    promotion: { kind: "listing", title: "Music teacher" },
   });
 });
