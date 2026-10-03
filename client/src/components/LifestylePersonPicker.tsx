@@ -93,13 +93,7 @@ export function LifestylePersonPicker({
     onError: e => toast.error(e.message),
   });
   const selected = selectedPeople(setup);
-  const multiple = setup.shot === "multiple";
-  const limit = multiple ? 4 : 1;
-  const ageOptions = MODEL_AGES.filter(
-    a =>
-      setup.shot === "multiple" ||
-      (setup.shot === "child" ? isChildModel(a.id) : !isChildModel(a.id))
-  );
+  const limit = 4;
   function assetFor(ref: PersonReference) {
     return ref.kind === "asset"
       ? people.data?.find(p => p.id === ref.assetId)
@@ -135,13 +129,14 @@ export function LifestylePersonPicker({
     );
   }
   function apply(next: PersonReference[]) {
-    onChange({ ...setup, person: null, people: next });
+    // The existing group setting supports one to four people. Keep old saved
+    // single-person references until the user applies a new selection.
+    onChange({ ...setup, shot: "multiple", person: null, people: next });
   }
   function toggle(ref: PersonReference) {
     setDraft(current => {
       const exists = current.some(p => identity(p) === identity(ref));
       if (exists) return current.filter(p => identity(p) !== identity(ref));
-      if (!multiple) return [ref];
       return current.length < limit ? [...current, ref] : current;
     });
   }
@@ -153,7 +148,7 @@ export function LifestylePersonPicker({
     setPage(0);
   }
   const matches = filterLifestylePeople({
-    shot: setup.shot,
+    shot: "multiple",
     gender,
     age,
     hair,
@@ -164,7 +159,7 @@ export function LifestylePersonPicker({
       const ref: PersonReference = { kind: "asset", assetId: p.id };
       const model = libraryFor(ref);
       return (
-        modelMatchesShot(model ?? p, setup.shot) &&
+        modelMatchesShot(model ?? p, "multiple") &&
         (gender === "any" || p.gender === gender) &&
         (age === "any" || (model?.age ?? p.age) === age) &&
         (hair === "any" || model?.hair === hair) &&
@@ -194,13 +189,11 @@ export function LifestylePersonPicker({
         <div>
           <h3 className="flex items-center gap-2 font-semibold">
             <UsersRound className="h-5 w-5 text-violet-600" />
-            {multiple ? "Models" : "Model"}
+            Models
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {multiple
-              ? "Choose up to four people for one scene."
-              : "Choose one person for your creative."}{" "}
-            Describe the scene and pose in Creative Direction.
+            Choose one to four people for your scene. Describe the scene and
+            pose in Creative Direction.
           </p>
         </div>
         {selected.length > 0 && (
@@ -256,8 +249,8 @@ export function LifestylePersonPicker({
         </div>
       ) : (
         <p className="my-4 text-sm text-muted-foreground">
-          {multiple
-            ? "AI will choose two adults unless you select a group."
+          {setup.shot === "multiple"
+            ? "AI will choose two adults unless you select one or more models."
             : setup.shot === "child"
               ? "AI will choose an age-appropriate child model."
               : "AI will choose a model unless you select one."}
@@ -282,16 +275,10 @@ export function LifestylePersonPicker({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[90dvh] max-h-[900px] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6">
-            <DialogTitle>
-              Choose {multiple ? "your models" : "a model"}
-            </DialogTitle>
+            <DialogTitle>Choose your models</DialogTitle>
             <DialogDescription>
-              {LIFESTYLE_PEOPLE.length} fictional portraits.{" "}
-              {multiple
-                ? "Select up to four people."
-                : setup.shot === "child"
-                  ? "Select one child or teen."
-                  : `Select one ${setup.shot === "male" ? "male" : "female"} adult model.`}
+              {LIFESTYLE_PEOPLE.length} fictional portraits. Select one to four
+              people.
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
@@ -370,14 +357,7 @@ export function LifestylePersonPicker({
                       Gender
                       <select
                         className={selectClass}
-                        value={
-                          setup.shot === "female" || setup.shot === "male"
-                            ? setup.shot
-                            : gender
-                        }
-                        disabled={
-                          setup.shot === "female" || setup.shot === "male"
-                        }
+                        value={gender}
                         onChange={e => {
                           setGender(e.target.value);
                           setPage(0);
@@ -399,7 +379,7 @@ export function LifestylePersonPicker({
                         }}
                       >
                         <option value="any">All ages</option>
-                        {ageOptions.map(a => (
+                        {MODEL_AGES.map(a => (
                           <option key={a.id} value={a.id}>
                             {a.label}
                           </option>
@@ -438,7 +418,7 @@ export function LifestylePersonPicker({
                   <span aria-live="polite">
                     {entries.length} matching models
                   </span>
-                  <span>{multiple ? "Select up to 4" : "Select 1"}</span>
+                  <span>Select up to 4</span>
                 </div>
                 {tab === "saved" && people.isLoading && (
                   <p>Loading saved people…</p>
@@ -464,7 +444,7 @@ export function LifestylePersonPicker({
                       );
                       const disabled =
                         entry.status !== "approved" ||
-                        (multiple && draft.length >= limit && !chosen);
+                        (draft.length >= limit && !chosen);
                       return (
                         <button
                           key={personReferenceKey(entry.ref)}
@@ -552,9 +532,6 @@ export function LifestylePersonPicker({
                     <select
                       className={selectClass}
                       value={uploadGender}
-                      disabled={
-                        setup.shot === "female" || setup.shot === "male"
-                      }
                       onChange={e =>
                         setUploadGender(e.target.value as "male" | "female")
                       }
@@ -573,7 +550,7 @@ export function LifestylePersonPicker({
                         setConfirmed(false);
                       }}
                     >
-                      {ageOptions.map(a => (
+                      {MODEL_AGES.map(a => (
                         <option key={a.id} value={a.id}>
                           {a.label}
                         </option>

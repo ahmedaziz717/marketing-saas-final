@@ -1,5 +1,6 @@
 import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
+import { isPeopleShot } from "@shared/lifestylePeople";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -1075,7 +1076,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 </span>
                 <select
                   className={selectClass}
-                  value={setup.shot}
+                  value={isPeopleShot(setup.shot) ? "multiple" : setup.shot}
                   onChange={event =>
                     change({
                       ...setupRef.current,
@@ -1090,11 +1091,8 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                       ? "Brand / concept"
                       : "Product only"}
                   </option>
-                  <option value="female">Lifestyle · female</option>
-                  <option value="male">Lifestyle · male</option>
-                  <option value="child">Lifestyle · Kids</option>
-                  <option value="multiple">Lifestyle · Multiple Models</option>
                   <option value="lifestyle">Lifestyle · no person</option>
+                  <option value="multiple">Lifestyle · with person(s)</option>
                 </select>
               </label>
               <label>
@@ -1121,7 +1119,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 </select>
               </label>
             </div>
-            {["male", "female", "child", "multiple"].includes(setup.shot) && (
+            {isPeopleShot(setup.shot) && (
               <LifestylePersonPicker
                 key={setup.shot}
                 setup={setup}

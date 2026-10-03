@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  creativeSetupSchema,
   defaultCreativeSetup,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
@@ -45,10 +46,17 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
-function Harness({ shot = "female" }: { shot?: CreativeSetup["shot"] }) {
+function Harness({
+  shot = "multiple",
+  person,
+}: {
+  shot?: CreativeSetup["shot"];
+  person?: CreativeSetup["person"];
+}) {
   const [setup, setSetup] = useState<CreativeSetup>({
     ...defaultCreativeSetup(),
     shot,
+    person,
   });
   return (
     <>
@@ -65,25 +73,42 @@ function stored() {
   return JSON.parse(screen.getByTestId("setup").textContent!);
 }
 afterEach(cleanup);
-it("replaces a single model, keeps the choice across filters, and applies only on confirmation", () => {
-  render(<Harness />);
+it("preserves a legacy single model, allows more people, and applies only on confirmation", () => {
+  render(
+    <Harness shot="female" person={{ kind: "library", id: "female-black-0" }} />
+  );
   const modal = openPicker();
-  fireEvent.click(modal.getByRole("button", { name: "Woman · Black 1" }));
+  expect(
+    modal
+      .getByRole("button", { name: "Woman · Black 1" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    (modal.getByRole("combobox", { name: "Gender" }) as HTMLSelectElement)
+      .disabled
+  ).toBe(false);
   fireEvent.click(modal.getByRole("button", { name: "Woman · Black 2" }));
-  expect(modal.getByText("1 / 1 selected")).toBeTruthy();
+  expect(modal.getByText("2 / 4 selected")).toBeTruthy();
   expect(stored().people).toBeUndefined();
+  expect(stored().person).toEqual({ kind: "library", id: "female-black-0" });
   fireEvent.change(modal.getByRole("combobox", { name: "Hair color" }), {
     target: { value: "blonde" },
   });
   expect(
     modal.getByRole("button", { name: "Remove Woman · Black 2 from selection" })
   ).toBeTruthy();
-  fireEvent.click(modal.getByRole("button", { name: "Use 1 model" }));
-  expect(stored().people).toEqual([{ kind: "library", id: "female-black-1" }]);
+  fireEvent.click(modal.getByRole("button", { name: "Use 2 models" }));
+  expect(stored().people).toEqual([
+    { kind: "library", id: "female-black-0" },
+    { kind: "library", id: "female-black-1" },
+  ]);
+  expect(stored().shot).toBe("multiple");
+  expect(creativeSetupSchema.safeParse(stored()).success).toBe(true);
   openPicker();
   fireEvent.click(screen.getByRole("button", { name: "Woman · Blonde 1" }));
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(stored().people[0].id).toBe("female-black-1");
+  expect(stored().people).toHaveLength(2);
+  expect(stored().people[0].id).toBe("female-black-0");
 });
 it("selects up to four across age and gender filters, disables a fifth, and restores capacity after removal", () => {
   render(<Harness shot="multiple" />);
@@ -113,16 +138,20 @@ it("selects up to four across age and gender filters, disables a fifth, and rest
   openPicker();
   expect(screen.getByText("4 / 4 selected")).toBeTruthy();
 });
-it("supports kids, empty searches and reset, while blocking unapproved saved models", () => {
+it("opens the full library for legacy kids setups and supports age filters, empty searches and reset", () => {
   render(<Harness shot="child" />);
   const modal = openPicker();
-  expect(modal.getByText("150 matching models")).toBeTruthy();
+  expect(modal.getByText("500 matching models")).toBeTruthy();
+  fireEvent.change(modal.getByRole("combobox", { name: "Age group" }), {
+    target: { value: "child" },
+  });
+  expect(modal.getByText("100 matching models")).toBeTruthy();
   fireEvent.change(modal.getByRole("textbox", { name: "Search models" }), {
     target: { value: "does not exist" },
   });
   expect(modal.getByText("No models match these filters.")).toBeTruthy();
   fireEvent.click(modal.getAllByRole("button", { name: "Reset filters" })[0]);
-  expect(modal.getByText("150 matching models")).toBeTruthy();
+  expect(modal.getByText("500 matching models")).toBeTruthy();
 });
 it("does not select the same identity twice through favorites, and requires upload consent", () => {
   render(<Harness shot="multiple" />);
