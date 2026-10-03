@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { personReferenceKey, personReferenceSchema } from "./creativeBuilder";
+
+export const ugcGenerationMessage =
+  "UGC generation is coming next. You can choose models and save your video setup now.";
 
 export const videoModes = [
   {
@@ -37,21 +41,42 @@ export const videoRatios = [
 ] as const;
 export const videoResolutions = ["480p", "720p", "1080p"] as const;
 const assetKey = z.string().regex(/^(asset|creative):[1-9][0-9]*$/);
-export const videoSetupSchema = z.object({
-  title: z.string().trim().min(1).max(160),
-  mode: z.enum(["create", "edit", "extend", "motion"]),
-  prompt: z.string().trim().max(10000),
-  imageKeys: z.array(assetKey).max(9),
-  sourceVideoKey: assetKey.nullable(),
-  duration: z.number().int().min(4).max(30),
-  aspectRatio: z.enum(videoRatios),
-  resolution: z.enum(videoResolutions),
-  sound: z.boolean(),
-  bitrate: z.enum(["default", "high"]),
-  campaignPlanId: z.number().int().positive().optional(),
-});
+export const videoSetupSchema = z
+  .object({
+    category: z.enum(["product", "ugc"]).default("product"),
+    people: z.array(personReferenceSchema).max(4).default([]),
+    title: z.string().trim().min(1).max(160),
+    mode: z.enum(["create", "edit", "extend", "motion"]),
+    prompt: z.string().trim().max(10000),
+    imageKeys: z.array(assetKey).max(9),
+    sourceVideoKey: assetKey.nullable(),
+    duration: z.number().int().min(4).max(30),
+    aspectRatio: z.enum(videoRatios),
+    resolution: z.enum(videoResolutions),
+    sound: z.boolean(),
+    bitrate: z.enum(["default", "high"]),
+    campaignPlanId: z.number().int().positive().optional(),
+  })
+  .superRefine((setup, ctx) => {
+    if (setup.category === "product" && setup.people.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["people"],
+        message: "Model selection is available for UGC videos.",
+      });
+    if (
+      new Set(setup.people.map(personReferenceKey)).size !== setup.people.length
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["people"],
+        message: "Choose each model only once.",
+      });
+  });
 export type VideoSetup = z.infer<typeof videoSetupSchema>;
 export const defaultVideoSetup: VideoSetup = {
+  category: "product",
+  people: [],
   title: "Untitled product video",
   mode: "create",
   prompt: "",

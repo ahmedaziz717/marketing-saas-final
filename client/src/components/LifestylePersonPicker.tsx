@@ -48,12 +48,24 @@ export function PersonPortrait({ person }: { person: LifestylePerson }) {
 const selectClass =
   "mt-1 h-10 w-full min-w-0 rounded-lg border bg-background px-2 text-sm";
 const pageSize = 24;
-export function LifestylePersonPicker({
+export function LifestylePersonPicker<
+  T extends Pick<CreativeSetup, "shot" | "person" | "people">,
+>({
   setup,
   onChange,
+  disabled = false,
+  description = "Choose one to four people for your scene. Describe the scene and pose in Creative Direction.",
+  emptyDescription,
+  clearLabel = "Let AI choose",
+  referenceDescription = "Fictional AI models, including kids, teens and adults. Selected identities are used across sizes; generated appearances may vary.",
 }: {
-  setup: CreativeSetup;
-  onChange: (setup: CreativeSetup) => void;
+  setup: T;
+  onChange: (setup: T) => void;
+  disabled?: boolean;
+  description?: string;
+  emptyDescription?: string;
+  clearLabel?: string;
+  referenceDescription?: string;
 }) {
   const { organizationId } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -129,6 +141,7 @@ export function LifestylePersonPicker({
     );
   }
   function apply(next: PersonReference[]) {
+    if (disabled) return;
     // The existing group setting supports one to four people. Keep old saved
     // single-person references until the user applies a new selection.
     onChange({ ...setup, shot: "multiple", person: null, people: next });
@@ -191,14 +204,16 @@ export function LifestylePersonPicker({
             <UsersRound className="h-5 w-5 text-violet-600" />
             Models
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose one to four people for your scene. Describe the scene and
-            pose in Creative Direction.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         {selected.length > 0 && (
-          <Button type="button" variant="ghost" onClick={() => apply([])}>
-            Let AI choose
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => apply([])}
+          >
+            {clearLabel}
           </Button>
         )}
       </div>
@@ -249,17 +264,19 @@ export function LifestylePersonPicker({
         </div>
       ) : (
         <p className="my-4 text-sm text-muted-foreground">
-          {setup.shot === "multiple"
-            ? "AI will choose two adults unless you select one or more models."
-            : setup.shot === "child"
-              ? "AI will choose an age-appropriate child model."
-              : "AI will choose a model unless you select one."}
+          {emptyDescription ??
+            (setup.shot === "multiple"
+              ? "AI will choose two adults unless you select one or more models."
+              : setup.shot === "child"
+                ? "AI will choose an age-appropriate child model."
+                : "AI will choose a model unless you select one.")}
         </p>
       )}
       <Button
         type="button"
         variant="outline"
         className="gap-2 bg-background"
+        disabled={disabled}
         onClick={() => {
           setDraft([...selected]);
           setOpen(true);
@@ -269,10 +286,9 @@ export function LifestylePersonPicker({
         Browse {LIFESTYLE_PEOPLE.length} models
       </Button>
       <p className="mt-3 text-xs text-muted-foreground">
-        Fictional AI models, including kids, teens and adults. Selected
-        identities are used across sizes; generated appearances may vary.
+        {referenceDescription}
       </p>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && !disabled} onOpenChange={setOpen}>
         <DialogContent className="flex h-[90dvh] max-h-[900px] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6">
             <DialogTitle>Choose your models</DialogTitle>
@@ -657,16 +673,18 @@ export function LifestylePersonPicker({
               >
                 Clear
               </Button>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
+                  className="shrink-0 px-3"
                   onClick={() => setOpen(false)}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="button"
+                  className="h-auto min-h-9 min-w-0 whitespace-normal px-3 py-2 text-center"
                   onClick={() => {
                     apply(draft);
                     setOpen(false);
@@ -674,7 +692,7 @@ export function LifestylePersonPicker({
                 >
                   {draft.length
                     ? `Use ${draft.length} ${draft.length === 1 ? "model" : "models"}`
-                    : "Let AI choose"}
+                    : clearLabel}
                 </Button>
               </div>
             </div>

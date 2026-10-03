@@ -62,6 +62,7 @@ import {
   defaultVideoSetup,
   videoRequestBody,
   videoSetupProblem,
+  videoSetupSchema,
   type VideoSetup,
 } from "../shared/videoCreation";
 import { processNextVideoJob, videoWorkerHeartbeat } from "./jobs/videoWorker";
@@ -143,17 +144,15 @@ beforeAll(async () => {
     .returning();
   org = orgs[0].id;
   otherOrg = orgs[1].id;
-  await db
-    .insert(organizationMemberships)
-    .values(
-      people.map((user: any, i: number) => ({
-        userId: user.id,
-        organizationId: i === 1 ? otherOrg : org,
-        role: i === 2 ? "reviewer" : "owner",
-        status: "active",
-        createdAtMs: now,
-      }))
-    );
+  await db.insert(organizationMemberships).values(
+    people.map((user: any, i: number) => ({
+      userId: user.id,
+      organizationId: i === 1 ? otherOrg : org,
+      role: i === 2 ? "reviewer" : "owner",
+      status: "active",
+      createdAtMs: now,
+    }))
+  );
   for (const organizationId of [org, otherOrg]) {
     const [kit] = await db
       .insert(brandKits)
@@ -203,23 +202,19 @@ beforeAll(async () => {
       videoId = video.id;
     } else foreignId = asset.id;
   }
-  await db
-    .insert(platformTiers)
-    .values({
-      id: "video-test",
-      name: "Test",
-      monthlyCredits: 10000,
-      monthlyPriceMicros: 0,
-      updatedAtMs: now,
-    });
-  await db
-    .insert(platformAccounts)
-    .values({
-      organizationId: org,
-      tierId: "video-test",
-      enforceCredits: 1,
-      updatedAtMs: now,
-    });
+  await db.insert(platformTiers).values({
+    id: "video-test",
+    name: "Test",
+    monthlyCredits: 10000,
+    monthlyPriceMicros: 0,
+    updatedAtMs: now,
+  });
+  await db.insert(platformAccounts).values({
+    organizationId: org,
+    tierId: "video-test",
+    enforceCredits: 1,
+    updatedAtMs: now,
+  });
 });
 beforeEach(async () => {
   state.submit.mockReset();
@@ -277,6 +272,153 @@ const accepted = {
 };
 
 describe("durable video generation", () => {
+  it("keeps UGC settings and selected models when saving and reopening, without generating or charging", async () => {
+    const settings = {
+      ...setup(),
+      category: "ugc" as const,
+      title: "Creator demonstration",
+      people: [
+        { kind: "library" as const, id: "female-black-0" },
+        { kind: "library" as const, id: "boys-child-a-0" },
+      ],
+      aspectRatio: "9:16" as const,
+      duration: 15,
+    };
+    const draft = await owner.video.save({
+      organizationId: org,
+      setup: settings,
+    });
+    expect(
+      (await owner.video.get({ organizationId: org, id: draft.id })).setup
+    ).toEqual(settings);
+    const updated = await owner.video.save({
+      organizationId: org,
+      id: draft.id,
+      revision: draft.revision,
+      setup: { ...settings, people: settings.people.slice(0, 1) },
+    });
+    expect((await owner.video.list({ organizationId: org }))[0]).toMatchObject({
+      revision: 2,
+      setup: { category: "ugc", people: [settings.people[0]] },
+    });
+    await expect(
+      owner.video.quote({ organizationId: org, setup: settings })
+    ).rejects.toThrow("UGC generation is coming next");
+    await expect(
+      owner.video.generate({
+        organizationId: org,
+        id: draft.id,
+        revision: updated.revision,
+        quotedCredits: 0,
+      })
+    ).rejects.toThrow("UGC generation is coming next");
+    expect(await state.db.select().from(aiUsage)).toHaveLength(0);
+    expect(await state.db.select().from(creditLedger)).toHaveLength(0);
+    expect(state.submit).not.toHaveBeenCalled();
+    expect(await tick()).toBe(false);
+  });
+  it("validates UGC model identities, approvals and tenant ownership", async () => {
+    const settings = { ...setup(), category: "ugc" as const };
+    for (const people of [
+      [{ kind: "library", id: "unknown-model" }],
+      Array.from({ length: 5 }, (_, i) => ({
+        kind: "library",
+        id: `female-black-${i}`,
+      })),
+      [
+        { kind: "library", id: "female-black-0" },
+        { kind: "library", id: "female-black-0" },
+      ],
+      [{ kind: "asset", assetId: imageId }],
+      [{ kind: "asset", assetId: foreignId }],
+    ])
+      await expect(
+        owner.video.save({
+          organizationId: org,
+          setup: { ...settings, people: people as VideoSetup["people"] },
+        })
+      ).rejects.toThrow();
+    const [kit] = await state.db
+      .select()
+      .from(brandKits)
+      .where(eq(brandKits.organizationId, org));
+    const [portrait] = await state.db
+      .insert(brandAssets)
+      .values({
+        organizationId: org,
+        brandKitId: kit.id,
+        name: "Saved presenter",
+        type: "reference",
+        mimeType: "image/png",
+        storageKey: "portrait.png",
+        url: "/portrait.png",
+        status: "pending",
+        metadata: { kind: "lifestyle_person", libraryId: "female-black-0" },
+        uploadedByUserId: ownerId,
+        createdAtMs: Date.now(),
+      })
+      .returning();
+    const selected = {
+      ...settings,
+      people: [{ kind: "asset" as const, assetId: portrait.id }],
+    };
+    await expect(
+      owner.video.save({ organizationId: org, setup: selected })
+    ).rejects.toThrow("approved model");
+    await state.db
+      .update(brandAssets)
+      .set({ status: "approved" })
+      .where(eq(brandAssets.id, portrait.id));
+    expect(
+      (await owner.video.save({ organizationId: org, setup: selected })).setup
+        .people
+    ).toEqual(selected.people);
+    await expect(
+      owner.video.save({
+        organizationId: org,
+        setup: {
+          ...settings,
+          people: [
+            ...selected.people,
+            { kind: "library", id: "female-black-0" },
+          ],
+        },
+      })
+    ).rejects.toThrow("same person");
+    await expect(
+      outsider.video.save({ organizationId: otherOrg, setup: selected })
+    ).rejects.toThrow("approved model");
+  });
+  it("keeps older product drafts compatible and blocks UGC from the product worker", async () => {
+    const { category, people, ...legacy } = setup();
+    const draft = await owner.video.save({
+      organizationId: org,
+      setup: legacy,
+    });
+    await state.db
+      .update(videoJobs)
+      .set({ setup: legacy })
+      .where(eq(videoJobs.id, draft.id));
+    expect(
+      (await owner.video.get({ organizationId: org, id: draft.id })).setup
+    ).toMatchObject({ category: "product", people: [] });
+    expect(
+      videoSetupSchema.safeParse({
+        ...setup(),
+        people: [{ kind: "library", id: "female-black-0" }],
+      }).success
+    ).toBe(false);
+    await state.db
+      .update(videoJobs)
+      .set({ status: "queued", setup: { ...setup(), category: "ugc" } })
+      .where(eq(videoJobs.id, draft.id));
+    await tick();
+    expect(
+      (await owner.video.get({ organizationId: org, id: draft.id })).status
+    ).toBe("failed");
+    expect(state.submit).not.toHaveBeenCalled();
+    expect(state.signed).not.toHaveBeenCalled();
+  });
   it("saves incomplete drafts without billing and enforces workspace/role boundaries", async () => {
     const draft = await owner.video.save({
       organizationId: org,

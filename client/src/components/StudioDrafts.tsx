@@ -43,7 +43,7 @@ import {
 type Draft = {
   key: string;
   type: "images" | "social" | "ads" | "videos" | "media";
-  videoJob?: { id: string; status: VideoStatus };
+  videoJob?: { id: string; status: VideoStatus; category: "product" | "ugc" };
   title: string;
   copy: string;
   at: number;
@@ -116,7 +116,11 @@ export function StudioDrafts({ planId }: { planId?: number }) {
             title: job.setup.title,
             copy: job.setup.prompt,
             at: job.updatedAtMs,
-            videoJob: { id: job.id, status: job.status },
+            videoJob: {
+              id: job.id,
+              status: job.status,
+              category: job.setup.category,
+            },
           }))
       : []),
     ...(canCreate
@@ -330,7 +334,9 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                     : item.type === "ads"
                       ? "Ad"
                       : item.type === "videos"
-                        ? "Video"
+                        ? item.videoJob?.category === "ugc" || item.asset?.isUgc
+                          ? "UGC video"
+                          : "Video"
                         : "File";
               const Icon =
                 item.type === "images"
@@ -415,7 +421,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                     <div className="mt-auto flex flex-wrap gap-x-4 gap-y-3 pt-5 text-sm font-medium">
                       {item.videoJob ? (
                         <Link
-                          href={`/app/creatives/video?video=${item.videoJob.id}`}
+                          href={`/app/creatives/video?video=${item.videoJob.id}${item.videoJob.category === "ugc" ? "&type=ugc" : ""}`}
                           className="text-primary underline-offset-4 hover:underline"
                         >
                           {item.videoJob.status === "draft"

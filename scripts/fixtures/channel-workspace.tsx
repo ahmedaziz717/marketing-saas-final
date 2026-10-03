@@ -202,11 +202,14 @@ const fixtureAdsets: any[] = [
 ];
 const mutations: string[] = [];
 const copyRequests: any[] = [];
+const videoDrafts: any[] = [];
+const videoQuotes: any[] = [];
 const role =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
     "role"
   ) ?? "owner";
 function respond(path: string, input: any) {
+  if (path === "video.generate" || path === "video.save") mutations.push(path);
   if (path === "briefs.list")
     return [
       {
@@ -226,8 +229,18 @@ function respond(path: string, input: any) {
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
   if (path === "video.options") return { ready: true, reason: null };
-  if (path === "video.list") return [];
-  if (path === "video.quote") return { credits: 235, durationSeconds: 5 };
+  if (path === "video.list") return [...videoDrafts];
+  if (path === "video.get") return videoDrafts.find(job => job.id === input.id);
+  if (path === "video.save") {
+    const index = videoDrafts.findIndex(job => job.id === input.id);
+    const job = { id: input.id ?? `55555555-5555-4555-8555-${String(videoDrafts.length + 1).padStart(12, "0")}`, setup: structuredClone(input.setup), revision: index >= 0 ? videoDrafts[index].revision + 1 : 1, status: "draft", credits: 0, error: null, cancelRequested: false, assetKey: null, createdAtMs: now, updatedAtMs: now };
+    if (index >= 0) videoDrafts[index] = job; else videoDrafts.push(job);
+    return job;
+  }
+  if (path === "video.quote") {
+    videoQuotes.push(input.setup);
+    return { credits: 235, durationSeconds: 5 };
+  }
   if (path === "creatives.overview") return { jobs: [] };
   if (path === "brand.assets") return [];
   if (path === "catalog.overview") return { products: [] };
@@ -552,7 +565,7 @@ function respond(path: string, input: any) {
     };
   }
   if (path === "assetLibrary.studioList")
-    return ["studio-drafts", "video-studio"].includes(which) ? studioDraftAssets : [];
+    return ["studio-drafts", "video-studio", "video-ugc"].includes(which) ? studioDraftAssets : [];
   if (path === "assetLibrary.list")
     return ["studio-ad-copy", "studio-post-media"].includes(which)
       ? [
@@ -1134,8 +1147,36 @@ function layout() {
       check(!!document.querySelector('img[alt^="Reference 1"]'), "Selected reference appears in the video editor");
     }
     if (which === "video-ugc") {
-      check(document.body.textContent?.includes("A space for creator-led video"), "UGC remains a clearly planned feature");
-      check(!document.querySelector('#video-prompt'), "UGC does not pretend to offer product generation");
+      check(!!document.querySelector('#video-prompt'), "UGC uses the video editor");
+      check(button("Generation coming soon")?.disabled, "UGC generation is unavailable until its provider is connected");
+      for (const label of ["Create video", "Edit video", "Extend video", "Motion control", "Save draft"])
+        check(!!button(label), `UGC has the shared ${label} control`);
+      await click("Edit video");
+      check(document.body.textContent?.includes("Source video"), "UGC edit has a source video picker");
+      await click("Create video");
+      await click("Add images");
+      await click("Emerald collection hero");
+      await click("Use selected images");
+      await click("Browse 500 models");
+      layout();
+      for (let i = 1; i <= 4; i++) await click(`Woman · Black ${i}`);
+      check(button("Woman · Black 5")?.disabled, "UGC supports at most four models");
+      await click("Use 4 models");
+      await click("Save draft");
+      check(videoDrafts[0]?.setup.category === "ugc" && videoDrafts[0]?.setup.people.length === 4 && videoDrafts[0]?.setup.imageKeys[0] === "asset:1", "UGC save keeps category, four models, and references");
+      await click("Product videos");
+      check(!button("Browse 500 models"), "Product editor does not show the UGC model picker");
+      await click("UGC videos");
+      // The temporary save toast sits above the final history row on mobile.
+      await new Promise(resolve => setTimeout(resolve, 4500));
+      await click("Open Untitled UGC video");
+      await click("Browse 500 models");
+      check(document.body.textContent?.includes("4 / 4 selected"), "Saved UGC restores its model selection");
+      await click("Cancel");
+      check(!!document.querySelector('img[alt^="Reference 1"]'), "Saved UGC restores its image references");
+      check(videoQuotes.every(setup => setup.category !== "ugc"), "UGC never requests product credit quotes");
+      check(!mutations.includes("video.generate"), "Saving UGC does not trigger generation");
+      layout();
     }
     if (which === "studio-overview") {
       check(

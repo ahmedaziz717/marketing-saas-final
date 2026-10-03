@@ -25,6 +25,8 @@ import {
   validateVideoReferences,
   videoReadiness,
   finishVideoFailure,
+  requireProductVideo,
+  validateVideoPeople,
 } from "../lib/videoJobs";
 import { videoQuote, videoRate } from "../lib/videoPricing";
 
@@ -87,6 +89,7 @@ export const videoRouter = router({
           });
       }
       return withOrganizationTransaction(db, input.organizationId, async tx => {
+        await validateVideoPeople(tx, input.organizationId, input.setup);
         const now = Date.now();
         if (input.id) {
           const job = await getVideoJob(tx, input.organizationId, input.id);
@@ -127,6 +130,7 @@ export const videoRouter = router({
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...studioRoles,
       ]);
+      requireProductVideo(input.setup);
       const db = await libraryDatabase(),
         refs = await resolveVideoReferences(
           db,
@@ -150,6 +154,7 @@ export const videoRouter = router({
       ]);
       const db = await libraryDatabase();
       const initial = await getVideoJob(db, input.organizationId, input.id);
+      requireProductVideo(initial.setup);
       if (initial.status !== "draft") return publicVideoJob(initial);
       if (!(await videoReadiness(db)).ready)
         throw new TRPCError({
@@ -164,6 +169,7 @@ export const videoRouter = router({
       );
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const job = await getVideoJob(tx, input.organizationId, input.id);
+        requireProductVideo(job.setup);
         if (job.status !== "draft") return publicVideoJob(job);
         if (
           job.revision !== input.revision ||
@@ -220,33 +226,29 @@ export const videoRouter = router({
             code: "FORBIDDEN",
             message: `This video needs ${quote.credits} AI credits; ${Math.max(0, credit.remaining)} remain.`,
           });
-        await tx
-          .insert(aiUsage)
-          .values({
-            id: job.id,
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            provider: "higgsfield",
-            model: videoModelKey(job.setup),
-            kind: "video",
-            operation: `video.${job.setup.mode}`,
-            status: "pending",
-            credits: quote.credits,
-            period,
-            rateSnapshot: rate,
-            createdAtMs: now,
-          });
-        await tx
-          .insert(creditLedger)
-          .values({
-            id: job.id,
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            period,
-            amount: -quote.credits,
-            reason: "Reserved: video generation",
-            createdAtMs: now,
-          });
+        await tx.insert(aiUsage).values({
+          id: job.id,
+          organizationId: input.organizationId,
+          actorUserId: ctx.user.id,
+          provider: "higgsfield",
+          model: videoModelKey(job.setup),
+          kind: "video",
+          operation: `video.${job.setup.mode}`,
+          status: "pending",
+          credits: quote.credits,
+          period,
+          rateSnapshot: rate,
+          createdAtMs: now,
+        });
+        await tx.insert(creditLedger).values({
+          id: job.id,
+          organizationId: input.organizationId,
+          actorUserId: ctx.user.id,
+          period,
+          amount: -quote.credits,
+          reason: "Reserved: video generation",
+          createdAtMs: now,
+        });
         const [saved] = await tx
           .update(videoJobs)
           .set({

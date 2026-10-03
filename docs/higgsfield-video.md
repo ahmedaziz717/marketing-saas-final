@@ -1,6 +1,6 @@
 # Product and UGC video creation
 
-`/app/creatives/video` separates Product videos (Higgsfield) from UGC videos (future Creatify). UGC currently supports uploading existing clips; it does not run a generator. Product video creation accepts product, service, and brand references without requiring a catalog product.
+`/app/creatives/video` separates Product videos (Higgsfield) from UGC videos (future Creatify). Both categories use the same editor: create, edit, extend, motion control, references, prompt, duration, framing, resolution, sound, and bitrate. UGC adds the existing 500-person model library, its filters and approved saved portraits, with up to four people per draft. UGC setup and model selections can be saved and reopened; generation and credit quotes remain disabled until the Creatify integration is connected. The server and worker prevent UGC requests from reaching Higgsfield or reserving generation credits. These saved settings express the requested creative setup; future Creatify capability validation must precede generation. Existing product drafts default to the product category, requiring no data migration. Product video creation accepts product, service, and brand references without requiring a catalog product.
 
 ## Setup
 

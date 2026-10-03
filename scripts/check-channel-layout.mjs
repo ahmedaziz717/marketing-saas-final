@@ -271,7 +271,7 @@ try {
         `Fixture returned no test result: ${JSON.stringify(evaluation)}`
       );
     await page("Runtime.evaluate", { expression: inlineLiveBrandImages });
-    if (item.page === "model-picker") {
+    if (["model-picker", "video-ugc"].includes(item.page)) {
       const sheets = Object.fromEntries(
         await Promise.all(
           (await readdir("client/public/people"))

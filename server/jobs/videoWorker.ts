@@ -6,6 +6,7 @@ import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
 import {
   activeVideoStatuses,
   videoRequestBody,
+  ugcGenerationMessage,
 } from "../../shared/videoCreation";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
@@ -297,6 +298,17 @@ export async function processNextVideoJob(db: LibraryDatabase) {
   });
   if (!job) return false;
   try {
+    // UGC belongs to the future Creatify integration, never this provider.
+    if (job.setup.category === "ugc") {
+      if (!job.providerRequestId && !job.requestBody)
+        await terminal(db, job, "failed", ugcGenerationMessage);
+      else
+        await release(db, job, {
+          status: "attention",
+          error: ugcGenerationMessage,
+        });
+      return true;
+    }
     if (job.status === "saving") {
       await saveOutput(db, job);
       return true;

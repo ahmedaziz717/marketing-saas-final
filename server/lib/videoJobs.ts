@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { brandAssets, creativeVariants } from "../../drizzle/schema";
 import { aiUsage, creditLedger } from "../../drizzle/platformSchema";
@@ -6,9 +6,13 @@ import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
 import { parseAssetKey } from "../../shared/assetLibrary";
 import {
   videoSetupProblem,
+  defaultVideoSetup,
+  ugcGenerationMessage,
   type VideoReference,
   type VideoSetup,
 } from "../../shared/videoCreation";
+import { personReferenceKey } from "../../shared/creativeBuilder";
+import { findLifestylePerson } from "../../shared/lifestylePeople";
 import {
   readLibraryAsset,
   type LibraryDatabase,
@@ -23,7 +27,7 @@ export type VideoJob = typeof videoJobs.$inferSelect;
 export function publicVideoJob(job: VideoJob) {
   return {
     id: job.id,
-    setup: job.setup,
+    setup: { ...defaultVideoSetup, ...job.setup },
     revision: job.revision,
     status: job.status,
     credits: job.credits,
@@ -33,6 +37,61 @@ export function publicVideoJob(job: VideoJob) {
     createdAtMs: job.createdAtMs,
     updatedAtMs: job.updatedAtMs,
   };
+}
+export function requireProductVideo(setup: VideoSetup) {
+  if (setup.category === "ugc")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: ugcGenerationMessage,
+    });
+}
+
+/** Saved portraits must be approved references owned by this workspace. */
+export async function validateVideoPeople(
+  db: LibraryDatabase | LibraryTransaction,
+  organizationId: number,
+  setup: VideoSetup
+) {
+  const ids = setup.people.flatMap(person =>
+    person.kind === "asset" ? [person.assetId] : []
+  );
+  const rows = ids.length
+    ? await db
+        .select()
+        .from(brandAssets)
+        .where(
+          and(
+            eq(brandAssets.organizationId, organizationId),
+            inArray(brandAssets.id, ids),
+            eq(brandAssets.type, "reference"),
+            eq(brandAssets.status, "approved")
+          )
+        )
+    : [];
+  const identities = new Set<string>();
+  for (const person of setup.people) {
+    let identity = personReferenceKey(person);
+    if (person.kind === "asset") {
+      const asset = rows.find(row => row.id === person.assetId);
+      if (!asset || asset.metadata?.kind !== "lifestyle_person")
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Choose an approved model from this workspace.",
+        });
+      const libraryPerson =
+        typeof asset.metadata.libraryId === "string"
+          ? findLifestylePerson(asset.metadata.libraryId)
+          : undefined;
+      if (libraryPerson) identity = `library:${libraryPerson.id}`;
+    }
+    if (identities.has(identity))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Choose different models; a saved favorite and its library portrait are the same person.",
+      });
+    identities.add(identity);
+  }
 }
 export async function videoReadiness(db: LibraryDatabase | LibraryTransaction) {
   const [worker] = await db

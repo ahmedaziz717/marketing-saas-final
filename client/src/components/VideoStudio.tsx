@@ -30,11 +30,13 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { AssetUploadDialog } from "./AssetUploadDialog";
+import { LifestylePersonPicker } from "./LifestylePersonPicker";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { studioDraftsHref } from "@shared/contentWorkflow";
 import {
   activeVideoStatuses,
   defaultVideoSetup,
+  ugcGenerationMessage,
   videoModes,
   videoRatios,
   videoResolutions,
@@ -133,6 +135,7 @@ function ReferencePicker({
                   <button
                     key={asset.key}
                     type="button"
+                    aria-label={asset.name}
                     aria-pressed={checked}
                     disabled={
                       !checked && selected.length >= limit && kind !== "video"
@@ -207,14 +210,17 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const scope = { organizationId: organizationId! };
   const params = new URLSearchParams(useSearch());
   const selectedId = params.get("video");
-  const isUgc = params.get("type") === "ugc";
+  const requestedUgc = params.get("type") === "ugc";
   const [, navigate] = useLocation();
   const href = (id?: string, ugc = false) =>
     `/app/creatives/video${id || ugc || initialPlanId ? "?" + new URLSearchParams({ ...(id ? { video: id } : {}), ...(ugc ? { type: "ugc" } : {}), ...(initialPlanId ? { plan: String(initialPlanId) } : {}) }) : ""}`;
   const [setup, setSetup] = useState<VideoSetup>({
     ...defaultVideoSetup,
+    category: requestedUgc ? "ugc" : "product",
+    title: requestedUgc ? "Untitled UGC video" : defaultVideoSetup.title,
     campaignPlanId: initialPlanId,
   });
+  const isUgc = setup.category === "ugc";
   const [saved, setSaved] = useState<SavedVideo | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -271,7 +277,11 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     { ...scope, setup: quoteSetup },
     {
       enabled:
-        !!organizationId && !isUgc && !locked && !videoSetupProblem(quoteSetup),
+        !!organizationId &&
+        !isUgc &&
+        quoteSetup.category !== "ugc" &&
+        !locked &&
+        !videoSetupProblem(quoteSetup),
       retry: false,
       refetchOnWindowFocus: false,
     }
@@ -285,12 +295,31 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   useEffect(() => {
     if (current && loadedId.current !== current.id) {
       loadedId.current = current.id;
-      setSetup(current.setup);
+      setSetup({ ...defaultVideoSetup, ...current.setup });
       setSaved(current);
       setDirty(false);
       setError("");
     }
   }, [current]);
+  useEffect(() => {
+    if (!selectedId && (loadedId.current || requestedUgc !== isUgc)) {
+      loadedId.current = null;
+      setSetup({
+        ...defaultVideoSetup,
+        category: requestedUgc ? "ugc" : "product",
+        title: requestedUgc ? "Untitled UGC video" : defaultVideoSetup.title,
+        campaignPlanId: initialPlanId,
+      });
+      setSaved(null);
+      setDirty(false);
+      setError("");
+    }
+  }, [selectedId, requestedUgc, initialPlanId]);
+  const recentVideos = (history.data ?? []).filter(
+    job =>
+      (job.setup.category === "ugc") === isUgc &&
+      (!initialPlanId || job.setup.campaignPlanId === initialPlanId)
+  );
   const completed = (history.data ?? [])
     .filter(job => job.status === "completed")
     .map(job => job.id)
@@ -309,16 +338,37 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       utils.video.get.invalidate(),
       utils.assetLibrary.studioList.invalidate(scope),
     ]);
-  const startNew = (next?: VideoSetup) => {
-    setSetup(next ?? { ...defaultVideoSetup, campaignPlanId: initialPlanId });
+  const startNew = (next?: VideoSetup, ugc = isUgc) => {
+    setSetup(
+      next ?? {
+        ...defaultVideoSetup,
+        category: ugc ? "ugc" : "product",
+        title: ugc ? "Untitled UGC video" : defaultVideoSetup.title,
+        campaignPlanId: initialPlanId,
+      }
+    );
     setSaved(null);
     loadedId.current = null;
     setDirty(!!next);
     setError("");
-    navigate(href());
+    navigate(href(undefined, next ? next.category === "ugc" : ugc));
   };
+  async function switchType(ugc: boolean) {
+    if (ugc === isUgc || busy) return;
+    if (dirty && !(await persist(false))) return;
+    startNew(undefined, ugc);
+  }
+  async function openVideo(id: string, ugc: boolean) {
+    if (busy || id === selectedId) return;
+    if (dirty && !(await persist(false))) return;
+    navigate(href(id, ugc));
+  }
   async function persist(shouldGenerate: boolean) {
-    if (busy) return;
+    if (busy || (shouldGenerate && isUgc)) return false;
+    if (!setup.title.trim()) {
+      setError("Give your video a name before saving.");
+      return false;
+    }
     setBusy(true);
     setError("");
     try {
@@ -332,7 +382,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       setSaved(draft);
       loadedId.current = draft.id;
       setDirty(false);
-      navigate(href(draft.id));
+      navigate(href(draft.id, isUgc));
       if (shouldGenerate && quote.data) {
         const queued = await generate.mutateAsync({
           ...scope,
@@ -346,12 +396,14 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
         );
       } else toast.success("Video draft saved.");
       await refresh();
+      return true;
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : "The video could not be saved. Please try again."
       );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -393,7 +445,14 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
           </p>
         </div>
         {selectedId && (
-          <Button variant="outline" onClick={() => startNew()}>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              if (dirty && !(await persist(false))) return;
+              startNew();
+            }}
+          >
             <Plus size={16} className="mr-2" />
             New video
           </Button>
@@ -417,8 +476,10 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
           <button
             key={title}
             type="button"
+            aria-label={title}
             aria-pressed={isUgc === ugc}
-            onClick={() => navigate(href(selectedId ?? undefined, ugc))}
+            disabled={busy}
+            onClick={() => void switchType(ugc)}
             className={`flex min-w-0 items-center gap-4 rounded-2xl border p-4 text-left transition-colors ${isUgc === ugc ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "bg-card hover:border-primary/40"}`}
           >
             <span
@@ -427,14 +488,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
               <Icon size={22} />
             </span>
             <span className="min-w-0">
-              <span className="block font-semibold">
-                {title}
-                {ugc && (
-                  <span className="ml-2 inline-block rounded-full bg-muted px-2 py-0.5 align-middle text-[10px] font-medium text-muted-foreground">
-                    COMING NEXT
-                  </span>
-                )}
-              </span>
+              <span className="block font-semibold">{title}</span>
               <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                 {subtitle}
               </span>
@@ -442,32 +496,20 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
           </button>
         ))}
       </nav>
-      {isUgc ? (
-        <div className="surface flex min-h-72 flex-col items-center justify-center p-8 text-center">
-          <Users size={36} className="text-primary" />
-          <h3 className="mt-5 text-xl font-semibold">
-            A space for creator-led video
-          </h3>
-          <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
-            AI presenters, testimonials, and creator-style videos are coming
-            next. For now, upload your existing UGC clips and send them through
-            review.
-          </p>
-          <Button
-            className="mt-6"
-            variant="outline"
-            onClick={() => {
-              setUploadKind("video");
-              setUpload(true);
-            }}
+      <>
+        {isUgc ? (
+          <div
+            role="status"
+            className="mb-6 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-950"
           >
-            <Upload size={16} className="mr-2" />
-            Upload a UGC clip
-          </Button>
-        </div>
-      ) : (
-        <>
-          {(options.error || (!options.isLoading && !options.data?.ready)) && (
+            <p className="font-medium">Prepare your UGC video</p>
+            <p>
+              {ugcGenerationMessage} Your settings and selected models stay with
+              the draft.
+            </p>
+          </div>
+        ) : (
+          (options.error || (!options.isLoading && !options.data?.ready)) && (
             <div
               role="status"
               className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
@@ -476,619 +518,630 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                 ? "Video service readiness could not be checked. Please refresh before generating."
                 : options.data?.reason}
             </div>
-          )}
-          {detail.error && (
-            <p role="alert" className="mb-5 rounded-xl border p-4 text-sm">
-              {detail.error.message}
-            </p>
-          )}
-          <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="surface min-w-0 overflow-hidden">
-              <div className="border-b bg-muted/20 p-5">
-                <h3 className="font-semibold">
-                  {locked ? "Generation settings" : "Build your video"}
-                </h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {locked
-                    ? "This version is saved. Start a new version to change its settings."
-                    : "Add references, describe the scene, and choose your format."}
+          )
+        )}
+        {detail.error && (
+          <p role="alert" className="mb-5 rounded-xl border p-4 text-sm">
+            {detail.error.message}
+          </p>
+        )}
+        <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="surface min-w-0 overflow-hidden">
+            <div className="border-b bg-muted/20 p-5">
+              <h3 className="font-semibold">
+                {locked ? "Generation settings" : "Build your video"}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {locked
+                  ? "This version is saved. Start a new version to change its settings."
+                  : "Add references, describe the scene, and choose your format."}
+              </p>
+            </div>
+            <fieldset
+              disabled={busy || locked || (!!selectedId && !current && !saved)}
+              className="min-w-0 space-y-6 p-5 sm:p-6 disabled:opacity-80"
+            >
+              <div>
+                <label htmlFor="video-title" className="text-sm font-medium">
+                  Video name
+                </label>
+                <Input
+                  id="video-title"
+                  maxLength={160}
+                  value={setup.title}
+                  onChange={e => update({ title: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium">
+                  What would you like to do?
+                </p>
+                <div
+                  aria-label="Video operation"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {videoModes.map(mode => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      aria-pressed={setup.mode === mode.id}
+                      onClick={() =>
+                        update({
+                          mode: mode.id,
+                          imageKeys: setup.imageKeys.slice(
+                            0,
+                            mode.id === "motion" ? 8 : 9
+                          ),
+                        })
+                      }
+                      className={`rounded-xl border px-3 py-2.5 text-sm ${setup.mode === mode.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  {videoModes.find(mode => mode.id === setup.mode)?.description}
                 </p>
               </div>
-              <fieldset
-                disabled={
-                  busy || locked || (!!selectedId && !current && !saved)
-                }
-                className="min-w-0 space-y-6 p-5 sm:p-6 disabled:opacity-80"
-              >
-                <div>
-                  <label htmlFor="video-title" className="text-sm font-medium">
-                    Video name
-                  </label>
-                  <Input
-                    id="video-title"
-                    maxLength={160}
-                    value={setup.title}
-                    onChange={e => update({ title: e.target.value })}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <p className="mb-2 text-sm font-medium">
-                    What would you like to do?
-                  </p>
-                  <div
-                    aria-label="Video operation"
-                    className="grid grid-cols-2 gap-2"
-                  >
-                    {videoModes.map(mode => (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        aria-pressed={setup.mode === mode.id}
-                        onClick={() =>
-                          update({
-                            mode: mode.id,
-                            imageKeys: setup.imageKeys.slice(
-                              0,
-                              mode.id === "motion" ? 8 : 9
-                            ),
-                          })
-                        }
-                        className={`rounded-xl border px-3 py-2.5 text-sm ${setup.mode === mode.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                    {
-                      videoModes.find(mode => mode.id === setup.mode)
-                        ?.description
-                    }
-                  </p>
-                </div>
-                {setup.mode !== "create" && (
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium">
-                        {setup.mode === "motion"
-                          ? "Motion reference video"
-                          : "Source video"}{" "}
-                        <span className="text-destructive">*</span>
-                      </p>
-                      {source && (
-                        <button
-                          type="button"
-                          onClick={() => update({ sourceVideoKey: null })}
-                          className="text-xs text-muted-foreground underline"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPicker("video")}
-                      className="mt-2 flex w-full items-center gap-3 rounded-xl border border-dashed bg-muted/20 p-4 text-left hover:border-primary"
-                    >
-                      <Film size={22} className="shrink-0 text-primary" />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm">
-                          {source?.name ?? "Choose an MP4 video"}
-                        </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {source?.durationSeconds
-                            ? `${source.durationSeconds.toFixed(1)} seconds`
-                            : "4–30 seconds"}
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                )}
+              {setup.mode !== "create" && (
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">
-                      Reference images{" "}
-                      {setup.mode === "motion" && (
-                        <span className="text-destructive">*</span>
-                      )}
+                      {setup.mode === "motion"
+                        ? "Motion reference video"
+                        : "Source video"}{" "}
+                      <span className="text-destructive">*</span>
                     </p>
-                    <span className="text-xs text-muted-foreground">
-                      {references.length} / {maxImages}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {references.map(({ key, asset }, i) => (
-                      <div
-                        key={key}
-                        className="relative min-w-0 rounded-xl border bg-muted/20 p-1.5"
-                      >
-                        {asset ? (
-                          <img
-                            src={asset.url}
-                            alt={`Reference ${i + 1}: ${asset.name}`}
-                            className="aspect-square w-full rounded-lg object-contain"
-                          />
-                        ) : (
-                          <div className="flex aspect-square items-center justify-center text-xs">
-                            Unavailable
-                          </div>
-                        )}
-                        <span className="mt-1 block text-center text-[10px] text-muted-foreground">
-                          Image {i + 1}
-                        </span>
-                        {!locked && (
-                          <button
-                            aria-label={`Remove image ${i + 1}`}
-                            type="button"
-                            onClick={() =>
-                              update({
-                                imageKeys: setup.imageKeys.filter(
-                                  value => value !== key
-                                ),
-                              })
-                            }
-                            className="absolute right-1 top-1 rounded-full border bg-background p-1 shadow-sm"
-                          >
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {references.length < maxImages && (
+                    {source && (
                       <button
                         type="button"
-                        onClick={() => setPicker("images")}
-                        className="flex aspect-square min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-primary hover:bg-primary/5"
+                        onClick={() => update({ sourceVideoKey: null })}
+                        className="text-xs text-muted-foreground underline"
                       >
-                        <ImagePlus size={21} />
-                        <span className="text-xs">Add images</span>
+                        Remove
                       </button>
                     )}
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    Use different angles, products, or visual references.
-                    Mention “Image 1” or “Image 2” in your description.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPicker("video")}
+                    className="mt-2 flex w-full items-center gap-3 rounded-xl border border-dashed bg-muted/20 p-4 text-left hover:border-primary"
+                  >
+                    <Film size={22} className="shrink-0 text-primary" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">
+                        {source?.name ?? "Choose an MP4 video"}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {source?.durationSeconds
+                          ? `${source.durationSeconds.toFixed(1)} seconds`
+                          : "4–30 seconds"}
+                      </span>
+                    </span>
+                  </button>
                 </div>
-                <div>
-                  <label htmlFor="video-prompt" className="text-sm font-medium">
-                    Describe your video{" "}
-                    {setup.mode !== "motion" && (
+              )}
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">
+                    Reference images{" "}
+                    {setup.mode === "motion" && (
                       <span className="text-destructive">*</span>
                     )}
-                  </label>
-                  <textarea
-                    id="video-prompt"
-                    rows={5}
-                    maxLength={10000}
-                    value={setup.prompt}
-                    onChange={e => update({ prompt: e.target.value })}
-                    placeholder={
-                      setup.mode === "motion"
-                        ? "Optional: describe the subject, setting, or style to preserve…"
-                        : "A slow cinematic orbit around the product. Soft studio lighting highlights the details, followed by a close-up of…"
-                    }
-                    className={field + " !h-auto resize-y py-3 leading-6"}
-                  />
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap gap-1">
-                      {references.map((ref, i) => (
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    {references.length} / {maxImages}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {references.map(({ key, asset }, i) => (
+                    <div
+                      key={key}
+                      className="relative min-w-0 rounded-xl border bg-muted/20 p-1.5"
+                    >
+                      {asset ? (
+                        <img
+                          src={asset.url}
+                          alt={`Reference ${i + 1}: ${asset.name}`}
+                          className="aspect-square w-full rounded-lg object-contain"
+                        />
+                      ) : (
+                        <div className="flex aspect-square items-center justify-center text-xs">
+                          Unavailable
+                        </div>
+                      )}
+                      <span className="mt-1 block text-center text-[10px] text-muted-foreground">
+                        Image {i + 1}
+                      </span>
+                      {!locked && (
                         <button
-                          key={ref.key}
+                          aria-label={`Remove image ${i + 1}`}
                           type="button"
                           onClick={() =>
                             update({
-                              prompt: `${setup.prompt}${setup.prompt && !setup.prompt.endsWith(" ") ? " " : ""}Image ${i + 1} `,
+                              imageKeys: setup.imageKeys.filter(
+                                value => value !== key
+                              ),
                             })
                           }
-                          className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                          className="absolute right-1 top-1 rounded-full border bg-background p-1 shadow-sm"
                         >
-                          + Image {i + 1}
+                          <X size={12} />
                         </button>
-                      ))}
+                      )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground">
-                      {setup.prompt.length.toLocaleString()} / 10,000
-                    </span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {["create", "extend"].includes(setup.mode) && (
-                    <label className="text-sm font-medium">
-                      {setup.mode === "extend"
-                        ? "Extension length"
-                        : "Duration"}
-                      <select
-                        className={field}
-                        value={setup.duration}
-                        onChange={e =>
-                          update({ duration: Number(e.target.value) })
-                        }
-                      >
-                        {Array.from({ length: 27 }, (_, i) => i + 4).map(
-                          seconds => (
-                            <option key={seconds} value={seconds}>
-                              {seconds} seconds
-                            </option>
-                          )
-                        )}
-                      </select>
-                    </label>
+                  ))}
+                  {references.length < maxImages && (
+                    <button
+                      type="button"
+                      onClick={() => setPicker("images")}
+                      className="flex aspect-square min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-primary hover:bg-primary/5"
+                    >
+                      <ImagePlus size={21} />
+                      <span className="text-xs">Add images</span>
+                    </button>
                   )}
-                  {setup.mode === "create" && (
-                    <label className="text-sm font-medium">
-                      Aspect ratio
-                      <select
-                        className={field}
-                        value={setup.aspectRatio}
-                        onChange={e =>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Use different angles, products, or visual references. Mention
+                  “Image 1” or “Image 2” in your description.
+                </p>
+              </div>
+              {isUgc && (
+                <LifestylePersonPicker
+                  setup={{ shot: "multiple", people: setup.people }}
+                  onChange={selection =>
+                    update({ people: selection.people ?? [] })
+                  }
+                  disabled={busy || locked}
+                  description="Choose one to four people, then describe their actions and dialogue in your video description below."
+                  emptyDescription="Choose models now or add them to this draft later."
+                  clearLabel="Clear selection"
+                  referenceDescription="Fictional AI models, including kids, teens, and adults. Your selected portraits are saved as references with this draft."
+                />
+              )}
+              <div>
+                <label htmlFor="video-prompt" className="text-sm font-medium">
+                  Describe your video{" "}
+                  {setup.mode !== "motion" && (
+                    <span className="text-destructive">*</span>
+                  )}
+                </label>
+                <textarea
+                  id="video-prompt"
+                  rows={5}
+                  maxLength={10000}
+                  value={setup.prompt}
+                  onChange={e => update({ prompt: e.target.value })}
+                  placeholder={
+                    setup.mode === "motion"
+                      ? "Optional: describe the subject, setting, or style to preserve…"
+                      : isUgc
+                        ? "Describe the setting, what each person does, and what they say. For example: a creator demonstrates the product in a bright kitchen…"
+                        : "A slow cinematic orbit around the product. Soft studio lighting highlights the details, followed by a close-up of…"
+                  }
+                  className={field + " !h-auto resize-y py-3 leading-6"}
+                />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-1">
+                    {references.map((ref, i) => (
+                      <button
+                        key={ref.key}
+                        type="button"
+                        onClick={() =>
                           update({
-                            aspectRatio: e.target
-                              .value as VideoSetup["aspectRatio"],
+                            prompt: `${setup.prompt}${setup.prompt && !setup.prompt.endsWith(" ") ? " " : ""}Image ${i + 1} `,
                           })
                         }
+                        className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
                       >
-                        {videoRatios.map(ratio => (
-                          <option key={ratio} value={ratio}>
-                            {ratio}
-                            {ratio === "9:16"
-                              ? " · Vertical"
-                              : ratio === "16:9"
-                                ? " · Landscape"
-                                : ratio === "1:1"
-                                  ? " · Square"
-                                  : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
+                        + Image {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {setup.prompt.length.toLocaleString()} / 10,000
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {["create", "extend"].includes(setup.mode) && (
                   <label className="text-sm font-medium">
-                    Resolution
+                    {setup.mode === "extend" ? "Extension length" : "Duration"}
                     <select
                       className={field}
-                      value={setup.resolution}
+                      value={setup.duration}
+                      onChange={e =>
+                        update({ duration: Number(e.target.value) })
+                      }
+                    >
+                      {Array.from({ length: 27 }, (_, i) => i + 4).map(
+                        seconds => (
+                          <option key={seconds} value={seconds}>
+                            {seconds} seconds
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+                )}
+                {setup.mode === "create" && (
+                  <label className="text-sm font-medium">
+                    Aspect ratio
+                    <select
+                      className={field}
+                      value={setup.aspectRatio}
                       onChange={e =>
                         update({
-                          resolution: e.target
-                            .value as VideoSetup["resolution"],
+                          aspectRatio: e.target
+                            .value as VideoSetup["aspectRatio"],
                         })
                       }
                     >
-                      {videoResolutions.map(resolution => (
-                        <option key={resolution}>{resolution}</option>
+                      {videoRatios.map(ratio => (
+                        <option key={ratio} value={ratio}>
+                          {ratio}
+                          {ratio === "9:16"
+                            ? " · Vertical"
+                            : ratio === "16:9"
+                              ? " · Landscape"
+                              : ratio === "1:1"
+                                ? " · Square"
+                                : ""}
+                        </option>
                       ))}
                     </select>
                   </label>
-                  {setup.mode !== "motion" && (
-                    <label className="text-sm font-medium">
-                      Bitrate
-                      <select
-                        className={field}
-                        value={setup.bitrate}
-                        onChange={e =>
-                          update({
-                            bitrate: e.target.value as VideoSetup["bitrate"],
-                          })
-                        }
-                      >
-                        <option value="default">Automatic</option>
-                        <option value="high">High</option>
-                      </select>
-                    </label>
-                  )}
-                </div>
-                {setup.mode !== "create" && (
-                  <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                    Framing follows your source video.
-                    {["edit", "motion"].includes(setup.mode)
-                      ? " Duration also follows the source clip."
-                      : ""}
-                  </p>
                 )}
+                <label className="text-sm font-medium">
+                  Resolution
+                  <select
+                    className={field}
+                    value={setup.resolution}
+                    onChange={e =>
+                      update({
+                        resolution: e.target.value as VideoSetup["resolution"],
+                      })
+                    }
+                  >
+                    {videoResolutions.map(resolution => (
+                      <option key={resolution}>{resolution}</option>
+                    ))}
+                  </select>
+                </label>
                 {setup.mode !== "motion" && (
-                  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
-                    <span className="flex items-center gap-2 text-sm">
-                      {setup.sound ? (
-                        <Volume2 size={17} />
-                      ) : (
-                        <VolumeX size={17} />
-                      )}
-                      Generate sound
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={setup.sound}
-                      onChange={e => update({ sound: e.target.checked })}
-                      className="h-4 w-4 accent-primary"
-                    />
+                  <label className="text-sm font-medium">
+                    Bitrate
+                    <select
+                      className={field}
+                      value={setup.bitrate}
+                      onChange={e =>
+                        update({
+                          bitrate: e.target.value as VideoSetup["bitrate"],
+                        })
+                      }
+                    >
+                      <option value="default">Automatic</option>
+                      <option value="high">High</option>
+                    </select>
                   </label>
                 )}
-              </fieldset>
-              <div className="space-y-3 border-t bg-muted/10 p-5 sm:px-6">
-                {(error || (!locked && quoteCurrent && quote.error)) && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {error || quote.error?.message}
-                  </p>
-                )}
-                {!locked ? (
-                  <>
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        variant="outline"
-                        disabled={
-                          busy ||
-                          !setup.title.trim() ||
-                          (!!selectedId && !current && !saved)
-                        }
-                        onClick={() => void persist(false)}
-                      >
-                        <Save size={16} className="mr-2" />
-                        Save draft
-                      </Button>
-                      <Button
-                        className="min-w-0 flex-1"
-                        disabled={
-                          busy ||
-                          !options.data?.ready ||
-                          !!problem ||
-                          !setup.title.trim() ||
-                          !quoteCurrent ||
-                          quote.isFetching ||
-                          !quote.data ||
-                          !!quote.error ||
-                          (!!selectedId && !current && !saved)
-                        }
-                        onClick={() => void persist(true)}
-                      >
-                        {busy ? (
-                          <Loader2 size={16} className="mr-2 animate-spin" />
-                        ) : (
-                          <Sparkles size={16} className="mr-2" />
-                        )}
-                        Generate
-                        {quoteCurrent && quote.data && !problem
-                          ? ` · ${quote.data.credits.toLocaleString()} credits`
-                          : " video"}
-                      </Button>
-                    </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      {dirty ? "Unsaved changes. " : ""}
-                      {problem ??
-                        "Credits are reserved when you generate. Confirmed failures and cancellations are refunded."}
-                    </p>
-                  </>
-                ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {!active && current?.status !== "attention" && (
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          startNew({
-                            ...setup,
-                            title: `${setup.title.slice(0, 146)} · New version`,
-                          })
-                        }
-                      >
-                        <Plus size={16} className="mr-2" />
-                        Create another version
-                      </Button>
-                    )}
-                    {current?.status === "attention" && (
-                      <Button
-                        variant="outline"
-                        disabled={check.isPending}
-                        onClick={() => void act("check")}
-                      >
-                        <RefreshCw size={16} className="mr-2" />
-                        Check same request again
-                      </Button>
-                    )}
-                    {active && current.status !== "saving" && (
-                      <Button
-                        variant="outline"
-                        disabled={cancel.isPending || current.cancelRequested}
-                        onClick={() => void act("cancel")}
-                      >
-                        {current.cancelRequested
-                          ? "Cancellation requested"
-                          : "Request cancellation"}
-                      </Button>
-                    )}
-                  </div>
-                )}
               </div>
-            </div>
-            <div className="min-w-0 space-y-6">
-              <section
-                className="surface overflow-hidden"
-                aria-labelledby="video-preview-heading"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
-                  <h3 id="video-preview-heading" className="font-semibold">
-                    {resultAsset ? "Your video" : "Preview"}
-                  </h3>
-                  {current && (
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${current.status === "completed" ? "bg-emerald-100 text-emerald-900" : current.status === "failed" || current.status === "attention" ? "bg-amber-100 text-amber-950" : "bg-primary/10 text-primary"}`}
+              {setup.mode !== "create" && (
+                <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                  Framing follows your source video.
+                  {["edit", "motion"].includes(setup.mode)
+                    ? " Duration also follows the source clip."
+                    : ""}
+                </p>
+              )}
+              {setup.mode !== "motion" && (
+                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
+                  <span className="flex items-center gap-2 text-sm">
+                    {setup.sound ? (
+                      <Volume2 size={17} />
+                    ) : (
+                      <VolumeX size={17} />
+                    )}
+                    Generate sound
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={setup.sound}
+                    onChange={e => update({ sound: e.target.checked })}
+                    className="h-4 w-4 accent-primary"
+                  />
+                </label>
+              )}
+            </fieldset>
+            <div className="space-y-3 border-t bg-muted/10 p-5 sm:px-6">
+              {(error ||
+                (!isUgc && !locked && quoteCurrent && quote.error)) && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error || quote.error?.message}
+                </p>
+              )}
+              {!locked ? (
+                <>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="outline"
+                      disabled={
+                        busy ||
+                        !setup.title.trim() ||
+                        (!!selectedId && !current && !saved)
+                      }
+                      onClick={() => void persist(false)}
                     >
-                      {videoStatusLabels[current.status]}
-                    </span>
+                      <Save size={16} className="mr-2" />
+                      Save draft
+                    </Button>
+                    <Button
+                      className="min-w-0 flex-1"
+                      disabled={
+                        busy ||
+                        isUgc ||
+                        !options.data?.ready ||
+                        !!problem ||
+                        !setup.title.trim() ||
+                        !quoteCurrent ||
+                        quote.isFetching ||
+                        !quote.data ||
+                        !!quote.error ||
+                        (!!selectedId && !current && !saved)
+                      }
+                      onClick={() => void persist(true)}
+                    >
+                      {busy ? (
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles size={16} className="mr-2" />
+                      )}
+                      {isUgc ? "Generation coming soon" : "Generate"}
+                      {!isUgc &&
+                        (quoteCurrent && quote.data && !problem
+                          ? ` · ${quote.data.credits.toLocaleString()} credits`
+                          : " video")}
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {dirty ? "Unsaved changes. " : ""}
+                    {isUgc
+                      ? "Saving a UGC setup uses no AI credits."
+                      : (problem ??
+                        "Credits are reserved when you generate. Confirmed failures and cancellations are refunded.")}
+                  </p>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {!active && current?.status !== "attention" && (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        startNew({
+                          ...setup,
+                          title: `${setup.title.slice(0, 146)} · New version`,
+                        })
+                      }
+                    >
+                      <Plus size={16} className="mr-2" />
+                      Create another version
+                    </Button>
+                  )}
+                  {current?.status === "attention" && (
+                    <Button
+                      variant="outline"
+                      disabled={check.isPending}
+                      onClick={() => void act("check")}
+                    >
+                      <RefreshCw size={16} className="mr-2" />
+                      Check same request again
+                    </Button>
+                  )}
+                  {active && current.status !== "saving" && (
+                    <Button
+                      variant="outline"
+                      disabled={cancel.isPending || current.cancelRequested}
+                      onClick={() => void act("cancel")}
+                    >
+                      {current.cancelRequested
+                        ? "Cancellation requested"
+                        : "Request cancellation"}
+                    </Button>
                   )}
                 </div>
-                {resultAsset ? (
-                  <div className="bg-slate-950 p-3">
-                    <video
-                      key={resultAsset.url}
-                      controls
-                      playsInline
-                      preload="metadata"
-                      src={resultAsset.url}
-                      className="max-h-[480px] min-h-52 w-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex min-h-72 flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 px-6 py-12 text-center text-white sm:min-h-80">
-                    <span className="mb-5 rounded-2xl border border-white/15 bg-white/5 p-5">
-                      {active ? (
-                        <Loader2
-                          size={32}
-                          className="animate-spin text-violet-200"
-                        />
-                      ) : (
-                        <Clapperboard size={32} className="text-violet-200" />
-                      )}
-                    </span>
-                    <h4 className="text-lg font-medium">
-                      {active
-                        ? videoStatusLabels[current!.status]
-                        : "Your next story starts here"}
-                    </h4>
-                    <p className="mt-3 max-w-xs text-sm leading-6 text-slate-300">
-                      {active
-                        ? "You can leave this page. Your clip will appear here and in your drafts when it is ready."
-                        : "Your generated video will appear here, ready to preview and send for review."}
-                    </p>
-                  </div>
-                )}
-                {current?.error && (
-                  <p
-                    role="status"
-                    className="border-t bg-amber-50 p-4 text-sm leading-6 text-amber-950"
-                  >
-                    {current.error}
-                  </p>
-                )}
-                {resultAsset && (
-                  <div className="space-y-4 p-5">
-                    <p className="text-xs text-muted-foreground">
-                      {resultAsset.width} × {resultAsset.height}
-                      {resultAsset.durationSeconds
-                        ? ` · ${resultAsset.durationSeconds.toFixed(1)}s`
-                        : ""}{" "}
-                      · MP4
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      <Button asChild>
-                        <Link
-                          href={studioDraftsHref({
-                            filter: "videos",
-                            asset: resultAsset.key,
-                            plan: initialPlanId,
-                          })}
-                        >
-                          Review video
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          startNew({
-                            ...setup,
-                            mode: "extend",
-                            sourceVideoKey: resultAsset.key,
-                            prompt: "",
-                            title: `${setup.title.slice(0, 146)} · Extended`,
-                          })
-                        }
-                      >
-                        Extend this clip
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          startNew({
-                            ...setup,
-                            mode: "edit",
-                            sourceVideoKey: resultAsset.key,
-                            prompt: "",
-                            title: `${setup.title.slice(0, 146)} · Edited`,
-                          })
-                        }
-                      >
-                        Edit this clip
-                      </Button>
-                    </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      Saved as a draft. Review and approve the finished asset
-                      before adding it to a post or ad.
-                    </p>
-                  </div>
-                )}
-              </section>
-              <section
-                className="surface p-5"
-                aria-labelledby="video-history-heading"
-              >
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <h3 id="video-history-heading" className="font-semibold">
-                    Recent videos
-                  </h3>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Refresh videos"
-                    onClick={() => void refresh()}
-                    disabled={history.isFetching}
-                  >
-                    <RefreshCw size={16} />
-                  </Button>
-                </div>
-                {history.isLoading ? (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    Loading videos…
-                  </p>
-                ) : history.error ? (
-                  <p role="alert" className="text-sm text-destructive">
-                    Your videos could not be loaded. Try refreshing.
-                  </p>
-                ) : history.data?.length ? (
-                  <div className="space-y-2">
-                    {history.data
-                      .filter(
-                        job =>
-                          !initialPlanId ||
-                          job.setup.campaignPlanId === initialPlanId
-                      )
-                      .slice(0, 8)
-                      .map(job => (
-                        <button
-                          key={job.id}
-                          type="button"
-                          onClick={() => navigate(href(job.id))}
-                          className={`flex w-full min-w-0 items-center gap-3 rounded-xl border p-3 text-left hover:border-primary/50 ${job.id === selectedId ? "border-primary/40 bg-primary/5" : "border-transparent bg-muted/20"}`}
-                        >
-                          <span className="rounded-lg bg-background p-2 text-primary">
-                            {activeVideoStatuses.includes(job.status) ? (
-                              <Loader2 size={18} className="animate-spin" />
-                            ) : (
-                              <Film size={18} />
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">
-                              {job.setup.title}
-                            </span>
-                            <span className="mt-1 block text-[11px] text-muted-foreground">
-                              {videoStatusLabels[job.status]} ·{" "}
-                              {job.setup.resolution} ·{" "}
-                              {new Date(job.updatedAtMs).toLocaleDateString()}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Saved drafts and generated clips will appear here.
-                  </p>
-                )}
-              </section>
+              )}
             </div>
           </div>
-        </>
-      )}
+          <div className="min-w-0 space-y-6">
+            <section
+              className="surface overflow-hidden"
+              aria-labelledby="video-preview-heading"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+                <h3 id="video-preview-heading" className="font-semibold">
+                  {resultAsset ? "Your video" : "Preview"}
+                </h3>
+                {current && (
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs ${current.status === "completed" ? "bg-emerald-100 text-emerald-900" : current.status === "failed" || current.status === "attention" ? "bg-amber-100 text-amber-950" : "bg-primary/10 text-primary"}`}
+                  >
+                    {videoStatusLabels[current.status]}
+                  </span>
+                )}
+              </div>
+              {resultAsset ? (
+                <div className="bg-slate-950 p-3">
+                  <video
+                    key={resultAsset.url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    src={resultAsset.url}
+                    className="max-h-[480px] min-h-52 w-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="flex min-h-72 flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 px-6 py-12 text-center text-white sm:min-h-80">
+                  <span className="mb-5 rounded-2xl border border-white/15 bg-white/5 p-5">
+                    {active ? (
+                      <Loader2
+                        size={32}
+                        className="animate-spin text-violet-200"
+                      />
+                    ) : (
+                      <Clapperboard size={32} className="text-violet-200" />
+                    )}
+                  </span>
+                  <h4 className="text-lg font-medium">
+                    {active
+                      ? videoStatusLabels[current!.status]
+                      : "Your next story starts here"}
+                  </h4>
+                  <p className="mt-3 max-w-xs text-sm leading-6 text-slate-300">
+                    {active
+                      ? "You can leave this page. Your clip will appear here and in your drafts when it is ready."
+                      : isUgc
+                        ? "Save your references, models, and creative direction now. Video generation will be available here when connected."
+                        : "Your generated video will appear here, ready to preview and send for review."}
+                  </p>
+                </div>
+              )}
+              {current?.error && (
+                <p
+                  role="status"
+                  className="border-t bg-amber-50 p-4 text-sm leading-6 text-amber-950"
+                >
+                  {current.error}
+                </p>
+              )}
+              {resultAsset && (
+                <div className="space-y-4 p-5">
+                  <p className="text-xs text-muted-foreground">
+                    {resultAsset.width} × {resultAsset.height}
+                    {resultAsset.durationSeconds
+                      ? ` · ${resultAsset.durationSeconds.toFixed(1)}s`
+                      : ""}{" "}
+                    · MP4
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button asChild>
+                      <Link
+                        href={studioDraftsHref({
+                          filter: "videos",
+                          asset: resultAsset.key,
+                          plan: initialPlanId,
+                        })}
+                      >
+                        Review video
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        startNew({
+                          ...setup,
+                          mode: "extend",
+                          sourceVideoKey: resultAsset.key,
+                          prompt: "",
+                          title: `${setup.title.slice(0, 146)} · Extended`,
+                        })
+                      }
+                    >
+                      Extend this clip
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        startNew({
+                          ...setup,
+                          mode: "edit",
+                          sourceVideoKey: resultAsset.key,
+                          prompt: "",
+                          title: `${setup.title.slice(0, 146)} · Edited`,
+                        })
+                      }
+                    >
+                      Edit this clip
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Saved as a draft. Review and approve the finished asset
+                    before adding it to a post or ad.
+                  </p>
+                </div>
+              )}
+            </section>
+            <section
+              className="surface p-5"
+              aria-labelledby="video-history-heading"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 id="video-history-heading" className="font-semibold">
+                  {isUgc ? "Recent UGC videos" : "Recent product videos"}
+                </h3>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Refresh videos"
+                  onClick={() => void refresh()}
+                  disabled={history.isFetching}
+                >
+                  <RefreshCw size={16} />
+                </Button>
+              </div>
+              {history.isLoading ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Loading videos…
+                </p>
+              ) : history.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  Your videos could not be loaded. Try refreshing.
+                </p>
+              ) : recentVideos.length ? (
+                <div className="space-y-2">
+                  {recentVideos.slice(0, 8).map(job => (
+                    <button
+                      key={job.id}
+                      type="button"
+                      aria-label={`Open ${job.setup.title}`}
+                      disabled={busy}
+                      onClick={() =>
+                        void openVideo(job.id, job.setup.category === "ugc")
+                      }
+                      className={`flex w-full min-w-0 items-center gap-3 rounded-xl border p-3 text-left hover:border-primary/50 ${job.id === selectedId ? "border-primary/40 bg-primary/5" : "border-transparent bg-muted/20"}`}
+                    >
+                      <span className="rounded-lg bg-background p-2 text-primary">
+                        {activeVideoStatuses.includes(job.status) ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Film size={18} />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {job.setup.title}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                          {videoStatusLabels[job.status]} ·{" "}
+                          {job.setup.resolution} ·{" "}
+                          {new Date(job.updatedAtMs).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Saved drafts and generated clips will appear here.
+                </p>
+              )}
+            </section>
+          </div>
+        </div>
+      </>
       {picker && (
         <ReferencePicker
           kind={picker}
@@ -1123,21 +1176,19 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
         role={membership?.role ?? ""}
         parent={null}
         defaultDisposition="draft"
-        defaultPurpose={isUgc ? "finished" : "source"}
+        defaultPurpose="source"
         defaultUgc={isUgc}
         mediaFilter={uploadKind === "video" ? "video" : "image"}
         onSaved={() => utils.assetLibrary.studioList.invalidate(scope)}
         onComplete={key => {
-          if (!isUgc) {
-            if (uploadKind === "video") update({ sourceVideoKey: key });
-            else
-              update({
-                imageKeys: Array.from(new Set([...setup.imageKeys, key])).slice(
-                  0,
-                  maxImages
-                ),
-              });
-          }
+          if (uploadKind === "video") update({ sourceVideoKey: key });
+          else
+            update({
+              imageKeys: Array.from(new Set([...setup.imageKeys, key])).slice(
+                0,
+                maxImages
+              ),
+            });
         }}
       />
     </section>

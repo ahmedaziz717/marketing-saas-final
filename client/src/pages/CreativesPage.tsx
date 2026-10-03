@@ -32,7 +32,7 @@ const creationChoices = [
     title: "Create a video",
     icon: Clapperboard,
     description:
-      "Create product videos from images and prompts, or edit and extend existing clips.",
+      "Create product videos or prepare UGC with selected models. Edit, extend, and build from your references.",
   },
   {
     path: "images",
