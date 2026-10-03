@@ -570,12 +570,15 @@ function respond(path: string, input: any) {
     const post = posts.find(p => p.id === input.id);
     post.revision++;
     post.state = path.endsWith("review")
-      ? input.decision
+      ? input.delivery
+        ? "scheduled"
+        : input.decision
       : path.endsWith("submit")
         ? "needs_review"
         : "scheduled";
-    if (path.endsWith("queue")) post.result = { deliveryMode: "test" };
-    return { success: true, liveEnabled: false };
+    if (path.endsWith("queue") || input.delivery)
+      post.result = { deliveryMode: connections.liveSocial ? "live" : "test" };
+    return { success: true, liveEnabled: connections.liveSocial };
   }
   if (path === "publishing.save") {
     mutations.push(path);
@@ -654,6 +657,8 @@ const routeForPage: Record<string, string> = {
   "advertising-empty": "/app/advertising/meta",
   "social-empty": "/app/social/facebook",
   publishing: "/app/publishing",
+  "publishing-live": "/app/publishing",
+  "publishing-approved": "/app/publishing",
   social: "/app/social/facebook",
   advertising: "/app/advertising/meta",
   analytics: "/app/analytics",
@@ -664,6 +669,9 @@ const routeForPage: Record<string, string> = {
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
 });
+if (which === "publishing-live" || which === "publishing-approved")
+  connections.liveSocial = true;
+if (which === "publishing-approved") posts[0].state = "approved";
 if (which === "studio-post-media") {
   posts[0].assetKey = "asset:1";
   posts[0].scheduledAtMs = null;
@@ -858,7 +866,7 @@ function layout() {
       if (innerWidth < 640) await click("Model filters");
       layout();
     }
-    if (which === "publishing") {
+    if (which.startsWith("publishing")) {
       check(
         button("Week")?.getAttribute("aria-pressed") === "true",
         "Weekly view is default"
@@ -878,27 +886,57 @@ function layout() {
       await pause();
       layout();
       if (role === "creator") {
-        check(!button("Approve publication"), "Creators cannot approve");
+        check(
+          !button("Approve & schedule") &&
+            !button("Approve & save test schedule"),
+          "Creators cannot approve"
+        );
         await click("Submit for publishing approval");
         check(posts[0].state === "needs_review", "Creator submits for review");
       } else {
-        await click("Approve publication");
-        await click("Save test schedule");
+        const wasApproved = posts[0].state === "approved";
+        const action = wasApproved
+          ? "Schedule post"
+          : connections.liveSocial
+            ? "Approve & schedule"
+            : "Approve & save test schedule";
+        await click(action);
         check(
-          posts[0].state === "approved",
-          "Opening confirmation cannot queue delivery"
+          posts[0].state === (wasApproved ? "approved" : "draft"),
+          "Opening confirmation cannot approve or queue delivery"
         );
+        const confirmation = Array.from(
+          document.querySelectorAll('[role="dialog"]')
+        ).at(-1)!;
+        const confirmButton = Array.from(
+          confirmation.querySelectorAll<HTMLButtonElement>("button")
+        ).find(b => b.textContent === action);
         check(
-          !!button("Confirm delivery"),
-          "EvokeLoop confirmation dialog is shown"
+          !!confirmButton &&
+            confirmation.textContent?.includes("Demo Facebook Page") &&
+            confirmation.textContent?.includes("UTC"),
+          "Confirmation clearly identifies the Page and time"
         );
         layout();
-        await click("Confirm delivery");
+        confirmButton!.click();
+        await pause();
         check(
           posts[0].state === "scheduled" &&
-            posts[0].result.deliveryMode === "test",
-          "Owner can explicitly save a safe test schedule"
+            posts[0].result.deliveryMode ===
+              (connections.liveSocial ? "live" : "test"),
+          "Confirmation schedules the post in the selected mode"
         );
+        check(
+          !button("Schedule post") &&
+            !button("Approve & schedule") &&
+            !button("Approve & save test schedule"),
+          "Scheduled posts have no duplicate scheduling action"
+        );
+        if (connections.liveSocial)
+          check(
+            document.body.textContent?.includes("No further action is needed"),
+            "Automatic publishing is clearly explained"
+          );
       }
       layout();
     } else if (which === "social")

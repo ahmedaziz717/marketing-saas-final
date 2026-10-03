@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { contentSchema } from "@shared/channels";
@@ -14,9 +15,14 @@ const api = vi.hoisted(() => ({
   save: vi.fn(),
   plan: undefined as any,
   accounts: [] as any[],
+  role: "owner",
+  liveSocial: true,
+  review: vi.fn(),
+  queue: vi.fn(),
+  submit: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
-  useWorkspace: () => ({ organizationId: 1, membership: { role: "owner" } }),
+  useWorkspace: () => ({ organizationId: 1, membership: { role: api.role } }),
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -24,11 +30,16 @@ vi.mock("@/lib/trpc", () => ({
       publishing: {
         list: { invalidate: vi.fn() },
         get: { invalidate: vi.fn() },
+        history: { invalidate: vi.fn() },
       },
     }),
     brand: { get: { useQuery: () => ({ data: undefined }) } },
     channels: {
-      connections: { useQuery: () => ({ data: { items: api.accounts } }) },
+      connections: {
+        useQuery: () => ({
+          data: { items: api.accounts, liveSocial: api.liveSocial },
+        }),
+      },
     },
     assetLibrary: {
       list: {
@@ -56,6 +67,16 @@ vi.mock("@/lib/trpc", () => ({
     },
     publishing: {
       save: { useMutation: () => ({ mutate: api.save, isPending: false }) },
+      review: { useMutation: () => ({ mutate: api.review, isPending: false }) },
+      queue: { useMutation: () => ({ mutate: api.queue, isPending: false }) },
+      submit: { useMutation: () => ({ mutate: api.submit, isPending: false }) },
+      history: { useQuery: () => ({ data: [] }) },
+      cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      retry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      resetFailed: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
+      reconcile: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     briefs: { get: { useQuery: () => ({ data: api.plan }) } },
   },
@@ -96,7 +117,7 @@ vi.mock("./ApprovedAssetPicker", () => ({
     </div>
   ),
 }));
-import { PublicationComposer } from "./PublicationComposer";
+import { PublicationComposer, PublicationDetails } from "./PublicationComposer";
 
 const baseProps = { onClose: vi.fn(), onSaved: vi.fn() };
 const caption = () =>
@@ -128,6 +149,8 @@ function legacy(content: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   api.plan = undefined;
+  api.role = "owner";
+  api.liveSocial = true;
   api.accounts = [
     {
       id: "page",
@@ -141,6 +164,151 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
+
+function deliveryItem(overrides: Partial<Publication> = {}) {
+  return {
+    ...legacy({ link: "" }),
+    assetKey: null,
+    state: "draft",
+    scheduledAtMs: Date.now() + 86400000,
+    result: null,
+    ...overrides,
+  } as Publication;
+}
+function showDetails(item = deliveryItem()) {
+  const onEdit = vi.fn();
+  render(<PublicationDetails item={item} onClose={vi.fn()} onEdit={onEdit} />);
+  return onEdit;
+}
+
+it("confirms the Page and time before approving and scheduling in a single request", () => {
+  const item = deliveryItem({ timezone: "America/New_York" });
+  showDetails(item);
+  expect(screen.getByText("Time selected — not scheduled")).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Approve publication" })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Approve & schedule" }));
+  expect(api.review).not.toHaveBeenCalled();
+  expect(api.queue).not.toHaveBeenCalled();
+  const confirmation = within(
+    screen.getByRole("dialog", { name: "Approve & schedule" })
+  );
+  expect(confirmation.getByText("Our Page")).toBeTruthy();
+  expect(confirmation.getByText(/America\/New_York/)).toBeTruthy();
+  fireEvent.click(
+    confirmation.getByRole("button", { name: "Approve & schedule" })
+  );
+  expect(api.review).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: item.id,
+      revision: item.revision,
+      decision: "approved",
+      delivery: { confirm: true, mode: "live" },
+    })
+  );
+  expect(api.queue).not.toHaveBeenCalled();
+});
+
+it("makes immediate publishing explicit and allows backing out without an approval or send", () => {
+  showDetails(deliveryItem({ scheduledAtMs: null }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Approve & publish now" })
+  );
+  const confirmation = within(
+    screen.getByRole("dialog", { name: "Approve & publish now" })
+  );
+  expect(confirmation.getByText(/as soon as it is processed/)).toBeTruthy();
+  fireEvent.click(confirmation.getByRole("button", { name: "Go back" }));
+  expect(api.review).not.toHaveBeenCalled();
+  expect(api.queue).not.toHaveBeenCalled();
+});
+
+it("shows existing approvals as not scheduled and only queues after a separate explicit confirmation", () => {
+  showDetails(deliveryItem({ state: "approved" }));
+  expect(screen.getByText("Approved · Not scheduled")).toBeTruthy();
+  expect(api.queue).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+  fireEvent.click(
+    within(screen.getByRole("dialog", { name: "Schedule post" })).getByRole(
+      "button",
+      { name: "Schedule post" }
+    )
+  );
+  expect(api.queue).toHaveBeenCalledWith(
+    expect.objectContaining({ confirm: true, mode: "live" })
+  );
+  expect(api.review).not.toHaveBeenCalled();
+});
+
+it("shows scheduled posts as automatic with change-schedule controls and no second scheduling action", () => {
+  const onEdit = showDetails(
+    deliveryItem({ state: "scheduled", result: { deliveryMode: "live" } })
+  );
+  expect(screen.getByText(/No further action is needed/)).toBeTruthy();
+  expect(
+    screen.queryByRole("button", {
+      name: /Schedule post|Approve & schedule|Schedule delivery/,
+    })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Change schedule" }));
+  expect(onEdit).toHaveBeenCalledTimes(1);
+});
+
+it("blocks activation when a selected time has passed and keeps delivery settings available", () => {
+  const onEdit = showDetails(
+    deliveryItem({ state: "approved", scheduledAtMs: Date.now() - 60000 })
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "selected time has passed"
+  );
+  expect(
+    (screen.getByRole("button", { name: "Schedule post" }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Delivery settings" }));
+  expect(onEdit).toHaveBeenCalledTimes(1);
+  expect(api.queue).not.toHaveBeenCalled();
+});
+
+it("keeps creators on the request-approval flow", () => {
+  api.role = "creator";
+  showDetails();
+  expect(screen.queryByRole("button", { name: /Approve &/ })).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Submit for publishing approval" })
+  );
+  expect(api.submit).toHaveBeenCalledTimes(1);
+  expect(api.review).not.toHaveBeenCalled();
+});
+
+it("clearly labels test schedules and explicitly confirms test mode", () => {
+  api.liveSocial = false;
+  showDetails();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Approve & save test schedule" })
+  );
+  const confirmation = within(
+    screen.getByRole("dialog", { name: "Approve & save test schedule" })
+  );
+  expect(confirmation.getByText(/No content will be sent/)).toBeTruthy();
+  fireEvent.click(
+    confirmation.getByRole("button", { name: "Approve & save test schedule" })
+  );
+  expect(api.review).toHaveBeenCalledWith(
+    expect.objectContaining({ delivery: { confirm: true, mode: "test" } })
+  );
+});
+
+it("does not describe an already published post as awaiting scheduling", () => {
+  showDetails(
+    deliveryItem({ state: "published", result: { deliveryMode: "live" } })
+  );
+  expect(screen.queryByText(/not scheduled/i)).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Schedule post|Approve & schedule/ })
+  ).toBeNull();
+});
 
 it("leads with the caption and automatically moves a preview link when media is added, without losing it on removal", () => {
   render(<PublicationComposer {...baseProps} />);

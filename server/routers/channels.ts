@@ -1091,6 +1091,12 @@ export const publishingRouter = router({
       version.extend({
         decision: z.enum(["approved", "changes_requested", "rejected"]),
         note: z.string().trim().max(2000).default(""),
+        delivery: z
+          .object({
+            confirm: z.literal(true),
+            mode: z.enum(["live", "test"]),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1101,6 +1107,24 @@ export const publishingRouter = router({
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const item = await publicationById(tx, input.organizationId, input.id);
         assertRevision(item, input.revision);
+        const liveEnabled = liveDeliveryEnabled(item.channel);
+        if (input.delivery) {
+          if (
+            input.decision !== "approved" ||
+            !["draft", "needs_review"].includes(item.state)
+          )
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "Only a draft or a post awaiting approval can be approved and scheduled together.",
+            });
+          if (input.delivery.mode !== (liveEnabled ? "live" : "test"))
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "Publishing availability changed. Refresh and confirm the delivery details again.",
+            });
+        }
         if (
           !["draft", "needs_review", "approved", "scheduled"].includes(
             item.state
@@ -1125,7 +1149,15 @@ export const publishingRouter = router({
         await tx
           .update(publications)
           .set({
-            state: input.decision,
+            state: input.delivery ? "scheduled" : input.decision,
+            ...(input.delivery
+              ? {
+                  result: {
+                    ...(item.result ?? {}),
+                    deliveryMode: input.delivery.mode,
+                  },
+                }
+              : {}),
             approvalHash: d?.hash ?? null,
             approvedByUserId: d ? ctx.user.id : null,
             approvedAtMs: d ? Date.now() : null,
@@ -1145,11 +1177,35 @@ export const publishingRouter = router({
           },
           tx
         );
-        return { success: true };
+        if (input.delivery)
+          await appendActivity(
+            {
+              organizationId: input.organizationId,
+              actorUserId: ctx.user.id,
+              action: "publication.queued",
+              entityType: "publication",
+              entityId: item.id,
+              payload: {
+                scheduledAtMs: item.scheduledAtMs,
+                liveEnabled,
+                destination: item.connectionId,
+              },
+            },
+            tx
+          );
+        return {
+          success: true,
+          liveEnabled: input.delivery ? liveEnabled : undefined,
+        };
       });
     }),
   queue: protectedProcedure
-    .input(version.extend({ confirm: z.literal(true) }))
+    .input(
+      version.extend({
+        confirm: z.literal(true),
+        mode: z.enum(["live", "test"]).optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...publishers,
@@ -1158,6 +1214,13 @@ export const publishingRouter = router({
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const item = await publicationById(tx, input.organizationId, input.id);
         assertRevision(item, input.revision);
+        const liveEnabled = liveDeliveryEnabled(item.channel);
+        if (input.mode && input.mode !== (liveEnabled ? "live" : "test"))
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Publishing availability changed. Refresh and confirm the delivery details again.",
+          });
         if (
           item.state !== "approved" &&
           !(item.state === "scheduled" && item.result?.deliveryMode === "test")
@@ -1178,7 +1241,7 @@ export const publishingRouter = router({
             state: "scheduled",
             result: {
               ...(item.result ?? {}),
-              deliveryMode: liveDeliveryEnabled(item.channel) ? "live" : "test",
+              deliveryMode: liveEnabled ? "live" : "test",
             },
             revision: item.revision + 1,
             updatedAtMs: Date.now(),
@@ -1193,13 +1256,13 @@ export const publishingRouter = router({
             entityId: item.id,
             payload: {
               scheduledAtMs: item.scheduledAtMs,
-              liveEnabled: liveDeliveryEnabled(item.channel),
+              liveEnabled,
               destination: item.connectionId,
             },
           },
           tx
         );
-        return { liveEnabled: liveDeliveryEnabled(item.channel) };
+        return { liveEnabled };
       });
     }),
   cancel: protectedProcedure

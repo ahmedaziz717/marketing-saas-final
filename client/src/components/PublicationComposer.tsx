@@ -47,16 +47,25 @@ export type { Publication };
 export function PublicationStatus({
   item,
 }: {
-  item: Pick<Publication, "state" | "channel" | "result">;
+  item: Pick<Publication, "state" | "channel" | "result"> &
+    Partial<Pick<Publication, "scheduledAtMs">>;
 }) {
   const label =
     item.state === "scheduled" && item.result?.deliveryMode === "test"
       ? "Test schedule - not live"
-      : item.state === "published" && item.channel === "meta_ads"
-        ? "Created in Meta - paused"
-        : statusLabel(item.state);
+      : item.channel === "facebook" && item.state === "approved"
+        ? "Approved · Not scheduled"
+        : item.channel === "facebook" &&
+            item.state === "scheduled" &&
+            !item.scheduledAtMs
+          ? "Queued to publish"
+          : item.state === "published" && item.channel === "meta_ads"
+            ? "Created in Meta - paused"
+            : statusLabel(item.state);
   return (
-    <span className="inline-flex max-w-full rounded-full border bg-muted px-2.5 py-1 text-xs">
+    <span
+      className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs ${item.state === "scheduled" && item.result?.deliveryMode !== "test" ? "border-blue-200 bg-blue-50 text-blue-900" : item.state === "approved" || item.result?.deliveryMode === "test" ? "border-amber-200 bg-amber-50 text-amber-950" : "bg-muted"}`}
+    >
       {label}
     </span>
   );
@@ -1096,7 +1105,7 @@ export function PublicationComposer({
             {stage === "activate" && (
               <>
                 <div>
-                  <Label htmlFor="pub-date">Scheduled date and time</Label>
+                  <Label htmlFor="pub-date">Publish date and time</Label>
                   <input
                     id="pub-date"
                     type="datetime-local"
@@ -1109,8 +1118,15 @@ export function PublicationComposer({
                     onClick={() => setLocal("")}
                     className="mt-1 text-xs text-primary"
                   >
-                    Clear time - queue after approval
+                    {channel === "facebook"
+                      ? "Clear time — publish after confirmation"
+                      : "Clear time — deliver after confirmation"}
                   </button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {channel === "facebook"
+                      ? "Saving a date does not schedule the post. Confirm approval and publishing on the next screen."
+                      : "Saving a date does not activate delivery."}
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="pub-timezone">Time zone</Label>
@@ -1225,7 +1241,14 @@ export function PublicationDetails({
 }) {
   const { organizationId, membership } = useWorkspace();
   const utils = trpc.useUtils();
-  const [confirmQueue, setConfirmQueue] = useState(false);
+  const [confirmDelivery, setConfirmDelivery] = useState<
+    "approve" | "queue" | null
+  >(null);
+  const [clock, setClock] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [note, setNote] = useState(""),
     [externalId, setExternalId] = useState("");
   const scope = { organizationId: organizationId! };
@@ -1243,6 +1266,48 @@ export function PublicationDetails({
     item.channel === "facebook"
       ? connections.data?.liveSocial
       : connections.data?.liveAds;
+  const social = item.channel === "facebook";
+  const hasTime = Boolean(item.scheduledAtMs);
+  const formattedTime = item.scheduledAtMs
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: item.timezone,
+      }).format(item.scheduledAtMs) +
+      " (" +
+      item.timezone +
+      ")"
+    : "Now, after confirmation";
+  const timeExpired = Boolean(
+    item.scheduledAtMs && item.scheduledAtMs <= clock
+  );
+  const destinationName =
+    connections.data?.items.find(c => c.id === item.connectionId)?.name ??
+    "Not selected";
+  const deliveryLabel = !live
+    ? "Save test schedule"
+    : social
+      ? hasTime
+        ? "Schedule post"
+        : "Publish now"
+      : hasTime
+        ? "Schedule delivery"
+        : "Create paused ad";
+  const approvalLabel = !live
+    ? "Approve & save test schedule"
+    : hasTime
+      ? "Approve & schedule"
+      : "Approve & publish now";
+  const deliveryToast = (liveEnabled: boolean) =>
+    toast.success(
+      !liveEnabled
+        ? "Test schedule saved. Nothing will be published."
+        : social
+          ? hasTime
+            ? `Post scheduled for ${formattedTime}.`
+            : "Post queued to publish now."
+          : "Approved ad queued for creation in Meta as paused."
+    );
   const success = async () => {
     await Promise.all([
       utils.publishing.list.invalidate(),
@@ -1260,17 +1325,16 @@ export function PublicationDetails({
     onError: error,
   });
   const review = trpc.publishing.review.useMutation({
-    onSuccess: success,
+    onSuccess: async (result, variables) => {
+      await success();
+      if (variables.delivery) deliveryToast(result.liveEnabled === true);
+    },
     onError: error,
   });
   const queue = trpc.publishing.queue.useMutation({
     onSuccess: async r => {
       await success();
-      toast.success(
-        r.liveEnabled
-          ? "Queued for delivery by the publishing worker."
-          : "Test schedule saved. Live delivery is disabled."
-      );
+      deliveryToast(r.liveEnabled);
     },
     onError: error,
   });
@@ -1304,6 +1368,29 @@ export function PublicationDetails({
     "approved",
     "scheduled",
   ].includes(item.state);
+  const awaitingActivation =
+    ["draft", "needs_review", "approved"].includes(item.state) ||
+    (item.state === "scheduled" &&
+      item.result?.deliveryMode === "test" &&
+      live);
+  const scheduleHeading =
+    item.state === "scheduled"
+      ? item.result?.deliveryMode === "test"
+        ? "Test schedule"
+        : hasTime
+          ? "Scheduled for"
+          : "Queued to publish"
+      : [
+            "draft",
+            "needs_review",
+            "approved",
+            "changes_requested",
+            "rejected",
+          ].includes(item.state)
+        ? hasTime
+          ? "Time selected — not scheduled"
+          : "Publish timing"
+        : "Selected publishing time";
   return (
     <Dialog
       open
@@ -1323,22 +1410,54 @@ export function PublicationDetails({
         </DialogHeader>
         <PublicationStatus item={item} />
         <p className="text-sm">
-          Destination:{" "}
-          {connections.data?.items.find(c => c.id === item.connectionId)
-            ?.name ?? "Not selected"}
+          {social ? "Facebook Page" : "Destination"}: {destinationName}
         </p>
-        <p className="text-sm">
-          {item.scheduledAtMs
-            ? new Intl.DateTimeFormat(undefined, {
-                dateStyle: "medium",
-                timeStyle: "short",
-                timeZone: item.timezone,
-              }).format(item.scheduledAtMs) +
-              " (" +
-              item.timezone +
-              ")"
-            : "No scheduled time - queue after approval"}
-        </p>
+        <section
+          aria-label="Publishing schedule"
+          className="rounded-xl border bg-muted/40 p-4 text-sm space-y-1"
+        >
+          <p className="font-medium">{scheduleHeading}</p>
+          <p>
+            {!hasTime && !awaitingActivation
+              ? "Immediate publishing"
+              : formattedTime}
+          </p>
+          {social &&
+            item.state === "scheduled" &&
+            item.result?.deliveryMode !== "test" && (
+              <p className="text-muted-foreground">
+                {hasTime
+                  ? "This post will publish automatically at the scheduled time. No further action is needed."
+                  : "This post is queued to publish. No further action is needed."}
+              </p>
+            )}
+          {social && item.state === "approved" && live && (
+            <p className="text-muted-foreground">
+              Approval is saved.{" "}
+              {hasTime
+                ? "Schedule the post to activate publishing at the selected time."
+                : "Choose Publish now to activate publishing, or select a future time in Delivery settings."}
+            </p>
+          )}
+          {social && ["draft", "needs_review"].includes(item.state) && live && (
+            <p className="text-muted-foreground">
+              {canPublish
+                ? hasTime
+                  ? "Approve & schedule confirms this post and its publishing time together."
+                  : "Approve & publish now confirms this post for immediate publishing."
+                : "A publisher must approve and schedule this post before it can publish."}
+            </p>
+          )}
+        </section>
+        {awaitingActivation && timeExpired && (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+          >
+            The selected time has passed. Choose a new time in Delivery
+            settings, or clear it to explicitly publish now.
+          </div>
+        )}
         <p className="whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-sm">
           {item.content.message || "No caption"}
         </p>
@@ -1432,7 +1551,7 @@ export function PublicationDetails({
             campaign activation is performed.
           </p>
         )}
-        {!live && (
+        {connections.data && !live && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             Live {item.channel === "facebook" ? "social" : "advertising"}{" "}
             delivery is disabled in this environment. Test schedules cannot
@@ -1448,7 +1567,7 @@ export function PublicationDetails({
         {item.externalId && (
           <p className="break-all text-sm">Meta object ID: {item.externalId}</p>
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
           {canEdit && editablePublication(item.state) && (
             <Link href={studioContentHref(item.channel, { id: item.id })}>
               <Button variant="outline" disabled={busy}>
@@ -1458,14 +1577,17 @@ export function PublicationDetails({
           )}
           {canEdit && editablePublication(item.state) && (
             <Button variant="outline" disabled={busy} onClick={onEdit}>
-              Delivery settings
+              {item.state === "scheduled" && hasTime
+                ? "Change schedule"
+                : "Delivery settings"}
             </Button>
           )}
           {canEdit &&
-            ["draft", "changes_requested", "rejected"].includes(item.state) && (
+            ["draft", "changes_requested", "rejected"].includes(item.state) &&
+            !(social && canPublish && item.state === "draft") && (
               <Button
                 className="h-auto min-h-9 max-w-full whitespace-normal py-2"
-                disabled={busy}
+                disabled={busy || timeExpired}
                 onClick={() => submit.mutate(version)}
               >
                 Submit for publishing approval
@@ -1473,12 +1595,14 @@ export function PublicationDetails({
             )}
           {canPublish && ["draft", "needs_review"].includes(item.state) && (
             <Button
-              disabled={busy}
+              disabled={busy || (social && (!connections.data || timeExpired))}
               onClick={() =>
-                review.mutate({ ...version, decision: "approved", note })
+                social
+                  ? setConfirmDelivery("approve")
+                  : review.mutate({ ...version, decision: "approved", note })
               }
             >
-              Approve publication
+              {social ? approvalLabel : "Approve publication"}
             </Button>
           )}
         </div>
@@ -1488,85 +1612,136 @@ export function PublicationDetails({
               item.result?.deliveryMode === "test" &&
               live)) && (
             <Button
-              disabled={busy || connections.isLoading}
-              onClick={() => setConfirmQueue(true)}
+              className="h-auto min-h-10 whitespace-normal py-2"
+              disabled={busy || !connections.data || timeExpired}
+              onClick={() => setConfirmDelivery("queue")}
             >
-              {live
-                ? item.scheduledAtMs
-                  ? "Schedule delivery"
-                  : "Queue now"
-                : "Save test schedule"}
+              {deliveryLabel}
             </Button>
           )}
-        {confirmQueue && (
-          <Dialog open onOpenChange={setConfirmQueue}>
-            <DialogContent>
+        {confirmDelivery && (
+          <Dialog
+            open
+            onOpenChange={open => {
+              if (!open && !busy) setConfirmDelivery(null);
+            }}
+          >
+            <DialogContent className="max-h-[90dvh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Confirm delivery</DialogTitle>
+                <DialogTitle>
+                  {confirmDelivery === "approve"
+                    ? approvalLabel
+                    : deliveryLabel}
+                </DialogTitle>
                 <DialogDescription>
                   {live
-                    ? item.channel === "facebook"
-                      ? "Queue this approved Facebook post for live delivery?"
+                    ? social
+                      ? hasTime
+                        ? "Confirm the Page and time below. The post will publish automatically at that time."
+                        : "This will publish the post to the Facebook Page below as soon as it is processed."
                       : "Create this approved ad in Meta with its status set to paused?"
                     : "Save this as a test schedule? No content will be sent."}
                 </DialogDescription>
               </DialogHeader>
-              <p className="font-medium">{item.content.title}</p>
-              <div className="flex justify-end gap-3">
+              <dl className="space-y-3 rounded-xl border bg-muted/40 p-4 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">
+                    {social ? "Facebook Page" : "Destination"}
+                  </dt>
+                  <dd className="font-medium break-words">{destinationName}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">
+                    {hasTime ? "Publish at" : "Timing"}
+                  </dt>
+                  <dd className="font-medium">{formattedTime}</dd>
+                </div>
+              </dl>
+              <p className="break-words text-sm">{item.content.title}</p>
+              {timeExpired && (
+                <p role="alert" className="text-sm text-destructive">
+                  The selected time has passed. Go back and choose a new time.
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-3 [&_button]:h-auto [&_button]:min-h-10 [&_button]:whitespace-normal [&_button]:py-2">
                 <Button
                   variant="outline"
-                  onClick={() => setConfirmQueue(false)}
+                  disabled={busy}
+                  onClick={() => setConfirmDelivery(null)}
                 >
-                  Cancel
+                  Go back
                 </Button>
                 <Button
-                  disabled={busy}
+                  disabled={busy || timeExpired || !connections.data}
                   onClick={() => {
-                    setConfirmQueue(false);
-                    queue.mutate({ ...version, confirm: true });
+                    const action = confirmDelivery;
+                    setConfirmDelivery(null);
+                    if (action === "approve")
+                      review.mutate({
+                        ...version,
+                        decision: "approved",
+                        note,
+                        delivery: {
+                          confirm: true,
+                          mode: live ? "live" : "test",
+                        },
+                      });
+                    else
+                      queue.mutate({
+                        ...version,
+                        confirm: true,
+                        mode: live ? "live" : "test",
+                      });
                   }}
                 >
-                  Confirm delivery
+                  {confirmDelivery === "approve"
+                    ? approvalLabel
+                    : deliveryLabel}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
         )}
         {canPublish && reviewable && (
-          <>
-            <Label htmlFor="publication-feedback">Review feedback</Label>
-            <textarea
-              id="publication-feedback"
-              className={channelInput}
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              maxLength={2000}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                disabled={busy || !note.trim()}
-                onClick={() =>
-                  review.mutate({
-                    ...version,
-                    decision: "changes_requested",
-                    note,
-                  })
-                }
-              >
-                Request changes
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy || !note.trim()}
-                onClick={() =>
-                  review.mutate({ ...version, decision: "rejected", note })
-                }
-              >
-                Reject
-              </Button>
+          <details className="rounded-xl border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Request changes or reject
+            </summary>
+            <div className="mt-3 space-y-3">
+              <Label htmlFor="publication-feedback">Review feedback</Label>
+              <textarea
+                id="publication-feedback"
+                className={channelInput}
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                maxLength={2000}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={busy || !note.trim()}
+                  onClick={() =>
+                    review.mutate({
+                      ...version,
+                      decision: "changes_requested",
+                      note,
+                    })
+                  }
+                >
+                  Request changes
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy || !note.trim()}
+                  onClick={() =>
+                    review.mutate({ ...version, decision: "rejected", note })
+                  }
+                >
+                  Reject
+                </Button>
+              </div>
             </div>
-          </>
+          </details>
         )}
         {canPublish &&
           editablePublication(item.state) &&
@@ -1637,7 +1812,7 @@ export function PublicationDetails({
         )}
         {!canPublish && (
           <p className="text-xs text-muted-foreground">
-            An owner, administrator or publisher must approve and queue the
+            An owner, administrator or publisher must approve and schedule the
             final publication. Asset reviewers do not automatically have
             publishing permission.
           </p>

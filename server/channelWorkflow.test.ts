@@ -529,6 +529,148 @@ describe.sequential(
       expect(state.graph).not.toHaveBeenCalled();
       expect((await current(p.id)).state).toBe("scheduled");
     });
+    it("approves and schedules a future social post in one transaction, with both audit events and no early send", async () => {
+      vi.stubEnv("LIVE_SOCIAL_ACTIONS_ENABLED", "true");
+      const draft = await creator.publishing.save(
+        input({ scheduledAtMs: Date.now() + 86400000 })
+      );
+      await creator.publishing.submit(version(draft));
+      const pending = await current(draft.id);
+      const request = {
+        ...version(pending),
+        decision: "approved" as const,
+        delivery: { confirm: true as const, mode: "live" as const },
+      };
+      await expect(publisher.publishing.review(request)).resolves.toMatchObject(
+        { success: true, liveEnabled: true }
+      );
+      const scheduled = await current(draft.id);
+      expect(scheduled).toMatchObject({
+        state: "scheduled",
+        revision: pending.revision + 1,
+        approvedByUserId: pubId,
+        scheduledAtMs: draft.scheduledAtMs,
+        result: { deliveryMode: "live" },
+      });
+      expect(scheduled.approvalHash).toBeTruthy();
+      const events = await owner.publishing.history({
+        organizationId: org,
+        id: draft.id,
+      });
+      expect(
+        events.filter(e => e.action === "publication.approved")
+      ).toHaveLength(1);
+      expect(
+        events.filter(e => e.action === "publication.queued")
+      ).toHaveLength(1);
+      await expect(publisher.publishing.review(request)).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
+      await publicationTick(state.db);
+      expect(state.graph).not.toHaveBeenCalled();
+    });
+    it("requires an explicit combined confirmation, then publishes an immediate post only once", async () => {
+      vi.stubEnv("LIVE_SOCIAL_ACTIONS_ENABLED", "true");
+      const draft = await creator.publishing.save(input());
+      await expect(
+        owner.publishing.review({
+          ...version(draft),
+          decision: "approved",
+          delivery: { mode: "live" } as any,
+        })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect((await current(draft.id)).state).toBe("draft");
+      await owner.publishing.review({
+        ...version(draft),
+        decision: "approved",
+        delivery: { confirm: true, mode: "live" },
+      });
+      expect(state.graph).not.toHaveBeenCalled();
+      await executePublication(state.db, org, draft.id);
+      await executePublication(state.db, org, draft.id);
+      expect(state.graph).toHaveBeenCalledTimes(1);
+      expect((await current(draft.id)).state).toBe("published");
+    });
+    it("keeps combined test approvals unsent and rejects changed delivery availability", async () => {
+      const draft = await creator.publishing.save(input());
+      await expect(
+        owner.publishing.review({
+          ...version(draft),
+          decision: "approved",
+          delivery: { confirm: true, mode: "live" },
+        })
+      ).rejects.toThrow("availability changed");
+      expect((await current(draft.id)).approvalHash).toBeNull();
+      await owner.publishing.review({
+        ...version(draft),
+        decision: "approved",
+        delivery: { confirm: true, mode: "test" },
+      });
+      expect((await current(draft.id)).result?.deliveryMode).toBe("test");
+      vi.stubEnv("LIVE_SOCIAL_ACTIONS_ENABLED", "true");
+      await publicationTick(state.db);
+      expect(state.graph).not.toHaveBeenCalled();
+      const scheduled = await current(draft.id);
+      await expect(
+        owner.publishing.queue({
+          ...version(scheduled),
+          confirm: true,
+          mode: "test",
+        })
+      ).rejects.toThrow("availability changed");
+      expect((await current(draft.id)).result?.deliveryMode).toBe("test");
+    });
+    it("preserves permissions and leaves drafts unchanged when combined approval fails validation", async () => {
+      const draft = await creator.publishing.save(input());
+      const request = {
+        ...version(draft),
+        decision: "approved" as const,
+        delivery: { confirm: true as const, mode: "test" as const },
+      };
+      await expect(creator.publishing.review(request)).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      await expect(reviewer.publishing.review(request)).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      await expect(outsider.publishing.review(request)).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      await expect(
+        owner.publishing.review({
+          ...request,
+          decision: "rejected",
+          note: "Changes needed",
+        })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect((await current(draft.id)).state).toBe("draft");
+      const expired = await creator.publishing.save(
+        input({ scheduledAtMs: Date.now() - 10000 })
+      );
+      await expect(
+        owner.publishing.review({ ...request, ...version(expired) })
+      ).rejects.toThrow("expired");
+      expect(await current(expired.id)).toMatchObject({
+        state: "draft",
+        approvalHash: null,
+        result: null,
+      });
+      const photo = await creator.publishing.save(
+        input({ assetKey: `asset:${assetId}` })
+      );
+      await state.db
+        .update(brandAssets)
+        .set({ status: "rejected" })
+        .where(eq(brandAssets.id, assetId));
+      await expect(
+        owner.publishing.review({ ...request, ...version(photo) })
+      ).rejects.toThrow("approved finished");
+      expect(await current(photo.id)).toMatchObject({
+        state: "draft",
+        approvalHash: null,
+        result: null,
+      });
+    });
     it("publishes an explicitly live queued text post exactly once", async () => {
       vi.stubEnv("LIVE_SOCIAL_ACTIONS_ENABLED", "true");
       const p = await queued();

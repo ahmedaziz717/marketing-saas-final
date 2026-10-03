@@ -163,6 +163,8 @@ try {
       "signup",
       "reset-password",
       "publishing",
+      "publishing-live",
+      "publishing-approved",
       "social",
       "advertising",
       "analytics",
