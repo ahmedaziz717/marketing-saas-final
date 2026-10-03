@@ -180,6 +180,7 @@ try {
       "studio-ad",
       "studio-ad-setup",
       "studio-ad-create",
+      "studio-ad-copy",
       "campaign-plans",
       "asset-library",
       "roadmap",

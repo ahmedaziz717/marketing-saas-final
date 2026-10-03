@@ -1,47 +1,47 @@
-import { useRef, useState } from "react";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
+import { useState } from "react";
+import { useAssetCopy } from "@/hooks/useAssetCopy";
+import type { CopySet } from "@shared/adCopy";
 import { Button } from "./ui/button";
 import { channelInput } from "./ChannelConnections";
 import type { PublicationContent } from "@shared/channels";
-type Copy = { message: string; headline: string; description: string };
+type Copy = CopySet;
 export function AdCopyAssistant({
   organizationId,
   channel = "meta_ads",
   assetKeys,
   promotion,
-  allowVariants,
   onUse,
 }: {
   organizationId: number;
   channel?: "facebook" | "meta_ads";
   assetKeys: string[];
   promotion?: PublicationContent["promotion"];
-  allowVariants: boolean;
-  onUse: (copy: Copy, rest?: Copy[]) => void;
+  onUse: (copy: Copy) => void;
 }) {
   const [direction, setDirection] = useState("");
   const [options, setOptions] = useState<Copy[]>([]);
   const [source, setSource] = useState("");
-  const key = JSON.stringify({ assetKeys, promotion, channel });
-  const current = useRef(key);
-  current.current = key;
-  const generate = trpc.channels.draftAssetCopy.useMutation({
-    onSuccess: (data, variables) => {
-      const requested = JSON.stringify({
-        assetKeys: variables.assetKeys,
-        promotion: variables.promotion,
-        channel: variables.channel ?? "meta_ads",
-      });
-      if (current.current !== requested) {
-        toast.info("Selection changed. Generate fresh copy for these assets.");
-        return;
-      }
-      setSource(requested);
-      setOptions(data.options);
+  const key = JSON.stringify({ organizationId, assetKeys, promotion, channel });
+  const generate = useAssetCopy(
+    {
+      organizationId,
+      assetKeys,
+      promotion,
+      channel,
+      direction,
+      currentOptions: source === key ? options : [],
     },
-    onError: e => toast.error(e.message),
-  });
+    (generated, target) => {
+      setSource(key);
+      setOptions(previous =>
+        target
+          ? previous.map((option, i) =>
+              i === target.index ? generated[0] : option
+            )
+          : generated
+      );
+    }
+  );
   return (
     <div className="rounded-xl border p-4 space-y-3">
       <h3 className="font-semibold">Create copy from selected images</h3>
@@ -59,21 +59,15 @@ export function AdCopyAssistant({
         type="button"
         variant="outline"
         disabled={!assetKeys.length || generate.isPending}
-        onClick={() =>
-          generate.mutate({
-            organizationId,
-            assetKeys,
-            promotion,
-            direction,
-            channel,
-          })
-        }
+        onClick={() => generate.generate()}
       >
         {generate.isPending
           ? "Creating suggestions…"
           : channel === "facebook"
             ? "Generate post copy"
-            : "Generate ad copy"}
+            : source === key && options.length
+              ? "Regenerate all 5 sets"
+              : "Generate 5 copy sets"}
       </Button>
       <p className="text-xs text-muted-foreground">
         Uses the actual selected images and saved business/brand context. Review
@@ -85,97 +79,26 @@ export function AdCopyAssistant({
             <strong>{o.headline}</strong>
             <p className="text-sm whitespace-pre-wrap">{o.message}</p>
             <p className="text-xs">{o.description}</p>
-            <Button type="button" variant="outline" onClick={() => onUse(o)}>
-              Use option {i + 1}
-            </Button>
-          </div>
-        ))}
-      {source === key && options.length > 1 && allowVariants && (
-        <Button
-          type="button"
-          onClick={() => onUse(options[0], options.slice(1))}
-        >
-          Use all as Meta text options
-        </Button>
-      )}
-    </div>
-  );
-}
-export function TextVariantFields({
-  value,
-  onChange,
-}: {
-  value: PublicationContent["textVariants"];
-  onChange: (value: NonNullable<PublicationContent["textVariants"]>) => void;
-}) {
-  const variants = value ?? { messages: [], headlines: [], descriptions: [] };
-  return (
-    <div className="rounded-xl border p-4 space-y-4">
-      <h3 className="font-semibold">Additional Meta text options</h3>
-      <p className="text-xs text-muted-foreground">
-        Up to 5 of each, including the primary fields above. Meta may combine
-        these options and may not display every description. Approval covers
-        every option.
-      </p>
-      {(["messages", "headlines", "descriptions"] as const).map(key => (
-        <div className="space-y-2" key={key}>
-          <p className="text-sm font-medium">
-            {key === "messages"
-              ? "Primary text"
-              : key === "headlines"
-                ? "Headlines"
-                : "Descriptions"}
-          </p>
-          {variants[key].map((text, i) => (
-            <div key={i} className="flex gap-2">
-              <textarea
-                aria-label={`${key} option ${i + 2}`}
-                className={channelInput}
-                value={text}
-                maxLength={
-                  key === "messages" ? 5000 : key === "headlines" ? 200 : 300
-                }
-                onChange={e =>
-                  onChange({
-                    ...variants,
-                    [key]: variants[key].map((v, n) =>
-                      n === i ? e.target.value : v
-                    ),
-                  })
-                }
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={generate.isPending}
+                onClick={() => onUse(o)}
+              >
+                Use option {i + 1}
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
-                aria-label={`Remove ${key} option ${i + 2}`}
-                onClick={() =>
-                  onChange({
-                    ...variants,
-                    [key]: variants[key].filter((_, n) => n !== i),
-                  })
-                }
+                disabled={generate.isPending}
+                onClick={() => generate.generate({ index: i, field: "set" })}
               >
-                Remove
+                Regenerate option {i + 1}
               </Button>
             </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={variants[key].length >= 4}
-            onClick={() =>
-              onChange({ ...variants, [key]: [...variants[key], ""] })
-            }
-          >
-            Add{" "}
-            {key === "messages"
-              ? "primary text"
-              : key === "headlines"
-                ? "headline"
-                : "description"}
-          </Button>
-        </div>
-      ))}
+          </div>
+        ))}
     </div>
   );
 }

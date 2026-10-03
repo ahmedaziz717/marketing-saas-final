@@ -3,7 +3,8 @@ import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { ContentPreview } from "./ContentPreview";
 import { StudioMediaDialog } from "./StudioMediaDialog";
 import { studioContentHref } from "@shared/contentWorkflow";
-import { AdCopyAssistant, TextVariantFields } from "./AdCopyAssistant";
+import { AdCopyAssistant } from "./AdCopyAssistant";
+import { AdTextOptionsEditor } from "./AdTextOptionsEditor";
 import { PlacementAssetPicker } from "./PlacementAssetPicker";
 import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
@@ -173,6 +174,17 @@ export function PublicationComposer({
     }));
   }, [initialPlan.data]);
   const selectedAsset = assets.data?.find(a => a.key === assetKey);
+  const multipleTextOptions = channel === "meta_ads" && !placement && !carousel;
+  const copyAssetKeys = placement
+    ? Object.values(content.placementAssetKeys ?? {}).filter(
+        (v): v is string => !!v
+      )
+    : carousel
+      ? (content.carouselAssetKeys ?? [])
+      : assetKey
+        ? [assetKey]
+        : [];
+
   const setField = (key: keyof PublicationContent, value: string) =>
     setContent(c => ({ ...c, [key]: value }));
   function submit(next?: "activate") {
@@ -689,69 +701,50 @@ export function PublicationComposer({
                 </details>
                 {organizationId && (
                   <div className="sm:col-span-2">
-                    <AdCopyAssistant
-                      organizationId={organizationId}
-                      channel={channel}
-                      assetKeys={
-                        placement
-                          ? Object.values(
-                              content.placementAssetKeys ?? {}
-                            ).filter((v): v is string => !!v)
-                          : carousel
-                            ? (content.carouselAssetKeys ?? [])
-                            : assetKey
-                              ? [assetKey]
-                              : []
-                      }
-                      promotion={content.promotion}
-                      allowVariants={
-                        channel === "meta_ads" && !placement && !carousel
-                      }
-                      onUse={(copy, rest) =>
-                        setContent(c => ({
-                          ...c,
-                          ...copy,
-                          textVariants: rest
-                            ? {
-                                messages: rest.map(o => o.message),
-                                headlines: rest.map(o => o.headline),
-                                descriptions: rest
-                                  .map(o => o.description)
-                                  .filter(Boolean),
-                              }
-                            : undefined,
-                        }))
-                      }
-                    />
-                  </div>
-                )}
-                <div className="sm:col-span-2">
-                  <Label htmlFor="pub-message">
-                    {channel === "facebook"
-                      ? "Post text / caption"
-                      : "Primary ad text"}
-                  </Label>
-                  <textarea
-                    id="pub-message"
-                    className={channelInput + " min-h-28"}
-                    maxLength={5000}
-                    value={content.message}
-                    onChange={e => setField("message", e.target.value)}
-                  />
-                </div>
-                {channel === "meta_ads" && (
-                  <div className="sm:col-span-2">
-                    {!placement && !carousel ? (
-                      <TextVariantFields
-                        value={content.textVariants}
-                        onChange={value =>
-                          setContent(c => ({ ...c, textVariants: value }))
-                        }
+                    {multipleTextOptions ? (
+                      <AdTextOptionsEditor
+                        organizationId={organizationId}
+                        assetKeys={copyAssetKeys}
+                        promotion={content.promotion}
+                        value={content}
+                        onChange={copy => setContent(c => ({ ...c, ...copy }))}
                       />
                     ) : (
-                      <p className="text-xs text-muted-foreground">
+                      <AdCopyAssistant
+                        organizationId={organizationId}
+                        channel={channel}
+                        assetKeys={copyAssetKeys}
+                        promotion={content.promotion}
+                        onUse={copy =>
+                          setContent(c => ({
+                            ...c,
+                            ...copy,
+                            textVariants: undefined,
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                )}
+                {!multipleTextOptions && (
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="pub-message">
+                      {channel === "facebook"
+                        ? "Post text / caption"
+                        : "Primary ad text"}
+                    </Label>
+                    <textarea
+                      id="pub-message"
+                      className={channelInput + " min-h-28"}
+                      maxLength={5000}
+                      value={content.message}
+                      onChange={e => setField("message", e.target.value)}
+                    />
+                    {channel === "meta_ads" && (
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Carousel and placement-image ads use one copy set here.
-                        Multiple text options are available with Single image.
+                        Generate five alternatives and choose one, or use Single
+                        image for multiple text options.
                       </p>
                     )}
                   </div>
@@ -779,16 +772,18 @@ export function PublicationComposer({
                 </div>
                 {channel === "meta_ads" && (
                   <>
-                    <div>
-                      <Label htmlFor="pub-headline">Headline</Label>
-                      <input
-                        id="pub-headline"
-                        className={channelInput}
-                        maxLength={200}
-                        value={content.headline}
-                        onChange={e => setField("headline", e.target.value)}
-                      />
-                    </div>
+                    {!multipleTextOptions && (
+                      <div>
+                        <Label htmlFor="pub-headline">Headline</Label>
+                        <input
+                          id="pub-headline"
+                          className={channelInput}
+                          maxLength={200}
+                          value={content.headline}
+                          onChange={e => setField("headline", e.target.value)}
+                        />
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="pub-cta">Call to action</Label>
                       <select
@@ -806,16 +801,20 @@ export function PublicationComposer({
                         )}
                       </select>
                     </div>
-                    <div className="sm:col-span-2">
-                      <Label htmlFor="pub-description">Description</Label>
-                      <input
-                        id="pub-description"
-                        className={channelInput}
-                        maxLength={300}
-                        value={content.description}
-                        onChange={e => setField("description", e.target.value)}
-                      />
-                    </div>
+                    {!multipleTextOptions && (
+                      <div className="sm:col-span-2">
+                        <Label htmlFor="pub-description">Description</Label>
+                        <input
+                          id="pub-description"
+                          className={channelInput}
+                          maxLength={300}
+                          value={content.description}
+                          onChange={e =>
+                            setField("description", e.target.value)
+                          }
+                        />
+                      </div>
+                    )}
                     <p className="rounded-xl bg-muted p-3 text-sm sm:col-span-2">
                       Your ad will be created <strong>paused</strong> in the
                       selected campaign and ad set after publishing approval.

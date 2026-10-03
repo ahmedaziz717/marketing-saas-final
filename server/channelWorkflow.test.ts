@@ -653,28 +653,22 @@ describe.sequential(
       ).toBe("Trial starts");
     });
     it("drafts copy from scoped approved image bytes and rejects unapproved assets", async () => {
-      state.llm.mockResolvedValue({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                options: [
-                  {
-                    message: "Explore our resource directory",
-                    headline: "Find resources",
-                    description: "Discover learning options",
-                  },
-                ],
-              }),
-            },
-          },
-        ],
+      const copyOptions = Array.from({ length: 5 }, (_, i) => ({
+        message: `Explore our resource directory ${i + 1}`,
+        headline: `Find resources ${i + 1}`,
+        description: `Discover learning options ${i + 1}`,
+      }));
+      const reply = (options: unknown[]) => ({
+        choices: [{ message: { content: JSON.stringify({ options }) } }],
       });
+      state.llm.mockResolvedValue(reply(copyOptions));
       const result = await creator.channels.draftAssetCopy({
         organizationId: org,
         assetKeys: [`asset:${assetId}`],
       });
-      expect(result.options[0].headline).toBe("Find resources");
+      expect(result.options).toHaveLength(5);
+      expect(result.options[0].headline).toBe("Find resources 1");
+      state.llm.mockResolvedValue(reply(copyOptions.slice(0, 3)));
       await creator.channels.draftAssetCopy({
         organizationId: org,
         channel: "facebook",
@@ -714,9 +708,19 @@ describe.sequential(
         link: "https://example.test",
         adSetId: "777",
         textVariants: {
-          messages: ["Alternative"],
-          headlines: ["Second headline"],
-          descriptions: ["Second description"],
+          messages: ["Alternative", "Third text", "Fourth text", "Fifth text"],
+          headlines: [
+            "Second headline",
+            "Third headline",
+            "Fourth headline",
+            "Fifth headline",
+          ],
+          descriptions: [
+            "Second description",
+            "Third description",
+            "Fourth description",
+            "Fifth description",
+          ],
         },
       });
       state.graph.mockImplementation(async (path: string) =>
@@ -743,8 +747,12 @@ describe.sequential(
       expect(feed.bodies).toEqual([
         { text: "Primary" },
         { text: "Alternative" },
+        { text: "Third text" },
+        { text: "Fourth text" },
+        { text: "Fifth text" },
       ]);
-      expect(feed.titles).toHaveLength(2);
+      expect(feed.titles).toHaveLength(5);
+      expect(feed.descriptions).toHaveLength(5);
       expect(
         state.graph.mock.calls
           .find(c => c[0] === "act_456/ads")?.[3]

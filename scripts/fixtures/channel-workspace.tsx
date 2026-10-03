@@ -154,6 +154,7 @@ const fixtureAdsets: any[] = [
   },
 ];
 const mutations: string[] = [];
+const copyRequests: any[] = [];
 const role =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
     "role"
@@ -499,7 +500,59 @@ function respond(path: string, input: any) {
       warnings: [],
     };
   }
-  if (path === "assetLibrary.list") return [];
+  if (path === "assetLibrary.list")
+    return which === "studio-ad-copy"
+      ? [
+          {
+            key: "asset:1",
+            name: "Approved learning directory image",
+            origin: "generated",
+            mediaType: "image",
+            mimeType: "image/svg+xml",
+            purpose: "finished",
+            isUgc: false,
+            state: "approved",
+            revision: "1",
+            fingerprint: "fixture",
+            parentKey: null,
+            createdAtMs: now,
+            reviewedAtMs: now,
+            reviewedByUserId: 1,
+            width: 1080,
+            height: 1080,
+            url:
+              "data:image/svg+xml," +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080"><rect width="1080" height="1080" fill="#efeafb"/><text x="100" y="500" font-size="72" fill="#7041bd">Discover learning</text></svg>'
+              ),
+          },
+        ]
+      : [];
+  if (path === "channels.draftAssetCopy") {
+    mutations.push(path);
+    copyRequests.push(input);
+    const n = copyRequests.length;
+    const option = (i: number) => ({
+      message: `Discover learning opportunities near you. Explore independent providers and find your next step. Option ${i + 1}, generation ${n}.`,
+      headline: `Find your next learning adventure ${i + 1}.${n}`,
+      description: `Explore classes and providers ${i + 1}.${n}`,
+    });
+    if (input.regeneration) {
+      const { index, field } = input.regeneration;
+      const fresh = option(index);
+      return {
+        options: [
+          field === "set"
+            ? fresh
+            : {
+                ...input.currentOptions[index],
+                [field]: fresh[field as keyof typeof fresh],
+              },
+        ],
+      };
+    }
+    return { options: Array.from({ length: 5 }, (_, i) => option(i)) };
+  }
   if (path.startsWith("catalog.")) return [];
   if (
     path === "publishing.review" ||
@@ -570,6 +623,7 @@ const routeForPage: Record<string, string> = {
   "studio-ad": "/app/creatives/ads?new=1",
   "studio-ad-setup": "/app/creatives/ads?new=1",
   "studio-ad-create": "/app/creatives/ads?new=1",
+  "studio-ad-copy": "/app/creatives/ads?new=1&asset=asset%3A1",
   "campaign-plans": "/app/plans",
   "asset-library": "/app/library",
   roadmap: "/app/roadmap",
@@ -1103,6 +1157,111 @@ function layout() {
         await select("#pub-adset", "11");
         layout();
       }
+    }
+    if (which === "studio-ad-copy") {
+      await click("Continue to creative");
+      await click("Generate 5 copy sets");
+      const fields = () =>
+        Array.from(
+          document.querySelectorAll<HTMLTextAreaElement>('textarea[id^="pub-"]')
+        ).map(el => ({ id: el.id, value: el.value }));
+      check(
+        fields().length === 15,
+        "All 15 editable fields appear after generation"
+      );
+      const original = JSON.stringify(fields());
+      const headlines = document.querySelector<HTMLButtonElement>(
+        '[role="tab"][data-state="inactive"]'
+      )!;
+      headlines.focus();
+      await pause();
+      check(
+        headlines.getAttribute("data-state") === "active",
+        "Headlines tab is keyboard accessible"
+      );
+      const single = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Regenerate headline option 3"]'
+      )!;
+      single.scrollIntoView({ block: "center", behavior: "instant" });
+      single.click();
+      await pause();
+      check(
+        copyRequests.at(-1).regeneration.field === "headline" &&
+          copyRequests.at(-1).regeneration.index === 2,
+        "Regenerate requests only the selected field"
+      );
+      const changed = fields().filter(
+        (f, i) => f.value !== JSON.parse(original)[i].value
+      );
+      check(
+        changed.length === 1 && changed[0].id === "pub-headline-2",
+        "Only headline 3 changed"
+      );
+      await click("Undo last generation");
+      check(
+        JSON.stringify(fields()) === original,
+        "Undo restores previous copy"
+      );
+      const menu = document.querySelector<HTMLButtonElement>(
+        '[aria-label="More actions for headline option 5"]'
+      )!;
+      menu.focus();
+      menu.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      await pause();
+      const setAction = Array.from(
+        document.querySelectorAll<HTMLElement>('[role="menuitem"]')
+      ).find(el => el.textContent === "Regenerate full set 5 (all 3 fields)");
+      check(!!setAction, "Full set regeneration is offered in the menu");
+      setAction!.click();
+      await pause();
+      check(
+        fields().filter((f, i) => f.value !== JSON.parse(original)[i].value)
+          .length === 3,
+        "Full set regeneration changes only three fields"
+      );
+      await click("Regenerate all 5 sets");
+      check(
+        fields().length === 15 &&
+          fields().every((f, i) => f.value !== JSON.parse(original)[i].value),
+        "Regenerate all replaces all 15 options"
+      );
+      const savedFields = fields();
+      await click("Save draft");
+      const saved = posts.find(
+        p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      )!;
+      check(
+        saved.content.textVariants.messages.length === 4 &&
+          saved.content.textVariants.headlines.length === 4 &&
+          saved.content.textVariants.descriptions.length === 4,
+        "Draft saves one primary plus four alternatives of every type"
+      );
+      const savedCard = Array.from(document.querySelectorAll("article")).find(
+        el => el.querySelector("h3")?.textContent === saved.content.title
+      )!;
+      const editButton = Array.from(
+        savedCard.querySelectorAll<HTMLButtonElement>("button")
+      ).find(el => el.textContent === "Edit content")!;
+      editButton.click();
+      await pause();
+      await click("Continue to creative");
+      check(
+        JSON.stringify(fields()) === JSON.stringify(savedFields),
+        "All copy options survive save and reopen"
+      );
+      check(
+        mutations.every(m =>
+          ["channels.draftAssetCopy", "publishing.save"].includes(m)
+        ),
+        "Generating copy never approves or publishes the ad"
+      );
+      document
+        .querySelector('[aria-label="Ad copy options"]')!
+        .scrollIntoView({ block: "start", behavior: "instant" });
+      await pause();
+      layout();
     }
     if (which === "studio-post" || which === "studio-ad") {
       const destination =

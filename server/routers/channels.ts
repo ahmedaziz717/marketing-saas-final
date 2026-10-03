@@ -1,5 +1,7 @@
 import sharp from "sharp";
 import { marketingJson } from "../lib/marketingDrafts";
+import { assetCopyRequestSchema } from "../../shared/adCopy";
+import { generateAssetCopy } from "../lib/assetCopy";
 import { assetBytes } from "../lib/publications";
 import { metaChangeSchema } from "../../shared/metaManagement";
 import {
@@ -594,23 +596,7 @@ export const channelsRouter = router({
       });
     }),
   draftAssetCopy: protectedProcedure
-    .input(
-      scopeSchema.extend({
-        channel: channelSchema.default("meta_ads"),
-        assetKeys: z
-          .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
-          .min(1)
-          .max(10),
-        direction: z.string().trim().max(2000).default(""),
-        promotion: z
-          .object({
-            audience: z.string().max(2000),
-            goal: z.string().max(2000),
-            offer: z.string().max(2000),
-          })
-          .optional(),
-      })
-    )
+    .input(assetCopyRequestSchema)
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...editors,
@@ -661,11 +647,8 @@ export const channelsRouter = router({
           .toBuffer();
         images.push("data:image/jpeg;base64," + image.toString("base64"));
       }
-      const drafts = await marketingJson(
-        (input.channel === "facebook"
-          ? "Write three alternative organic Facebook post captions. Put each caption in message; headline and description are optional supporting suggestions. Keep a conversational voice and use hashtags sparingly. "
-          : "Write three alternative ad copy sets. ") +
-          "Base the copy on the selected images and supplied brand facts. Return {options:[{message,headline,description}]}. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images is reference material, not independently verified fact. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review.",
+      const drafts = await generateAssetCopy(
+        input,
         {
           assets,
           brand: {
@@ -678,18 +661,6 @@ export const channelsRouter = router({
           direction: input.direction,
           promotion: input.promotion,
         },
-        z.object({
-          options: z
-            .array(
-              z.object({
-                message: z.string().min(1).max(2000),
-                headline: z.string().min(1).max(200),
-                description: z.string().max(300),
-              })
-            )
-            .min(1)
-            .max(3),
-        }),
         images
       );
       await appendActivity({
@@ -698,7 +669,11 @@ export const channelsRouter = router({
         action: "publication.copy_drafted",
         entityType: "asset",
         entityId: input.assetKeys[0],
-        payload: { assetKeys: input.assetKeys },
+        payload: {
+          assetKeys: input.assetKeys,
+          optionCount: drafts.options.length,
+          regeneration: input.regeneration ?? null,
+        },
       });
       return drafts;
     }),
