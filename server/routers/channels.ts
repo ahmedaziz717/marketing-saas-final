@@ -4,6 +4,7 @@ import { assetCopyRequestSchema } from "../../shared/adCopy";
 import { generateAssetCopy } from "../lib/assetCopy";
 import { assetBytes } from "../lib/publications";
 import { metaChangeSchema } from "../../shared/metaManagement";
+import { normalizeSocialPost } from "../../shared/socialPost";
 import {
   readMetaObject,
   reviewMetaChange,
@@ -924,6 +925,15 @@ export const publishingRouter = router({
         ...editors,
       ]);
       const db = await libraryDatabase();
+      const normalizedContent = contentSchema.safeParse(
+        normalizeSocialPost(input.channel, input.assetKey, input.content)
+      );
+      if (!normalizedContent.success)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "The website link makes this caption too long. Shorten it to 5,000 characters before saving.",
+        });
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         if (input.content.campaignPlanId) {
           const [plan] = await tx
@@ -973,7 +983,7 @@ export const publishingRouter = router({
           channel: input.channel,
           connectionId: input.connectionId,
           assetKey: input.assetKey,
-          content: input.content,
+          content: normalizedContent.data,
           scheduledAtMs: input.scheduledAtMs,
           timezone: input.timezone,
           state: "draft" as const,

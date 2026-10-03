@@ -37,9 +37,13 @@ export function ContentPreview({
           preview
         </span>
       </div>
-      <p className="whitespace-pre-wrap break-words text-sm leading-6">
-        {content.message || "Your text will appear here."}
-      </p>
+      {(content.message ||
+        channel === "meta_ads" ||
+        (!media.length && !content.link)) && (
+        <p className="whitespace-pre-wrap break-words text-sm leading-6">
+          {content.message || "Your text will appear here."}
+        </p>
+      )}
       {!!media.length && (
         <div
           className={`mt-3 grid gap-3 ${media.length > 1 ? "sm:grid-cols-3" : ""}`}

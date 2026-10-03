@@ -947,6 +947,11 @@
 .meta-create-dialog select {
   padding-right: 28px;
 }
+.publication-composer .social-post-caption {
+  min-height: 144px;
+  resize: vertical;
+  line-height: 1.6;
+}
 .meta-create-dialog input[type="checkbox"],
 .meta-create-dialog input[type="radio"] {
   accent-color: var(--primary);

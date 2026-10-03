@@ -318,6 +318,57 @@ describe.sequential(
         creator.publishing.save(input({ connectionId: foreignId }))
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
+    it("moves a photo post's website link into its caption before saving and approval", async () => {
+      const p = await creator.publishing.save(
+        input({
+          assetKey: `asset:${assetId}`,
+          content: contentSchema.parse({
+            title: "Photo and link",
+            message: "Explore our collection.",
+            link: "https://example.com/shop",
+          }),
+        })
+      );
+      expect(p.content.message).toBe(
+        "Explore our collection.\n\nhttps://example.com/shop"
+      );
+      expect(p.content.link).toBe("");
+      await owner.publishing.review({ ...version(p), decision: "approved" });
+      const reviewed = await current(p.id);
+      expect(reviewed.state).toBe("approved");
+      expect(reviewed.content).toEqual(p.content);
+      expect(state.graph).not.toHaveBeenCalled();
+    });
+    it("does not duplicate a caption link or drop text to make an oversized caption fit", async () => {
+      const p = await creator.publishing.save(
+        input({
+          assetKey: `asset:${assetId}`,
+          content: contentSchema.parse({
+            title: "Existing link",
+            message: "Explore https://example.com/shop",
+            link: "https://example.com/shop",
+          }),
+        })
+      );
+      expect(p.content.message).toBe("Explore https://example.com/shop");
+      expect(p.content.link).toBe("");
+      await expect(
+        creator.publishing.save(
+          input({
+            assetKey: `asset:${assetId}`,
+            content: contentSchema.parse({
+              title: "Long caption",
+              message: "x".repeat(5000),
+              link: "https://example.com/shop",
+            }),
+          })
+        )
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(
+        (await owner.publishing.list({ organizationId: org })).items
+      ).toHaveLength(1);
+      expect(state.graph).not.toHaveBeenCalled();
+    });
     it("keeps one content record from a standalone Studio draft through delivery configuration", async () => {
       const { briefId } = await creator.briefs.create({
         organizationId: org,

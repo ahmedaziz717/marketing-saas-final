@@ -175,6 +175,7 @@ try {
       "product-home",
       "studio-overview",
       "studio-post",
+      "studio-post-media",
       "studio-post-empty",
       "studio-media",
       "studio-legacy",

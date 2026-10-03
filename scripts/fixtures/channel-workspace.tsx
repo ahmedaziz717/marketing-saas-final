@@ -508,7 +508,7 @@ function respond(path: string, input: any) {
     };
   }
   if (path === "assetLibrary.list")
-    return which === "studio-ad-copy"
+    return ["studio-ad-copy", "studio-post-media"].includes(which)
       ? [
           {
             key: "asset:1",
@@ -627,6 +627,7 @@ const routeForPage: Record<string, string> = {
   "studio-media": "/app/creatives/social?new=1",
   "studio-legacy": "/app/creatives/saved?asset=creative%3A42",
   "studio-post": "/app/creatives/social?new=1&plan=7",
+  "studio-post-media": `/app/creatives/social?edit=${id}`,
   "studio-post-empty": "/app/creatives/social?new=1",
   "studio-ad": "/app/creatives/ads?new=1",
   "studio-ad-setup": "/app/creatives/ads?new=1",
@@ -663,6 +664,13 @@ const routeForPage: Record<string, string> = {
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
 });
+if (which === "studio-post-media") {
+  posts[0].assetKey = "asset:1";
+  posts[0].scheduledAtMs = null;
+  posts[0].content.message =
+    "Find your next learning adventure. Explore local classes and independent providers.";
+  posts[0].content.link = "https://example.com/classes";
+}
 if (which === "navigation-ten") {
   const group = workspaceNavigation.find(
     item => item.path === "/app/advertising"
@@ -1315,6 +1323,44 @@ function layout() {
       await pause();
       layout();
     }
+    if (which === "studio-post-media") {
+      const caption =
+        document.querySelector<HTMLTextAreaElement>("#pub-message")!;
+      check(
+        caption.value.includes("https://example.com/classes"),
+        "Legacy photo link is visible in caption"
+      );
+      check(
+        !document.getElementById("pub-link"),
+        "Media posts hide website preview field"
+      );
+      check(
+        caption.getBoundingClientRect().height >= 144,
+        "Caption has a full writing area"
+      );
+      await click("Add website link");
+      layout();
+      const link =
+        document.querySelector<HTMLInputElement>("#pub-caption-link")!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )!.set!.call(link, "example.com/more");
+      link.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause();
+      await click("Add to caption");
+      check(
+        caption.value.includes("https://example.com/more"),
+        "Website action adds URL to caption"
+      );
+      check(mutations.length === 0, "Editing content never publishes");
+      const body = document.querySelector(
+        ".publication-fields"
+      )!.parentElement!;
+      body.scrollTop = 0;
+      await pause();
+      layout();
+    }
     if (which === "studio-post" || which === "studio-ad") {
       const destination =
         document.querySelector<HTMLSelectElement>("#pub-destination")!;
@@ -1363,7 +1409,21 @@ function layout() {
         );
       layout();
       if (which === "studio-ad") await click("Preview ad");
-      await click("Save & continue to Activate");
+      if (which === "studio-post") {
+        const caption =
+          document.querySelector<HTMLTextAreaElement>("#pub-message")!;
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value"
+        )!.set!.call(caption, "Explore our latest collection.");
+        caption.dispatchEvent(new Event("input", { bubbles: true }));
+        await pause();
+      }
+      await click(
+        which === "studio-post"
+          ? "Save & continue"
+          : "Save & continue to Activate"
+      );
       const saved = posts.find(
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
       );

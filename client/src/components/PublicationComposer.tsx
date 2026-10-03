@@ -1,6 +1,14 @@
 import { AdCampaignPicker } from "./AdCampaignPicker";
 import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { ContentPreview } from "./ContentPreview";
+import { SocialPostFields } from "./SocialPostFields";
+import { normalizeDestinationUrl } from "@shared/briefValidation";
+import {
+  normalizeSocialPost,
+  replaceSocialCaption,
+  socialPostTitle,
+  SOCIAL_CAPTION_LIMIT,
+} from "@shared/socialPost";
 import { StudioMediaDialog } from "./StudioMediaDialog";
 import { studioContentHref } from "@shared/contentWorkflow";
 import { AdCopyAssistant } from "./AdCopyAssistant";
@@ -8,7 +16,7 @@ import { AdTextOptionsEditor } from "./AdTextOptionsEditor";
 import { PlacementAssetPicker } from "./PlacementAssetPicker";
 import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +34,7 @@ import { channelInput } from "./ChannelConnections";
 import {
   channelNames,
   contentSchema,
+  linkSchema,
   dateInZone,
   localScheduleToUtc,
   statusLabel,
@@ -88,6 +97,7 @@ export function PublicationComposer({
   const [id] = useState(() => item?.id ?? crypto.randomUUID());
   const channel = item?.channel ?? initialChannel;
   const adWizard = channel === "meta_ads" && composing;
+  const CopyToolsContainer = channel === "facebook" ? "details" : "div";
   const [step, setStep] = useState<"setup" | "creative" | "preview">("setup");
   const [platform, setPlatform] = useState("meta_ads");
   const scrollBody = useRef<HTMLDivElement>(null);
@@ -105,17 +115,35 @@ export function PublicationComposer({
   const [connectionId, setConnection] = useState(
     item?.connectionId ?? initialConnectionId ?? ""
   );
-  const [assetKey, setAsset] = useState(
+  const [assetKey, setAssetKey] = useState(
     item?.assetKey ?? initialAssetKey ?? ""
   );
-  const [content, setContent] = useState<PublicationContent>(
-    item?.content ??
-      contentSchema.parse({
-        title: channel === "facebook" ? "Untitled post" : "Untitled ad",
-        campaignPlanId: initialPlanId,
-        adSetId: initialAdSetId ?? "",
-      })
+  const [content, setContentValue] = useState<PublicationContent>(() =>
+    normalizeSocialPost(
+      channel,
+      assetKey,
+      item?.content ??
+        contentSchema.parse({
+          title: channel === "facebook" ? "Untitled post" : "Untitled ad",
+          campaignPlanId: initialPlanId,
+          adSetId: initialAdSetId ?? "",
+        })
+    )
   );
+  const [showErrors, setShowErrors] = useState(false);
+  function setContent(update: SetStateAction<PublicationContent>) {
+    setContentValue(previous =>
+      normalizeSocialPost(
+        channel,
+        assetKey,
+        typeof update === "function" ? update(previous) : update
+      )
+    );
+  }
+  function setAsset(key: string) {
+    setAssetKey(key);
+    setContentValue(previous => normalizeSocialPost(channel, key, previous));
+  }
   const [timezone, setTimezone] = useState(
     item?.timezone ??
       initialTimezone ??
@@ -187,9 +215,68 @@ export function PublicationComposer({
 
   const setField = (key: keyof PublicationContent, value: string) =>
     setContent(c => ({ ...c, [key]: value }));
+  const socialErrors: Record<string, string> = {};
+  if (channel === "facebook") {
+    if (content.message.length > SOCIAL_CAPTION_LIMIT)
+      socialErrors.message =
+        "Shorten the caption to 5,000 characters or fewer.";
+    if (
+      content.link &&
+      !assetKey &&
+      (normalizeDestinationUrl(content.link) === null ||
+        !linkSchema.safeParse(normalizeDestinationUrl(content.link)).success)
+    )
+      socialErrors.link =
+        "Enter a valid website address, such as example.com, or clear this optional field.";
+    if (!connectionId || selectedAccountUnavailable)
+      socialErrors.destination =
+        "Choose a connected Facebook Page before continuing.";
+    else if (
+      !connectedAccounts
+        .find(c => c.id === connectionId)
+        ?.details.capabilities.includes("publish")
+    )
+      socialErrors.destination =
+        "This account has read-only access. Choose an account with publishing permission.";
+    if (!content.message.trim() && !content.link.trim() && !assetKey)
+      socialErrors.message =
+        "Write a caption, add a website preview, or select a photo or video.";
+    if (
+      assetKey &&
+      (!selectedAsset ||
+        selectedAsset.state !== "approved" ||
+        selectedAsset.purpose !== "finished" ||
+        !["image", "video"].includes(selectedAsset.mediaType))
+    )
+      socialErrors.asset = assets.isLoading
+        ? "Wait for your selected media to finish loading."
+        : "Choose an approved photo or video, or remove the current selection.";
+  }
+  function focusIssue(field: string) {
+    const element = document.getElementById(
+      field === "asset" ? "pub-asset" : `pub-${field}`
+    );
+    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+    element?.focus({ preventScroll: true });
+  }
   function submit(next?: "activate") {
     nextAction.current = next;
     try {
+      if (channel === "facebook") {
+        const issues = Object.entries(socialErrors).filter(
+          ([field]) =>
+            next ||
+            field === "link" ||
+            field === "asset" ||
+            (field === "message" &&
+              content.message.length > SOCIAL_CAPTION_LIMIT)
+        );
+        if (issues.length) {
+          setShowErrors(true);
+          focusIssue(issues[0][0]);
+          return;
+        }
+      }
       const at =
         stage === "create"
           ? (item?.scheduledAtMs ??
@@ -210,6 +297,14 @@ export function PublicationComposer({
         assetKey: assetKey || null,
         content: {
           ...content,
+          ...(channel === "facebook"
+            ? {
+                title: socialPostTitle(content, selectedAsset?.name),
+                link: assetKey
+                  ? ""
+                  : (normalizeDestinationUrl(content.link) ?? content.link),
+              }
+            : {}),
           textVariants:
             channel === "meta_ads" &&
             !placement &&
@@ -262,7 +357,7 @@ export function PublicationComposer({
             {stage === "create"
               ? channel === "meta_ads"
                 ? "Choose where your ad runs, build the creative, then preview it."
-                : "Choose a connected social account and create your post."
+                : "Write your caption, add optional media, then choose when to publish."
               : "Choose the destination and timing for this content, then review and approve delivery."}
           </DialogDescription>
         </DialogHeader>
@@ -337,10 +432,17 @@ export function PublicationComposer({
                   <Label htmlFor="pub-destination">
                     {channel === "facebook" ? "Social account" : "Ad account"}
                   </Label>
+                  {channel === "facebook" && (
+                    <p className="text-xs text-muted-foreground">
+                      Required to publish. You can save a draft before choosing
+                      an account.
+                    </p>
+                  )}
                   <select
                     id="pub-destination"
                     className={channelInput}
                     value={connectionId}
+                    aria-invalid={showErrors && !!socialErrors.destination}
                     disabled={connections.isLoading}
                     onChange={e => {
                       setConnection(e.target.value);
@@ -402,6 +504,11 @@ export function PublicationComposer({
                   >
                     Manage connections
                   </Link>
+                  {showErrors && socialErrors.destination && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {socialErrors.destination}
+                    </p>
+                  )}
                 </div>
                 {channel === "meta_ads" &&
                   connectionId &&
@@ -430,47 +537,63 @@ export function PublicationComposer({
             )}
             {composing && (!adWizard || step === "creative") && (
               <>
-                <details className="sm:col-span-2 rounded-xl border p-4">
-                  <summary className="mb-3 cursor-pointer text-sm font-medium">
-                    Link a campaign plan (optional)
-                  </summary>
-                  <CampaignPlanSelect
-                    value={content.campaignPlanId}
-                    onChange={(planId, plan) =>
-                      setContent(c => ({
-                        ...c,
-                        campaignPlanId: planId,
-                        promotion: {
-                          audience:
-                            c.promotion?.audience ||
-                            plan?.audience?.slice(0, 2000) ||
-                            "",
-                          goal:
-                            c.promotion?.goal ||
-                            plan?.creativeDirection?.slice(0, 2000) ||
-                            "",
-                          offer:
-                            c.promotion?.offer ||
-                            plan?.offer?.slice(0, 2000) ||
-                            "",
-                        },
-                        link: c.link || plan?.destinationUrl || "",
-                      }))
-                    }
+                {channel === "facebook" && (
+                  <SocialPostFields
+                    content={content}
+                    hasMedia={!!assetKey}
+                    onChange={setContent}
+                    errors={showErrors ? socialErrors : {}}
                   />
-                </details>
+                )}
+                {channel === "meta_ads" && (
+                  <>
+                    <details className="sm:col-span-2 rounded-xl border p-4">
+                      <summary className="mb-3 cursor-pointer text-sm font-medium">
+                        Link a campaign plan (optional)
+                      </summary>
+                      <CampaignPlanSelect
+                        value={content.campaignPlanId}
+                        onChange={(planId, plan) =>
+                          setContent(c => ({
+                            ...c,
+                            campaignPlanId: planId,
+                            promotion: {
+                              audience:
+                                c.promotion?.audience ||
+                                plan?.audience?.slice(0, 2000) ||
+                                "",
+                              goal:
+                                c.promotion?.goal ||
+                                plan?.creativeDirection?.slice(0, 2000) ||
+                                "",
+                              offer:
+                                c.promotion?.offer ||
+                                plan?.offer?.slice(0, 2000) ||
+                                "",
+                            },
+                            link: c.link || plan?.destinationUrl || "",
+                          }))
+                        }
+                      />
+                    </details>
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="pub-title">Internal title</Label>
+                      <input
+                        id="pub-title"
+                        className={channelInput}
+                        maxLength={180}
+                        value={content.title}
+                        onChange={e => setField("title", e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="sm:col-span-2">
-                  <Label htmlFor="pub-title">Internal title</Label>
-                  <input
-                    id="pub-title"
-                    className={channelInput}
-                    maxLength={180}
-                    value={content.title}
-                    onChange={e => setField("title", e.target.value)}
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label htmlFor="pub-asset">Approved finished asset</Label>
+                  <p className="mb-2 text-sm font-medium">
+                    {channel === "facebook"
+                      ? "Photo or video (optional)"
+                      : "Approved finished asset"}
+                  </p>
                   {channel === "meta_ads" && (
                     <select
                       aria-label="Ad format"
@@ -502,9 +625,10 @@ export function PublicationComposer({
                   )}
                   {!placement && (
                     <Button
+                      id="pub-asset"
                       type="button"
                       variant="outline"
-                      className="w-full"
+                      className={channel === "facebook" ? "" : "w-full"}
                       onClick={() => setPickerOpen(true)}
                     >
                       Browse approved assets
@@ -535,8 +659,7 @@ export function PublicationComposer({
                   )}
                   {channel === "facebook" && !assetKey && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      No media selected. You can publish a text-only post, or
-                      add a link below.
+                      Text and website-preview posts do not need media.
                     </p>
                   )}
                   {channel === "facebook" && assetKey && (
@@ -635,104 +758,158 @@ export function PublicationComposer({
                       The approved library could not be loaded.
                     </p>
                   )}
+                  {showErrors && socialErrors.asset && (
+                    <p role="alert" className="mt-2 text-sm text-destructive">
+                      {socialErrors.asset}
+                    </p>
+                  )}
                   {selectedAsset && !carousel && !placement && (
-                    <div className="mt-3 rounded-xl bg-muted/50 p-3">
+                    <div
+                      className={
+                        channel === "facebook"
+                          ? "mt-3 flex items-center gap-3 rounded-xl border bg-muted/30 p-3"
+                          : "mt-3 rounded-xl bg-muted/50 p-3"
+                      }
+                    >
                       {selectedAsset.mediaType === "video" ? (
                         <video
                           src={selectedAsset.url}
                           controls
                           preload="metadata"
-                          className="mx-auto max-h-52 max-w-full"
+                          className={
+                            channel === "facebook"
+                              ? "h-16 w-20 shrink-0 rounded-lg object-contain"
+                              : "mx-auto max-h-52 max-w-full"
+                          }
                         />
                       ) : (
                         <img
                           src={selectedAsset.url}
                           alt={selectedAsset.name}
-                          className="mx-auto max-h-52 max-w-full object-contain"
+                          className={
+                            channel === "facebook"
+                              ? "h-16 w-20 shrink-0 rounded-lg object-contain"
+                              : "mx-auto max-h-52 max-w-full object-contain"
+                          }
                         />
+                      )}
+                      {channel === "facebook" && (
+                        <div className="min-w-0 text-sm">
+                          <p className="break-words font-medium">
+                            {selectedAsset.name}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {selectedAsset.mediaType === "video"
+                              ? "Video post"
+                              : "Photo post"}{" "}
+                            · Full preview below
+                          </p>
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
-                <details className="sm:col-span-2 rounded-xl border p-4 space-y-3">
-                  <summary className="cursor-pointer font-semibold">
-                    Copy guidance (optional)
-                  </summary>
-                  <p className="text-xs text-muted-foreground">
-                    Promote a product, service, plan, listing, category, or the
-                    whole platform.
-                  </p>
-                  {(
-                    [
-                      ["audience", "Audience"],
-                      ["goal", "Goal"],
-                      ["offer", "What are you promoting?"],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <label className="block text-sm" key={key}>
-                      {label}
-                      <input
-                        className={channelInput + " mt-1"}
-                        value={content.promotion?.[key] ?? ""}
-                        placeholder={
-                          key === "audience"
-                            ? businessBrand.data?.businessProfile?.audiences
-                            : key === "goal"
-                              ? businessBrand.data?.businessProfile?.goals
-                              : businessBrand.data?.businessProfile
-                                  ?.primaryOffer
-                        }
-                        maxLength={2000}
-                        onChange={e =>
-                          setContent(c => ({
-                            ...c,
-                            promotion: {
-                              audience: "",
-                              goal: "",
-                              offer: "",
-                              ...c.promotion,
-                              [key]: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                  ))}
-                </details>
-                {organizationId && (
-                  <div className="sm:col-span-2">
-                    {multipleTextOptions ? (
-                      <AdTextOptionsEditor
-                        organizationId={organizationId}
-                        assetKeys={copyAssetKeys}
-                        promotion={content.promotion}
-                        value={content}
-                        onChange={copy => setContent(c => ({ ...c, ...copy }))}
-                      />
-                    ) : (
-                      <AdCopyAssistant
-                        organizationId={organizationId}
-                        channel={channel}
-                        assetKeys={copyAssetKeys}
-                        promotion={content.promotion}
-                        onUse={copy =>
-                          setContent(c => ({
-                            ...c,
-                            ...copy,
-                            textVariants: undefined,
-                          }))
-                        }
-                      />
+                {(channel === "meta_ads" ||
+                  selectedAsset?.mediaType === "image") && (
+                  <CopyToolsContainer
+                    className={
+                      channel === "facebook"
+                        ? "sm:col-span-2 rounded-xl border p-4 space-y-4"
+                        : "sm:col-span-2 space-y-5"
+                    }
+                  >
+                    {channel === "facebook" && (
+                      <summary className="cursor-pointer text-sm font-medium">
+                        Write caption with AI (optional)
+                      </summary>
                     )}
-                  </div>
+                    <details className="sm:col-span-2 rounded-xl border p-4 space-y-3">
+                      <summary className="cursor-pointer font-semibold">
+                        Copy guidance (optional)
+                      </summary>
+                      <p className="text-xs text-muted-foreground">
+                        Promote a product, service, plan, listing, category, or
+                        the whole platform.
+                      </p>
+                      {(
+                        [
+                          ["audience", "Audience"],
+                          ["goal", "Goal"],
+                          ["offer", "What are you promoting?"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label className="block text-sm" key={key}>
+                          {label}
+                          <input
+                            className={channelInput + " mt-1"}
+                            value={content.promotion?.[key] ?? ""}
+                            placeholder={
+                              key === "audience"
+                                ? businessBrand.data?.businessProfile?.audiences
+                                : key === "goal"
+                                  ? businessBrand.data?.businessProfile?.goals
+                                  : businessBrand.data?.businessProfile
+                                      ?.primaryOffer
+                            }
+                            maxLength={2000}
+                            onChange={e =>
+                              setContent(c => ({
+                                ...c,
+                                promotion: {
+                                  audience: "",
+                                  goal: "",
+                                  offer: "",
+                                  ...c.promotion,
+                                  [key]: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </details>
+                    {organizationId && (
+                      <div className="sm:col-span-2">
+                        {multipleTextOptions ? (
+                          <AdTextOptionsEditor
+                            organizationId={organizationId}
+                            assetKeys={copyAssetKeys}
+                            promotion={content.promotion}
+                            value={content}
+                            onChange={copy =>
+                              setContent(c => ({ ...c, ...copy }))
+                            }
+                          />
+                        ) : (
+                          <AdCopyAssistant
+                            organizationId={organizationId}
+                            channel={channel}
+                            assetKeys={copyAssetKeys}
+                            promotion={content.promotion}
+                            onUse={copy =>
+                              setContent(c => ({
+                                ...c,
+                                ...copy,
+                                ...(channel === "facebook"
+                                  ? {
+                                      message: replaceSocialCaption(
+                                        c.message,
+                                        copy.message
+                                      ),
+                                    }
+                                  : {}),
+                                textVariants: undefined,
+                              }))
+                            }
+                          />
+                        )}
+                      </div>
+                    )}
+                  </CopyToolsContainer>
                 )}
-                {!multipleTextOptions && (
+                {channel === "meta_ads" && !multipleTextOptions && (
                   <div className="sm:col-span-2">
-                    <Label htmlFor="pub-message">
-                      {channel === "facebook"
-                        ? "Post text / caption"
-                        : "Primary ad text"}
-                    </Label>
+                    <Label htmlFor="pub-message">Primary ad text</Label>
                     <textarea
                       id="pub-message"
                       className={channelInput + " min-h-28"}
@@ -749,27 +926,19 @@ export function PublicationComposer({
                     )}
                   </div>
                 )}
-                <div className="sm:col-span-2">
-                  <Label htmlFor="pub-link">
-                    {channel === "facebook"
-                      ? "Link preview URL (text/link posts only)"
-                      : "Destination URL"}
-                  </Label>
-                  <input
-                    id="pub-link"
-                    type="url"
-                    className={channelInput}
-                    placeholder="https://"
-                    value={content.link}
-                    onChange={e => setField("link", e.target.value)}
-                  />
-                  {channel === "facebook" && assetKey && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      For a media post, leave this field empty and include any
-                      URL in the caption.
-                    </p>
-                  )}
-                </div>
+                {channel === "meta_ads" && (
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="pub-link">Destination URL</Label>
+                    <input
+                      id="pub-link"
+                      type="url"
+                      className={channelInput}
+                      placeholder="https://"
+                      value={content.link}
+                      onChange={e => setField("link", e.target.value)}
+                    />
+                  </div>
+                )}
                 {channel === "meta_ads" && (
                   <>
                     {!multipleTextOptions && (
@@ -822,6 +991,66 @@ export function PublicationComposer({
                   </>
                 )}
               </>
+            )}
+            {composing && channel === "facebook" && (
+              <details className="sm:col-span-2 rounded-xl border p-4 space-y-4">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Post organization (optional)
+                </summary>
+                <p className="text-xs text-muted-foreground">
+                  For your workspace only. These details do not appear on
+                  Facebook.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="pub-title">Internal title (optional)</Label>
+                  <input
+                    id="pub-title"
+                    className={channelInput}
+                    maxLength={180}
+                    value={
+                      content.title === "Untitled post" ? "" : content.title
+                    }
+                    placeholder="Automatically named from your caption"
+                    onChange={e => setField("title", e.target.value)}
+                  />
+                </div>
+                <CampaignPlanSelect
+                  value={content.campaignPlanId}
+                  onChange={(planId, plan) =>
+                    setContent(c => ({
+                      ...c,
+                      campaignPlanId: planId,
+                      promotion: {
+                        audience:
+                          c.promotion?.audience ||
+                          plan?.audience?.slice(0, 2000) ||
+                          "",
+                        goal:
+                          c.promotion?.goal ||
+                          plan?.creativeDirection?.slice(0, 2000) ||
+                          "",
+                        offer:
+                          c.promotion?.offer ||
+                          plan?.offer?.slice(0, 2000) ||
+                          "",
+                      },
+                      link: c.link || plan?.destinationUrl || "",
+                    }))
+                  }
+                />
+                <div className="space-y-2">
+                  <Label htmlFor="pub-campaign-label">
+                    Campaign label (optional)
+                  </Label>
+                  <input
+                    id="pub-campaign-label"
+                    className={channelInput}
+                    maxLength={180}
+                    value={content.campaignLabel}
+                    onChange={e => setField("campaignLabel", e.target.value)}
+                  />
+                </div>
+              </details>
             )}
             {(!adWizard || step === "preview") && (
               <ContentPreview
@@ -899,19 +1128,21 @@ export function PublicationComposer({
                 </div>
               </>
             )}
-            {composing && (!adWizard || step === "creative") && (
-              <div className="sm:col-span-2">
-                <Label htmlFor="pub-campaign-label">
-                  Campaign label (optional)
-                </Label>
-                <input
-                  id="pub-campaign-label"
-                  className={channelInput}
-                  value={content.campaignLabel}
-                  onChange={e => setField("campaignLabel", e.target.value)}
-                />
-              </div>
-            )}
+            {composing &&
+              channel === "meta_ads" &&
+              (!adWizard || step === "creative") && (
+                <div className="sm:col-span-2">
+                  <Label htmlFor="pub-campaign-label">
+                    Campaign label (optional)
+                  </Label>
+                  <input
+                    id="pub-campaign-label"
+                    className={channelInput}
+                    value={content.campaignLabel}
+                    onChange={e => setField("campaignLabel", e.target.value)}
+                  />
+                </div>
+              )}
           </fieldset>
           {item && (
             <p className="text-sm text-muted-foreground">
@@ -922,12 +1153,20 @@ export function PublicationComposer({
           )}
         </div>
         <div className="flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal">
+          {showErrors && Object.keys(socialErrors).length > 0 && (
+            <p role="alert" className="w-full text-sm text-destructive">
+              {Object.values(socialErrors)[0]}
+            </p>
+          )}
           <Button variant="outline" disabled={save.isPending} onClick={onClose}>
             Cancel
           </Button>
           <Button
-            variant={adWizard ? "outline" : "default"}
-            disabled={save.isPending || !content.title.trim()}
+            variant="outline"
+            disabled={
+              save.isPending ||
+              (channel === "meta_ads" && !content.title.trim())
+            }
             onClick={() => submit()}
           >
             {save.isPending
@@ -947,10 +1186,15 @@ export function PublicationComposer({
           )}
           {stage === "create" && (!adWizard || step === "preview") && (
             <Button
-              disabled={save.isPending || !content.title.trim()}
+              disabled={
+                save.isPending ||
+                (channel === "meta_ads" && !content.title.trim())
+              }
               onClick={() => submit("activate")}
             >
-              Save & continue to Activate
+              {channel === "facebook"
+                ? "Save & continue"
+                : "Save & continue to Activate"}
             </Button>
           )}
         </div>
