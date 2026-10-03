@@ -33,7 +33,10 @@ vi.mock("@/lib/trpc", () => ({
       creatives: { overview: { invalidate: api.invalidate } },
       activity: { list: { invalidate: api.invalidate } },
     }),
+    briefs: { get: { useQuery: () => ({ data: undefined }) }, list: { useQuery: () => ({ data: [] }) } },
     creativeBuilder: {
+      people: { useQuery: () => ({ data: [] }) },
+      savePerson: { useMutation: () => ({ mutate: vi.fn() }) },
       options: { useQuery: () => ({ data: api.options, isLoading: false }) },
       save: { useMutation: () => api.save },
       refreshCopy: { useMutation: () => api.refresh },

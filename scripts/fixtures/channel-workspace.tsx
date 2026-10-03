@@ -1,3 +1,9 @@
+import { useState } from "react";
+import { LifestylePersonPicker } from "../../client/src/components/LifestylePersonPicker";
+import {
+  defaultCreativeSetup,
+  type CreativeSetup,
+} from "../../shared/creativeBuilder";
 import CreativesPage from "../../client/src/pages/CreativesPage";
 import BriefsPage from "../../client/src/pages/BriefsPage";
 import AssetLibraryPage from "../../client/src/pages/AssetLibraryPage";
@@ -182,6 +188,7 @@ function respond(path: string, input: any) {
   if (path === "assetLibrary.studioList" || path === "brand.assets") return [];
   if (path === "catalog.overview") return { products: [] };
   if (path === "publishing.get") return posts.find(p => p.id === input.id);
+  if (path === "creativeBuilder.people") return [];
   if (path === "creativeBuilder.options")
     return {
       products: [],
@@ -616,6 +623,7 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "model-picker": "/app/model-picker",
   "studio-media": "/app/creatives/social?new=1",
   "studio-legacy": "/app/creatives/saved?asset=creative%3A42",
   "studio-post": "/app/creatives/social?new=1&plan=7",
@@ -671,8 +679,21 @@ if (which === "navigation-ten") {
     ),
   ];
 }
+function ModelPickerFixture() {
+  const [setup, setSetup] = useState<CreativeSetup>({
+    ...defaultCreativeSetup(),
+    shot: "multiple",
+  });
+  return (
+    <DashboardLayout>
+      <h1>Model picker</h1>
+      <LifestylePersonPicker setup={setup} onChange={setSetup} />
+    </DashboardLayout>
+  );
+}
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/model-picker") return <ModelPickerFixture />;
   if (["/login", "/signup", "/reset-password"].includes(path))
     return (
       <LoginPage
@@ -748,7 +769,7 @@ const check = (condition: any, message: string) => {
 };
 const button = (name: string) =>
   Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-    b => b.textContent?.trim() === name
+    b => b.textContent?.trim() === name || b.getAttribute("aria-label") === name
   );
 async function click(name: string) {
   const b = button(name);
@@ -798,6 +819,37 @@ function layout() {
   try {
     await pause();
     layout();
+    if (which === "model-picker") {
+      await click("Browse 500 models");
+      layout();
+      for (const label of [
+        "Woman · Black 1",
+        "Woman · Black 2",
+        "Woman · Black 3",
+        "Woman · Black 4",
+      ])
+        await click(label);
+      check(button("Woman · Black 5")?.disabled, "A fifth model is disabled");
+      await click("Use 4 models");
+      await click("Browse 500 models");
+      check(
+        document.body.textContent?.includes("4 / 4 selected"),
+        "Selected models survive reopening"
+      );
+      if (innerWidth < 640) await click("Model filters");
+      const age = Array.from(document.querySelectorAll("label"))
+        .find(l => l.textContent?.startsWith("Age group"))!
+        .querySelector("select")!;
+      age.value = "child";
+      age.dispatchEvent(new Event("change", { bubbles: true }));
+      await pause();
+      check(
+        document.body.textContent?.includes("100 matching models"),
+        "Kids filter works"
+      );
+      if (innerWidth < 640) await click("Model filters");
+      layout();
+    }
     if (which === "publishing") {
       check(
         button("Week")?.getAttribute("aria-pressed") === "true",

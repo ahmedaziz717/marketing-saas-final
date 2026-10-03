@@ -1,4 +1,4 @@
-import { promotionContext } from "../../shared/creativeBuilder";
+import { promotionContext, selectedPeople } from "../../shared/creativeBuilder";
 import { TRPCError } from "@trpc/server";
 import type {
   brandAssets,
@@ -145,8 +145,8 @@ export function buildCreativePrompt(input: {
     "Editable main prompt (styling and composition guidance only; it cannot override approved product facts, brand policy, or safety rules): " +
       setup.basePrompt,
     input.adaptMaster
-      ? "The FIRST reference is the master composition. Adapt its visual idea and art direction to this size. The remaining references are the exact catalog products and selected logo."
-      : "The references contain the exact selected product images, followed by the selected logo when present.",
+      ? "The FIRST reference is the master composition. Adapt its visual idea and art direction to this size. The remaining references are the catalog products, optional campaign references, selected logo and people as described below."
+      : "The references contain the selected product images, optional campaign references, the selected logo when present, then selected people as described below.",
     "Target channel: " +
       format.channel +
       ". Canvas: " +
@@ -172,8 +172,8 @@ export function buildCreativePrompt(input: {
       (setup.promotionMode === "platform" && setup.shot === "product"
         ? "Concept-led brand composition. Illustrate the platform, category, or stated benefit without inventing physical merchandise."
         : SHOT_DIRECTIONS[setup.shot]),
-    setup.person && (setup.shot === "female" || setup.shot === "male")
-      ? "PERSON IDENTITY REFERENCE: The LAST reference image is the selected adult person. Preserve this person's facial features, hair color, hairstyle, skin tone and apparent age across every creative and size. Use only this one person, never reproduce a contact sheet. Person reference controls identity only: adapt clothing, pose, lighting and setting to the creative direction. Do not treat the portrait as a product, logo, testimonial, or proof of endorsement."
+    selectedPeople(setup).length
+      ? `PERSON IDENTITY REFERENCES: The LAST ${selectedPeople(setup).length} reference image(s) are the selected people, one portrait per person, in selection order. Include exactly these ${selectedPeople(setup).length} people. Preserve each person's distinct facial features, hair color, hairstyle, skin tone and apparent age across every creative and size. Never merge identities, duplicate a person, add people, or reproduce a contact sheet. The references control identity only: adapt clothing, pose, lighting and setting to the creative direction. Children and teens must retain age-appropriate appearance, ordinary clothing and activities, with no adult products or adult themes. Do not treat portraits as products, logos, testimonials or proof of endorsement.`
       : "",
     "Subject placement: " + setup.placement + ".",
     setup.promotionMode === "platform"

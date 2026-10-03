@@ -1,8 +1,15 @@
-import { promotionContext } from "../../shared/creativeBuilder";
+import {
+  promotionContext,
+  selectedPeople,
+  personReferenceKey,
+} from "../../shared/creativeBuilder";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { storagePut } from "../storage";
-import { findLifestylePerson } from "../../shared/lifestylePeople";
+import {
+  findLifestylePerson,
+  modelMatchesShot,
+} from "../../shared/lifestylePeople";
 import { readLifestylePortrait } from "../lib/lifestylePeople";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -109,33 +116,51 @@ export async function loadInputs(
       code: "PRECONDITION_FAILED",
       message: "Set up your Brand Kit first.",
     });
-  let personAsset: typeof brandAssets.$inferSelect | null = null;
-  if (setup.person?.kind === "asset") {
-    personAsset =
-      (
+  const personAssets: Array<typeof brandAssets.$inferSelect> = [];
+  const identityKeys = new Set<string>();
+  for (const person of selectedPeople(setup)) {
+    let identityKey = personReferenceKey(person);
+    if (person.kind === "asset") {
+      const asset = (
         await db
           .select()
           .from(brandAssets)
           .where(
             and(
-              eq(brandAssets.id, setup.person.assetId),
+              eq(brandAssets.id, person.assetId),
               eq(brandAssets.organizationId, organizationId),
               eq(brandAssets.type, "reference"),
               eq(brandAssets.status, "approved")
             )
           )
           .limit(1)
-      )[0] ?? null;
-    if (
-      !personAsset ||
-      personAsset.metadata?.kind !== "lifestyle_person" ||
-      personAsset.metadata?.gender !== setup.shot
-    )
+      )[0];
+      const libraryPerson =
+        typeof asset?.metadata?.libraryId === "string"
+          ? findLifestylePerson(asset.metadata.libraryId)
+          : undefined;
+      if (
+        !asset ||
+        asset.metadata?.kind !== "lifestyle_person" ||
+        !modelMatchesShot(libraryPerson ?? asset.metadata, setup.shot)
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Choose an approved person reference matching this setting from this workspace.",
+        });
+      if (libraryPerson) identityKey = `library:${libraryPerson.id}`;
+      personAssets.push(asset);
+    }
+    if (identityKeys.has(identityKey))
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Choose an approved person reference from this workspace.",
+        code: "BAD_REQUEST",
+        message:
+          "Choose different models; a saved favorite and its library portrait are the same person.",
       });
+    identityKeys.add(identityKey);
   }
+  const personAsset = personAssets[0];
   if (
     setup.promotionMode === "platform" &&
     !kit[0]?.businessProfile?.summary?.trim() &&
@@ -179,6 +204,7 @@ export async function loadInputs(
     });
   return {
     references,
+    personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
     ...resolveBuilderInputs(organizationId, setup, catalog, images, logos),
@@ -202,16 +228,18 @@ export async function runBuilderJob(
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
       : null;
-    const personSource =
-      setup.person && (setup.shot === "male" || setup.shot === "female")
-        ? setup.person.kind === "library"
-          ? await readLifestylePortrait(setup.person.id)
-          : resolved.personAsset
-            ? await readGenerationSource(resolved.personAsset.storageKey)
-            : null
-        : null;
-    if (setup.person && !personSource)
-      throw new Error("Selected person reference is unavailable");
+    const personSources = await Promise.all(
+      selectedPeople(setup).map(async person => {
+        if (person.kind === "library") return readLifestylePortrait(person.id);
+        // Legacy queued jobs may carry only personAsset.
+        const asset = (
+          resolved.personAssets ??
+          (resolved.personAsset ? [resolved.personAsset] : [])
+        ).find(a => a.id === person.assetId);
+        if (!asset) throw new Error("Selected person reference is unavailable");
+        return readGenerationSource(asset.storageKey);
+      })
+    );
     const groups =
       setup.promotionMode === "platform"
         ? [[]]
@@ -234,7 +262,7 @@ export async function runBuilderJob(
         ))
       );
       if (logoSource) sources.push(logoSource);
-      if (personSource) sources.push(personSource);
+      sources.push(...personSources);
       let master: Awaited<ReturnType<typeof readGenerationSource>> | null =
         null;
       // Generate a substantial master before adapting it to compact banner sizes.
@@ -424,6 +452,7 @@ export const creativeBuilderRouter = router({
           status: asset.status,
           gender: asset.metadata?.gender,
           libraryId: asset.metadata?.libraryId,
+          age: asset.metadata?.age ?? "adult_unspecified",
         }));
     }),
   savePerson: protectedProcedure
@@ -432,6 +461,16 @@ export const creativeBuilderRouter = router({
         libraryId: z.string().optional(),
         name: z.string().trim().min(2).max(120),
         gender: z.enum(["male", "female"]),
+        age: z
+          .enum([
+            "child",
+            "teen",
+            "young",
+            "adult",
+            "senior",
+            "adult_unspecified",
+          ])
+          .default("adult_unspecified"),
         base64: z.string().max(8_500_000).optional(),
         permissionConfirmed: z.boolean().optional(),
       })
@@ -485,7 +524,7 @@ export const creativeBuilderRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "Confirm that the reference depicts an adult and you have permission to use it.",
+              "Confirm permission to use this portrait, including parent or guardian permission for a child or teen.",
           });
         const raw = Buffer.from(
           input.base64.replace(/^data:[^;]+;base64,/, ""),
@@ -535,6 +574,9 @@ export const creativeBuilderRouter = router({
             metadata: {
               kind: "lifestyle_person",
               gender: input.gender,
+              age: input.libraryId
+                ? findLifestylePerson(input.libraryId)!.age
+                : input.age,
               libraryId: input.libraryId ?? null,
               source: input.libraryId ? "curated_ai_library" : "user_upload",
               permissionConfirmed: input.permissionConfirmed ?? false,
@@ -919,20 +961,17 @@ export const creativeBuilderRouter = router({
           storageKey: r.storageKey,
           url: r.url,
         })),
-        ...(setup.person
-          ? [
-              {
-                kind: "person",
-                selection: setup.person,
-                ...(resolved.personAsset
-                  ? {
-                      storageKey: resolved.personAsset.storageKey,
-                      id: resolved.personAsset.id,
-                    }
-                  : {}),
-              },
-            ]
-          : []),
+        ...selectedPeople(setup).map(selection => {
+          const asset =
+            selection.kind === "asset"
+              ? resolved.personAssets.find(a => a.id === selection.assetId)
+              : undefined;
+          return {
+            kind: "person",
+            selection,
+            ...(asset ? { storageKey: asset.storageKey, id: asset.id } : {}),
+          };
+        }),
         ...resolved.products.map(product => ({
           kind: "product",
           productId: product.id,

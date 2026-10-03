@@ -13,10 +13,12 @@ export async function readLifestylePortrait(id: string) {
   const meta = await sharp(bytes).metadata();
   if (!meta.width || !meta.height)
     throw new Error("Person reference unavailable");
-  const left = Math.floor((meta.width * person.column) / 5);
-  const top = Math.floor((meta.height * person.row) / 2);
-  const width = Math.floor((meta.width * (person.column + 1)) / 5) - left;
-  const height = Math.floor((meta.height * (person.row + 1)) / 2) - top;
+  const left = Math.floor((meta.width * person.column) / person.columns);
+  const top = Math.floor((meta.height * person.row) / person.rows);
+  const width =
+    Math.floor((meta.width * (person.column + 1)) / person.columns) - left;
+  const height =
+    Math.floor((meta.height * (person.row + 1)) / person.rows) - top;
   const portrait = await sharp(bytes)
     .extract({ left, top, width, height })
     .png()

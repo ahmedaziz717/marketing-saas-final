@@ -1,0 +1,134 @@
+{
+  "method": "Built-in image_gen",
+  "generatedAt": "2026-10-03",
+  "sheets": [
+    {
+      "id": "girls-child-a",
+      "gender": "female",
+      "age": "child",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch girls-child-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional girls ages 6–12. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural child appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people.",
+      "asset": "client/public/people/girls-child-a.webp"
+    },
+    {
+      "id": "boys-child-a",
+      "gender": "male",
+      "age": "child",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch boys-child-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional boys ages 6–12. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people.",
+      "asset": "client/public/people/boys-child-a.webp"
+    },
+    {
+      "id": "girls-child-b",
+      "gender": "female",
+      "age": "child",
+      "lastHair": "black",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch girls-child-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional girls ages 6–12, with especially varied curly hair, braids, short cuts and face shapes. Distinct from any prior casting sheet. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BLACK hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people.",
+      "asset": "client/public/people/girls-child-b.webp"
+    },
+    {
+      "id": "boys-child-b",
+      "gender": "male",
+      "age": "child",
+      "lastHair": "black",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch boys-child-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional boys ages 6–12, with especially varied curly hair, short cuts, round and angular face shapes. Distinct from any prior casting sheet. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BLACK hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people.",
+      "asset": "client/public/people/boys-child-b.webp"
+    },
+    {
+      "id": "girls-teen",
+      "gender": "female",
+      "age": "teen",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch girls-teen. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional teenage girls ages 13–17. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Vary features strongly: include broad and narrow noses, oval, square and round faces, freckles and different eye shapes. Ordinary everyday people, not idealized beauty models.",
+      "asset": "client/public/people/girls-teen.webp"
+    },
+    {
+      "id": "women-young-a",
+      "gender": "female",
+      "age": "young",
+      "lastHair": "black",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch women-young-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult women ages 18–34. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BLACK hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Vary features strongly: include broad and narrow noses, oval, square and round faces, freckles and different eye shapes. Ordinary everyday people, not idealized beauty models.",
+      "asset": "client/public/people/women-young-a.webp"
+    },
+    {
+      "id": "men-young-a",
+      "gender": "male",
+      "age": "young",
+      "lastHair": "black",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch men-young-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult men ages 18–34. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BLACK hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Vary features strongly: include broad and narrow noses, oval, square and round faces, freckles and different eye shapes. Ordinary everyday people, not idealized beauty models.",
+      "asset": "client/public/people/men-young-a.webp"
+    },
+    {
+      "id": "boys-teen",
+      "gender": "male",
+      "age": "teen",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch boys-teen. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional teenage boys ages 13–17. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Vary features strongly: include broad and narrow noses, oval, square and round faces, freckles and different eye shapes. Ordinary everyday people, not idealized beauty models.",
+      "asset": "client/public/people/boys-teen.webp"
+    },
+    {
+      "id": "men-young-b",
+      "gender": "male",
+      "age": "young",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch men-young-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult men ages 18–34 with varied stubble, beards, clean-shaven faces and hairstyles. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each person a clearly different facial structure, proportions, hairstyle, body build and expression. Include ordinary people with glasses, varied skin tones and realistic facial texture. No repeated faces or family resemblances.",
+      "asset": "client/public/people/men-young-b.webp"
+    },
+    {
+      "id": "women-young-b",
+      "gender": "female",
+      "age": "young",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch women-young-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult women ages 18–34 with especially varied short hair, curls, updos and face shapes. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each person a clearly different facial structure, proportions, hairstyle, body build and expression. Include ordinary people with glasses, varied skin tones and realistic facial texture. No repeated faces or family resemblances.",
+      "asset": "client/public/people/women-young-b.webp"
+    },
+    {
+      "id": "women-adult-a",
+      "gender": "female",
+      "age": "adult",
+      "lastHair": "silver",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch women-adult-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult women ages 35–54. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 SILVER hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each person a clearly different facial structure, proportions, hairstyle, body build and expression. Include ordinary people with glasses, varied skin tones and realistic facial texture. No repeated faces or family resemblances.",
+      "asset": "client/public/people/women-adult-a.webp"
+    },
+    {
+      "id": "men-adult-a",
+      "gender": "male",
+      "age": "adult",
+      "lastHair": "silver",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch men-adult-a. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult men ages 35–54. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 SILVER hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each person a clearly different facial structure, proportions, hairstyle, body build and expression. Include ordinary people with glasses, varied skin tones and realistic facial texture. No repeated faces or family resemblances.",
+      "asset": "client/public/people/men-adult-a.webp"
+    },
+    {
+      "id": "women-adult-b",
+      "gender": "female",
+      "age": "adult",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch women-adult-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult women ages 35–54 with especially varied face shapes, curls, pixie cuts and styles. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each portrait a strongly individual face. Across the grid include glasses, broad and slender faces, fuller and slim body builds, different noses and smiles. Ordinary everyday people, natural skin texture, no idealized beauty cloning.",
+      "asset": "client/public/people/women-adult-b.webp"
+    },
+    {
+      "id": "men-adult-b",
+      "gender": "male",
+      "age": "adult",
+      "lastHair": "brown",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch men-adult-b. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional adult men ages 35–54 with especially varied face shapes, beards and clean-shaven faces. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 BROWN hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each portrait a strongly individual face. Across the grid include glasses, broad and slender faces, fuller and slim body builds, different noses and smiles. Ordinary everyday people, natural skin texture, no idealized beauty cloning.",
+      "asset": "client/public/people/men-adult-b.webp"
+    },
+    {
+      "id": "women-senior",
+      "gender": "female",
+      "age": "senior",
+      "lastHair": "silver",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch women-senior. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional older adult women ages 55–75, age-appropriate natural wrinkles. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 SILVER hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each portrait a strongly individual face. Across the grid include glasses, broad and slender faces, fuller and slim body builds, different noses and smiles. Ordinary everyday people, natural skin texture, no idealized beauty cloning.",
+      "asset": "client/public/people/women-senior.webp"
+    },
+    {
+      "id": "men-senior",
+      "gender": "male",
+      "age": "senior",
+      "lastHair": "silver",
+      "prompt": "Use case: photorealistic-natural. Asset type: fictional model casting library contact sheet, batch men-senior. Create ONE precisely aligned square contact sheet of EXACTLY 25 different fictional older adult men ages 55–75, age-appropriate natural wrinkles. Layout: exactly 5 equal columns and 5 equal rows (25 square cells) filling the entire image, no outer margin, no gaps, no borders. Each cell contains one centered head-and-shoulders studio portrait; entire head visible, neutral pale gray backdrop, ordinary fully clothed casual shirt, natural age-appropriate appearance, friendly natural expression. All 25 faces must be distinct. Diverse skin tones, face shapes, and hairstyles across each row. Hair by row, top to bottom: row 1 BLACK hair; row 2 BROWN hair; row 3 BLONDE hair; row 4 RED/AUBURN hair; row 5 SILVER hair. No text, labels, numbers, logos, watermark, props or jewelry. Natural realistic skin, sharp individual facial details. Output square 2560 by 2560 or highest available resolution. Keep the grid exact so each portrait can be cropped automatically. This is a wholly fictional diverse casting reference library, no real people. Give each portrait a strongly individual face. Across the grid include glasses, broad and slender faces, fuller and slim body builds, different noses and smiles. Ordinary everyday people, natural skin texture, no idealized beauty cloning.",
+      "asset": "client/public/people/men-senior.webp"
+    }
+  ]
+}

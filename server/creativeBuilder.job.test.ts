@@ -196,7 +196,7 @@ it("sends the selected person as the final image reference for master and every 
   for (const request of requests) {
     expect(request.originalImages.at(-1).b64Json).toBe("person:female-brown-3");
     expect(request.prompt).toContain(
-      "LAST reference image is the selected adult person"
+      "LAST 1 reference image(s) are the selected people"
     );
     expect(
       request.originalImages.some((x: any) => x.b64Json === "lamp.png")
@@ -230,4 +230,41 @@ it("generates directory promotions without product images and retains their refe
   expect(variants.some((r: any) => r.name.startsWith("Music lessons"))).toBe(
     true
   );
+});
+
+it("retains four ordered identities, including kids and uploaded references, in every size", async () => {
+  const { db, args } = fixture();
+  args.setup.shot = "multiple";
+  args.setup.people = [
+    { kind: "library", id: "girls-child-a-0" },
+    { kind: "asset", assetId: 41 },
+    { kind: "library", id: "male-brown-3" },
+    { kind: "library", id: "boys-teen-2" },
+  ];
+  args.resolved.personAssets = [{ id: 41, storageKey: "uploaded-mother.png" }];
+  await runBuilderJob(db, args);
+  expect(mocked.generate).toHaveBeenCalledTimes(3);
+  for (const [request] of mocked.generate.mock.calls) {
+    expect(request.originalImages.slice(-4).map((x: any) => x.b64Json)).toEqual(
+      [
+        "person:girls-child-a-0",
+        "uploaded-mother.png",
+        "person:male-brown-3",
+        "person:boys-teen-2",
+      ]
+    );
+    expect(request.prompt).toContain("Include exactly these 4 people");
+    expect(request.prompt).toContain(
+      "Children and teens must retain age-appropriate appearance"
+    );
+  }
+});
+
+it("fails instead of silently omitting an unavailable selected identity", async () => {
+  const { db, args, updates } = fixture();
+  args.setup.shot = "multiple";
+  args.setup.people = [{ kind: "asset", assetId: 999 }];
+  await runBuilderJob(db, args);
+  expect(mocked.generate).not.toHaveBeenCalled();
+  expect(updates).toContainEqual(expect.objectContaining({ status: "failed" }));
 });

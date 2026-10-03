@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   defaultCreativeSetup,
@@ -12,49 +18,136 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     creativeBuilder: {
-      people: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+      people: {
+        useQuery: () => ({
+          data: [
+            {
+              id: 42,
+              name: "Favorite",
+              gender: "female",
+              age: "adult_unspecified",
+              libraryId: "female-black-0",
+              status: "approved",
+            },
+            {
+              id: 43,
+              name: "Pending model",
+              gender: "female",
+              age: "adult_unspecified",
+              status: "pending",
+            },
+          ],
+          refetch: vi.fn(),
+        }),
+      },
       savePerson: { useMutation: () => ({ mutate: vi.fn() }) },
     },
   },
 }));
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
-function Harness() {
+function Harness({ shot = "female" }: { shot?: CreativeSetup["shot"] }) {
   const [setup, setSetup] = useState<CreativeSetup>({
     ...defaultCreativeSetup(),
-    shot: "female",
+    shot,
   });
-  return <LifestylePersonPicker setup={setup} onChange={setSetup} />;
+  return (
+    <>
+      <LifestylePersonPicker setup={setup} onChange={setSetup} />
+      <output data-testid="setup">{JSON.stringify(setup)}</output>
+    </>
+  );
+}
+function openPicker() {
+  fireEvent.click(screen.getByRole("button", { name: "Browse 500 models" }));
+  return within(screen.getByRole("dialog"));
+}
+function stored() {
+  return JSON.parse(screen.getByTestId("setup").textContent!);
 }
 afterEach(cleanup);
-it("keeps the selected identity pinned when filters and pages change", () => {
+it("replaces a single model, keeps the choice across filters, and applies only on confirmation", () => {
   render(<Harness />);
-  fireEvent.change(screen.getByRole("combobox", { name: "Hair color" }), {
-    target: { value: "brown" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /Woman · Brown 1\b/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Refresh options" }));
-  expect(
-    screen.queryByRole("button", { name: /Woman · Brown 1\b/ })
-  ).toBeNull();
-  expect(screen.getByRole("button", { name: /Woman · Brown 6/ })).toBeTruthy();
-  expect(screen.getByText("Selected person · pinned")).toBeTruthy();
-  fireEvent.change(screen.getByRole("combobox", { name: "Hair color" }), {
+  const modal = openPicker();
+  fireEvent.click(modal.getByRole("button", { name: "Woman · Black 1" }));
+  fireEvent.click(modal.getByRole("button", { name: "Woman · Black 2" }));
+  expect(modal.getByText("1 / 1 selected")).toBeTruthy();
+  expect(stored().people).toBeUndefined();
+  fireEvent.change(modal.getByRole("combobox", { name: "Hair color" }), {
     target: { value: "blonde" },
   });
-  expect(screen.getByText("Woman · Brown 1")).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Woman · Blonde 1/ })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Let AI choose" }));
-  expect(screen.queryByText("Selected person · pinned")).toBeNull();
+  expect(
+    modal.getByRole("button", { name: "Remove Woman · Black 2 from selection" })
+  ).toBeTruthy();
+  fireEvent.click(modal.getByRole("button", { name: "Use 1 model" }));
+  expect(stored().people).toEqual([{ kind: "library", id: "female-black-1" }]);
+  openPicker();
+  fireEvent.click(screen.getByRole("button", { name: "Woman · Blonde 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(stored().people[0].id).toBe("female-black-1");
 });
-it("requires a file and permission confirmation before uploading a real-person reference", () => {
-  render(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "Upload reference" }));
+it("selects up to four across age and gender filters, disables a fifth, and restores capacity after removal", () => {
+  render(<Harness shot="multiple" />);
+  const modal = openPicker();
+  for (let i = 1; i <= 4; i++)
+    fireEvent.click(modal.getByRole("button", { name: `Woman · Black ${i}` }));
   expect(
     (
-      screen.getByRole("button", {
+      modal.getByRole("button", {
+        name: "Woman · Black 5",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  fireEvent.click(
+    modal.getByRole("button", { name: "Remove Woman · Black 4 from selection" })
+  );
+  fireEvent.change(modal.getByRole("combobox", { name: "Age group" }), {
+    target: { value: "child" },
+  });
+  fireEvent.change(modal.getByRole("combobox", { name: "Gender" }), {
+    target: { value: "male" },
+  });
+  fireEvent.click(modal.getByRole("button", { name: "Boy · 126" }));
+  fireEvent.click(modal.getByRole("button", { name: "Use 4 models" }));
+  expect(stored().people).toHaveLength(4);
+  expect(stored().people[3].id).toBe("boys-child-a-0");
+  openPicker();
+  expect(screen.getByText("4 / 4 selected")).toBeTruthy();
+});
+it("supports kids, empty searches and reset, while blocking unapproved saved models", () => {
+  render(<Harness shot="child" />);
+  const modal = openPicker();
+  expect(modal.getByText("150 matching models")).toBeTruthy();
+  fireEvent.change(modal.getByRole("textbox", { name: "Search models" }), {
+    target: { value: "does not exist" },
+  });
+  expect(modal.getByText("No models match these filters.")).toBeTruthy();
+  fireEvent.click(modal.getAllByRole("button", { name: "Reset filters" })[0]);
+  expect(modal.getByText("150 matching models")).toBeTruthy();
+});
+it("does not select the same identity twice through favorites, and requires upload consent", () => {
+  render(<Harness shot="multiple" />);
+  const modal = openPicker();
+  fireEvent.click(modal.getByRole("button", { name: "Woman · Black 1" }));
+  fireEvent.click(modal.getByRole("button", { name: "Saved people" }));
+  expect(
+    modal.getByRole("button", { name: "Favorite" }).getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    (modal.getByRole("button", { name: "Pending model" }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+  fireEvent.click(modal.getByRole("button", { name: "Upload reference" }));
+  fireEvent.change(modal.getByRole("combobox", { name: "Model age group" }), {
+    target: { value: "child" },
+  });
+  expect(
+    modal.getByRole("checkbox", { name: /parent or guardian permission/ })
+  ).toBeTruthy();
+  expect(
+    (
+      modal.getByRole("button", {
         name: "Upload for approval",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
-  expect(screen.getByRole("checkbox")).toBeTruthy();
 });

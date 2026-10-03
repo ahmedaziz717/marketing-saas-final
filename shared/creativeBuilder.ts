@@ -1,4 +1,8 @@
-import { findLifestylePerson } from "./lifestylePeople";
+import {
+  findLifestylePerson,
+  isPeopleShot,
+  modelMatchesShot,
+} from "./lifestylePeople";
 import { z } from "zod";
 import {
   CREATIVE_THEMES,
@@ -237,6 +241,10 @@ export const SHOT_DIRECTIONS = {
   female:
     "Lifestyle setting with an adult female model using the product naturally.",
   male: "Lifestyle setting with an adult male model using the product naturally.",
+  child:
+    "Lifestyle scene with one child or teen. Preserve the selected age. Fully clothed, age-appropriate styling and activity, no adult products or adult themes.",
+  multiple:
+    "Lifestyle scene with the selected group of people interacting naturally. Keep each identity distinct. If no portraits are selected, use two adults. Any child or teen must have age-appropriate clothing, styling and activity, with no adult products or adult themes.",
   lifestyle:
     "Lifestyle environment around the product with no people, hands, faces, silhouettes, or human figures. Show believable contextual use through the setting and surrounding objects only.",
 } as const;
@@ -264,6 +272,28 @@ export function promotionContext(setup: CreativeSetup) {
       ? "This is a third-party provider/listing. Attribute its services to that provider; the directory helps people discover it and does not deliver those services."
       : "Promote the operator's platform or stated offering. For directories, emphasize discovery and connection; do not claim the operator delivers listed providers' services.")
   );
+}
+
+export const personReferenceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("library"),
+    id: z
+      .string()
+      .refine(id => !!findLifestylePerson(id), "Choose a supported person"),
+  }),
+  z.object({ kind: z.literal("asset"), assetId: z.number().int().positive() }),
+]);
+export type PersonReference = z.infer<typeof personReferenceSchema>;
+export function personReferenceKey(person: PersonReference) {
+  return person.kind === "library"
+    ? `library:${person.id}`
+    : `asset:${person.assetId}`;
+}
+export function selectedPeople(setup: {
+  people?: PersonReference[];
+  person?: PersonReference | null;
+}): PersonReference[] {
+  return setup.people ?? (setup.person ? [setup.person] : []);
 }
 
 export const creativeSetupSchema = z
@@ -310,25 +340,17 @@ export const creativeSetupSchema = z
       .optional(),
     referenceAssetIds: z.array(z.number().int().positive()).max(3).optional(),
     productMode: z.enum(["separate", "together"]),
-    shot: z.enum(["product", "female", "male", "lifestyle"]),
-    person: z
-      .discriminatedUnion("kind", [
-        z.object({
-          kind: z.literal("library"),
-          id: z
-            .string()
-            .refine(
-              id => !!findLifestylePerson(id),
-              "Choose a supported person"
-            ),
-        }),
-        z.object({
-          kind: z.literal("asset"),
-          assetId: z.number().int().positive(),
-        }),
-      ])
-      .nullable()
-      .optional(),
+    shot: z.enum([
+      "product",
+      "female",
+      "male",
+      "child",
+      "multiple",
+      "lifestyle",
+    ]),
+    // Singular references remain readable for drafts saved before multi-model support.
+    person: personReferenceSchema.nullable().optional(),
+    people: z.array(personReferenceSchema).max(4).optional(),
     personHair: z
       .enum(["any", "black", "brown", "blonde", "auburn", "silver"])
       .optional(),
@@ -375,21 +397,42 @@ export const creativeSetupSchema = z
         code: "custom",
         message: "Choose a promotion or catalog items, not both.",
       });
-    if (setup.person && setup.shot !== "female" && setup.shot !== "male")
+    const people = selectedPeople(setup);
+    if (setup.person && setup.people !== undefined)
       ctx.addIssue({
         code: "custom",
-        path: ["person"],
+        path: ["people"],
+        message: "Use one model selection format.",
+      });
+    if (people.length && !isPeopleShot(setup.shot))
+      ctx.addIssue({
+        code: "custom",
+        path: ["people"],
         message: "People are only available in lifestyle shots with a person.",
       });
-    if (
-      setup.person?.kind === "library" &&
-      findLifestylePerson(setup.person.id)?.gender !== setup.shot
-    )
+    if (setup.shot !== "multiple" && people.length > 1)
       ctx.addIssue({
         code: "custom",
-        path: ["person"],
-        message: "Choose a person matching this lifestyle setting.",
+        path: ["people"],
+        message: "Choose one model, or switch to Lifestyle · Multiple Models.",
       });
+    if (new Set(people.map(personReferenceKey)).size !== people.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["people"],
+        message: "Choose different models.",
+      });
+    for (const person of people) {
+      if (
+        person.kind === "library" &&
+        !modelMatchesShot(findLifestylePerson(person.id) ?? {}, setup.shot)
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["people"],
+          message: "Choose a person matching this lifestyle setting.",
+        });
+    }
     if (!setup.themePrompt)
       setup.themePrompt = getCreativeTheme(setup.theme).direction;
     if (

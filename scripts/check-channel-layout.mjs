@@ -155,6 +155,7 @@ try {
   const results = [];
   const cases = [
     ...[
+      "model-picker",
       "brand-kit",
       "directory-creative",
       "platform-admin",
@@ -264,6 +265,24 @@ try {
         `Fixture returned no test result: ${JSON.stringify(evaluation)}`
       );
     await page("Runtime.evaluate", { expression: inlineLiveBrandImages });
+    if (item.page === "model-picker") {
+      const sheets = Object.fromEntries(
+        await Promise.all(
+          (await readdir("client/public/people"))
+            .filter(f => f.endsWith(".webp"))
+            .map(async f => [
+              "/people/" + f,
+              "data:image/webp;base64," +
+                (await readFile("client/public/people/" + f)).toString(
+                  "base64"
+                ),
+            ])
+        )
+      );
+      await page("Runtime.evaluate", {
+        expression: `(() => { const sheets = ${JSON.stringify(sheets)}; for (const el of document.querySelectorAll('[role="img"]')) { const url = el.style.backgroundImage.slice(5, -2); if (sheets[url]) el.style.backgroundImage = 'url("' + sheets[url] + '")'; } })()`,
+      });
+    }
     await new Promise(resolve => setTimeout(resolve, 60));
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
     const image = await page("Page.captureScreenshot", { format: "png" });

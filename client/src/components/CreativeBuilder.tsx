@@ -1081,6 +1081,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                       ...setupRef.current,
                       shot: event.target.value as CreativeSetup["shot"],
                       person: null,
+                      people: [],
                     })
                   }
                 >
@@ -1091,6 +1092,8 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   </option>
                   <option value="female">Lifestyle · female</option>
                   <option value="male">Lifestyle · male</option>
+                  <option value="child">Lifestyle · Kids</option>
+                  <option value="multiple">Lifestyle · Multiple Models</option>
                   <option value="lifestyle">Lifestyle · no person</option>
                 </select>
               </label>
@@ -1118,7 +1121,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 </select>
               </label>
             </div>
-            {(setup.shot === "male" || setup.shot === "female") && (
+            {["male", "female", "child", "multiple"].includes(setup.shot) && (
               <LifestylePersonPicker
                 key={setup.shot}
                 setup={setup}

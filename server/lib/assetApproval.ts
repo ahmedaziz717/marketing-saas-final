@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { campaignBriefs, creativeVariants, publishRequests } from "../../drizzle/schema";
-import { creativeSetupSchema, type CreativeSetup } from "../../shared/creativeBuilder";
+import { creativeSetupSchema, selectedPeople, type CreativeSetup } from "../../shared/creativeBuilder";
 import { requireOrganizationRole } from "./access";
 import { libraryDatabase, readLibraryAsset, type LibraryDatabase } from "./assetLibrary";
 import { stableHash } from "./policy";
@@ -37,7 +37,7 @@ export async function requireApprovedLibraryAsset(
 export async function assertBuilderSourceApprovals(db: LibraryDatabase, organizationId: number, setup: CreativeSetup) {
   const ids = new Set<number>();
   if (setup.logoAssetId) ids.add(setup.logoAssetId);
-  if (setup.person?.kind === "asset") ids.add(setup.person.assetId);
+  for (const person of selectedPeople(setup)) if (person.kind === "asset") ids.add(person.assetId);
   for (const id of Array.from(ids)) await requireApprovedLibraryAsset(db, organizationId, `asset:${id}`, "source");
 }
 
