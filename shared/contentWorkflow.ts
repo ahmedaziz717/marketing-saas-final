@@ -5,6 +5,29 @@ export const contentDraftStates: readonly PublicationState[] = [
   "changes_requested",
   "rejected",
 ];
+export const studioDraftFilters = [
+  { id: "all", label: "All" },
+  { id: "images", label: "Images" },
+  { id: "social", label: "Social posts" },
+  { id: "ads", label: "Ads" },
+] as const;
+export type StudioDraftFilter = (typeof studioDraftFilters)[number]["id"];
+export function studioDraftsHref(
+  options: {
+    filter?: StudioDraftFilter;
+    plan?: number;
+    search?: string;
+    asset?: string;
+  } = {}
+) {
+  const params = new URLSearchParams();
+  if (options.filter && options.filter !== "all")
+    params.set("filter", options.filter);
+  if (options.plan) params.set("plan", String(options.plan));
+  if (options.search) params.set("q", options.search);
+  if (options.asset) params.set("asset", options.asset);
+  return "/app/creatives/drafts" + (params.size ? "?" + params.toString() : "");
+}
 export function studioContentHref(
   channel: Channel,
   options: {

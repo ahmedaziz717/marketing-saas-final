@@ -4,105 +4,72 @@ import {
   Megaphone,
   MessageSquare,
   ArrowRight,
-  Loader2,
+  ArrowLeft,
+  Plus,
+  FolderOpen,
 } from "lucide-react";
-import { useState } from "react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { CreativeBuilder } from "@/components/CreativeBuilder";
-import { AssetWorkbench } from "@/components/AssetWorkbench";
-import {
-  PublicationComposer,
-  PublicationStatus,
-} from "@/components/PublicationComposer";
-import { Button } from "@/components/ui/button";
+import { StudioDrafts } from "@/components/StudioDrafts";
+import { PublicationComposer } from "@/components/PublicationComposer";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
 import { mayCreateAssets } from "@shared/assetWorkflow";
 import {
   activationHref,
-  contentDraftStates,
   legacyStudioHref,
   studioContentHref,
+  studioDraftsHref,
 } from "@shared/contentWorkflow";
-import {
-  channelNames,
-  editablePublication,
-  type Channel,
-} from "@shared/channels";
+import { editablePublication, type Channel } from "@shared/channels";
 
-const modes = [
+const creationChoices = [
   {
     path: "images",
-    title: "Image",
+    title: "Create an image",
     icon: Image,
     description:
-      "Generate images and placement sizes, or refine a saved setup.",
+      "Generate reusable images for your posts and ads, with sizes for each placement.",
   },
   {
     path: "social",
-    title: "Social post",
+    title: "Create a social post",
     icon: MessageSquare,
     description:
-      "Write a Facebook caption, add optional media or a link, and preview your post.",
+      "Write your caption, add an image, video or link, and preview the finished post.",
   },
   {
     path: "ads",
-    title: "Ad",
+    title: "Create an ad",
     icon: Megaphone,
     description:
-      "Build a Meta ad with copy, headlines, CTA, carousel or placement images.",
+      "Combine your creative and ad copy, then choose a connected ad account and campaign.",
   },
 ] as const;
+
 function Studio() {
   const { organizationId, membership } = useWorkspace();
   const [path, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const mode = path.split("/").at(-1);
-  const kind =
-    params.get("kind") === "media" ||
-    params.has("asset") ||
-    params.has("revise")
-      ? "media"
-      : "content";
   const channel: Channel = mode === "ads" ? "meta_ads" : "facebook";
   const planId = Number(params.get("plan")) || undefined;
   const editId = params.get("edit");
+  const isDrafts = mode === "drafts" || !!editId;
   const canCreate = mayCreateAssets(membership?.role ?? "");
   const canCompose = ["owner", "admin", "creator", "publisher"].includes(
     membership?.role ?? ""
   );
-  const [filter, setFilter] = useState("");
-  const scope = { organizationId: organizationId! };
-  const drafts = trpc.publishing.list.useQuery(scope, {
-    enabled: !!organizationId,
-  });
+  const newContentHref = `/app/creatives${planId ? "?plan=" + planId : ""}`;
+  const draftsHref = studioDraftsHref({ plan: planId });
   const editing = trpc.publishing.get.useQuery(
-    { ...scope, id: editId ?? "00000000-0000-4000-8000-000000000000" },
+    {
+      organizationId: organizationId!,
+      id: editId ?? "00000000-0000-4000-8000-000000000000",
+    },
     { enabled: !!organizationId && !!editId, retry: false }
-  );
-  const jobs = trpc.creatives.overview.useQuery(scope, {
-    enabled: !!organizationId && canCreate,
-    refetchInterval: q =>
-      q.state.data?.jobs.some(j => ["running", "queued"].includes(j.status))
-        ? 5000
-        : false,
-  });
-  const pending = jobs.data?.jobs.some(j =>
-    ["running", "queued"].includes(j.status)
-  );
-  const contentDrafts = (drafts.data?.items ?? []).filter(
-    item =>
-      contentDraftStates.includes(item.state) &&
-      (!planId || item.content.campaignPlanId === planId)
-  );
-  const visible = contentDrafts.filter(
-    item =>
-      (!(mode === "ads" || mode === "social") || item.channel === channel) &&
-      `${item.content.title} ${item.content.message}`
-        .toLowerCase()
-        .includes(filter.toLowerCase())
   );
   const compose =
     canCompose &&
@@ -113,246 +80,134 @@ function Studio() {
       <PageHeader
         eyebrow="Create"
         title="Content Studio"
-        description="Create an image, a social post, or an ad. Keep drafts here, then review and schedule in Activate."
+        description="Start something new or pick up where you left off."
         action={
           <Link href="/app/plans" className="text-sm text-primary underline">
             Campaign Plans
           </Link>
         }
       />
-      <nav
-        aria-label="Studio modes"
-        className="mb-6 flex flex-wrap gap-2 border-b pb-4"
-      >
+      <nav aria-label="Content Studio" className="mb-8 flex gap-1 border-b">
         {[
-          { path: "", label: "Start" },
-          ...modes.map(m => ({ path: m.path, label: m.title })),
-          { path: "drafts", label: "Drafts" },
-        ].map(m => (
+          {
+            label: "New content",
+            href: newContentHref,
+            active: !isDrafts,
+            icon: Plus,
+          },
+          {
+            label: "Drafts",
+            href: draftsHref,
+            active: isDrafts,
+            icon: FolderOpen,
+          },
+        ].map(({ label, href, active, icon: Icon }) => (
           <Link
-            key={m.path}
-            href={`/app/creatives${m.path ? "/" + m.path : ""}${planId ? "?plan=" + planId : ""}`}
+            key={label}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`inline-flex min-h-12 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`}
           >
-            <Button
-              variant={
-                mode === m.path ||
-                (!m.path && ["creatives", "overview"].includes(mode ?? ""))
-                  ? "default"
-                  : "outline"
-              }
-            >
-              {m.label}
-            </Button>
+            <Icon size={17} aria-hidden="true" />
+            {label}
           </Link>
         ))}
       </nav>
       {planId && (
         <p className="mb-5 text-sm">
           Showing work for campaign plan #{planId}.{" "}
-          <Link href="/app/creatives" className="text-primary underline">
+          <Link
+            href={isDrafts ? "/app/creatives/drafts" : "/app/creatives"}
+            className="text-primary underline"
+          >
             Show all work
           </Link>
         </p>
       )}
-      {["creatives", "overview"].includes(mode ?? "") && (
-        <div className="mb-8 grid gap-4 md:grid-cols-3">
-          {modes.map(({ path, title, icon: Icon, description }) => (
-            <article key={path} className="surface flex min-w-0 flex-col p-6">
-              <Icon className="mb-4 h-7 w-7 text-primary" />
-              <h2 className="text-xl font-semibold">{title}</h2>
-              <p className="mb-6 mt-2 flex-1 text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
-              <Link
-                className="flex items-center gap-2 text-sm font-medium text-primary"
-                href={
-                  path === "images"
-                    ? `/app/creatives/images${planId ? "?plan=" + planId : ""}`
-                    : studioContentHref(
-                        path === "ads" ? "meta_ads" : "facebook",
-                        { plan: planId }
-                      )
-                }
-              >
-                Create {title.toLowerCase()} <ArrowRight size={16} />
-              </Link>
-            </article>
-          ))}
-        </div>
-      )}
-      {mode === "images" ? (
-        canCreate ? (
-          <CreativeBuilder
-            initialPlanId={planId}
-            onGenerated={() =>
-              navigate(
-                `/app/creatives/drafts?kind=media${planId ? "&plan=" + planId : ""}`
-              )
-            }
-          />
-        ) : (
-          <p className="surface p-6">
-            Your role can view assets in the library. Image creation requires a
-            creator role.
-          </p>
-        )
-      ) : (
+      {isDrafts ? (
+        <StudioDrafts planId={planId} />
+      ) : mode === "images" ? (
         <>
-          {mode === "drafts" && (
-            <div className="mb-6 flex flex-wrap gap-2" aria-label="Draft types">
-              <Link
-                href={`/app/creatives/drafts${planId ? "?plan=" + planId : ""}`}
-              >
-                <Button variant={kind === "content" ? "default" : "outline"}>
-                  Posts & ads
-                </Button>
-              </Link>
-              {canCreate && (
-                <Link
-                  href={`/app/creatives/drafts?kind=media${planId ? "&plan=" + planId : ""}`}
-                >
-                  <Button variant={kind === "media" ? "default" : "outline"}>
-                    Images & uploads
-                  </Button>
-                </Link>
-              )}
-            </div>
-          )}
-          {mode === "drafts" && kind === "media" ? (
-            <>
-              {pending && (
-                <p
-                  role="status"
-                  className="mb-5 rounded-xl bg-muted p-4 text-sm"
-                >
-                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                  Images are generating. Completed versions appear below.
-                </p>
-              )}
-              {jobs.data?.jobs[0]?.status === "failed" && (
-                <p role="alert" className="mb-4 rounded-xl border p-4">
-                  The latest generation failed: {jobs.data.jobs[0].errorMessage}{" "}
-                  <Link
-                    href="/app/creatives/images"
-                    className="text-primary underline"
-                  >
-                    Review saved setup
-                  </Link>
-                </p>
-              )}
-              <AssetWorkbench
-                surface="studio"
-                initialType={params.get("type") === "ugc" ? "ugc" : undefined}
-              />
-            </>
+          <Link
+            href={newContentHref}
+            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
+          >
+            <ArrowLeft size={16} />
+            Back to new content
+          </Link>
+          {canCreate ? (
+            <CreativeBuilder
+              initialPlanId={planId}
+              onGenerated={() =>
+                navigate(studioDraftsHref({ filter: "images", plan: planId }))
+              }
+            />
           ) : (
-            <section>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold">
-                    {mode === "social"
-                      ? "Social post drafts"
-                      : mode === "ads"
-                        ? "Ad drafts"
-                        : "Continue a draft"}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {mode === "social"
-                      ? "Captions, media, links and previews for organic posts. Hashtags can go in your caption."
-                      : mode === "ads"
-                        ? "Primary text, headlines, descriptions, CTA and creative variants for paid ads."
-                        : "Posts and ads stay here until ready for delivery review."}
-                  </p>
-                </div>
-                {canCompose && ["social", "ads"].includes(mode ?? "") && (
-                  <Link href={studioContentHref(channel, { plan: planId })}>
-                    <Button>
-                      New {channel === "facebook" ? "post" : "ad"}
-                    </Button>
-                  </Link>
-                )}
-              </div>
-              <input
-                aria-label="Search content drafts"
-                className="mb-4 h-11 w-full rounded-xl border bg-background px-4 sm:max-w-md"
-                placeholder="Search draft titles or copy…"
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
-              />
-              {drafts.isLoading ? (
-                <p role="status">Loading drafts…</p>
-              ) : drafts.error ? (
-                <div role="alert" className="surface p-5">
-                  Drafts could not be loaded.{" "}
-                  <Button variant="outline" onClick={() => drafts.refetch()}>
-                    Try again
-                  </Button>
-                </div>
-              ) : !visible.length ? (
-                <div className="surface p-8 text-center">
-                  <h3 className="font-semibold">
-                    No content drafts in this view
-                  </h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Start a post or ad above. Review, scheduled and delivered
-                    content is in Activate.
-                  </p>
-                  <Link
-                    href="/app/publishing"
-                    className="mt-4 inline-block text-primary underline"
-                  >
-                    Open Calendar
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {visible.map(item => (
-                    <article
-                      key={item.id}
-                      className="surface flex flex-wrap items-center justify-between gap-4 p-5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground">
-                          {channelNames[item.channel]} · Updated{" "}
-                          {new Date(item.updatedAtMs).toLocaleDateString()}
-                        </p>
-                        <h3 className="mt-1 break-words font-semibold">
-                          {item.content.title}
-                        </h3>
-                        <p className="mt-2 line-clamp-2 break-words text-sm text-muted-foreground">
-                          {item.content.message || "No copy yet"}
-                        </p>
-                      </div>
-                      <PublicationStatus item={item} />
-                      <div className="flex flex-wrap gap-2">
-                        {canCompose && (
-                          <Link
-                            href={studioContentHref(item.channel, {
-                              id: item.id,
-                            })}
-                          >
-                            <Button variant="outline">Edit content</Button>
-                          </Link>
-                        )}
-                        <Link href={activationHref(item.channel, item.id)}>
-                          <Button variant="outline">
-                            Continue to Activate
-                          </Button>
-                        </Link>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-              {drafts.data?.truncated && (
-                <p className="mt-3 text-xs">
-                  Showing drafts from the 500 most recent content records.
-                  Existing direct links still open older records.
-                </p>
-              )}
-            </section>
+            <p className="surface p-6">
+              Your role can view assets in the library. Image creation requires
+              a creator role.
+            </p>
           )}
         </>
+      ) : (
+        <section aria-labelledby="studio-create-heading">
+          <h2 id="studio-create-heading" className="text-xl font-semibold">
+            What would you like to create?
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Choose a starting point. Save a draft, then review it before
+            publishing.
+          </p>
+          <div className="mt-6 grid gap-5 lg:grid-cols-3">
+            {creationChoices.map(({ path, title, icon: Icon, description }) => {
+              const allowed = path === "images" ? canCreate : canCompose;
+              const href =
+                path === "images"
+                  ? `/app/creatives/images${planId ? "?plan=" + planId : ""}`
+                  : studioContentHref(
+                      path === "ads" ? "meta_ads" : "facebook",
+                      { plan: planId }
+                    );
+              const contents = (
+                <>
+                  <div className="mb-6 flex items-start justify-between gap-4">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon size={25} aria-hidden="true" />
+                    </span>
+                    {allowed && (
+                      <ArrowRight
+                        size={20}
+                        className="mt-3 text-primary transition-transform group-hover:translate-x-1"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </div>
+                  <h3 className="text-xl font-semibold">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {description}
+                  </p>
+                </>
+              );
+              return allowed ? (
+                <Link
+                  key={path}
+                  href={href}
+                  aria-label={title}
+                  className="surface group min-w-0 p-6 transition-colors hover:border-primary/50 hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {contents}
+                </Link>
+              ) : (
+                <div key={path} className="surface min-w-0 p-6 opacity-70">
+                  {contents}
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Your workspace role does not allow this action.
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
       {editId && editing.isLoading && (
         <p role="status" className="mt-4">
@@ -388,7 +243,16 @@ function Studio() {
           initialAdSetId={params.get("adset") ?? undefined}
           initialTime={params.get("time") ?? undefined}
           initialTimezone={params.get("timezone") ?? undefined}
-          onClose={() => navigate(`/app/creatives/${mode}`)}
+          onClose={() =>
+            navigate(
+              editId
+                ? studioDraftsHref({
+                    filter: channel === "facebook" ? "social" : "ads",
+                    plan: planId,
+                  })
+                : newContentHref
+            )
+          }
           onSaved={(id, next, savedChannel) =>
             navigate(
               next === "activate"
@@ -396,7 +260,13 @@ function Studio() {
                     savedChannel ?? editing.data?.channel ?? channel,
                     id
                   )
-                : "/app/creatives/drafts"
+                : studioDraftsHref({
+                    filter:
+                      (savedChannel ?? channel) === "facebook"
+                        ? "social"
+                        : "ads",
+                    plan: planId,
+                  })
             )
           }
         />
@@ -410,6 +280,21 @@ export default function CreativesPage() {
   const legacy = legacyStudioHref(path, search);
   if (legacy && legacy !== path + "?" + search)
     return <Redirect to={legacy} replace />;
+  const params = new URLSearchParams(search);
+  if (
+    (path.endsWith("/social") || path.endsWith("/ads")) &&
+    !params.has("new") &&
+    !params.has("edit")
+  )
+    return (
+      <Redirect
+        to={studioDraftsHref({
+          filter: path.endsWith("/ads") ? "ads" : "social",
+          plan: Number(params.get("plan")) || undefined,
+        })}
+        replace
+      />
+    );
   return (
     <WorkspaceGate>
       <Studio />

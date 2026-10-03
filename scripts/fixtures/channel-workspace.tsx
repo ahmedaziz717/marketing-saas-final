@@ -45,6 +45,46 @@ const secondPageId = "44444444-4444-4444-8444-444444444444";
 const id = "33333333-3333-4333-8333-333333333333";
 const now = Date.now();
 const empty = { items: [], truncated: false };
+const studioDraftAssets = [
+  {
+    key: "asset:1",
+    name: "Emerald collection hero",
+    state: "draft",
+    campaignPlanId: 7,
+  },
+  {
+    key: "asset:2",
+    name: "Approved collection image",
+    state: "approved",
+    campaignPlanId: 7,
+  },
+  {
+    key: "asset:3",
+    name: "Gold bracelet lifestyle",
+    state: "changes_requested",
+    campaignPlanId: 7,
+  },
+].map((a, i) => ({
+  ...a,
+  origin: "generated",
+  mediaType: "image",
+  mimeType: "image/svg+xml",
+  purpose: "finished",
+  isUgc: false,
+  revision: "1",
+  fingerprint: "fixture",
+  parentKey: null,
+  createdAtMs: now - i * 100000,
+  reviewedAtMs: null,
+  reviewedByUserId: null,
+  width: 1080,
+  height: 1080,
+  url:
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080"><rect width="1080" height="1080" fill="${i === 2 ? "#e8dfcf" : "#d5e4dc"}"/><circle cx="540" cy="455" r="230" fill="none" stroke="${i === 2 ? "#a67c35" : "#426653"}" stroke-width="55"/><text x="540" y="850" text-anchor="middle" font-size="52" fill="#243932">${i === 2 ? "Gold collection" : "Emerald collection"}</text></svg>`
+    ),
+}));
 const posts: any[] = [
   {
     id,
@@ -185,7 +225,7 @@ function respond(path: string, input: any) {
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
   if (path === "creatives.overview") return { jobs: [] };
-  if (path === "assetLibrary.studioList" || path === "brand.assets") return [];
+  if (path === "brand.assets") return [];
   if (path === "catalog.overview") return { products: [] };
   if (path === "publishing.get") return posts.find(p => p.id === input.id);
   if (path === "creativeBuilder.people") return [];
@@ -507,6 +547,8 @@ function respond(path: string, input: any) {
       warnings: [],
     };
   }
+  if (path === "assetLibrary.studioList")
+    return which === "studio-drafts" ? studioDraftAssets : [];
   if (path === "assetLibrary.list")
     return ["studio-ad-copy", "studio-post-media"].includes(which)
       ? [
@@ -647,6 +689,7 @@ const routeForPage: Record<string, string> = {
   signup: "/signup",
   "reset-password": "/reset-password",
   "studio-overview": "/app/creatives/overview",
+  "studio-drafts": "/app/creatives/drafts?plan=7",
   "advertising-overview": "/app/advertising",
   "social-overview": "/app/social",
   "billing-usage": "/app/settings/billing",
@@ -669,6 +712,30 @@ const routeForPage: Record<string, string> = {
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
 });
+if (which === "studio-drafts") {
+  posts[0].assetKey = "asset:2";
+  posts[0].content.campaignPlanId = 7;
+  posts.push({
+    ...posts[0],
+    id: "55555555-5555-4555-8555-555555555555",
+    channel: "meta_ads",
+    content: contentSchema.parse({
+      title: "Weekend collection ad",
+      message: "Discover the collection.",
+      campaignPlanId: 7,
+    }),
+  });
+  posts.push({
+    ...posts[0],
+    id: "66666666-6666-4666-8666-666666666666",
+    state: "scheduled",
+    content: contentSchema.parse({
+      title: "Already scheduled",
+      message: "Excluded from drafts",
+      campaignPlanId: 7,
+    }),
+  });
+}
 if (which === "publishing-live" || which === "publishing-approved")
   connections.liveSocial = true;
 if (which === "publishing-approved") posts[0].state = "approved";
@@ -1046,15 +1113,80 @@ function layout() {
     }
     if (which === "studio-overview") {
       check(
-        document.body.textContent?.includes("Social post") &&
-          document.body.textContent?.includes("Ad"),
+        !!document.querySelector('a[aria-label="Create a social post"]') &&
+          !!document.querySelector('a[aria-label="Create an ad"]'),
         "Real creation modes render"
+      );
+      const tabs = Array.from(
+        document.querySelectorAll('nav[aria-label="Content Studio"] a')
+      );
+      check(
+        tabs.length === 2 &&
+          tabs[0].textContent === "New content" &&
+          tabs[1].textContent === "Drafts",
+        "Studio has two clear destinations"
+      );
+      check(
+        !document.querySelector(
+          'input[placeholder="Search names, captions, and ad copy…"]'
+        ) && !document.body.textContent?.includes("No drafts yet"),
+        "Creation screen does not duplicate the drafts view"
       );
       check(
         !document.body.textContent?.includes("Saved work") &&
           !document.body.textContent?.includes("Video creation"),
         "Studio removes redundant and unavailable modes"
       );
+    }
+    if (which === "studio-drafts") {
+      const results = () =>
+        document.querySelectorAll('[aria-label="Draft results"] article');
+      const filter = async (label: string) => {
+        const control = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(
+            '[aria-label="Draft types"] button'
+          )
+        ).find(b => b.textContent?.startsWith(label));
+        check(!!control, "Draft type exists: " + label);
+        control!.click();
+        await pause();
+        layout();
+      };
+      check(
+        results().length === 4,
+        "Image, post, and ad drafts share one list; approved and scheduled work is excluded"
+      );
+      await filter("Images");
+      check(results().length === 2, "Image filter includes returned drafts");
+      await filter("Social posts");
+      check(results().length === 1, "Social filter shows posts only");
+      await filter("Ads");
+      check(results().length === 1, "Ad filter shows ads only");
+      await filter("All");
+      const search = document.querySelector<HTMLInputElement>(
+        'input[placeholder="Search names, captions, and ad copy…"]'
+      )!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )!.set!.call(search, "Emerald");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause();
+      check(
+        results().length === 1,
+        "Search finds image drafts in the unified list"
+      );
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )!.set!.call(search, "");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause();
+      check(
+        results().length === 4 && mutations.length === 0,
+        "Browsing draft types does not alter or copy records"
+      );
+      layout();
     }
     if (which === "studio-media") {
       const caption =
@@ -1103,7 +1235,7 @@ function layout() {
     }
     if (which === "studio-legacy") {
       check(
-        document.body.textContent?.includes("Image & upload drafts"),
+        document.body.textContent?.includes("Your drafts"),
         "Old saved-work link redirects to image drafts"
       );
       check(

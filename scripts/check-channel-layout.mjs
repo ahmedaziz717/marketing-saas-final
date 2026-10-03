@@ -176,6 +176,7 @@ try {
       "navigation-ten",
       "product-home",
       "studio-overview",
+      "studio-drafts",
       "studio-post",
       "studio-post-media",
       "studio-post-empty",

@@ -82,11 +82,15 @@ export function AssetWorkbench({
   initialType,
   embedded = false,
   onChoose,
+  detailsOnly = false,
+  onDetailsClose,
 }: {
   surface: AssetSurface;
   initialType?: AssetView;
   embedded?: boolean;
   onChoose?: (key: string) => void;
+  detailsOnly?: boolean;
+  onDetailsClose?: () => void;
 }) {
   const { organizationId, membership } = useWorkspace();
   const role = membership?.role ?? "",
@@ -278,88 +282,19 @@ export function AssetWorkbench({
     );
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">
-            {surface === "studio"
-              ? "Image & upload drafts"
-              : "Your shared collection"}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {surface === "studio"
-              ? "Drafts and experiments stay here. Submit only the versions you want reviewed."
-              : "Only submitted and approved assets appear here. Working drafts stay in Content Studio."}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            aria-label="Refresh assets"
-            variant="outline"
-            disabled={query.isFetching}
-            onClick={() => query.refetch()}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}
-            />
+      {detailsOnly && query.isLoading && (
+        <p role="status" className="mt-4">
+          Opening image draft…
+        </p>
+      )}
+      {detailsOnly && query.error && (
+        <p role="alert" className="mt-4">
+          This draft could not be opened.{" "}
+          <Button variant="outline" onClick={() => query.refetch()}>
+            Try again
           </Button>
-          {canCreate && (
-            <Button
-              onClick={() => {
-                setParent(null);
-                setUploadOpen(true);
-              }}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Upload assets
-            </Button>
-          )}
-        </div>
-      </div>
-      <nav
-        aria-label={
-          surface === "library" ? "Library views" : "Image draft views"
-        }
-        className="mb-6 flex flex-wrap gap-2 border-b pb-4"
-      >
-        {views.map(item => (
-          <Button
-            key={item.id}
-            variant={view === item.id ? "default" : "outline"}
-            aria-pressed={view === item.id}
-            className="h-auto whitespace-normal py-2"
-            onClick={() => navigateView(item.id)}
-          >
-            {item.label}
-            <span className="ml-2 rounded-full border px-2 text-xs">
-              {
-                assets.filter(asset => matchesState(asset, surface, item.id))
-                  .length
-              }
-            </span>
-          </Button>
-        ))}
-      </nav>
-      <div className="mb-5 flex flex-wrap gap-3">
-        <Input
-          className="min-w-40 flex-1"
-          aria-label="Search assets"
-          value={search}
-          onChange={event => setSearch(event.target.value)}
-          placeholder="Search names and headlines..."
-        />
-        <select
-          aria-label="Asset type"
-          className="h-10 max-w-full rounded-xl border bg-background px-3 text-sm"
-          value={type}
-          onChange={event => setType(event.target.value as AssetView)}
-        >
-          {ASSET_VIEWS.map(item => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        </p>
+      )}
       {selectedKey && !selected && !query.isLoading && !query.error && (
         <div role="status" className="mb-5 rounded-xl border p-4 text-sm">
           This version is not in this collection.{" "}
@@ -375,144 +310,236 @@ export function AssetWorkbench({
           )}
         </div>
       )}
-      <div className="mb-5 flex flex-wrap gap-3">
-        <select
-          aria-label="Channel size match"
-          className="min-w-0 max-w-full rounded-xl border p-2"
-          value={channelFilter}
-          onChange={e => setChannelFilter(e.target.value)}
-        >
-          <option value="all">All channels</option>
-          {assetChannels.map(channel => (
-            <option key={channel.id} value={channel.id}>
-              {channel.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Asset size"
-          className="min-w-0 max-w-full rounded-xl border p-2"
-          value={sizeFilter}
-          onChange={e => setSizeFilter(e.target.value)}
-        >
-          <option value="all">All sizes</option>
-          {[...assetFormats, "unknown", "other"].map(f => (
-            <option key={f} value={f}>
-              {assetFormatFilterLabel(f)}
-            </option>
-          ))}
-        </select>
-      </div>
-      {sizeFilter !== "all" && (
-        <p className="mb-3 text-xs text-muted-foreground sm:hidden">
-          {assetFormatFilterLabel(sizeFilter)}
-        </p>
-      )}
-      <p className="mb-5 text-xs text-muted-foreground">
-        Channel filters match image dimensions for common placements. Ad format,
-        file limits and content requirements still apply; a size match does not
-        mean a publishing connection is available.
-      </p>
-      {query.isLoading ? (
-        <p role="status" className="surface p-8">
-          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-          Loading assets...
-        </p>
-      ) : query.error ? (
-        <div role="alert" className="surface p-8">
-          <p>Assets could not be loaded. Your assets have not changed.</p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => query.refetch()}
-          >
-            Try again
-          </Button>
-        </div>
-      ) : !visible.length ? (
-        <div className="surface grid min-h-64 place-items-center p-8 text-center">
-          <div>
-            <FolderOpen className="mx-auto h-8 w-8 text-primary" />
-            <h3 className="mt-4 text-lg font-semibold">
-              {surface === "library" && view === "approved"
-                ? "No approved assets in this view"
-                : surface === "library" && view === "needs_review"
-                  ? "No submissions waiting for review"
-                  : "No matching assets"}
-            </h3>
-            <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              {surface === "library"
-                ? "Create or upload in Studio, then submit selected versions. Only approved versions are available for use."
-                : "Generate an image or upload a file. It will be saved as a draft until you choose the next step."}
-            </p>
-            <Link
-              className="mt-4 inline-block text-sm text-primary underline"
-              href={
-                surface === "library"
-                  ? "/app/creatives/drafts?kind=media"
-                  : "/app/creatives"
-              }
-            >
-              {surface === "library" ? "Open image drafts" : "Create an image"}
-            </Link>
+      {!detailsOnly && (
+        <>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {surface === "studio"
+                  ? "Image & upload drafts"
+                  : "Your shared collection"}
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                {surface === "studio"
+                  ? "Drafts and experiments stay here. Submit only the versions you want reviewed."
+                  : "Only submitted and approved assets appear here. Working drafts stay in Content Studio."}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                aria-label="Refresh assets"
+                variant="outline"
+                disabled={query.isFetching}
+                onClick={() => query.refetch()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}
+                />
+              </Button>
+              {canCreate && (
+                <Button
+                  onClick={() => {
+                    setParent(null);
+                    setUploadOpen(true);
+                  }}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload assets
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map(asset => (
-            <button
-              key={asset.key}
-              className="min-w-0 overflow-hidden rounded-2xl border bg-card text-left hover:border-primary focus-visible:ring-2 focus-visible:ring-primary"
-              onClick={() => inspect(asset.key)}
+          <nav
+            aria-label={
+              surface === "library" ? "Library views" : "Image draft views"
+            }
+            className="mb-6 flex flex-wrap gap-2 border-b pb-4"
+          >
+            {views.map(item => (
+              <Button
+                key={item.id}
+                variant={view === item.id ? "default" : "outline"}
+                aria-pressed={view === item.id}
+                className="h-auto whitespace-normal py-2"
+                onClick={() => navigateView(item.id)}
+              >
+                {item.label}
+                <span className="ml-2 rounded-full border px-2 text-xs">
+                  {
+                    assets.filter(asset =>
+                      matchesState(asset, surface, item.id)
+                    ).length
+                  }
+                </span>
+              </Button>
+            ))}
+          </nav>
+          <div className="mb-5 flex flex-wrap gap-3">
+            <Input
+              className="min-w-40 flex-1"
+              aria-label="Search assets"
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Search names and headlines..."
+            />
+            <select
+              aria-label="Asset type"
+              className="h-10 max-w-full rounded-xl border bg-background px-3 text-sm"
+              value={type}
+              onChange={event => setType(event.target.value as AssetView)}
             >
-              <div className="relative flex h-52 items-center justify-center overflow-hidden bg-muted/50 p-3">
-                {asset.mediaType === "image" ? (
-                  <img
-                    src={asset.url}
-                    alt={asset.name}
-                    loading="lazy"
-                    className="block h-full w-full min-h-0 min-w-0 object-contain"
-                  />
-                ) : (
-                  <Film className="h-12 w-12 text-muted-foreground" />
-                )}
-                <div className="absolute left-2 top-2">
-                  <AssetStatus state={asset.state} />
-                </div>
+              {ASSET_VIEWS.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-5 flex flex-wrap gap-3">
+            <select
+              aria-label="Channel size match"
+              className="min-w-0 max-w-full rounded-xl border p-2"
+              value={channelFilter}
+              onChange={e => setChannelFilter(e.target.value)}
+            >
+              <option value="all">All channels</option>
+              {assetChannels.map(channel => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Asset size"
+              className="min-w-0 max-w-full rounded-xl border p-2"
+              value={sizeFilter}
+              onChange={e => setSizeFilter(e.target.value)}
+            >
+              <option value="all">All sizes</option>
+              {[...assetFormats, "unknown", "other"].map(f => (
+                <option key={f} value={f}>
+                  {assetFormatFilterLabel(f)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {sizeFilter !== "all" && (
+            <p className="mb-3 text-xs text-muted-foreground sm:hidden">
+              {assetFormatFilterLabel(sizeFilter)}
+            </p>
+          )}
+          <p className="mb-5 text-xs text-muted-foreground">
+            Channel filters match image dimensions for common placements. Ad
+            format, file limits and content requirements still apply; a size
+            match does not mean a publishing connection is available.
+          </p>
+          {query.isLoading ? (
+            <p role="status" className="surface p-8">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              Loading assets...
+            </p>
+          ) : query.error ? (
+            <div role="alert" className="surface p-8">
+              <p>Assets could not be loaded. Your assets have not changed.</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => query.refetch()}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : !visible.length ? (
+            <div className="surface grid min-h-64 place-items-center p-8 text-center">
+              <div>
+                <FolderOpen className="mx-auto h-8 w-8 text-primary" />
+                <h3 className="mt-4 text-lg font-semibold">
+                  {surface === "library" && view === "approved"
+                    ? "No approved assets in this view"
+                    : surface === "library" && view === "needs_review"
+                      ? "No submissions waiting for review"
+                      : "No matching assets"}
+                </h3>
+                <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+                  {surface === "library"
+                    ? "Create or upload in Studio, then submit selected versions. Only approved versions are available for use."
+                    : "Generate an image or upload a file. It will be saved as a draft until you choose the next step."}
+                </p>
+                <Link
+                  className="mt-4 inline-block text-sm text-primary underline"
+                  href={
+                    surface === "library"
+                      ? "/app/creatives/drafts?kind=media"
+                      : "/app/creatives"
+                  }
+                >
+                  {surface === "library"
+                    ? "Open image drafts"
+                    : "Create an image"}
+                </Link>
               </div>
-              <div className="p-4">
-                <p className="truncate font-medium">{asset.name}</p>
-                <p className="mt-1 text-xs">{assetSizeLabel(asset)}</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {assetMatchingChannels(asset).length
-                    ? `Size matches: ${assetMatchingChannels(asset)
-                        .map(channel => channel.label)
-                        .join(" · ")}`
-                    : "Channel size match not verified"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {asset.origin === "generated" ? "Generated" : "Uploaded"}
-                  {asset.isUgc ? " / UGC" : ""} /{" "}
-                  {asset.purpose === "source"
-                    ? "Source material"
-                    : "Finished asset"}
-                </p>
-                <p className="mt-3 text-sm text-primary">
-                  {surface === "studio"
-                    ? "Open version"
-                    : asset.state === "needs_review"
-                      ? "Open submission"
-                      : "View asset"}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {visible.map(asset => (
+                <button
+                  key={asset.key}
+                  className="min-w-0 overflow-hidden rounded-2xl border bg-card text-left hover:border-primary focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={() => inspect(asset.key)}
+                >
+                  <div className="relative flex h-52 items-center justify-center overflow-hidden bg-muted/50 p-3">
+                    {asset.mediaType === "image" ? (
+                      <img
+                        src={asset.url}
+                        alt={asset.name}
+                        loading="lazy"
+                        className="block h-full w-full min-h-0 min-w-0 object-contain"
+                      />
+                    ) : (
+                      <Film className="h-12 w-12 text-muted-foreground" />
+                    )}
+                    <div className="absolute left-2 top-2">
+                      <AssetStatus state={asset.state} />
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="truncate font-medium">{asset.name}</p>
+                    <p className="mt-1 text-xs">{assetSizeLabel(asset)}</p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      {assetMatchingChannels(asset).length
+                        ? `Size matches: ${assetMatchingChannels(asset)
+                            .map(channel => channel.label)
+                            .join(" · ")}`
+                        : "Channel size match not verified"}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {asset.origin === "generated" ? "Generated" : "Uploaded"}
+                      {asset.isUgc ? " / UGC" : ""} /{" "}
+                      {asset.purpose === "source"
+                        ? "Source material"
+                        : "Finished asset"}
+                    </p>
+                    <p className="mt-3 text-sm text-primary">
+                      {surface === "studio"
+                        ? "Open version"
+                        : asset.state === "needs_review"
+                          ? "Open submission"
+                          : "View asset"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
       <Dialog
         open={!!selected && !uploadOpen}
         onOpenChange={open => {
-          if (!open && !busy) navigateView(view);
+          if (!open && !busy) {
+            if (detailsOnly && onDetailsClose) onDetailsClose();
+            else navigateView(view);
+          }
         }}
       >
         <DialogContent className="max-h-[90dvh] overflow-x-hidden overflow-y-auto sm:max-w-5xl">
