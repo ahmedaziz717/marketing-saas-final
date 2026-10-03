@@ -31,6 +31,8 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: HF_API_KEY
+        sync: false
       - key: INTEGRATION_TOKEN_ENCRYPTION_SECRET
         generateValue: true
   - type: worker
@@ -66,6 +68,11 @@ services:
           name: frame-staging
           type: web
           envVarKey: OPENAI_API_KEY
+      - key: HF_API_KEY
+        fromService:
+          name: frame-staging
+          type: web
+          envVarKey: HF_API_KEY
       - key: INTEGRATION_TOKEN_ENCRYPTION_SECRET
         fromService:
           name: frame-staging

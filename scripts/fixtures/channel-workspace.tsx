@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { defaultVideoSetup } from "../../shared/videoCreation";
 import { LifestylePersonPicker } from "../../client/src/components/LifestylePersonPicker";
 import {
   defaultCreativeSetup,
@@ -224,6 +225,9 @@ function respond(path: string, input: any) {
       },
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
+  if (path === "video.options") return { ready: true, reason: null };
+  if (path === "video.list") return [];
+  if (path === "video.quote") return { credits: 235, durationSeconds: 5 };
   if (path === "creatives.overview") return { jobs: [] };
   if (path === "brand.assets") return [];
   if (path === "catalog.overview") return { products: [] };
@@ -548,7 +552,7 @@ function respond(path: string, input: any) {
     };
   }
   if (path === "assetLibrary.studioList")
-    return which === "studio-drafts" ? studioDraftAssets : [];
+    return ["studio-drafts", "video-studio"].includes(which) ? studioDraftAssets : [];
   if (path === "assetLibrary.list")
     return ["studio-ad-copy", "studio-post-media"].includes(which)
       ? [
@@ -689,6 +693,8 @@ const routeForPage: Record<string, string> = {
   signup: "/signup",
   "reset-password": "/reset-password",
   "studio-overview": "/app/creatives/overview",
+  "video-studio": "/app/creatives/video",
+  "video-ugc": "/app/creatives/video?type=ugc",
   "studio-drafts": "/app/creatives/drafts?plan=7",
   "advertising-overview": "/app/advertising",
   "social-overview": "/app/social",
@@ -1110,6 +1116,26 @@ function layout() {
         ),
         "Home does not imply optimization tools are operational"
       );
+    }
+    if (which === "video-studio") {
+      check(!!document.querySelector('[aria-label="Video type"]'), "Video creation has Product and UGC routes");
+      check(!!document.querySelector('#video-prompt'), "Video prompt is visible");
+      await click("Edit video");
+      check(document.body.textContent?.includes("Source video"), "Edit mode requires source video");
+      check(!Array.from(document.querySelectorAll('label')).some(label => label.textContent?.startsWith("Aspect ratio")), "Edit mode hides unsupported ratio controls");
+      await click("Motion control");
+      check(!document.body.textContent?.includes("Generate sound"), "Motion mode hides unsupported sound controls");
+      await click("Create video");
+      await click("Add images");
+      check(!!document.querySelector('[role="dialog"]'), "Reference picker opens accessibly");
+      const image = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent?.includes("Emerald collection hero"));
+      image?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+      await click("Use selected images");
+      check(!!document.querySelector('img[alt^="Reference 1"]'), "Selected reference appears in the video editor");
+    }
+    if (which === "video-ugc") {
+      check(document.body.textContent?.includes("A space for creator-led video"), "UGC remains a clearly planned feature");
+      check(!document.querySelector('#video-prompt'), "UGC does not pretend to offer product generation");
     }
     if (which === "studio-overview") {
       check(

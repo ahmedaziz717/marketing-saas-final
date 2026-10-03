@@ -1,4 +1,5 @@
 import { platformAdminRouter } from "./routers/platformAdmin";
+import { videoRouter } from "./routers/video";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -40,6 +41,7 @@ export const appRouter = router({
   activity: activityRouter,
   creatives: creativesRouter,
   creativeBuilder: creativeBuilderRouter,
+  video: videoRouter,
   assetLibrary: assetLibraryRouter,
   meta: metaRouter,
   channels: channelsRouter,

@@ -176,6 +176,8 @@ try {
       "navigation-ten",
       "product-home",
       "studio-overview",
+      "video-studio",
+      "video-ugc",
       "studio-drafts",
       "studio-post",
       "studio-post-media",

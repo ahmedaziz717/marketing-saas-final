@@ -8,6 +8,7 @@ export const contentDraftStates: readonly PublicationState[] = [
 export const studioDraftFilters = [
   { id: "all", label: "All" },
   { id: "images", label: "Images" },
+  { id: "videos", label: "Videos" },
   { id: "social", label: "Social posts" },
   { id: "ads", label: "Ads" },
 ] as const;

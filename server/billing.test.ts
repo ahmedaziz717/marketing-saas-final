@@ -287,12 +287,12 @@ describe.sequential("workspace billing preview and audit-backed usage", () => {
       organizationId: org,
       month: "2026-09",
     });
-    expect(result.usage.map(m => m.quantity)).toEqual([5, 1, 1, 1]);
+    expect(result.usage.map(m => m.quantity)).toEqual([0, 5, 1, 1, 1]);
     const october = await owner.billing.summary({
       organizationId: org,
       month: "2026-10",
     });
-    expect(october.usage.map(m => m.quantity)).toEqual([1, 0, 0, 0]);
+    expect(october.usage.map(m => m.quantity)).toEqual([0, 1, 0, 0, 0]);
   });
   it("does not allow malformed month queries", async () => {
     await expect(

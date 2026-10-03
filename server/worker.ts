@@ -9,6 +9,7 @@ import {
 import { publicationTick } from "./lib/publications";
 import { processNextWebsiteJob } from "./jobs/catalogWorker";
 import { processNextStoreJob } from "./jobs/storeWorker";
+import { processNextVideoJob, videoWorkerHeartbeat } from "./jobs/videoWorker";
 
 let stopping = false;
 process.on("SIGTERM", () => {
@@ -23,6 +24,18 @@ async function main() {
   if (!db) throw new Error("Worker requires PostgreSQL");
   console.info('Publishing worker readiness', { liveSocialEnabled: process.env.LIVE_SOCIAL_ACTIONS_ENABLED === 'true', liveAdsEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === 'true' });
   let lastRecovery = 0;
+  const videoHeartbeatLoop = (async () => {
+    while (!stopping) {
+      try { await videoWorkerHeartbeat(db); } catch { console.error("Video worker heartbeat failed"); }
+      await setTimeout(10000);
+    }
+  })();
+  const videoLoop = (async () => {
+    while (!stopping) {
+      try { await processNextVideoJob(db); } catch { console.error("Video worker iteration failed"); }
+      await setTimeout(2000);
+    }
+  })();
   const publishingLoop = (async () => {
     while (!stopping) {
       try { await publicationTick(db); } catch { console.error("Publishing worker iteration failed"); }
@@ -57,7 +70,7 @@ async function main() {
       await setTimeout(5000);
     }
   }
-  await Promise.all([catalogLoop, publishingLoop]);
+  await Promise.all([catalogLoop, publishingLoop, videoLoop, videoHeartbeatLoop]);
   await closeDb();
 }
 

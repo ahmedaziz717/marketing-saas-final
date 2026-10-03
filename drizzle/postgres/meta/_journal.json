@@ -64,6 +64,13 @@
       "when": 1790732465998,
       "tag": "0008_verified_image_token_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791049800123,
+      "tag": "0009_outgoing_ogun",
+      "breakpoints": true
     }
   ]
 }

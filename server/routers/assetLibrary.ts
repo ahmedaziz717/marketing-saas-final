@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import sharp from "sharp";
+import { mp4Info } from "../lib/videoMedia";
 import { activityEvents, brandAssets, brandKits, reviewComments, users } from "../../drizzle/schema";
 import { canReviewAsset, canSubmitAsset } from "../../shared/assetLibrary";
 import { isLibraryAsset, mayCreateAssets, studioRoles, reviewerRoles, directApprovalRoles, type UploadDisposition } from "../../shared/assetWorkflow";
@@ -65,7 +66,8 @@ export const assetLibraryRouter = router({
     if (!mimeType || mimeType !== input.mimeType) throw new TRPCError({ code: "BAD_REQUEST", message: "The file contents do not match a supported image or video format." });
     const limit = mimeType.startsWith("video/") ? 20 : 12;
     if (bytes.length > limit * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: `This file must be ${limit} MB or smaller.` });
-    let dimensions: { width?: number; height?: number } = {};
+    let dimensions: { width?: number; height?: number; durationSeconds?: number } = {};
+    if (mimeType === "video/mp4") { try { dimensions = mp4Info(bytes); } catch { /* Keep general video uploads compatible; generation validates MP4 timing separately. */ } }
     if (mimeType.startsWith("image/")) {
       try { const info = await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata(); if (!info.width || !info.height || info.width * info.height > 40_000_000) throw new Error("Image too large"); dimensions = { width: info.width, height: info.height }; }
       catch { throw new TRPCError({ code: "BAD_REQUEST", message: "This image is damaged or exceeds the image-size limit." }); }

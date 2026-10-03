@@ -59,10 +59,10 @@ export const PRODUCT_FEATURES = [
     id: "video",
     name: "Video creation",
     stage: "create",
-    availability: "planned",
+    availability: "available",
     href: "/app/creatives/video",
     description:
-      "Video generation and editing are not available yet. Upload existing videos in Studio or Asset Library.",
+      "Create, edit, extend, and transfer motion in product videos. UGC generation is planned.",
   },
   {
     id: "ugc",
@@ -286,6 +286,13 @@ export function mayManageBilling(role: string) {
   return role === "owner" || role === "admin";
 }
 export const USAGE_METERS = [
+  {
+    id: "video_outputs",
+    action: "video.completed",
+    label: "Generated videos",
+    unit: "videos",
+    entity: "library_asset",
+  },
   {
     id: "image_outputs",
     action: "creative_generation.completed",

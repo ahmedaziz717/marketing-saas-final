@@ -55,7 +55,7 @@ function Router() {
       <Route path="/app/roadmap" component={ProductOverviewPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={CreativesPage} />
-      {["images", "ads", "social", "saved", "ugc", "drafts"].map(view => (
+      {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(view => (
         <Route
           key={view}
           path={"/app/creatives/" + view}

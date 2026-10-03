@@ -1,4 +1,6 @@
 import { syncPublishedPricing } from "../lib/publishedPricing";
+import { videoReadiness } from "../lib/videoJobs";
+import { higgsfieldConfigured } from "../lib/higgsfield";
 import { randomBytes, createHash } from "node:crypto";
 import { and, eq, desc, sql, gte, lt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
@@ -100,6 +102,10 @@ export const platformAdminRouter = router({
   config: adminProcedure.query(async () => {
     const db = await libraryDatabase();
     return {
+      video: {
+        configured: higgsfieldConfigured(),
+        ...(await videoReadiness(db)),
+      },
       tiers: await db
         .select()
         .from(platformTiers)

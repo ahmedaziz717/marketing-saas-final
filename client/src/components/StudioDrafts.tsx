@@ -1,3 +1,8 @@
+import {
+  activeVideoStatuses,
+  videoStatusLabels,
+  type VideoStatus,
+} from "@shared/videoCreation";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -37,7 +42,8 @@ import {
 
 type Draft = {
   key: string;
-  type: "images" | "social" | "ads" | "media";
+  type: "images" | "social" | "ads" | "videos" | "media";
+  videoJob?: { id: string; status: VideoStatus };
   title: string;
   copy: string;
   at: number;
@@ -67,24 +73,52 @@ export function StudioDrafts({ planId }: { planId?: number }) {
         ? 5000
         : false,
   });
+  const videoJobs = trpc.video.list.useQuery(scope, {
+    enabled: !!organizationId && canCreate,
+    refetchInterval: query =>
+      query.state.data?.some(job => activeVideoStatuses.includes(job.status))
+        ? 5000
+        : false,
+  });
+  const videoPending = videoJobs.data?.some(job =>
+    activeVideoStatuses.includes(job.status)
+  );
   const pending = jobs.data?.jobs.some(j =>
     ["running", "queued"].includes(j.status)
   );
   const studio = trpc.assetLibrary.studioList.useQuery(scope, {
     enabled: !!organizationId && canCreate,
-    refetchInterval: pending ? 5000 : false,
+    refetchInterval: pending || videoPending ? 5000 : false,
   });
   const wasGenerating = useRef(false);
   useEffect(() => {
-    if (wasGenerating.current && !pending) void studio.refetch();
-    wasGenerating.current = Boolean(pending);
-  }, [pending, studio.refetch]);
+    if (wasGenerating.current && !pending && !videoPending)
+      void studio.refetch();
+    wasGenerating.current = Boolean(pending || videoPending);
+  }, [pending, videoPending, studio.refetch]);
   const library = trpc.assetLibrary.list.useQuery(scope, {
     enabled: !!organizationId && !canCreate,
   });
   const assets = (canCreate ? studio.data : library.data) ?? [];
   const assetByKey = new Map(assets.map(asset => [asset.key, asset]));
   const records: Draft[] = [
+    ...(canCreate
+      ? (videoJobs.data ?? [])
+          .filter(
+            job =>
+              job.status !== "completed" &&
+              job.status !== "canceled" &&
+              (!planId || job.setup.campaignPlanId === planId)
+          )
+          .map(job => ({
+            key: `video:${job.id}`,
+            type: "videos" as const,
+            title: job.setup.title,
+            copy: job.setup.prompt,
+            at: job.updatedAtMs,
+            videoJob: { id: job.id, status: job.status },
+          }))
+      : []),
     ...(canCreate
       ? assets
           .filter(isWorkingAsset)
@@ -94,7 +128,9 @@ export function StudioDrafts({ planId }: { planId?: number }) {
             type:
               asset.mediaType === "image"
                 ? ("images" as const)
-                : ("media" as const),
+                : asset.mediaType === "video"
+                  ? ("videos" as const)
+                  : ("media" as const),
             title: asset.name,
             copy: [asset.headline, asset.primaryText, asset.copyText]
               .filter(Boolean)
@@ -135,17 +171,20 @@ export function StudioDrafts({ planId }: { planId?: number }) {
         .toLowerCase()
         .includes(search.trim().toLowerCase())
   );
-  const needsImages = canCreate && ["all", "images"].includes(filter);
-  const needsContent = filter !== "images";
+  const needsImages = canCreate && ["all", "images", "videos"].includes(filter);
+  const needsContent = !["images", "videos"].includes(filter);
   const loading =
-    (needsImages && studio.isLoading) ||
+    (needsImages && (studio.isLoading || videoJobs.isLoading)) ||
     (needsContent && publications.isLoading);
   const failed =
-    (needsImages && !!studio.error) || (needsContent && !!publications.error);
+    (needsImages && (!!studio.error || !!videoJobs.error)) ||
+    (needsContent && !!publications.error);
   const listHref = studioDraftsHref({ filter, search, plan: planId });
   const refresh = () =>
     Promise.all([
-      ...(canCreate ? [studio.refetch(), jobs.refetch()] : [library.refetch()]),
+      ...(canCreate
+        ? [studio.refetch(), jobs.refetch(), videoJobs.refetch()]
+        : [library.refetch()]),
       publications.refetch(),
     ]);
   const afterUpload = () =>
@@ -164,7 +203,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
             Your drafts
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Pick up an unfinished image, social post, or ad.
+            Pick up an unfinished image, video, social post, or ad.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -259,7 +298,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
           className="surface mb-5 flex flex-wrap items-center justify-between gap-3 p-4 text-sm"
         >
           {studio.error && needsImages
-            ? "Image drafts could not be loaded."
+            ? "Media drafts could not be loaded."
             : "Post and ad drafts could not be loaded."}
           <Button variant="outline" onClick={() => void refresh()}>
             Try again
@@ -290,7 +329,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                     ? "Social post"
                     : item.type === "ads"
                       ? "Ad"
-                      : item.asset?.mediaType === "video"
+                      : item.type === "videos"
                         ? "Video"
                         : "File";
               const Icon =
@@ -300,7 +339,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                     ? MessageSquare
                     : item.type === "ads"
                       ? Megaphone
-                      : item.asset?.mediaType === "video"
+                      : item.type === "videos"
                         ? Film
                         : FileText;
               return (
@@ -317,6 +356,14 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                         loading="lazy"
                         className="h-full w-full min-w-0 object-contain"
                       />
+                    ) : item.asset?.mediaType === "video" ? (
+                      <video
+                        src={item.asset.url}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-contain"
+                      />
                     ) : (
                       <div className="flex max-w-full flex-col items-center gap-3 p-4 text-center">
                         <Icon
@@ -326,8 +373,10 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                         />
                         <p className="line-clamp-2 break-words text-sm text-muted-foreground">
                           {post?.content.message ||
-                            (item.type === "media"
-                              ? "Uploaded media"
+                            (item.type === "media" || item.type === "videos"
+                              ? item.videoJob
+                                ? videoStatusLabels[item.videoJob.status]
+                                : "Video asset"
                               : "Text or link post")}
                         </p>
                       </div>
@@ -343,7 +392,9 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                         <PublicationStatus item={post} />
                       ) : (
                         <span className="rounded-full border bg-muted px-2.5 py-1 text-xs">
-                          {workflowLabel(item.asset!.state)}
+                          {item.videoJob
+                            ? videoStatusLabels[item.videoJob.status]
+                            : workflowLabel(item.asset!.state)}
                         </span>
                       )}
                     </div>
@@ -362,7 +413,16 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                         : ""}
                     </p>
                     <div className="mt-auto flex flex-wrap gap-x-4 gap-y-3 pt-5 text-sm font-medium">
-                      {post ? (
+                      {item.videoJob ? (
+                        <Link
+                          href={`/app/creatives/video?video=${item.videoJob.id}`}
+                          className="text-primary underline-offset-4 hover:underline"
+                        >
+                          {item.videoJob.status === "draft"
+                            ? "Edit video draft"
+                            : "View generation"}
+                        </Link>
+                      ) : post ? (
                         <>
                           {canCompose && (
                             <Link
@@ -418,7 +478,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                 ? "You can browse submitted and approved images in Asset Library."
                 : search || filter !== "all"
                   ? "Try another type or clear your search to see more work."
-                  : "Create an image, post, or ad. When you save a draft, it appears here."}
+                  : "Create an image, video, post, or ad. When you save a draft, it appears here."}
             </p>
             {search || filter !== "all" ? (
               <Button
@@ -441,7 +501,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
       )}
       <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
         <Link href="/app/library" className="hover:text-primary">
-          Submitted & approved images: Asset Library
+          Submitted & approved assets: Asset Library
         </Link>
         <Link href="/app/publishing" className="hover:text-primary">
           Posts ready for publishing: Calendar

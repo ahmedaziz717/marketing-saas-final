@@ -60,6 +60,7 @@ vi.mock("@/lib/trpc", () => ({
       brand: { assets: { invalidate: vi.fn() } },
       activity: { list: { invalidate: vi.fn() } },
     }),
+    video: { list: { useQuery: () => ({ data: [], refetch: api.refetch }) } },
     publishing: {
       list: {
         useQuery: (...args: any[]) => {
@@ -163,7 +164,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("offers only New content and Drafts, with three creation cards and no draft list on New content", () => {
+it("offers only New content and Drafts, with four creation cards and no draft list on New content", () => {
   setup("/app/creatives?plan=7");
   const nav = within(
     screen.getByRole("navigation", { name: "Content Studio" })
@@ -255,7 +256,7 @@ it("keeps available post drafts visible when image drafts fail to load", () => {
   api.assetError = new Error("Unavailable");
   setup("/app/creatives/drafts");
   expect(screen.getByRole("alert").textContent).toContain(
-    "Image drafts could not be loaded"
+    "Media drafts could not be loaded"
   );
   expect(screen.getAllByRole("article")).toHaveLength(2);
   expect(screen.queryByText("No drafts yet")).toBeNull();

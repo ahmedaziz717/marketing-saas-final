@@ -1081,14 +1081,55 @@ function Administration() {
         </div>
       )}
       {tab === "Provider rates" && (
+        <section className="surface mb-6 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">
+              Higgsfield video generation
+            </h2>
+            <span className="rounded-full bg-muted px-3 py-1 text-xs">
+              {config.data?.video?.ready ? "Ready" : "Setup required"}
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Product video generation uses the Higgsfield API. Add the complete
+            API credential as <code>HF_API_KEY</code> to both the web service
+            and background worker, then redeploy both. API billing is separate
+            from a Higgsfield website subscription. UGC generation will use
+            Creatify in a later release.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <span>
+              Web configuration:{" "}
+              {config.data?.video?.configured
+                ? "Present"
+                : "Missing or disabled"}
+            </span>
+            <span>
+              Worker:{" "}
+              {config.data?.video?.ready
+                ? "Connected"
+                : "Awaiting configuration or heartbeat"}
+            </span>
+            <a
+              href="https://open.higgsfield.ai"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline"
+            >
+              Higgsfield API dashboard
+            </a>
+          </div>
+        </section>
+      )}
+      {tab === "Provider rates" && (
         <section className="surface mb-5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Pricing verification</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Official standard rates are checked daily. Updates affect new
-                requests only. Billing API totals remain the source for actual
-                charges.
+                Supported OpenAI standard rates are checked daily. Higgsfield
+                rates require manual verification. Updates affect new requests
+                only. Billing API totals remain the source for actual charges.
               </p>
             </div>
             <Button
@@ -1145,7 +1186,7 @@ function Administration() {
             <h2 className="text-xl font-semibold">Provider cost estimates</h2>
             <p className="my-3 text-sm text-muted-foreground">
               Verified standard rates are configured for the models we use. Each
-              request is priced from its recorded tokens and assigned to its
+              request is priced from its recorded usage and assigned to its
               account. Image requests use separate text-input, image-input and
               image-output rates. You can override rates for a provider
               agreement. Blank rates mean unknown, not zero. Edits apply to
@@ -1159,6 +1200,7 @@ function Administration() {
                 onClick={() => setRate(r.config)}
               >
                 {r.provider} / {r.model} · {r.kind} · {r.config.credits} credits
+                {r.kind === "video" ? "/second" : ""}
               </button>
             ))}
             <h3 className="mt-5 font-semibold">
@@ -1231,11 +1273,16 @@ function Administration() {
               >
                 <option>text</option>
                 <option>image</option>
+                <option>video</option>
                 <option>other</option>
               </select>
             </Field>
             <NumberField
-              label="AI credits per request"
+              label={
+                rate.kind === "video"
+                  ? "AI credits per billable second"
+                  : "AI credits per request"
+              }
               value={rate.credits}
               onChange={credits => setRate({ ...rate, credits })}
             />
@@ -1245,6 +1292,7 @@ function Administration() {
                 "cachedInputPerMillion",
                 "outputPerMillion",
                 "perRequestUsd",
+                "perSecondUsd",
                 "imageInputPerMillion",
                 "imageOutputPerMillion",
               ] as const
@@ -1255,8 +1303,11 @@ function Administration() {
                   [
                     "USD per million text input tokens",
                     "USD per million cached text input tokens (text requests)",
-                    "USD per million text output tokens",
+                    rate.kind === "video"
+                      ? "USD per million video tokens (Seedance pixel/time units)"
+                      : "USD per million text output tokens",
                     "USD per request (overrides token estimate)",
+                    "USD per second (motion video)",
                     "USD per million image input tokens (Images API)",
                     "USD per million image output tokens (Images API)",
                   ][i]
@@ -1278,6 +1329,25 @@ function Administration() {
                 />
               </Field>
             ))}
+            {rate.kind === "video" && (
+              <>
+                <NumberField
+                  label="Video-input rate multiplier (Seedance)"
+                  value={rate.videoInputMultiplier ?? 0.6}
+                  onChange={videoInputMultiplier =>
+                    setRate({ ...rate, videoInputMultiplier })
+                  }
+                />
+                <p className="rounded-xl bg-muted p-3 text-xs leading-5">
+                  Video costs are estimates from the saved rate and measured
+                  output dimensions/duration. Promotions and account discounts
+                  are not automatically imported. Credits use source + output
+                  seconds for Seedance and source seconds for motion transfer.
+                  Review Higgsfield’s current published rates before changing
+                  these settings.
+                </p>
+              </>
+            )}
             <Field label="Long-context threshold (input tokens; blank disables)">
               <Input
                 type="number"

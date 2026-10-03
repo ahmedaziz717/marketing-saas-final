@@ -1,6 +1,8 @@
+import { VideoStudio } from "@/components/VideoStudio";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
   Image,
+  Clapperboard,
   Megaphone,
   MessageSquare,
   ArrowRight,
@@ -25,6 +27,13 @@ import {
 import { editablePublication, type Channel } from "@shared/channels";
 
 const creationChoices = [
+  {
+    path: "video",
+    title: "Create a video",
+    icon: Clapperboard,
+    description:
+      "Create product videos from images and prompts, or edit and extend existing clips.",
+  },
   {
     path: "images",
     title: "Create an image",
@@ -126,6 +135,23 @@ function Studio() {
       )}
       {isDrafts ? (
         <StudioDrafts planId={planId} />
+      ) : mode === "video" ? (
+        <>
+          <Link
+            href={newContentHref}
+            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
+          >
+            <ArrowLeft size={16} />
+            Back to new content
+          </Link>
+          {canCreate ? (
+            <VideoStudio key={organizationId} initialPlanId={planId} />
+          ) : (
+            <p className="surface p-6">
+              Video creation requires a creator role.
+            </p>
+          )}
+        </>
       ) : mode === "images" ? (
         <>
           <Link
@@ -158,16 +184,16 @@ function Studio() {
             Choose a starting point. Save a draft, then review it before
             publishing.
           </p>
-          <div className="mt-6 grid gap-5 lg:grid-cols-3">
+          <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {creationChoices.map(({ path, title, icon: Icon, description }) => {
-              const allowed = path === "images" ? canCreate : canCompose;
-              const href =
-                path === "images"
-                  ? `/app/creatives/images${planId ? "?plan=" + planId : ""}`
-                  : studioContentHref(
-                      path === "ads" ? "meta_ads" : "facebook",
-                      { plan: planId }
-                    );
+              const allowed = ["images", "video"].includes(path)
+                ? canCreate
+                : canCompose;
+              const href = ["images", "video"].includes(path)
+                ? `/app/creatives/${path}${planId ? "?plan=" + planId : ""}`
+                : studioContentHref(path === "ads" ? "meta_ads" : "facebook", {
+                    plan: planId,
+                  });
               const contents = (
                 <>
                   <div className="mb-6 flex items-start justify-between gap-4">

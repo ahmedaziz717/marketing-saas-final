@@ -15,6 +15,7 @@ export type LibraryAsset = {
   parentKey: AssetKey | null; createdAtMs: number;
   reviewedAtMs: number | null; reviewedByUserId: number | null;
   width?: number; height?: number; channel?: string;
+  durationSeconds?: number;
   headline?: string; primaryText?: string; format?: string; copyText?: string;
   campaignPlanId?: number;
   promotion?: import("./creativeBuilder").CreativeSetup["promotion"];
