@@ -45,7 +45,7 @@ import {
   workspaceSection,
 } from "./WorkspaceNavigation";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
-import { AppearanceMenu } from "./AppearanceMenu";
+import { AppearanceToggle } from "./AppearanceToggle";
 import { Button } from "./ui/button";
 
 export const SIDEBAR_PREFERENCE_KEY = "evokeloop-sidebar-expanded";
@@ -164,13 +164,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <TooltipContent side="right">{toggleLabel}</TooltipContent>
           </Tooltip>
         </SidebarHeader>
-        <div className="workspace-sidebar-appearance">
-          <AppearanceMenu compact={collapsed} />
-        </div>
         <SidebarContent className="workspace-sidebar-content">
           <WorkspaceNavigation />
         </SidebarContent>
         <SidebarFooter className="workspace-sidebar-footer">
+          <div className="workspace-sidebar-appearance">
+            <AppearanceToggle />
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

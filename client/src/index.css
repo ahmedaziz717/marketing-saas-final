@@ -1090,37 +1090,18 @@
 }
 .workspace-sidebar-appearance {
   flex-shrink: 0;
-  padding: 10px 10px 0;
+  padding: 0 8px;
 }
-.workspace-theme-trigger {
-  width: 100%;
+.workspace-theme-toggle {
+  width: 40px;
   height: 40px;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--sidebar-border);
-  border-radius: 12px;
+  padding: 0;
+  border-radius: 10px;
   color: var(--muted-foreground);
-  font-size: 12px;
 }
-.workspace-theme-trigger:hover,
-.workspace-theme-trigger[data-state="open"] {
+.workspace-theme-toggle:hover {
   color: var(--foreground);
   background: var(--muted);
-}
-.workspace-theme-trigger[data-compact="true"] {
-  height: 52px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px;
-  font-size: 10px;
-  line-height: 1.2;
-}
-.workspace-theme-value {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 400;
 }
 .workspace-navigation {
   display: flex;

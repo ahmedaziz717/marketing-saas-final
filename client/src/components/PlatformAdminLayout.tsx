@@ -1,5 +1,5 @@
 import { useTheme } from "@/contexts/ThemeContext";
-import { AppearanceMenu } from "@/components/AppearanceMenu";
+import { AppearanceToggle } from "@/components/AppearanceToggle";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -69,10 +69,7 @@ export default function PlatformAdminLayout({
       </header>
       <div className="mx-auto flex max-w-[1800px] flex-col lg:flex-row">
         {user?.role === "admin" && (
-          <aside className="border-b bg-card lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
-            <div className="workspace-sidebar-appearance">
-              <AppearanceMenu />
-            </div>
+          <aside className="flex flex-col border-b bg-card lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
             <p className="hidden px-6 pb-3 pt-7 text-xs font-semibold uppercase tracking-widest text-slate-400 lg:block">
               Manage EvokeLoop
             </p>
@@ -99,6 +96,9 @@ export default function PlatformAdminLayout({
               Platform staff only
               <br />
               Customer billing is not yet connected to Stripe.
+            </div>
+            <div className="mx-3 mt-auto px-2 pb-4 pt-2">
+              <AppearanceToggle />
             </div>
           </aside>
         )}
