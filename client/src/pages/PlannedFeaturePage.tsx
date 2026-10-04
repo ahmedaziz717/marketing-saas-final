@@ -3,6 +3,7 @@ import { Clock3 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { CreateNavigation } from "@/components/CreateNavigation";
 import { PageHeader } from "@/components/PageHeader";
+import { SettingsLayout } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_FEATURES, PRODUCT_STAGES } from "@shared/frameProduct";
 export default function PlannedFeaturePage() {
@@ -17,9 +18,10 @@ export default function PlannedFeaturePage() {
       </WorkspaceGate>
     );
   const stage = PRODUCT_STAGES.find(item => item.id === feature.stage)!;
-  return (
-    <WorkspaceGate>
+  const content = (
+    <>
       <PageHeader
+        compact={feature.id === "api_assistants"}
         eyebrow={feature.id === "api_assistants" ? "Settings" : stage.label}
         title={feature.name}
         description={feature.description}
@@ -67,6 +69,15 @@ export default function PlannedFeaturePage() {
           )}
         </div>
       </section>
+    </>
+  );
+  return (
+    <WorkspaceGate>
+      {feature.id === "api_assistants" ? (
+        <SettingsLayout>{content}</SettingsLayout>
+      ) : (
+        content
+      )}
     </WorkspaceGate>
   );
 }

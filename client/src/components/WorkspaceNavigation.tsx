@@ -5,7 +5,6 @@ import {
   ChevronDown,
   FolderOpen,
   House,
-  Palette,
   Send,
   Settings,
   Sparkles,
@@ -13,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
+import { settingsSectionForPath } from "@/lib/settingsNavigation";
 import {
   Popover,
   PopoverContent,
@@ -116,36 +116,11 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     ],
   },
   {
-    icon: Palette,
-    label: "Brand",
-    path: "/app/brand",
-    aliases: ["/app/catalog", "/app/import", "/app/settings/company"],
-    children: [
-      { label: "Business profile", path: "/app/settings/company" },
-      { label: "Brand kit", path: "/app/brand" },
-      { label: "Catalog & offerings", path: "/app/catalog" },
-      { label: "Import sources", path: "/app/import" },
-    ],
-  },
-  {
     icon: Settings,
     label: "Settings",
     path: "/app/settings",
     group: "Settings",
-    aliases: ["/app/roadmap"],
-    children: [
-      { label: "Integrations", path: "/app/settings/integrations" },
-      { label: "Team & access", path: "/app/settings/team" },
-      { label: "Billing & usage", path: "/app/settings/billing" },
-      { label: "Activity & audit", path: "/app/settings/activity" },
-      {
-        label: "API & AI assistants",
-        path: "/app/settings/developer",
-        planned: true,
-      },
-      { label: "All settings", path: "/app/settings", exact: true },
-      { label: "Roadmap", path: "/app/roadmap" },
-    ],
+    aliases: ["/app/roadmap", "/app/brand", "/app/catalog", "/app/import"],
   },
 ];
 const matchesPath = (path: string, location: string) =>
@@ -180,6 +155,12 @@ export function workspaceSection(location: string) {
   );
 }
 export function workspacePageLabel(location: string, search = "") {
+  if (location === "/app/settings" || location.startsWith("/app/settings/"))
+    return `Settings / ${settingsSectionForPath(location).label}`;
+  if (location === "/app/brand") return "Settings / Company & brand";
+  if (["/app/catalog", "/app/import"].includes(location))
+    return "Settings / Catalog & offerings";
+  if (location === "/app/roadmap") return "Settings / Product roadmap";
   const editor = (
     {
       images: "Image creator",

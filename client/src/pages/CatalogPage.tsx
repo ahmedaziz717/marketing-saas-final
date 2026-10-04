@@ -1,7 +1,8 @@
 import { offeringLabel } from "@shared/businessProfile";
 import { CatalogSources } from "@/components/CatalogSources";
-import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { SettingsLayout } from "@/components/SettingsLayout";
 import {
   Check,
   Edit3,
@@ -70,7 +71,14 @@ function CatalogContent() {
   const { organizationId } = useWorkspace();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const [tab, setTab] = useState("products");
+  const searchParams = new URLSearchParams(useSearch());
+  const requestedTab = searchParams.get("view");
+  const tab =
+    requestedTab === "services" || requestedTab === "sources"
+      ? requestedTab
+      : "products";
+  const setTab = (value: string) =>
+    setLocation(`/app/settings/catalog?view=${value}`);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [category, setCategory] = useState("all");
@@ -87,6 +95,10 @@ function CatalogContent() {
     { enabled: !!organizationId }
   );
   const [selected, setSelected] = useState<number[]>([]);
+  useEffect(() => {
+    setSelected([]);
+    setOffset(0);
+  }, [tab, organizationId]);
   const [editing, setEditing] = useState<Editable | null>(null);
   const refresh = async () =>
     Promise.all([
@@ -238,7 +250,7 @@ function CatalogContent() {
   };
 
   const tabs = (
-    <div className="mb-6 flex gap-2 border-b pb-4">
+    <div className="mb-6 flex flex-wrap gap-2 border-b pb-4">
       {["products", "services", "sources"].map(t => (
         <Button
           key={t}
@@ -259,8 +271,9 @@ function CatalogContent() {
     return (
       <>
         <PageHeader
+          compact
           eyebrow="Catalog"
-          title="Catalog sources"
+          title="Catalog & offerings"
           description="Scan a website, connect a store, or add your own products and services."
         />
         {tabs}
@@ -270,8 +283,9 @@ function CatalogContent() {
   return (
     <>
       <PageHeader
+        compact
         eyebrow="Approved product truth"
-        title="Catalog"
+        title="Catalog & offerings"
         description="Your products, services, subscriptions, and platform offerings, connected to every creative. Review facts and approve what your team can use."
         action={
           <div className="flex flex-wrap gap-2">
@@ -296,7 +310,7 @@ function CatalogContent() {
             </Button>
             <Button
               className="rounded-full"
-              onClick={() => setLocation("/app/import")}
+              onClick={() => setLocation("/app/settings/catalog/import")}
             >
               <ScanSearch className="mr-2 h-4 w-4" />
               Import website
@@ -829,7 +843,9 @@ function CatalogContent() {
 export default function CatalogPage() {
   return (
     <WorkspaceGate>
-      <CatalogContent />
+      <SettingsLayout>
+        <CatalogContent />
+      </SettingsLayout>
     </WorkspaceGate>
   );
 }

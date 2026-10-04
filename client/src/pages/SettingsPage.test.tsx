@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { Router } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
 const state = vi.hoisted(() => ({
   role: "owner",
   platformRole: "user",
@@ -27,7 +29,7 @@ vi.mock("@/lib/trpc", () => ({
         invites: { invalidate: vi.fn() },
       },
     }),
-    platformAdmin: { customerCredits: {useQuery:()=>({data:null})} },
+    platformAdmin: { customerCredits: { useQuery: () => ({ data: null }) } },
     billing: {
       summary: { useQuery: () => ({ data: null, isLoading: false }) },
       selectPreviewPlan: {
@@ -57,6 +59,14 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import SettingsPage from "./SettingsPage";
+function renderSettings() {
+  const location = memoryLocation({ path: "/app/settings/team" });
+  return render(
+    <Router hook={location.hook} searchHook={location.searchHook}>
+      <SettingsPage />
+    </Router>
+  );
+}
 afterEach(() => {
   cleanup();
   state.role = "owner";
@@ -64,7 +74,7 @@ afterEach(() => {
   state.mutate.mockClear();
 });
 it("requires confirmation before removing a teammate and protects the owner", () => {
-  render(<SettingsPage />);
+  renderSettings();
   expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "Remove" }));
   expect(state.mutate).not.toHaveBeenCalled();
@@ -74,7 +84,7 @@ it("requires confirmation before removing a teammate and protects the owner", ()
   );
 });
 it("offers email-app and link sharing without claiming automated delivery", () => {
-  render(<SettingsPage />);
+  renderSettings();
   fireEvent.click(screen.getByRole("button", { name: "Invite teammate" }));
   expect(screen.getByRole("radio", { name: "Email app" })).toBeTruthy();
   expect(screen.getByRole("radio", { name: "Copy link" })).toBeTruthy();
@@ -84,26 +94,28 @@ it("offers email-app and link sharing without claiming automated delivery", () =
 });
 it("hides administrative actions from creators and labels unimplemented settings", () => {
   state.role = "creator";
-  render(<SettingsPage />);
+  renderSettings();
   expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Invite teammate" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Billing & Usage" }));
+  fireEvent.click(screen.getByRole("link", { name: "Billing & usage" }));
   expect(
     screen.getByText(/Only workspace owners and administrators/)
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Security" }));
+  fireEvent.click(screen.getByRole("link", { name: "Security" }));
   expect(screen.getByText("Planned")).toBeTruthy();
   expect(screen.getByText(/not connected yet/)).toBeTruthy();
 });
 
 it("keeps platform website administration out of ordinary workspace-owner settings", () => {
-  render(<SettingsPage />);
+  renderSettings();
   expect(document.querySelector('a[href="/app/platform/website"]')).toBeNull();
 });
 it("keeps platform controls out of customer settings even for platform staff", () => {
   state.platformRole = "admin";
-  render(<SettingsPage />);
+  renderSettings();
   expect(
-    document.querySelector('a[href="/admin"], a[href="/admin/website"], a[href="/app/platform/website"]')
+    document.querySelector(
+      'a[href="/admin"], a[href="/admin/website"], a[href="/app/platform/website"]'
+    )
   ).toBeNull();
 });

@@ -112,14 +112,14 @@ export function CatalogSources({
                 </span>
               </p>
             </div>
-            <Link href="/app/catalog" className="text-sm text-primary">
+            <Link href="/app/settings/catalog" className="text-sm text-primary">
               View catalog
             </Link>
           </div>
           <OfferingDiscovery organizationId={organizationId} />
           <div className="grid gap-4 md:grid-cols-3">
             <Link
-              href="/app/import"
+              href="/app/settings/catalog/import"
               className="surface p-6 hover:border-primary"
             >
               <Globe className="mb-4 text-primary" />
@@ -144,10 +144,12 @@ export function CatalogSources({
                 Import CSV
               </Label>
               <p className="my-2 text-sm text-muted-foreground">
-                Required columns: name, productUrl. Optional: offeringType (subscription, membership, platform, directory_category, directory_listing, free_offer), audience, billingPeriod, trial, benefits, recordType
-                (service or standalone), description, sku, price, currency,
-                imageUrl, category, pricing, duration, area, delivery, packages,
-                cta.
+                Required columns: name, productUrl. Optional: offeringType
+                (subscription, membership, platform, directory_category,
+                directory_listing, free_offer), audience, billingPeriod, trial,
+                benefits, recordType (service or standalone), description, sku,
+                price, currency, imageUrl, category, pricing, duration, area,
+                delivery, packages, cta.
               </p>
               <Input
                 id="catalog-csv"
@@ -207,7 +209,10 @@ export function CatalogSources({
                     : 0
                 }
               />
-              <Link href="/app/import" className="text-sm text-primary">
+              <Link
+                href="/app/settings/catalog/import"
+                className="text-sm text-primary"
+              >
                 View scan and progress
               </Link>
             </div>

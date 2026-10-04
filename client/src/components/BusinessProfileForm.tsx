@@ -65,9 +65,7 @@ export function BusinessProfileForm({
         save.mutate({ organizationId, profile: result.data });
       }}
     >
-      <h3 className="text-lg font-semibold">
-        Business profile & onboarding answers
-      </h3>
+      <h3 className="text-lg font-semibold">Business profile</h3>
       <p className="text-sm text-muted-foreground">
         Edit these anytime in Settings → Company & brand. They guide website
         discovery and new creative suggestions. Existing approved content stays

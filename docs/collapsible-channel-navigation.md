@@ -9,7 +9,15 @@ schema, credential, publishing-policy, provider-call or advertising-budget chang
   is an explicit action (logo hover/focus reveals “Expand sidebar”, or Ctrl/Cmd+B).
   The 240px expanded state is remembered on this browser; mobile uses a drawer.
 - Primary destinations are Home, Create, Activate, Measure, Optimize, Library,
-  Brand, and Settings. Platform administration remains an independent shell.
+  and Settings. Platform administration remains an independent shell.
+- Settings opens directly, with one shared settings navigation. Company & brand
+  combines the editable workspace name, logo uploads, business profile, and brand
+  identity. Catalog & offerings contains its own Sources tab for website scans,
+  stores, and CSV imports; Import sources is no longer a separate destination.
+  Legacy brand, catalog, and import URLs redirect to Settings, preserving queries.
+- Workspace rename is limited to owners/admins and recorded atomically in the
+  activity log. It changes the display name, not workspace identity or memberships.
+  Logo uploads use the existing pending-approval workflow in Library.
 - A compact group opens a single anchored flyout. It does not expand the rail or
   navigate. Expanded groups use one disclosure at a time. Groups start closed,
   close on selection, and are never reopened by route changes or old preferences.

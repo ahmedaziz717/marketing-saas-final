@@ -50,7 +50,7 @@ export default function OnboardingPage() {
   const finish = async () => {
     await utils.workspace.mine.invalidate();
     toast.success("Your workspace is ready");
-    setLocation("/app/catalog");
+    setLocation("/app/settings/catalog");
   };
   const inviteAndFinish = async () => {
     if (!organizationId || !inviteEmail) return;

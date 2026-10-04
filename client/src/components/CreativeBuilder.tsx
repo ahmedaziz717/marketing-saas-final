@@ -974,7 +974,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                         <>
                           Approve products in your{" "}
                           <Link
-                            href="/app/catalog"
+                            href="/app/settings/catalog"
                             className="text-primary underline"
                           >
                             catalog

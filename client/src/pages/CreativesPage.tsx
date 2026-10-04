@@ -115,8 +115,11 @@ function Studio() {
         title="Create"
         description="One place for your images, videos, ads, and posts. Start with an app or continue a draft."
         action={
-          <Link href="/app/brand" className="text-sm font-medium text-primary">
-            Open brand kit <ArrowRight size={14} className="ml-1 inline" />
+          <Link
+            href="/app/settings/company?tab=brand"
+            className="text-sm font-medium text-primary"
+          >
+            Brand settings <ArrowRight size={14} className="ml-1 inline" />
           </Link>
         }
       />

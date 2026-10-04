@@ -1,4 +1,7 @@
-import { ChannelConnectionCard, MetaConnectionSelection } from '@/components/ChannelConnections';
+import {
+  ChannelConnectionCard,
+  MetaConnectionSelection,
+} from "@/components/ChannelConnections";
 import { useState } from "react";
 import { Link } from "wouter";
 import { Search, ArrowUpRight, Plug } from "lucide-react";
@@ -18,7 +21,12 @@ import {
 } from "@/components/ui/dialog";
 
 const groups = [
-  { id: "social", name: "Social Media", description: "Connect social accounts for organic posts and reporting. Facebook first; each channel has its own connection." },
+  {
+    id: "social",
+    name: "Social Media",
+    description:
+      "Connect social accounts for organic posts and reporting. Facebook first; each channel has its own connection.",
+  },
   {
     id: "catalog",
     name: "Catalog",
@@ -45,9 +53,35 @@ const groups = [
   },
 ];
 const partners = [
-  { name: "Facebook Pages", slug: "facebook", group: "social", description: "Organic Page posts and insights", capabilities: [] },
-  { name: "Instagram", slug: "instagram", group: "social", description: "Instagram organic content. Coming after Facebook.", capabilities: ["Connect an Instagram professional account", "Schedule supported organic formats", "Review performance"] },
-  { name: "TikTok", slug: "tiktoksocial", group: "social", description: "TikTok organic content. Coming after Facebook.", capabilities: ["Connect a TikTok account", "Prepare supported video posts", "Review performance"] },
+  {
+    name: "Facebook Pages",
+    slug: "facebook",
+    group: "social",
+    description: "Organic Page posts and insights",
+    capabilities: [],
+  },
+  {
+    name: "Instagram",
+    slug: "instagram",
+    group: "social",
+    description: "Instagram organic content. Coming after Facebook.",
+    capabilities: [
+      "Connect an Instagram professional account",
+      "Schedule supported organic formats",
+      "Review performance",
+    ],
+  },
+  {
+    name: "TikTok",
+    slug: "tiktoksocial",
+    group: "social",
+    description: "TikTok organic content. Coming after Facebook.",
+    capabilities: [
+      "Connect a TikTok account",
+      "Prepare supported video posts",
+      "Review performance",
+    ],
+  },
   {
     name: "Meta Ads",
     slug: "meta",
@@ -216,6 +250,7 @@ export function Integrations() {
     <>
       <MetaConnectionSelection />
       <PageHeader
+        compact
         eyebrow="Workspace connections"
         title="Integrations"
         description="Connect your tools once. Use them across your catalog, campaigns, content, and reporting."
@@ -262,7 +297,7 @@ export function Integrations() {
               </div>
               {group.id === "catalog" && (
                 <Link
-                  href="/app/catalog"
+                  href="/app/settings/catalog"
                   className="inline-flex items-center gap-1 text-sm text-primary"
                 >
                   Open catalog <ArrowUpRight className="h-4 w-4" />
@@ -281,7 +316,10 @@ export function Integrations() {
                 <p className="mt-4 text-sm text-muted-foreground">
                   Scanning a website or importing a spreadsheet? Find these
                   tools in{" "}
-                  <Link href="/app/catalog" className="text-primary underline">
+                  <Link
+                    href="/app/settings/catalog?view=sources"
+                    className="text-primary underline"
+                  >
                     Catalog → Sources
                   </Link>
                   .
@@ -291,28 +329,40 @@ export function Integrations() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {partners
                   .filter(p => p.group === group.id && matches(p))
-                  .map(p => p.slug === 'facebook' || p.slug === 'meta' ? <ChannelConnectionCard key={p.slug} channel={p.slug === 'facebook' ? 'facebook' : 'meta_ads'} /> : (
-                    <article key={p.slug} className="surface flex flex-col p-6">
-                      <div className="flex items-center justify-between gap-3">
-                        <PartnerLogo slug={p.slug} name={p.name} />
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                          Coming soon
-                        </span>
-                      </div>
-                      <h3 className="mt-5 font-semibold">{p.name}</h3>
-                      <p className="mt-2 mb-6 flex-1 text-sm text-muted-foreground">
-                        {p.description}
-                      </p>
-                      <Button
-                        variant="outline"
-                        className="w-fit"
-                        onClick={() => setSelected(p)}
+                  .map(p =>
+                    p.slug === "facebook" || p.slug === "meta" ? (
+                      <ChannelConnectionCard
+                        key={p.slug}
+                        channel={
+                          p.slug === "facebook" ? "facebook" : "meta_ads"
+                        }
+                      />
+                    ) : (
+                      <article
+                        key={p.slug}
+                        className="surface flex flex-col p-6"
                       >
-                        View planned setup{" "}
-                        <ArrowUpRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </article>
-                  ))}
+                        <div className="flex items-center justify-between gap-3">
+                          <PartnerLogo slug={p.slug} name={p.name} />
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                            Coming soon
+                          </span>
+                        </div>
+                        <h3 className="mt-5 font-semibold">{p.name}</h3>
+                        <p className="mt-2 mb-6 flex-1 text-sm text-muted-foreground">
+                          {p.description}
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="w-fit"
+                          onClick={() => setSelected(p)}
+                        >
+                          View planned setup{" "}
+                          <ArrowUpRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </article>
+                    )
+                  )}
               </div>
             )}
           </section>

@@ -46,7 +46,10 @@ vi.mock("@/lib/trpc", async () => {
   return {
     trpc: {
       useUtils: () => ({
-        brand: { get: { invalidate: async () => {} } },
+        brand: {
+          get: { invalidate: async () => {} },
+          assets: { invalidate: async () => {} },
+        },
         assetLibrary: { list: { invalidate: async () => {} } },
       }),
       brand: {
@@ -137,4 +140,20 @@ it("does not expose scan or save controls to a creator", () => {
   render(<BrandPage />);
   expect(screen.queryByRole("button", { name: "Scan website" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Save draft" })).toBeNull();
+});
+it("preserves unsaved brand edits when the shared business profile query refreshes", () => {
+  const original = api.kit;
+  const view = render(<BrandPage />);
+  fireEvent.change(screen.getByLabelText("Brand voice"), {
+    target: { value: "My unsaved voice" },
+  });
+  api.kit = {
+    ...api.kit,
+    businessProfile: { website: "updated.example.test" },
+  };
+  view.rerender(<BrandPage />);
+  expect(
+    (screen.getByLabelText("Brand voice") as HTMLTextAreaElement).value
+  ).toBe("My unsaved voice");
+  api.kit = original;
 });

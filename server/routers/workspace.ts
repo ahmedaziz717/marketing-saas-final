@@ -10,7 +10,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { appendActivity } from "../lib/activity";
+import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
 import { protectedProcedure, router } from "../_core/trpc";
 
@@ -81,6 +81,49 @@ function slugify(value: string) {
 }
 
 export const workspaceRouter = router({
+  rename: protectedProcedure
+    .input(teamInput.extend({ name: z.string().trim().min(2).max(160) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+      ]);
+      const db = await getDb();
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database unavailable",
+        });
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        const [previous] = await tx
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, input.organizationId));
+        if (!previous)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        if (previous.name === input.name) return previous;
+        const [organization] = await tx
+          .update(organizations)
+          .set({ name: input.name })
+          .where(eq(organizations.id, input.organizationId))
+          .returning();
+        await appendActivity(
+          {
+            organizationId: input.organizationId,
+            actorUserId: ctx.user.id,
+            action: "workspace.renamed",
+            entityType: "organization",
+            entityId: input.organizationId,
+            payload: { previousName: previous.name, name: input.name },
+          },
+          tx
+        );
+        return organization;
+      });
+    }),
   mine: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db)

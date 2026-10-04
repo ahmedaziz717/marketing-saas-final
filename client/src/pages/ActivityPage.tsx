@@ -13,6 +13,7 @@ export function Activity() {
   return (
     <>
       <PageHeader
+        compact
         eyebrow="Append-only record"
         title="Activity & audit log"
         description="Every approval, generation request, and publishing action becomes part of a tamper-evident organization history."

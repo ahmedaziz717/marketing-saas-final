@@ -138,11 +138,12 @@ export const PRODUCT_FEATURES = [
   },
   {
     id: "catalog",
-    name: "Catalog",
+    name: "Catalog & offerings",
     stage: "create",
     availability: "available",
-    href: "/app/catalog",
-    description: "Manage product data and approved product images.",
+    href: "/app/settings/catalog",
+    description:
+      "Manage products, services, subscriptions, and import sources in Settings.",
   },
   {
     id: "advertising",

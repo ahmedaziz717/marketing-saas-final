@@ -4,7 +4,7 @@ import PlatformAdminPage, {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Redirect, Route, Switch, useLocation } from "wouter";
+import { Redirect, Route, Switch, useLocation, useSearch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProductOverviewPage from "./pages/ProductOverviewPage";
@@ -13,7 +13,6 @@ import { PRODUCT_FEATURES } from "@shared/frameProduct";
 import PlatformWebsitePage from "./pages/PlatformWebsitePage";
 import Home from "./pages/Home";
 import WorkspaceApp from "./pages/WorkspaceApp";
-import BrandPage from "./pages/BrandPage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
@@ -28,6 +27,18 @@ import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
 import CatalogPage from "./pages/CatalogPage";
 import WebsiteImportPage from "./pages/WebsiteImportPage";
 import LoginPage from "./pages/LoginPage";
+
+function SettingsRedirect({
+  to,
+  brand = false,
+}: {
+  to: string;
+  brand?: boolean;
+}) {
+  const query = new URLSearchParams(useSearch());
+  if (brand) query.set("tab", "brand");
+  return <Redirect to={`${to}${query.size ? `?${query}` : ""}`} replace />;
+}
 
 function Router() {
   return (
@@ -87,16 +98,27 @@ function Router() {
       <Route path="/app/analytics/advertising" component={AnalyticsPage} />
       <Route path="/app/analytics/social" component={AnalyticsPage} />
       <Route path="/app/publishing" component={PublishingPage} />
-      <Route path="/app/brand" component={BrandPage} />
+      <Route path="/app/brand">
+        <SettingsRedirect to="/app/settings/company" brand />
+      </Route>
       <Route path="/app/integrations">
         <Redirect to="/app/settings/integrations" replace />
       </Route>
-      <Route path="/app/catalog" component={CatalogPage} />
-      <Route path="/app/import" component={WebsiteImportPage} />
+      <Route path="/app/catalog">
+        <SettingsRedirect to="/app/settings/catalog" />
+      </Route>
+      <Route path="/app/import">
+        <SettingsRedirect to="/app/settings/catalog/import" />
+      </Route>
       <Route path="/app/activity">
         <Redirect to="/app/settings/activity" replace />
       </Route>
       <Route path="/app/settings" component={SettingsPage} />
+      <Route
+        path="/app/settings/catalog/import"
+        component={WebsiteImportPage}
+      />
+      <Route path="/app/settings/catalog" component={CatalogPage} />
       <Route path="/app/settings/:section" component={SettingsPage} />
       <Route path="/invite/:token" component={InvitePage} />
       <Route path="/404" component={NotFound} />

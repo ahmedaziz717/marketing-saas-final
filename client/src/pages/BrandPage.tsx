@@ -1,5 +1,5 @@
 import { BrandWebsiteScanner } from "@/components/BrandWebsiteScanner";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, FolderOpen, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -14,14 +14,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
 
-function BrandContent() {
+export function BrandContent({ embedded = false }: { embedded?: boolean }) {
   const { organizationId, membership } = useWorkspace();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const [showScanner, setShowScanner] = useState(false);
   const [websiteLogoUrls, setWebsiteLogoUrls] = useState<string[]>([]);
   const [scanApplied, setScanApplied] = useState(false);
+  const dirty = useRef(false);
   useEffect(() => {
+    dirty.current = false;
     setShowScanner(false);
     setWebsiteLogoUrls([]);
     setScanApplied(false);
@@ -32,7 +34,7 @@ function BrandContent() {
   );
   const library = trpc.assetLibrary.list.useQuery(
     { organizationId: organizationId! },
-    { enabled: !!organizationId }
+    { enabled: !!organizationId && !embedded }
   );
   const sources = (library.data ?? []).filter(
     asset => asset.purpose === "source"
@@ -47,7 +49,7 @@ function BrandContent() {
     prohibitedContent: "",
   });
   useEffect(() => {
-    if (kit.data)
+    if (kit.data && !dirty.current)
       setForm({
         name: kit.data.name,
         colors: kit.data.colors.join(", "),
@@ -59,8 +61,10 @@ function BrandContent() {
   }, [kit.data]);
   const update = trpc.brand.update.useMutation({
     onSuccess: async result => {
+      dirty.current = false;
       await Promise.all([
         utils.brand.get.invalidate(),
+        utils.brand.assets.invalidate(),
         utils.assetLibrary.list.invalidate(),
       ]);
       setWebsiteLogoUrls(result.failedLogoUrls);
@@ -72,7 +76,7 @@ function BrandContent() {
       );
       if (result.failedLogoUrls.length)
         toast.error(
-          "Brand details were saved, but some logos could not be imported. Retry saving or upload them in Source assets."
+          "Brand details were saved, but some logos could not be imported. Retry saving or use Upload logo in Company & brand."
         );
     },
     onError: error => toast.error(error.message),
@@ -99,12 +103,15 @@ function BrandContent() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Brand source of truth"
-        title="Brand kit"
-        description="Define your identity and brand rules. Source assets are uploaded and reviewed in the shared Asset Library."
-        action={
-          <div className="flex gap-2">
+      {embedded ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">Brand identity</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Colors, typography, voice, and rules for your creative content.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
             {canManage && (
               <Button
                 variant="outline"
@@ -117,14 +124,36 @@ function BrandContent() {
             )}
             {kit.data && <StatusPill status={kit.data.status} />}
           </div>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          eyebrow="Brand source of truth"
+          title="Brand kit"
+          description="Define your identity and brand rules. Source assets are uploaded and reviewed in the shared Asset Library."
+          action={
+            <div className="flex gap-2">
+              {canManage && (
+                <Button
+                  variant="outline"
+                  disabled={update.isPending}
+                  onClick={() => setShowScanner(value => !value)}
+                >
+                  <ScanSearch className="mr-2 h-4 w-4" />
+                  Scan website
+                </Button>
+              )}
+              {kit.data && <StatusPill status={kit.data.status} />}
+            </div>
+          }
+        />
+      )}
       {showScanner && canManage && (
         <BrandWebsiteScanner
           organizationId={organizationId!}
           website={kit.data?.businessProfile?.website || ""}
           onClose={() => setShowScanner(false)}
           onApply={brand => {
+            dirty.current = true;
             setForm(current => ({
               ...current,
               name: brand.name || current.name,
@@ -182,10 +211,12 @@ function BrandContent() {
         </div>
       )}
       <Tabs defaultValue="kit">
-        <TabsList className="mb-6">
-          <TabsTrigger value="kit">Brand kit</TabsTrigger>
-          <TabsTrigger value="assets">Source assets</TabsTrigger>
-        </TabsList>
+        {!embedded && (
+          <TabsList className="mb-6">
+            <TabsTrigger value="kit">Brand kit</TabsTrigger>
+            <TabsTrigger value="assets">Source assets</TabsTrigger>
+          </TabsList>
+        )}
         <TabsContent value="kit">
           {kit.isLoading ? (
             <p role="status" className="surface p-8">
@@ -211,6 +242,9 @@ function BrandContent() {
                 </p>
               )}
               <fieldset
+                onChange={() => {
+                  dirty.current = true;
+                }}
                 disabled={!canManage || update.isPending}
                 className="grid gap-6 md:grid-cols-2"
               >
