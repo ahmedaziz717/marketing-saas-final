@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CreateNavigation } from "@/components/CreateNavigation";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -423,6 +424,7 @@ function BriefsContent() {
           </Dialog>
         }
       />
+      <CreateNavigation />
       {!briefQuery.data?.length ? (
         <div className="surface grid min-h-[420px] place-items-center p-8 text-center">
           <div>

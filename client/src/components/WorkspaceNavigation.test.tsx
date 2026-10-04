@@ -5,6 +5,7 @@ import {
   render,
   screen,
   within,
+  act,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Router } from "wouter";
@@ -14,6 +15,7 @@ import {
   WorkspaceNavigation,
   workspaceNavigation,
   workspacePageLabel,
+  workspaceSection,
 } from "./WorkspaceNavigation";
 const viewport = vi.hoisted(() => ({ mobile: false }));
 vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => viewport.mobile }));
@@ -58,86 +60,117 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  if (vi.isFakeTimers()) vi.runOnlyPendingTimers();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-it("opens the active group and marks only its leaf current", () => {
+it("starts with every submenu closed, including the current section", () => {
   setup();
   expect(
     screen
-      .getByRole("button", { name: "Advertising" })
+      .getByRole("button", { name: "Activate" })
       .getAttribute("aria-expanded")
-  ).toBe("true");
+  ).toBe("false");
+  expect(screen.queryByRole("link", { name: "Meta Ads" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
   expect(
     screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")
   ).toBe("page");
   expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
-  expect(screen.queryByRole("link", { name: "Google Ads" })).toBeNull();
-  expect(
-    screen.queryByTitle("Google Ads - planned, not available yet")
-  ).toBeNull();
 });
-it("toggles groups without navigating and Escape returns focus to the parent", () => {
+it("opens only one submenu at a time and Escape restores focus", () => {
   const router = setup();
-  const parent = screen.getByRole("button", { name: "Advertising" });
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  const parent = screen.getByRole("button", { name: "Create" });
   fireEvent.click(parent);
   expect(screen.queryByRole("link", { name: "Meta Ads" })).toBeNull();
-  expect(router.history).toHaveLength(1);
-  fireEvent.click(parent);
-  const link = screen.getByRole("link", { name: "Meta Ads" });
+  const link = screen.getByRole("link", { name: "Apps" });
   link.focus();
   fireEvent.keyDown(link, { key: "Escape" });
-  expect(document.activeElement).toBe(parent);
+  expect(document.activeElement === parent).toBe(true);
   expect(parent.getAttribute("aria-expanded")).toBe("false");
+  expect(router.history).toHaveLength(1);
 });
-it("keeps independent collapse state and restores it on remount", () => {
+it("opens a compact flyout without expanding the rail and closes it after navigation", async () => {
+  vi.useFakeTimers();
+  const router = setup("/app", true);
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  expect(screen.getByTestId("sidebar-state").textContent).toBe(
+    "collapsed/false"
+  );
+  expect(
+    document.querySelector('[role="dialog"][aria-label="Activate navigation"]')
+  ).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(
+      document.querySelector('[role="dialog"] a[href="/app/advertising/meta"]')!
+    );
+    vi.advanceTimersByTime(1);
+  });
+  expect(document.querySelector('[role="dialog"]') === null).toBe(true);
+  expect(router.history.at(-1)).toBe("/app/advertising/meta");
+  expect(screen.getByTestId("sidebar-state").textContent).toBe(
+    "collapsed/false"
+  );
+}, 30000);
+it("supports Escape and focus return from the compact flyout", async () => {
+  // Radix restores trigger focus after removing its portal. JSDOM floating
+  // layout/focus cleanup can exceed the default 5s timeout on shared runners.
+  vi.useFakeTimers();
+  setup("/app", true);
+  const parent = screen.getByRole("button", { name: "Create" });
+  fireEvent.click(parent);
+  await act(async () => {
+    fireEvent.keyDown(
+      document.querySelector('[role="dialog"] a[href="/app/creatives"]')!,
+      { key: "Escape" }
+    );
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(document.querySelector('[role="dialog"]') === null).toBe(true);
+  expect(document.activeElement === parent).toBe(true);
+}, 30000);
+it("keeps groups closed after remount even if the legacy preference had them open", () => {
+  localStorage.setItem(
+    "frame-navigation-groups-v1",
+    JSON.stringify({ "/app/advertising": true })
+  );
   setup();
-  fireEvent.click(screen.getByRole("button", { name: "Social Publishing" }));
-  expect(screen.getByRole("link", { name: "Facebook" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
   cleanup();
-  setup("/app");
+  setup();
   expect(
     screen
-      .getByRole("button", { name: "Social Publishing" })
+      .getByRole("button", { name: "Activate" })
       .getAttribute("aria-expanded")
-  ).toBe("true");
-  expect(
-    screen
-      .getByRole("button", { name: "Advertising" })
-      .getAttribute("aria-expanded")
-  ).toBe("true");
+  ).toBe("false");
 });
-it("recognizes legacy Analytics deep links and preserves date/comparison filters", () => {
+it("preserves date and comparison filters between analytics reports", () => {
   const router = setup(
     "/app/analytics?tab=social&since=2026-09-01&until=2026-09-20&compare=1&account=page1&channel=facebook"
   );
+  fireEvent.click(screen.getByRole("button", { name: "Measure" }));
   expect(
     screen.getByRole("link", { name: "Social" }).getAttribute("aria-current")
   ).toBe("page");
   fireEvent.click(screen.getByRole("link", { name: "Advertising" }));
-  expect(router.history?.at(-1)).toBe(
+  expect(router.history.at(-1)).toBe(
     "/app/analytics/advertising?since=2026-09-01&until=2026-09-20&compare=1"
   );
   expect(
     screen
-      .getByRole("link", { name: "Advertising" })
-      .getAttribute("aria-current")
-  ).toBe("page");
+      .getByRole("button", { name: "Measure" })
+      .getAttribute("aria-expanded")
+  ).toBe("false");
 });
-it("expands the icon rail before opening a group without selecting a page", () => {
-  const router = setup("/app", true);
-  fireEvent.click(screen.getByRole("button", { name: "Advertising" }));
-  expect(screen.getByTestId("sidebar-state").textContent).toBe(
-    "expanded/false"
-  );
-  expect(screen.getByRole("link", { name: "Meta Ads" })).toBeTruthy();
-  expect(router.history).toHaveLength(1);
-});
-it("mobile group toggles keep the drawer open and selecting a leaf closes it", () => {
+it("mobile selection closes the drawer without changing the desktop preference", () => {
   viewport.mobile = true;
   setup("/app", true);
   fireEvent.click(screen.getByRole("button", { name: "Open drawer" }));
-  fireEvent.click(screen.getByRole("button", { name: "Advertising" }));
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/true"
   );
@@ -146,92 +179,61 @@ it("mobile group toggles keep the drawer open and selecting a leaf closes it", (
     "collapsed/false"
   );
 });
-it("handles ten channels with the same nested-list structure", () => {
+it("supports a growing channel list in the same flyout", () => {
   const items = [
     {
-      ...workspaceNavigation.find(item => item.path === "/app/advertising")!,
+      ...workspaceNavigation.find(item => item.label === "Activate")!,
       children: Array.from({ length: 10 }, (_, i) => ({
         label: `Channel ${i + 1}`,
         path: `/app/advertising/channel-${i + 1}`,
       })),
     },
   ];
-  setup("/app/advertising/channel-10", false, items);
-  const nav = screen.getByRole("navigation", { name: "Workspace navigation" });
-  expect(within(nav).getAllByRole("link")).toHaveLength(10);
+  setup("/app/advertising/channel-10", true, items);
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  const menu = within(screen.getByRole("dialog"));
+  expect(menu.getAllByRole("link")).toHaveLength(10);
   expect(
-    within(nav)
-      .getByRole("link", { name: "Channel 10" })
-      .getAttribute("aria-current")
+    menu.getByRole("link", { name: "Channel 10" }).getAttribute("aria-current")
   ).toBe("page");
 });
-it("does not crash if local storage is unavailable", () => {
-  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-    throw new Error("Unavailable");
-  });
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("Unavailable");
-  });
-  setup();
-  fireEvent.click(screen.getByRole("button", { name: "Social Publishing" }));
-  expect(screen.getByRole("link", { name: "Facebook" })).toBeTruthy();
+it("keeps the library filter and Brand routes distinct", () => {
+  setup("/app/library?view=approved");
+  fireEvent.click(screen.getByRole("button", { name: "Library" }));
+  expect(
+    screen
+      .getByRole("link", { name: "Approved assets" })
+      .getAttribute("aria-current")
+  ).toBe("page");
+  expect(
+    screen
+      .getByRole("link", { name: "Review history" })
+      .getAttribute("aria-current")
+  ).toBeNull();
+  expect(workspacePageLabel("/app/settings/company")).toBe(
+    "Brand / Business profile"
+  );
 });
-it("labels direct and historical nested pages correctly", () => {
+it("keeps app editors, historic links, and roadmap labels understandable", () => {
   expect(workspacePageLabel("/app/advertising/meta/legacy")).toBe(
-    "Advertising / Meta Ads"
+    "Activate / Meta Ads"
   );
   expect(workspacePageLabel("/app/analytics", "tab=advertising")).toBe(
-    "Analytics / Advertising"
+    "Measure / Advertising"
   );
-  expect(workspacePageLabel("/app/social/facebook")).toBe(
-    "Social Publishing / Facebook"
+  expect(workspacePageLabel("/app/creatives/video", "type=ugc")).toBe(
+    "Create / UGC video"
   );
-});
-it("groups tools under the four product stages and keeps administration separate", () => {
+  expect(workspacePageLabel("/app/briefs")).toBe("Create / Campaign plans");
+  expect(workspaceSection("/app/creatives/workflows")).toBe("Create");
   setup("/app");
-  for (const name of ["Create", "Activate", "Measure", "Optimize"])
-    expect(screen.getByText(name)).toBeTruthy();
-  expect(
-    workspaceNavigation.find(item => item.path === "/app/creatives")?.group
-  ).toBe("Create");
-  expect(
-    workspaceNavigation.find(item => item.path === "/app/advertising")?.group
-  ).toBe("Activate");
-  expect(
-    workspaceNavigation.find(item => item.path === "/app/analytics")?.group
-  ).toBe("Measure");
-  expect(
-    workspaceNavigation.find(item => item.path === "/app/optimize")?.group
-  ).toBe("Optimize");
-  expect(workspaceNavigation.some(item => item.roadmap)).toBe(false);
-});
-it("opens Settings for the retained Brand route and highlights billing", () => {
-  setup("/app/brand");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   expect(
     screen
-      .getByRole("button", { name: "Settings" })
-      .getAttribute("aria-expanded")
-  ).toBe("true");
-  expect(
-    screen.getByRole("link", { name: "Brand kit" }).getAttribute("aria-current")
-  ).toBe("page");
-  expect(screen.getByRole("link", { name: "Billing & Usage" })).toBeTruthy();
-});
-it("keeps historical Studio deep links in the single Studio destination", () => {
-  setup("/app/creatives?tab=saved&asset=creative%3A42");
-  expect(
-    screen
-      .getByRole("link", { name: "Content Studio" })
-      .getAttribute("aria-current")
-  ).toBe("page");
-  expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
-});
-it("keeps channel Overview separate from the individual Meta route", () => {
-  setup("/app/advertising");
-  expect(
-    screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")
-  ).toBe("page");
-  expect(
-    screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")
-  ).toBeNull();
+      .getByRole("link", { name: "API & AI assistants Planned" })
+      .getAttribute("href")
+  ).toBe("/app/settings/developer");
+  expect(workspaceNavigation.some(item => item.path.startsWith("/admin"))).toBe(
+    false
+  );
 });

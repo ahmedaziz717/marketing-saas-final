@@ -29,6 +29,33 @@ export const PRODUCT_STAGES = [
 export type ProductStage = (typeof PRODUCT_STAGES)[number]["id"];
 export const PRODUCT_FEATURES = [
   {
+    id: "creative_workflows",
+    name: "Creative workflows",
+    stage: "create",
+    availability: "planned",
+    href: "/app/creatives/workflows",
+    description:
+      "Connect ideas, generation, editing, and placement versions in a reusable visual workflow. Use the same brand context and assets as the creation apps.",
+  },
+  {
+    id: "marketing_automations",
+    name: "Marketing automations",
+    stage: "activate",
+    availability: "planned",
+    href: "/app/activate/automations",
+    description:
+      "Build repeatable marketing routines around events, approvals, publishing, and performance. Keep creative workflows and delivery automations connected.",
+  },
+  {
+    id: "api_assistants",
+    name: "API & AI assistants",
+    stage: "create",
+    availability: "planned",
+    href: "/app/settings/developer",
+    description:
+      "Connect tools such as ChatGPT and Claude to your workspace through an API and MCP tools, with scoped access, usage tracking, and the same approval rules.",
+  },
+  {
     id: "image_assets",
     name: "Image",
     stage: "create",

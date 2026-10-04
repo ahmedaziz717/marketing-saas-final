@@ -626,7 +626,7 @@ function Administration() {
             </div>
             <div className="my-5 overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500">
+                <thead className="bg-muted text-muted-foreground">
                   <tr>
                     {["Account", "Owner", "Tier", "AI access", "Credits"].map(
                       h => (
@@ -641,7 +641,7 @@ function Administration() {
                   {items.map(a => (
                     <tr
                       key={a.organization.id}
-                      className="border-t hover:bg-slate-50"
+                      className="border-t hover:bg-muted"
                     >
                       <td className="p-3">
                         <button

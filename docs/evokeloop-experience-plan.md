@@ -1,5 +1,37 @@
 # EvokeLoop experience redesign - implementation plan
 
+## October 2026 workspace refresh
+
+This refresh supersedes the original dashboard navigation and palette below.
+The public website keeps its existing brand system.
+
+- **Foundation implemented:** compact rail, one flyout/disclosure at a time,
+  neutral Light/Dark/System themes with Create violet, Activate blue, Measure
+  teal, and Optimize amber accents. Home focuses on tasks; Create groups the
+  working editors as apps and keeps shared drafts and campaign plans.
+- **Existing capability preserved:** image creation, product video, UGC drafts
+  with model selection, ad and social composers, approvals, connected-channel
+  publishing, and reporting. UGC generation remains planned. No provider calls
+  or paid jobs are triggered by the new navigation.
+- **Next journey:** connect an approved creative brief to reusable image/video
+  variations, ad/social publishing, reporting, and the next creative iteration.
+- **Future creative workflows:** visual generation/editing graphs using the same
+  brand, offering, audience, campaign, asset, and version records as guided apps.
+- **Future marketing automations:** events, approvals, schedules, channel actions,
+  and measured outcomes. Separate entry point from creative workflow graphs.
+- **Future API and assistants:** scoped API/MCP access for ChatGPT and Claude,
+  organization boundaries, idempotent jobs, usage attribution, audit history,
+  and identical approval controls across UI and assistant actions. No external
+  assistant access is activated by this release.
+- **Future channels:** email creation/delivery and landing pages reuse context
+  and assets; capabilities must be labeled until their real integrations exist.
+
+The first release changes organization and appearance, not the underlying
+content lifecycle or account permissions. Products remain optional for
+services, directories, and memberships. No new model provider, generation
+charge, publishing action, or Stripe activation is part of this refresh.
+
+
 ## Sequence and release boundaries
 1. Finish the prepared domain-routing release and verify it independently.
    DNS/TLS are complete; do not claim auth cutover until Supabase allowlist,

@@ -164,29 +164,39 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("offers only New content and Drafts, with four creation cards and no draft list on New content", () => {
+it("offers six working apps, honest roadmap labels, and shared campaign context", () => {
   setup("/app/creatives?plan=7");
   const nav = within(
-    screen.getByRole("navigation", { name: "Content Studio" })
+    screen.getByRole("navigation", { name: "Create navigation" })
   );
   expect(nav.getAllByRole("link").map(a => a.textContent)).toEqual([
-    "New content",
+    "Apps",
     "Drafts",
+    "Campaign plans",
+    "WorkflowsPlanned",
   ]);
   expect(
-    nav.getByRole("link", { name: "New content" }).getAttribute("aria-current")
+    nav.getByRole("link", { name: "Apps" }).getAttribute("aria-current")
   ).toBe("page");
   expect(
-    screen.getByRole("link", { name: "Create an image" }).getAttribute("href")
+    screen.getByRole("link", { name: "Image creator" }).getAttribute("href")
   ).toBe("/app/creatives/images?plan=7");
   expect(
-    screen
-      .getByRole("link", { name: "Create a social post" })
-      .getAttribute("href")
+    screen.getByRole("link", { name: "Social composer" }).getAttribute("href")
   ).toContain("social?new=1&plan=7");
   expect(
-    screen.getByRole("link", { name: "Create an ad" }).getAttribute("href")
+    screen.getByRole("link", { name: "Ad builder" }).getAttribute("href")
   ).toContain("ads?new=1&plan=7");
+  expect(
+    screen.getByRole("link", { name: "Product video" }).getAttribute("href")
+  ).toBe("/app/creatives/video?plan=7");
+  expect(
+    screen.getByRole("link", { name: "UGC video" }).getAttribute("href")
+  ).toBe("/app/creatives/video?plan=7&type=ugc");
+  expect(screen.getByText("Drafts only")).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Campaign planner" }).getAttribute("href")
+  ).toBe("/app/plans");
   expect(screen.queryByLabelText("Search drafts")).toBeNull();
   expect(screen.queryByText("Your drafts")).toBeNull();
   expect(api.publishQuery).not.toHaveBeenCalled();
@@ -266,7 +276,7 @@ it("retains older asset links and sends older social landing links to the correc
   setup("/app/creatives/saved?asset=asset%3A1");
   expect(screen.getByText(/Asset details true/)).toBeTruthy();
   expect(
-    within(screen.getByRole("navigation", { name: "Content Studio" }))
+    within(screen.getByRole("navigation", { name: "Create navigation" }))
       .getByRole("link", { name: "Drafts" })
       .getAttribute("aria-current")
   ).toBe("page");

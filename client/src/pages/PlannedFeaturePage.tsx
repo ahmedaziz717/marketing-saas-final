@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Clock3 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
+import { CreateNavigation } from "@/components/CreateNavigation";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_FEATURES, PRODUCT_STAGES } from "@shared/frameProduct";
@@ -19,10 +20,11 @@ export default function PlannedFeaturePage() {
   return (
     <WorkspaceGate>
       <PageHeader
-        eyebrow={stage.label}
+        eyebrow={feature.id === "api_assistants" ? "Settings" : stage.label}
         title={feature.name}
         description={feature.description}
       />
+      {feature.id === "creative_workflows" && <CreateNavigation />}
       <section className="surface max-w-3xl p-6 md:p-8">
         <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm">
           <Clock3 size={16} />
@@ -32,14 +34,13 @@ export default function PlannedFeaturePage() {
           Part of the EvokeLoop roadmap
         </h2>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          This is a scope preview, not an operational tool or a feature you can
-          unlock by changing plans. No action, budget change or charge is
-          available from this page.
+          This capability is planned and is not available yet. It will build on
+          your existing brand, content, and campaign workspace.
         </p>
-        <p className="mt-4 text-sm leading-6">
-          Delivery order: core workflows and usage tracking, then video and the
-          unified event layer, then attribution and budget optimization,
-          followed by incrementality, experiments and the AI Agent.
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">
+          You can use the creation apps, shared library, connected channels, and
+          reporting today. These future tools will use the same content and
+          permissions.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
@@ -53,7 +54,7 @@ export default function PlannedFeaturePage() {
           >
             <Button variant="outline">
               {feature.stage === "create"
-                ? "Back to Content Studio"
+                ? "Back to apps"
                 : feature.stage === "activate"
                   ? "Open Calendar"
                   : "Open Analytics"}

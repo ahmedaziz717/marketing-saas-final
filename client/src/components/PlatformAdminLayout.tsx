@@ -1,3 +1,5 @@
+import { useTheme } from "@/contexts/ThemeContext";
+import { AppearanceMenu } from "@/components/AppearanceMenu";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -37,16 +39,17 @@ export default function PlatformAdminLayout({
 }) {
   const { user, loading, logout } = useAuth();
   const [path] = useLocation();
+  const { resolvedTheme } = useTheme();
   return (
     <div
-      className="min-h-screen bg-slate-50 text-foreground"
+      className="min-h-screen bg-background text-foreground"
       data-platform-admin-shell
     >
-      <header className="border-b bg-white">
+      <header className="border-b bg-card">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
           <div className="flex flex-wrap items-center gap-4">
             <Link href="/admin" aria-label="EvokeLoop administration">
-              <EvokeLoopLogo />
+              <EvokeLoopLogo reversed={resolvedTheme === "dark"} />
             </Link>
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
               <ShieldCheck size={15} /> Platform admin
@@ -57,6 +60,7 @@ export default function PlatformAdminLayout({
               <span className="max-w-[240px] truncate text-sm text-muted-foreground">
                 {user.email}
               </span>
+              <AppearanceMenu />
               <Button variant="outline" onClick={() => logout()}>
                 <LogOut size={15} /> Sign out
               </Button>
@@ -66,7 +70,7 @@ export default function PlatformAdminLayout({
       </header>
       <div className="mx-auto flex max-w-[1800px] flex-col lg:flex-row">
         {user?.role === "admin" && (
-          <aside className="border-b bg-white lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
+          <aside className="border-b bg-card lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
             <p className="hidden px-6 pb-3 pt-7 text-xs font-semibold uppercase tracking-widest text-slate-400 lg:block">
               Manage EvokeLoop
             </p>
@@ -81,7 +85,7 @@ export default function PlatformAdminLayout({
                     key={href}
                     href={href}
                     aria-current={path === href ? "page" : undefined}
-                    className={`flex shrink-0 items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium ${path === href ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                    className={`flex shrink-0 items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium ${path === href ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
                   >
                     <Icon size={17} />
                     {title}
@@ -89,7 +93,7 @@ export default function PlatformAdminLayout({
                 );
               })}
             </nav>
-            <div className="m-5 hidden rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500 lg:block">
+            <div className="m-5 hidden rounded-lg bg-muted p-3 text-xs leading-relaxed text-muted-foreground lg:block">
               Platform staff only
               <br />
               Customer billing is not yet connected to Stripe.

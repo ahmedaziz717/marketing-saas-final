@@ -4,7 +4,7 @@ import PlatformAdminPage, {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Redirect, Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProductOverviewPage from "./pages/ProductOverviewPage";
@@ -55,13 +55,15 @@ function Router() {
       <Route path="/app/roadmap" component={ProductOverviewPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={CreativesPage} />
-      {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(view => (
-        <Route
-          key={view}
-          path={"/app/creatives/" + view}
-          component={CreativesPage}
-        />
-      ))}
+      {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(
+        view => (
+          <Route
+            key={view}
+            path={"/app/creatives/" + view}
+            component={CreativesPage}
+          />
+        )
+      )}
       {PRODUCT_FEATURES.filter(
         feature => feature.availability === "planned"
       ).map(feature => (
@@ -103,9 +105,15 @@ function Router() {
   );
 }
 export default function App() {
+  const [path] = useLocation();
+  const workspace =
+    path === "/app" ||
+    path.startsWith("/app/") ||
+    path === "/admin" ||
+    path.startsWith("/admin/");
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="system" switchable={workspace}>
         <TooltipProvider>
           <Toaster />
           <GlobalQueryFeedback />

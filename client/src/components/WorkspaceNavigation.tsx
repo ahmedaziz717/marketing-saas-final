@@ -1,29 +1,23 @@
-import { Fragment, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   BarChart3,
-  BookOpenText,
   ChevronDown,
   FolderOpen,
-  Images,
-  LayoutDashboard,
-  Megaphone,
+  House,
+  Palette,
   Send,
   Settings,
-  Target,
-  Lightbulb,
-  Users,
+  Sparkles,
+  WandSparkles,
   type LucideIcon,
 } from "lucide-react";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  useSidebar,
-} from "@/components/ui/sidebar";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   analyticsHref,
   analyticsViewForRoute,
@@ -47,52 +41,49 @@ export type WorkspaceNavItem = {
   roadmap?: boolean;
 };
 export const workspaceNavigation: WorkspaceNavItem[] = [
-  { icon: LayoutDashboard, label: "Home", path: "/app" },
+  { icon: House, label: "Home", path: "/app" },
   {
-    icon: BookOpenText,
-    label: "Campaign Plans",
-    path: "/app/plans",
-    aliases: ["/app/briefs"],
-    group: "Create",
-  },
-  {
-    icon: Images,
-    label: "Content Studio",
+    icon: Sparkles,
+    label: "Create",
     path: "/app/creatives",
     group: "Create",
+    aliases: ["/app/plans", "/app/briefs"],
+    children: [
+      { label: "Apps", path: "/app/creatives", exact: true },
+      { label: "Drafts", path: "/app/creatives/drafts" },
+      { label: "Campaign plans", path: "/app/plans" },
+      {
+        label: "Creative workflows",
+        path: "/app/creatives/workflows",
+        planned: true,
+      },
+    ],
   },
   {
-    icon: FolderOpen,
-    label: "Asset Library",
-    path: "/app/library",
-    group: "Create",
-  },
-  {
-    icon: Megaphone,
-    label: "Advertising",
+    icon: Send,
+    label: "Activate",
     path: "/app/advertising",
     group: "Activate",
+    aliases: ["/app/social", "/app/publishing", "/app/activate", "/app/email"],
     children: [
-      { label: "Overview", path: "/app/advertising", exact: true },
+      { label: "Advertising", path: "/app/advertising", exact: true },
       { label: "Meta Ads", path: "/app/advertising/meta" },
-    ],
-  },
-  {
-    icon: Users,
-    label: "Social Publishing",
-    path: "/app/social",
-    group: "Activate",
-    children: [
-      { label: "Overview", path: "/app/social", exact: true },
+      { label: "Social publishing", path: "/app/social", exact: true },
       { label: "Facebook", path: "/app/social/facebook" },
+      { label: "Calendar", path: "/app/publishing" },
+      {
+        label: "Automations",
+        path: "/app/activate/automations",
+        planned: true,
+      },
     ],
   },
-  { icon: Send, label: "Calendar", path: "/app/publishing", group: "Activate" },
   {
     icon: BarChart3,
-    label: "Analytics",
+    label: "Measure",
     path: "/app/analytics",
     group: "Measure",
+    aliases: ["/app/attribution", "/app/incrementality"],
     children: [
       { label: "Overview", path: "/app/analytics", analyticsView: "overview" },
       {
@@ -108,46 +99,80 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     ],
   },
   {
-    icon: Lightbulb,
-    label: "Optimization",
+    icon: WandSparkles,
+    label: "Optimize",
     path: "/app/optimize",
     group: "Optimize",
+    roadmap: true,
+  },
+  {
+    icon: FolderOpen,
+    label: "Library",
+    path: "/app/library",
+    children: [
+      { label: "Approved assets", path: "/app/library", exact: true },
+      { label: "Needs review", path: "/app/library?view=needs_review" },
+      { label: "Review history", path: "/app/library?view=history" },
+    ],
+  },
+  {
+    icon: Palette,
+    label: "Brand",
+    path: "/app/brand",
+    aliases: ["/app/catalog", "/app/import", "/app/settings/company"],
+    children: [
+      { label: "Business profile", path: "/app/settings/company" },
+      { label: "Brand kit", path: "/app/brand" },
+      { label: "Catalog & offerings", path: "/app/catalog" },
+      { label: "Import sources", path: "/app/import" },
+    ],
   },
   {
     icon: Settings,
     label: "Settings",
     path: "/app/settings",
     group: "Settings",
-    aliases: ["/app/brand", "/app/catalog", "/app/import"],
+    aliases: ["/app/roadmap"],
     children: [
-      { label: "Business profile", path: "/app/settings/company" },
-      { label: "Brand kit", path: "/app/brand" },
-      { label: "Catalog & offerings", path: "/app/catalog" },
-      { label: "Import sources", path: "/app/import" },
       { label: "Integrations", path: "/app/settings/integrations" },
       { label: "Team & access", path: "/app/settings/team" },
-      { label: "Billing & Usage", path: "/app/settings/billing" },
+      { label: "Billing & usage", path: "/app/settings/billing" },
       { label: "Activity & audit", path: "/app/settings/activity" },
+      {
+        label: "API & AI assistants",
+        path: "/app/settings/developer",
+        planned: true,
+      },
+      { label: "All settings", path: "/app/settings", exact: true },
+      { label: "Roadmap", path: "/app/roadmap" },
     ],
   },
-  { icon: Target, label: "Roadmap", path: "/app/roadmap", group: "Settings" },
 ];
-const storageKey = "frame-navigation-groups-v1";
 const matchesPath = (path: string, location: string) =>
   path === location || (path !== "/app" && location.startsWith(path + "/"));
-function childActive(child: Child, location: string, search: string) {
-  if (child.exact) return !child.planned && child.path === location;
-  return (
-    !child.planned &&
-    (child.analyticsView
-      ? matchesPath("/app/analytics", location) &&
-        analyticsViewForRoute(location, search) === child.analyticsView
-      : matchesPath(child.path, location))
-  );
-}
 const matchesItem = (item: WorkspaceNavItem, location: string) =>
   matchesPath(item.path, location) ||
   !!item.aliases?.some(path => matchesPath(path, location));
+function childActive(child: Child, location: string, search: string) {
+  if (child.analyticsView)
+    return (
+      matchesPath("/app/analytics", location) &&
+      analyticsViewForRoute(location, search) === child.analyticsView
+    );
+  const [path, query] = child.path.split("?");
+  if (query)
+    return (
+      path === location &&
+      Array.from(new URLSearchParams(query)).every(
+        ([key, value]) => new URLSearchParams(search).get(key) === value
+      )
+    );
+  if (path === "/app/library") {
+    const view = new URLSearchParams(search).get("view");
+    return location === path && (!view || view === "approved");
+  }
+  return child.exact ? path === location : matchesPath(path, location);
+}
 export function workspaceSection(location: string) {
   return (
     workspaceNavigation.find(item => matchesItem(item, location))?.group ??
@@ -155,29 +180,26 @@ export function workspaceSection(location: string) {
   );
 }
 export function workspacePageLabel(location: string, search = "") {
+  const editor = (
+    {
+      images: "Image creator",
+      video:
+        new URLSearchParams(search).get("type") === "ugc"
+          ? "UGC video"
+          : "Product video",
+      ads: "Ad builder",
+      social: "Social composer",
+    } as Record<string, string>
+  )[location.replace("/app/creatives/", "")];
+  if (editor) return `Create / ${editor}`;
   const parent = workspaceNavigation.find(item => matchesItem(item, location));
   const child = parent?.children?.find(item =>
     childActive(item, location, search)
   );
+  if (location === "/app/briefs") return "Create / Campaign plans";
   return child
     ? `${parent!.label} / ${child.label}`
     : (parent?.label ?? "EvokeLoop");
-}
-function readGroups(): Record<string, boolean> {
-  try {
-    const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const groups: Record<string, boolean> = {};
-    for (const [key, open] of Object.entries(value))
-      if (
-        typeof open === "boolean" &&
-        workspaceNavigation.some(item => item.path === key && item.children)
-      )
-        groups[key] = open;
-    return groups;
-  } catch {
-    return {};
-  }
 }
 export function WorkspaceNavigation({
   items = workspaceNavigation,
@@ -186,178 +208,163 @@ export function WorkspaceNavigation({
 }) {
   const [location] = useLocation();
   const search = useSearch();
-  const { state, isMobile, setOpen, setOpenMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
-  const activeGroup = items.find(
-    item => item.children && matchesItem(item, location)
-  )?.path;
-  const [groups, setGroups] = useState<Record<string, boolean>>(() => ({
-    ...readGroups(),
-    ...(activeGroup ? { [activeGroup]: true } : {}),
-  }));
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const prefix = useId();
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
+  // Opening a page never changes the rail or reopens a submenu.
   useEffect(() => {
-    if (activeGroup)
-      setGroups(current => ({ ...current, [activeGroup]: true }));
-  }, [activeGroup, location, search]);
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(groups));
-    } catch {
-      /* Navigation still works when storage is blocked. */
-    }
-  }, [groups]);
+    setOpenGroup(null);
+  }, [location, search, collapsed, isMobile]);
   const navigate = () => {
+    setOpenGroup(null);
     if (isMobile) setOpenMobile(false);
   };
+  const activeItem = items.find(item => matchesItem(item, location));
+  const children = (item: WorkspaceNavItem) => (
+    <ul className="workspace-subnav">
+      {item.children!.map(child => (
+        <li key={child.path}>
+          <Link
+            href={
+              child.analyticsView
+                ? analyticsHref(
+                    child.analyticsView,
+                    matchesPath("/app/analytics", location) ? search : ""
+                  )
+                : child.path
+            }
+            aria-current={
+              childActive(child, location, search) ? "page" : undefined
+            }
+            onClick={navigate}
+            className="workspace-subnav-link"
+          >
+            <span>{child.label}</span>
+            {child.planned && (
+              <span className="workspace-planned">Planned</span>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
   return (
-    <nav aria-label="Workspace navigation">
-      <SidebarMenu className="gap-1 px-2 py-1">
+    <nav
+      aria-label="Workspace navigation"
+      className="workspace-navigation"
+      data-compact={collapsed}
+    >
+      <ul className="workspace-nav-list">
         {items.map((item, index) => {
-          const active = matchesItem(item, location);
-          const expanded = !collapsed && !!groups[item.path];
+          const active = activeItem === item;
+          const expanded = openGroup === item.path;
           const id = `${prefix}-group-${index}`;
-          return (
-            <Fragment key={item.path}>
-              {item.group && items[index - 1]?.group !== item.group && (
-                <li
-                  role="presentation"
-                  data-workflow={item.group}
-                  className="workspace-group-label px-3 pb-2 pt-5 group-data-[collapsible=icon]:hidden"
-                >
-                  <span className="text-[10px] font-semibold uppercase tracking-[.18em] text-muted-foreground">
-                    {item.group}
-                  </span>
-                </li>
+          const contents = (
+            <>
+              <item.icon size={20} strokeWidth={1.8} aria-hidden="true" />
+              <span>{item.label}</span>
+              {item.children && !collapsed && (
+                <ChevronDown
+                  size={14}
+                  className={
+                    expanded
+                      ? "workspace-nav-chevron open"
+                      : "workspace-nav-chevron"
+                  }
+                  aria-hidden="true"
+                />
               )}
-              <SidebarMenuItem data-workflow={item.group ?? "Home"}>
-                {item.children ? (
-                  <>
-                    <SidebarMenuButton
-                      type="button"
-                      ref={node => {
-                        triggers.current[item.path] = node;
-                      }}
-                      tooltip={item.label}
-                      aria-label={item.label}
-                      aria-expanded={expanded}
-                      aria-controls={id}
-                      isActive={active}
-                      className="h-10 rounded-xl font-medium data-[active=true]:bg-primary/5 data-[active=true]:text-primary"
-                      onClick={() => {
-                        if (collapsed) setOpen(true);
-                        setGroups(current => ({
-                          ...current,
-                          [item.path]: collapsed || !current[item.path],
-                        }));
-                      }}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="min-w-0 flex-1 text-left">
-                        {item.label}
-                      </span>
-                      {!collapsed && (
-                        <ChevronDown
-                          aria-hidden="true"
-                          className={`ml-auto h-4 w-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}
-                        />
-                      )}
-                    </SidebarMenuButton>
-                    <div
-                      id={id}
-                      hidden={!expanded}
-                      onKeyDown={event => {
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setGroups(current => ({
-                            ...current,
-                            [item.path]: false,
-                          }));
-                          triggers.current[item.path]?.focus();
-                        }
-                      }}
-                    >
-                      <SidebarMenuSub className="mr-1 mt-1">
-                        {item.children.map(child => (
-                          <SidebarMenuSubItem key={child.path}>
-                            {child.planned ? (
-                              <div
-                                aria-disabled="true"
-                                title={`${child.label} - planned, not available yet`}
-                                className="flex min-h-9 min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground"
-                              >
-                                <span className="min-w-0 flex-1 truncate">
-                                  {child.label}
-                                </span>
-                                <span className="shrink-0 text-[10px]">
-                                  Planned
-                                </span>
-                              </div>
-                            ) : (
-                              <SidebarMenuSubButton
-                                asChild
-                                isActive={childActive(child, location, search)}
-                                className="min-h-9 h-auto rounded-lg py-2 data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
-                              >
-                                <Link
-                                  href={
-                                    child.analyticsView
-                                      ? analyticsHref(
-                                          child.analyticsView,
-                                          matchesPath(
-                                            "/app/analytics",
-                                            location
-                                          )
-                                            ? search
-                                            : ""
-                                        )
-                                      : child.path
-                                  }
-                                  aria-current={
-                                    childActive(child, location, search)
-                                      ? "page"
-                                      : undefined
-                                  }
-                                  onClick={navigate}
-                                >
-                                  <span>{child.label}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            )}
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </div>
-                  </>
-                ) : (
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.label}
-                    isActive={active}
-                    className="h-10 rounded-xl font-medium data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+            </>
+          );
+          const trigger = (
+            <button
+              type="button"
+              ref={node => {
+                triggers.current[item.path] = node;
+              }}
+              className="workspace-nav-link"
+              data-active={active}
+              aria-label={item.label}
+              aria-expanded={expanded}
+              aria-controls={expanded ? id : undefined}
+              onClick={
+                collapsed
+                  ? undefined
+                  : () => setOpenGroup(expanded ? null : item.path)
+              }
+            >
+              {contents}
+            </button>
+          );
+          return (
+            <li
+              key={item.path}
+              data-workflow={item.group ?? "Home"}
+              className={`${item.label === "Library" ? "workspace-nav-divider" : ""} ${item.label === "Settings" ? "workspace-nav-utility" : ""}`}
+            >
+              {!item.children ? (
+                <Link
+                  href={item.path}
+                  className="workspace-nav-link"
+                  data-active={active}
+                  aria-current={active ? "page" : undefined}
+                  onClick={navigate}
+                  title={item.roadmap ? "Optimize · Planned" : undefined}
+                >
+                  {contents}
+                </Link>
+              ) : collapsed ? (
+                <Popover
+                  open={expanded}
+                  onOpenChange={open =>
+                    setOpenGroup(current =>
+                      open ? item.path : current === item.path ? null : current
+                    )
+                  }
+                >
+                  <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+                  <PopoverContent
+                    id={id}
+                    side="right"
+                    align="start"
+                    sideOffset={12}
+                    collisionPadding={12}
+                    className="workspace-nav-flyout"
+                    data-workflow={item.group ?? "Home"}
+                    aria-label={`${item.label} navigation`}
                   >
-                    <Link
-                      href={item.path}
-                      aria-current={active ? "page" : undefined}
-                      onClick={navigate}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="min-w-0 flex-1">{item.label}</span>
-                      {item.roadmap && !collapsed && (
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          Planned
-                        </span>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                )}
-              </SidebarMenuItem>
-            </Fragment>
+                    <p className="workspace-flyout-heading">
+                      <item.icon size={17} aria-hidden="true" />
+                      {item.label}
+                    </p>
+                    {children(item)}
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <>
+                  {trigger}
+                  <div
+                    id={id}
+                    hidden={!expanded}
+                    onKeyDown={event => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setOpenGroup(null);
+                        triggers.current[item.path]?.focus();
+                      }
+                    }}
+                  >
+                    {children(item)}
+                  </div>
+                </>
+              )}
+            </li>
           );
         })}
-      </SidebarMenu>
+      </ul>
     </nav>
   );
 }

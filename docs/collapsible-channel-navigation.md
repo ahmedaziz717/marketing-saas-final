@@ -3,20 +3,28 @@
 This UI-only change builds on the Facebook-first staging release. There are no
 schema, credential, publishing-policy, provider-call or advertising-budget changes.
 
-## Navigation
+## Navigation (workspace refresh, October 2026)
 
-- Social Media expands to Facebook, Instagram (planned) and TikTok (planned).
-- Advertising expands to Meta Ads, Google Ads (planned) and Microsoft Ads (planned).
-- Analytics expands to Overview, Advertising and Social Media.
-- Groups are independent, remember their open state when storage is available,
-  and open automatically for direct links. Toggling a group does not navigate.
-- Collapsed desktop icons expand the rail before showing children. Selecting a
-  real destination closes the mobile drawer. Planned channels are not fake links.
-- Disclosure buttons expose aria-expanded and aria-controls; links expose
-  aria-current. Escape inside a group closes it and focuses the parent.
-
-The same WorkspaceNavigation component accepts additional items without adding
-horizontal tabs. Existing source, library, publishing and settings routes remain.
+- Default desktop state is an 80px rail with text below each icon. Expanding it
+  is an explicit action (logo hover/focus reveals “Expand sidebar”, or Ctrl/Cmd+B).
+  The 240px expanded state is remembered on this browser; mobile uses a drawer.
+- Primary destinations are Home, Create, Activate, Measure, Optimize, Library,
+  Brand, and Settings. Platform administration remains an independent shell.
+- A compact group opens a single anchored flyout. It does not expand the rail or
+  navigate. Expanded groups use one disclosure at a time. Groups start closed,
+  close on selection, and are never reopened by route changes or old preferences.
+- Escape closes the flyout/disclosure and restores focus. Buttons expose
+  aria-expanded and links expose aria-current. Selecting a destination closes
+  the mobile drawer.
+- Create contains Apps, Drafts, Campaign plans, and planned creative workflows.
+  Activate contains channel management, Calendar, and planned automations.
+  Measure retains distinct Overview, Advertising, and Social reports.
+- The header keeps account switching visible in compact mode and offers
+  Light, Dark, and System. Appearance is saved per browser and synchronized
+  across tabs. System follows OS changes. Public marketing pages stay light.
+- Planned destinations open explicitly labeled roadmap pages, never operational
+  editors. Existing source, library, publishing, settings, and historical links
+  continue to work.
 
 ## Channel pages
 

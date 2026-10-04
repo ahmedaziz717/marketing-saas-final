@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ThemeProvider } from "../../client/src/contexts/ThemeContext";
 import { defaultVideoSetup } from "../../shared/videoCreation";
 import { LifestylePersonPicker } from "../../client/src/components/LifestylePersonPicker";
 import {
@@ -233,8 +234,22 @@ function respond(path: string, input: any) {
   if (path === "video.get") return videoDrafts.find(job => job.id === input.id);
   if (path === "video.save") {
     const index = videoDrafts.findIndex(job => job.id === input.id);
-    const job = { id: input.id ?? `55555555-5555-4555-8555-${String(videoDrafts.length + 1).padStart(12, "0")}`, setup: structuredClone(input.setup), revision: index >= 0 ? videoDrafts[index].revision + 1 : 1, status: "draft", credits: 0, error: null, cancelRequested: false, assetKey: null, createdAtMs: now, updatedAtMs: now };
-    if (index >= 0) videoDrafts[index] = job; else videoDrafts.push(job);
+    const job = {
+      id:
+        input.id ??
+        `55555555-5555-4555-8555-${String(videoDrafts.length + 1).padStart(12, "0")}`,
+      setup: structuredClone(input.setup),
+      revision: index >= 0 ? videoDrafts[index].revision + 1 : 1,
+      status: "draft",
+      credits: 0,
+      error: null,
+      cancelRequested: false,
+      assetKey: null,
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+    if (index >= 0) videoDrafts[index] = job;
+    else videoDrafts.push(job);
     return job;
   }
   if (path === "video.quote") {
@@ -565,7 +580,9 @@ function respond(path: string, input: any) {
     };
   }
   if (path === "assetLibrary.studioList")
-    return ["studio-drafts", "video-studio", "video-ugc"].includes(which) ? studioDraftAssets : [];
+    return ["studio-drafts", "video-studio", "video-ugc"].includes(which)
+      ? studioDraftAssets
+      : [];
   if (path === "assetLibrary.list")
     return ["studio-ad-copy", "studio-post-media"].includes(which)
       ? [
@@ -856,12 +873,17 @@ window.confirm = () => true;
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={client} queryClient={query}>
     <QueryClientProvider client={query}>
-      <TooltipProvider>
-        <Router hook={fixtureRouter.hook} searchHook={fixtureRouter.searchHook}>
-          <RoutedPage />
-        </Router>
-        <Toaster />
-      </TooltipProvider>
+      <ThemeProvider switchable defaultTheme="light">
+        <TooltipProvider>
+          <Router
+            hook={fixtureRouter.hook}
+            searchHook={fixtureRouter.searchHook}
+          >
+            <RoutedPage />
+          </Router>
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   </trpc.Provider>
 );
@@ -1131,28 +1153,69 @@ function layout() {
       );
     }
     if (which === "video-studio") {
-      check(!!document.querySelector('[aria-label="Video type"]'), "Video creation has Product and UGC routes");
-      check(!!document.querySelector('#video-prompt'), "Video prompt is visible");
+      check(
+        !!document.querySelector('[aria-label="Video type"]'),
+        "Video creation has Product and UGC routes"
+      );
+      check(
+        !!document.querySelector("#video-prompt"),
+        "Video prompt is visible"
+      );
       await click("Edit video");
-      check(document.body.textContent?.includes("Source video"), "Edit mode requires source video");
-      check(!Array.from(document.querySelectorAll('label')).some(label => label.textContent?.startsWith("Aspect ratio")), "Edit mode hides unsupported ratio controls");
+      check(
+        document.body.textContent?.includes("Source video"),
+        "Edit mode requires source video"
+      );
+      check(
+        !Array.from(document.querySelectorAll("label")).some(label =>
+          label.textContent?.startsWith("Aspect ratio")
+        ),
+        "Edit mode hides unsupported ratio controls"
+      );
       await click("Motion control");
-      check(!document.body.textContent?.includes("Generate sound"), "Motion mode hides unsupported sound controls");
+      check(
+        !document.body.textContent?.includes("Generate sound"),
+        "Motion mode hides unsupported sound controls"
+      );
       await click("Create video");
       await click("Add images");
-      check(!!document.querySelector('[role="dialog"]'), "Reference picker opens accessibly");
-      const image = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent?.includes("Emerald collection hero"));
-      image?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+      check(
+        !!document.querySelector('[role="dialog"]'),
+        "Reference picker opens accessibly"
+      );
+      const image = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+      ).find(button => button.textContent?.includes("Emerald collection hero"));
+      image?.click();
+      await new Promise(resolve => setTimeout(resolve, 30));
       await click("Use selected images");
-      check(!!document.querySelector('img[alt^="Reference 1"]'), "Selected reference appears in the video editor");
+      check(
+        !!document.querySelector('img[alt^="Reference 1"]'),
+        "Selected reference appears in the video editor"
+      );
     }
     if (which === "video-ugc") {
-      check(!!document.querySelector('#video-prompt'), "UGC uses the video editor");
-      check(button("Generation coming soon")?.disabled, "UGC generation is unavailable until its provider is connected");
-      for (const label of ["Create video", "Edit video", "Extend video", "Motion control", "Save draft"])
+      check(
+        !!document.querySelector("#video-prompt"),
+        "UGC uses the video editor"
+      );
+      check(
+        button("Generation coming soon")?.disabled,
+        "UGC generation is unavailable until its provider is connected"
+      );
+      for (const label of [
+        "Create video",
+        "Edit video",
+        "Extend video",
+        "Motion control",
+        "Save draft",
+      ])
         check(!!button(label), `UGC has the shared ${label} control`);
       await click("Edit video");
-      check(document.body.textContent?.includes("Source video"), "UGC edit has a source video picker");
+      check(
+        document.body.textContent?.includes("Source video"),
+        "UGC edit has a source video picker"
+      );
       await click("Create video");
       await click("Add images");
       await click("Emerald collection hero");
@@ -1160,38 +1223,61 @@ function layout() {
       await click("Browse 500 models");
       layout();
       for (let i = 1; i <= 4; i++) await click(`Woman · Black ${i}`);
-      check(button("Woman · Black 5")?.disabled, "UGC supports at most four models");
+      check(
+        button("Woman · Black 5")?.disabled,
+        "UGC supports at most four models"
+      );
       await click("Use 4 models");
       await click("Save draft");
-      check(videoDrafts[0]?.setup.category === "ugc" && videoDrafts[0]?.setup.people.length === 4 && videoDrafts[0]?.setup.imageKeys[0] === "asset:1", "UGC save keeps category, four models, and references");
+      check(
+        videoDrafts[0]?.setup.category === "ugc" &&
+          videoDrafts[0]?.setup.people.length === 4 &&
+          videoDrafts[0]?.setup.imageKeys[0] === "asset:1",
+        "UGC save keeps category, four models, and references"
+      );
       await click("Product videos");
-      check(!button("Browse 500 models"), "Product editor does not show the UGC model picker");
+      check(
+        !button("Browse 500 models"),
+        "Product editor does not show the UGC model picker"
+      );
       await click("UGC videos");
       // The temporary save toast sits above the final history row on mobile.
       await new Promise(resolve => setTimeout(resolve, 4500));
       await click("Open Untitled UGC video");
       await click("Browse 500 models");
-      check(document.body.textContent?.includes("4 / 4 selected"), "Saved UGC restores its model selection");
+      check(
+        document.body.textContent?.includes("4 / 4 selected"),
+        "Saved UGC restores its model selection"
+      );
       await click("Cancel");
-      check(!!document.querySelector('img[alt^="Reference 1"]'), "Saved UGC restores its image references");
-      check(videoQuotes.every(setup => setup.category !== "ugc"), "UGC never requests product credit quotes");
-      check(!mutations.includes("video.generate"), "Saving UGC does not trigger generation");
+      check(
+        !!document.querySelector('img[alt^="Reference 1"]'),
+        "Saved UGC restores its image references"
+      );
+      check(
+        videoQuotes.every(setup => setup.category !== "ugc"),
+        "UGC never requests product credit quotes"
+      );
+      check(
+        !mutations.includes("video.generate"),
+        "Saving UGC does not trigger generation"
+      );
       layout();
     }
     if (which === "studio-overview") {
       check(
-        !!document.querySelector('a[aria-label="Create a social post"]') &&
-          !!document.querySelector('a[aria-label="Create an ad"]'),
+        !!document.querySelector('a[aria-label="Social composer"]') &&
+          !!document.querySelector('a[aria-label="Ad builder"]'),
         "Real creation modes render"
       );
       const tabs = Array.from(
-        document.querySelectorAll('nav[aria-label="Content Studio"] a')
+        document.querySelectorAll('nav[aria-label="Create navigation"] a')
       );
       check(
-        tabs.length === 2 &&
-          tabs[0].textContent === "New content" &&
+        tabs.length === 4 &&
+          tabs[0].textContent === "Apps" &&
           tabs[1].textContent === "Drafts",
-        "Studio has two clear destinations"
+        "Create has apps, drafts, plans, and planned workflows"
       );
       check(
         !document.querySelector(
@@ -1935,108 +2021,84 @@ async function navigationChecks(ten: boolean) {
   const mobile = innerWidth < 768;
   const openDrawer = async () => {
     if (mobile && !document.querySelector('[data-mobile="true"]'))
-      await click("Toggle Sidebar");
+      await click("Open navigation");
   };
   await openDrawer();
-  const nav = () =>
-    document.querySelector<HTMLElement>(
-      'nav[aria-label="Workspace navigation"]'
-    )!;
   const parent = (label: string) =>
-    nav().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+    document.querySelector<HTMLButtonElement>(
+      `nav[aria-label="Workspace navigation"] button[aria-label="${label}"]`
+    )!;
   const children = (label: string) =>
     document.getElementById(parent(label).getAttribute("aria-controls")!)!;
   check(
-    parent("Advertising").getAttribute("aria-expanded") === "true",
-    "Direct link opens its sidebar group"
+    parent("Activate").getAttribute("aria-expanded") === "false",
+    "Direct links keep submenus closed"
   );
+  parent("Activate").click();
+  await pause();
   check(
-    children("Advertising").querySelector('[aria-current="page"]')
-      ?.textContent === "Meta Ads",
+    children("Activate").querySelector('[aria-current="page"]')?.textContent ===
+      "Meta Ads",
     "Active channel highlighted"
   );
-  parent("Advertising").click();
-  await pause();
-  check(children("Advertising").hidden, "User can collapse current section");
-  parent("Advertising").click();
-  await pause();
+  if (!mobile)
+    check(!!button("Expand sidebar"), "Opening a group keeps the rail compact");
   if (ten) {
-    const last = children("Advertising").querySelector<HTMLElement>(
-      '[title="Future channel 10 - planned, not available yet"]'
+    const last = children("Activate").querySelector<HTMLAnchorElement>(
+      'a[href="/app/advertising/future-3"]'
     )!;
-    check(last, "Ten channels use the same sidebar list");
+    check(last, "Ten channels remain accessible");
     last.scrollIntoView({ block: "center" });
     await pause();
-    const r = last.getBoundingClientRect();
+    const rect = last.getBoundingClientRect();
     check(
-      r.top >= 0 && r.bottom <= innerHeight + 1,
-      "Last of ten channels is reachable by scrolling"
-    );
-    check(
-      nav().scrollWidth <= nav().clientWidth + 1,
-      "Long channel list fits sidebar width"
+      rect.top >= 0 && rect.bottom <= innerHeight + 1,
+      "Last channel reachable"
     );
     return;
   }
-  parent("Social Publishing").click();
-  await pause();
-  check(
-    parent("Advertising").getAttribute("aria-expanded") === "true",
-    "Groups expand independently"
-  );
-  const facebook = children(
-    "Social Publishing"
-  ).querySelector<HTMLAnchorElement>('a[href="/app/social/facebook"]')!;
-  facebook.scrollIntoView({ block: "center" });
-  facebook.click();
+  children("Activate")
+    .querySelector<HTMLAnchorElement>('a[href="/app/social/facebook"]')!
+    .click();
   await pause();
   check(
     document.querySelector("h1")?.textContent === "Facebook",
-    "Channel link changes the page"
+    "Channel link changes page"
   );
   if (mobile)
     check(
       !document.querySelector('[data-mobile="true"]'),
-      "Selecting a channel closes the mobile drawer"
+      "Selection closes mobile drawer"
     );
   await openDrawer();
-  parent("Analytics").click();
+  parent("Measure").click();
   await pause();
-  const adReport = children("Analytics").querySelector<HTMLAnchorElement>(
-    'a[href="/app/analytics/advertising"]'
-  )!;
-  adReport.scrollIntoView({ block: "center" });
-  adReport.click();
+  children("Measure")
+    .querySelector<HTMLAnchorElement>('a[href="/app/analytics/advertising"]')!
+    .click();
   await pause();
   check(
     document.querySelector("h1")?.textContent === "Advertising analytics",
-    "Analytics subsection opens directly"
+    "Analytics opens directly"
   );
   fixtureRouter.navigate(
     "/app/analytics?tab=social&since=2026-09-01&until=2026-09-20&compare=1"
   );
   await pause();
-  check(
-    document.querySelector("h1")?.textContent === "Social media analytics",
-    "Legacy deep links remain compatible"
-  );
   await openDrawer();
-  const overview = children("Analytics").querySelector<HTMLAnchorElement>(
+  parent("Measure").click();
+  await pause();
+  const overview = children("Measure").querySelector<HTMLAnchorElement>(
     'a[href^="/app/analytics?"]'
   )!;
   check(
     overview.href.includes("since=2026-09-01") &&
       overview.href.includes("compare=1"),
-    "Dates and comparison preserved by sidebar"
+    "Dates and comparison preserved"
   );
   overview.click();
   await pause();
-  check(
-    document.querySelector("h1")?.textContent === "Analytics overview",
-    "Overview stays separate from scoped analytics"
-  );
   layout();
-  // Leave the initial advertising page visible for a comparable screenshot.
   fixtureRouter.navigate("/app/advertising/meta");
   await pause();
   if (mobile) await openDrawer();

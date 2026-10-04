@@ -7,11 +7,15 @@ import {
   MessageSquare,
   ArrowRight,
   ArrowLeft,
-  Plus,
-  FolderOpen,
+  Users,
+  BookOpenText,
+  Mail,
+  PanelsTopLeft,
+  FileText,
 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
+import { CreateNavigation } from "@/components/CreateNavigation";
 import { CreativeBuilder } from "@/components/CreativeBuilder";
 import { StudioDrafts } from "@/components/StudioDrafts";
 import { PublicationComposer } from "@/components/PublicationComposer";
@@ -28,34 +32,54 @@ import { editablePublication, type Channel } from "@shared/channels";
 
 const creationChoices = [
   {
-    path: "video",
-    title: "Create a video",
-    icon: Clapperboard,
-    description:
-      "Create product videos or prepare UGC with selected models. Edit, extend, and build from your references.",
-  },
-  {
     path: "images",
-    title: "Create an image",
+    title: "Image creator",
     icon: Image,
     description:
-      "Generate reusable images for your posts and ads, with sizes for each placement.",
+      "Turn your products, services, or ideas into images in every size you need.",
   },
   {
-    path: "social",
-    title: "Create a social post",
-    icon: MessageSquare,
+    path: "video",
+    title: "Product video",
+    icon: Clapperboard,
     description:
-      "Write your caption, add an image, video or link, and preview the finished post.",
+      "Bring products and ideas to life. Generate, edit, extend, and restyle video.",
+  },
+  {
+    path: "ugc-video",
+    title: "UGC video",
+    icon: Users,
+    description:
+      "Choose your models and prepare a creator-style video. Generation is coming next.",
+    badge: "Drafts only",
   },
   {
     path: "ads",
-    title: "Create an ad",
+    title: "Ad builder",
     icon: Megaphone,
     description:
-      "Combine your creative and ad copy, then choose a connected ad account and campaign.",
+      "Pair approved media with ad copy and creative variations for your connected channels.",
+  },
+  {
+    path: "social",
+    title: "Social composer",
+    icon: MessageSquare,
+    description:
+      "Compose a post with a caption, image, video, or link. Preview it before publishing.",
+  },
+  {
+    path: "plans",
+    title: "Campaign planner",
+    icon: BookOpenText,
+    description:
+      "Give your campaign a goal, audience, and creative direction. Keep its content together.",
   },
 ] as const;
+const plannedChoices = [
+  { title: "Email builder", icon: Mail, href: "/app/creatives/email" },
+  { title: "Landing pages", icon: PanelsTopLeft, href: "/app/creatives/pages" },
+  { title: "Blog & insights", icon: FileText, href: "/app/creatives/blog" },
+];
 
 function Studio() {
   const { organizationId, membership } = useWorkspace();
@@ -88,40 +112,15 @@ function Studio() {
     <>
       <PageHeader
         eyebrow="Create"
-        title="Content Studio"
-        description="Start something new or pick up where you left off."
+        title="Create"
+        description="One place for your images, videos, ads, and posts. Start with an app or continue a draft."
         action={
-          <Link href="/app/plans" className="text-sm text-primary underline">
-            Campaign Plans
+          <Link href="/app/brand" className="text-sm font-medium text-primary">
+            Open brand kit <ArrowRight size={14} className="ml-1 inline" />
           </Link>
         }
       />
-      <nav aria-label="Content Studio" className="mb-8 flex gap-1 border-b">
-        {[
-          {
-            label: "New content",
-            href: newContentHref,
-            active: !isDrafts,
-            icon: Plus,
-          },
-          {
-            label: "Drafts",
-            href: draftsHref,
-            active: isDrafts,
-            icon: FolderOpen,
-          },
-        ].map(({ label, href, active, icon: Icon }) => (
-          <Link
-            key={label}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={`inline-flex min-h-12 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`}
-          >
-            <Icon size={17} aria-hidden="true" />
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <CreateNavigation planId={planId} />
       {planId && (
         <p className="mb-5 text-sm">
           Showing work for campaign plan #{planId}.{" "}
@@ -142,7 +141,7 @@ function Studio() {
             className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
           >
             <ArrowLeft size={16} />
-            Back to new content
+            Back to apps
           </Link>
           {canCreate ? (
             <VideoStudio key={organizationId} initialPlanId={planId} />
@@ -159,7 +158,7 @@ function Studio() {
             className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
           >
             <ArrowLeft size={16} />
-            Back to new content
+            Back to apps
           </Link>
           {canCreate ? (
             <CreativeBuilder
@@ -177,41 +176,65 @@ function Studio() {
         </>
       ) : (
         <section aria-labelledby="studio-create-heading">
-          <h2 id="studio-create-heading" className="text-xl font-semibold">
-            What would you like to create?
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Choose a starting point. Save a draft, then review it before
-            publishing.
-          </p>
-          <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {creationChoices.map(({ path, title, icon: Icon, description }) => {
-              const allowed = ["images", "video"].includes(path)
-                ? canCreate
-                : canCompose;
-              const href = ["images", "video"].includes(path)
-                ? `/app/creatives/${path}${planId ? "?plan=" + planId : ""}`
-                : studioContentHref(path === "ads" ? "meta_ads" : "facebook", {
-                    plan: planId,
-                  });
+          <div className="studio-section-heading">
+            <div>
+              <h2 id="studio-create-heading">Your creative toolkit</h2>
+              <p>
+                Choose an app. Your brand and campaign context come with you.
+              </p>
+            </div>
+            <Link href={draftsHref}>
+              Continue a draft <ArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="studio-app-grid">
+            {creationChoices.map(choice => {
+              const { path, title, icon: Icon, description } = choice;
+              const assetApp = ["images", "video", "ugc-video"].includes(path);
+              const allowed =
+                path === "plans" || (assetApp ? canCreate : canCompose);
+              const query = new URLSearchParams();
+              if (planId) query.set("plan", String(planId));
+              if (path === "ugc-video") query.set("type", "ugc");
+              const href =
+                path === "plans"
+                  ? "/app/plans"
+                  : assetApp
+                    ? `/app/creatives/${path === "ugc-video" ? "video" : path}${query.size ? "?" + query : ""}`
+                    : studioContentHref(
+                        path === "ads" ? "meta_ads" : "facebook",
+                        { plan: planId }
+                      );
               const contents = (
                 <>
-                  <div className="mb-6 flex items-start justify-between gap-4">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <Icon size={25} aria-hidden="true" />
-                    </span>
-                    {allowed && (
-                      <ArrowRight
-                        size={20}
-                        className="mt-3 text-primary transition-transform group-hover:translate-x-1"
-                        aria-hidden="true"
-                      />
+                  <div
+                    className="studio-app-art"
+                    data-app={path}
+                    aria-hidden="true"
+                  >
+                    <div className="studio-app-symbol">
+                      <Icon size={32} strokeWidth={1.5} />
+                    </div>
+                    <span className="studio-app-orbit" />
+                  </div>
+                  <div className="studio-app-body">
+                    <div className="studio-app-title">
+                      <h3>{title}</h3>
+                      {"badge" in choice ? (
+                        <span className="workspace-planned">
+                          {choice.badge}
+                        </span>
+                      ) : (
+                        allowed && <ArrowRight size={17} aria-hidden="true" />
+                      )}
+                    </div>
+                    <p>{description}</p>
+                    {!allowed && (
+                      <span className="mt-3 block text-xs text-muted-foreground">
+                        A creator or publisher role is required.
+                      </span>
                     )}
                   </div>
-                  <h3 className="text-xl font-semibold">{title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {description}
-                  </p>
                 </>
               );
               return allowed ? (
@@ -219,19 +242,36 @@ function Studio() {
                   key={path}
                   href={href}
                   aria-label={title}
-                  className="surface group min-w-0 p-6 transition-colors hover:border-primary/50 hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="studio-app-card"
                 >
                   {contents}
                 </Link>
               ) : (
-                <div key={path} className="surface min-w-0 p-6 opacity-70">
+                <div key={path} className="studio-app-card unavailable">
                   {contents}
-                  <p className="mt-4 text-xs text-muted-foreground">
-                    Your workspace role does not allow this action.
-                  </p>
                 </div>
               );
             })}
+          </div>
+          <div className="studio-planned-section">
+            <div className="studio-section-heading">
+              <div>
+                <h2>More ways to create</h2>
+                <p>
+                  On the roadmap. Your content will share the same brand and
+                  asset library.
+                </p>
+              </div>
+            </div>
+            <div className="studio-planned-grid">
+              {plannedChoices.map(({ title, icon: Icon, href }) => (
+                <Link key={href} href={href} className="studio-planned-card">
+                  <Icon size={21} aria-hidden="true" />
+                  <span>{title}</span>
+                  <span className="workspace-planned">Planned</span>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
       )}
