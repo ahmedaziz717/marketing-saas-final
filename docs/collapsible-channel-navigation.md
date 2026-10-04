@@ -19,8 +19,9 @@ schema, credential, publishing-policy, provider-call or advertising-budget chang
 - Create contains Apps, Drafts, Campaign plans, and planned creative workflows.
   Activate contains channel management, Calendar, and planned automations.
   Measure retains distinct Overview, Advertising, and Social reports.
-- The header keeps account switching visible in compact mode and offers
-  Light, Dark, and System. Appearance is saved per browser and synchronized
+- The header keeps account switching visible in compact mode. A labeled Theme
+  button at the top of the sidebar, beneath the logo, offers Light, Dark, and
+  System in both compact and expanded modes. Appearance is saved per browser and synchronized
   across tabs. System follows OS changes. Public marketing pages stay light.
 - Planned destinations open explicitly labeled roadmap pages, never operational
   editors. Existing source, library, publishing, settings, and historical links

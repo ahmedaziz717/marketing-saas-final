@@ -164,6 +164,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <TooltipContent side="right">{toggleLabel}</TooltipContent>
           </Tooltip>
         </SidebarHeader>
+        <div className="workspace-sidebar-appearance">
+          <AppearanceMenu compact={collapsed} />
+        </div>
         <SidebarContent className="workspace-sidebar-content">
           <WorkspaceNavigation />
         </SidebarContent>
@@ -273,7 +276,6 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             >
               <CircleHelp size={18} />
             </a>
-            <AppearanceMenu />
           </div>
         </header>
         <div
