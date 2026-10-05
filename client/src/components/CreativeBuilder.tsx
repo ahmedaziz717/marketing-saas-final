@@ -845,7 +845,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   {options.data?.brand?.businessProfile?.summary ||
                     "Add promotion details above or complete your business profile."}{" "}
                   <Link
-                    href="/app/settings/company"
+                    href="/app/brand"
                     className="text-primary underline"
                   >
                     Edit business profile

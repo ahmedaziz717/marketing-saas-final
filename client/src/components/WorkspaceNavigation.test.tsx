@@ -197,7 +197,7 @@ it("supports a growing channel list in the same flyout", () => {
     menu.getByRole("link", { name: "Channel 10" }).getAttribute("aria-current")
   ).toBe("page");
 });
-it("keeps library filters distinct and groups company and catalog under Settings", () => {
+it("keeps library filters, Brand, and administrative Settings distinct", () => {
   setup("/app/library?view=approved");
   fireEvent.click(screen.getByRole("button", { name: "Library" }));
   expect(
@@ -210,14 +210,22 @@ it("keeps library filters distinct and groups company and catalog under Settings
       .getByRole("link", { name: "Review history" })
       .getAttribute("aria-current")
   ).toBeNull();
-  expect(workspacePageLabel("/app/settings/company")).toBe(
-    "Settings / Company & brand"
-  );
+  expect(workspacePageLabel("/app/settings/company")).toBe("Brand");
+  expect(workspacePageLabel("/app/brand")).toBe("Brand");
   expect(workspacePageLabel("/app/settings/catalog/import")).toBe(
     "Settings / Catalog & offerings"
   );
-  expect(workspaceSection("/app/settings/company")).toBe("Settings");
-  expect(workspaceNavigation.some(item => item.label === "Brand")).toBe(false);
+  expect(workspaceSection("/app/settings/company")).toBe("Brand");
+  expect(screen.getByRole("link", { name: "Brand" }).getAttribute("href")).toBe(
+    "/app/brand"
+  );
+  fireEvent.click(screen.getByRole("link", { name: "Brand" }));
+  expect(
+    screen.getByRole("link", { name: "Brand" }).getAttribute("aria-current")
+  ).toBe("page");
+  expect(
+    screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")
+  ).toBeNull();
 });
 it("keeps app editors, historic links, and roadmap labels understandable", () => {
   expect(workspacePageLabel("/app/advertising/meta/legacy")).toBe(

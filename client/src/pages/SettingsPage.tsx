@@ -1,4 +1,3 @@
-import { CompanyBrandSettings } from "@/components/CompanyBrandSettings";
 import { SettingsLayout } from "@/components/SettingsLayout";
 import {
   settingsSectionForPath,
@@ -625,8 +624,6 @@ function Settings() {
             </section>
           )}
         </>
-      ) : section === "company" ? (
-        <CompanyBrandSettings key={organizationId} />
       ) : (
         <section className="surface p-6">
           <div className="flex items-center gap-3">

@@ -13,6 +13,7 @@ import { PRODUCT_FEATURES } from "@shared/frameProduct";
 import PlatformWebsitePage from "./pages/PlatformWebsitePage";
 import Home from "./pages/Home";
 import WorkspaceApp from "./pages/WorkspaceApp";
+import BrandWorkspacePage from "./pages/BrandWorkspacePage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
@@ -28,15 +29,8 @@ import CatalogPage from "./pages/CatalogPage";
 import WebsiteImportPage from "./pages/WebsiteImportPage";
 import LoginPage from "./pages/LoginPage";
 
-function SettingsRedirect({
-  to,
-  brand = false,
-}: {
-  to: string;
-  brand?: boolean;
-}) {
+function SettingsRedirect({ to }: { to: string }) {
   const query = new URLSearchParams(useSearch());
-  if (brand) query.set("tab", "brand");
   return <Redirect to={`${to}${query.size ? `?${query}` : ""}`} replace />;
 }
 
@@ -98,8 +92,9 @@ function Router() {
       <Route path="/app/analytics/advertising" component={AnalyticsPage} />
       <Route path="/app/analytics/social" component={AnalyticsPage} />
       <Route path="/app/publishing" component={PublishingPage} />
-      <Route path="/app/brand">
-        <SettingsRedirect to="/app/settings/company" brand />
+      <Route path="/app/brand" component={BrandWorkspacePage} />
+      <Route path="/app/settings/company">
+        <SettingsRedirect to="/app/brand" />
       </Route>
       <Route path="/app/integrations">
         <Redirect to="/app/settings/integrations" replace />

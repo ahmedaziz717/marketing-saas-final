@@ -14,7 +14,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
       <PageHeader
         eyebrow="Workspace"
         title="Settings"
-        description="Your company, brand, connections, and workspace preferences."
+        description="Manage your team, connections, billing, and workspace preferences."
       />
       <div className="grid items-start gap-6 xl:grid-cols-[208px_minmax(0,1fr)]">
         <nav

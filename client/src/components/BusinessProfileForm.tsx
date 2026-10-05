@@ -67,7 +67,7 @@ export function BusinessProfileForm({
     >
       <h3 className="text-lg font-semibold">Business profile</h3>
       <p className="text-sm text-muted-foreground">
-        Edit these anytime in Settings → Company & brand. They guide website
+        Edit these anytime in Brand → Business profile. They guide website
         discovery and new creative suggestions. Existing approved content stays
         as reviewed.
       </p>

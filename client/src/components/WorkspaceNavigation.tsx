@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FolderOpen,
   House,
+  Palette,
   Send,
   Settings,
   Sparkles,
@@ -36,7 +37,7 @@ export type WorkspaceNavItem = {
   label: string;
   path: string;
   children?: Child[];
-  group?: "Create" | "Activate" | "Measure" | "Optimize" | "Settings";
+  group?: "Create" | "Activate" | "Measure" | "Optimize" | "Brand" | "Settings";
   aliases?: string[];
   roadmap?: boolean;
 };
@@ -116,11 +117,18 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     ],
   },
   {
+    icon: Palette,
+    label: "Brand",
+    path: "/app/brand",
+    group: "Brand",
+    aliases: ["/app/settings/company"],
+  },
+  {
     icon: Settings,
     label: "Settings",
     path: "/app/settings",
     group: "Settings",
-    aliases: ["/app/roadmap", "/app/brand", "/app/catalog", "/app/import"],
+    aliases: ["/app/roadmap", "/app/catalog", "/app/import"],
   },
 ];
 const matchesPath = (path: string, location: string) =>
@@ -155,9 +163,10 @@ export function workspaceSection(location: string) {
   );
 }
 export function workspacePageLabel(location: string, search = "") {
+  if (location === "/app/brand" || location === "/app/settings/company")
+    return "Brand";
   if (location === "/app/settings" || location.startsWith("/app/settings/"))
     return `Settings / ${settingsSectionForPath(location).label}`;
-  if (location === "/app/brand") return "Settings / Company & brand";
   if (["/app/catalog", "/app/import"].includes(location))
     return "Settings / Catalog & offerings";
   if (location === "/app/roadmap") return "Settings / Product roadmap";

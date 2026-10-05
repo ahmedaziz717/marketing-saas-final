@@ -269,7 +269,7 @@ export function CompanyBrandSettings() {
         value={tab}
         onValueChange={value =>
           navigate(
-            `/app/settings/company${value === "brand" ? "?tab=brand" : ""}`
+            `/app/brand${value === "brand" ? "?tab=brand" : ""}`
           )
         }
       >

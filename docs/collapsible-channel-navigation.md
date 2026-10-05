@@ -9,12 +9,14 @@ schema, credential, publishing-policy, provider-call or advertising-budget chang
   is an explicit action (logo hover/focus reveals “Expand sidebar”, or Ctrl/Cmd+B).
   The 240px expanded state is remembered on this browser; mobile uses a drawer.
 - Primary destinations are Home, Create, Activate, Measure, Optimize, Library,
-  and Settings. Platform administration remains an independent shell.
-- Settings opens directly, with one shared settings navigation. Company & brand
-  combines the editable workspace name, logo uploads, business profile, and brand
-  identity. Catalog & offerings contains its own Sources tab for website scans,
+  Brand, and Settings. Platform administration remains an independent shell.
+- Brand opens directly from its own sidebar icon at `/app/brand`. It combines
+  the editable workspace name, logo uploads, business profile, and brand identity.
+  `/app/settings/company` redirects to Brand, preserving the selected tab.
+- Settings opens directly to Team & access, with one shared administrative
+  navigation. Catalog & offerings contains its own Sources tab for website scans,
   stores, and CSV imports; Import sources is no longer a separate destination.
-  Legacy brand, catalog, and import URLs redirect to Settings, preserving queries.
+  Legacy catalog and import URLs redirect to Settings, preserving queries.
 - Workspace rename is limited to owners/admins and recorded atomically in the
   activity log. It changes the display name, not workspace identity or memberships.
   Logo uploads use the existing pending-approval workflow in Library.

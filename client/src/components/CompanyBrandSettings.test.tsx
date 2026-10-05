@@ -78,7 +78,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { CompanyBrandSettings } from "./CompanyBrandSettings";
-const setup = (path = "/app/settings/company") => {
+const setup = (path = "/app/brand") => {
   const location = memoryLocation({ path });
   const view = render(
     <Router hook={location.hook} searchHook={location.searchHook}>
@@ -178,7 +178,7 @@ it("uploads only supported logo files through the existing brand asset endpoint"
 
 it("keeps company settings read-only for creators", () => {
   state.role = "creator";
-  setup("/app/settings/company?tab=brand");
+  setup("/app/brand?tab=brand");
   expect(
     (screen.getByLabelText("Workspace name") as HTMLInputElement).disabled
   ).toBe(true);

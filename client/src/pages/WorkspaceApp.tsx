@@ -192,7 +192,7 @@ function Dashboard() {
               title: "Make it on-brand",
               detail: "Keep your logo, colors, and voice together.",
               icon: Palette,
-              href: "/app/settings/company?tab=brand",
+              href: "/app/brand?tab=brand",
             },
             {
               title: "Connect your channels",
