@@ -72,7 +72,9 @@ export function VideoReferencePicker({
           <DialogDescription>
             {kind === "video"
               ? "Use an MP4 clip of 4–30 seconds."
-              : `Combine up to ${limit} product photos and image assets. Selection order matches the image numbers in your prompt.`}
+              : limit === 1
+                ? "Choose one product photo or image asset for this step."
+                : `Combine up to ${limit} product photos and image assets. Selection order matches the image numbers in your prompt.`}
           </DialogDescription>
         </DialogHeader>
         {kind === "images" && (

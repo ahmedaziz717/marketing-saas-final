@@ -175,14 +175,14 @@ export function WorkflowCanvas({
       minY = Math.min(...graph.nodes.map(n => n.y)),
       maxX = Math.max(...graph.nodes.map(n => n.x + NODE_WIDTH)),
       maxY = Math.max(...graph.nodes.map(n => n.y + 370));
-    const width = Math.max(320, el.clientWidth - (selected ? 350 : 0) - 100),
+    const width = Math.max(320, el.clientWidth - (selected ? 350 : 0) - 130),
       height = el.clientHeight - 100,
       zoom = Math.max(
         0.25,
         Math.min(1, width / (maxX - minX), height / (maxY - minY))
       );
     setView({
-      x: 50 + (width - (maxX - minX) * zoom) / 2 - minX * zoom,
+      x: 80 + (width - (maxX - minX) * zoom) / 2 - minX * zoom,
       y: 50 + (height - (maxY - minY) * zoom) / 2 - minY * zoom,
       zoom,
     });
@@ -583,7 +583,9 @@ export function WorkflowCanvas({
                         : node.type === "generate_video"
                           ? `${node.config.duration}s · ${node.config.resolution} · ${node.config.ratio}`
                           : node.type === "output"
-                            ? "Saved in Asset Library"
+                            ? step?.outputs?.length
+                              ? "Saved in run history"
+                              : "Collect workflow results"
                             : meta.output}
                   </span>
                   {isGenerationNode(node.type) && (
