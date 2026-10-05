@@ -82,7 +82,7 @@ export const PILLARS = [
       "AI images and copy assistance",
       "Brand and product source assets",
       "Content drafts and version reviews",
-      "Image, video and UGC uploads",
+      "Image, video and creator content uploads",
     ],
     next: "Keep your brand, product information and approved source assets together as you create.",
   },

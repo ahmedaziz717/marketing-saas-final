@@ -514,7 +514,7 @@ export function AssetWorkbench({
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {asset.origin === "generated" ? "Generated" : "Uploaded"}
-                      {asset.isUgc ? " / UGC" : ""} /{" "}
+                      {asset.isUgc ? " / Creator content" : ""} /{" "}
                       {asset.purpose === "source"
                         ? "Source material"
                         : "Finished asset"}

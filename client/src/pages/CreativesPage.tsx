@@ -47,10 +47,10 @@ const creationChoices = [
   },
   {
     path: "ugc-video",
-    title: "UGC video",
+    title: "Creator video",
     icon: Users,
     description:
-      "Choose your models and prepare a creator-style video. Generation is coming next.",
+      "Choose an AI presenter or model and prepare your video. Generation is coming next.",
     badge: "Drafts only",
   },
   {

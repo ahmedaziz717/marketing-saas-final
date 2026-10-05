@@ -191,7 +191,7 @@ it("offers six working apps, honest roadmap labels, and shared campaign context"
     screen.getByRole("link", { name: "Product video" }).getAttribute("href")
   ).toBe("/app/creatives/video?plan=7");
   expect(
-    screen.getByRole("link", { name: "UGC video" }).getAttribute("href")
+    screen.getByRole("link", { name: "Creator video" }).getAttribute("href")
   ).toBe("/app/creatives/video?plan=7&type=ugc");
   expect(screen.getByText("Drafts only")).toBeTruthy();
   expect(

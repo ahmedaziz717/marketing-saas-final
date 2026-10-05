@@ -89,11 +89,11 @@ export const PRODUCT_FEATURES = [
     availability: "available",
     href: "/app/creatives/video",
     description:
-      "Create, edit, extend, and transfer motion in product videos. Prepare UGC drafts with selected models; UGC generation is planned.",
+      "Create, edit, extend, and transfer motion in product videos. Prepare creator video drafts with selected models; creator video generation is planned.",
   },
   {
     id: "ugc",
-    name: "User-generated content",
+    name: "Creator content",
     stage: "create",
     availability: "available",
     href: "/app/creatives/drafts?kind=media&type=ugc",

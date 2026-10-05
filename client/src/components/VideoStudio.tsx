@@ -217,7 +217,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const [setup, setSetup] = useState<VideoSetup>({
     ...defaultVideoSetup,
     category: requestedUgc ? "ugc" : "product",
-    title: requestedUgc ? "Untitled UGC video" : defaultVideoSetup.title,
+    title: requestedUgc ? "Untitled creator video" : defaultVideoSetup.title,
     campaignPlanId: initialPlanId,
   });
   const isUgc = setup.category === "ugc";
@@ -307,7 +307,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       setSetup({
         ...defaultVideoSetup,
         category: requestedUgc ? "ugc" : "product",
-        title: requestedUgc ? "Untitled UGC video" : defaultVideoSetup.title,
+        title: requestedUgc ? "Untitled creator video" : defaultVideoSetup.title,
         campaignPlanId: initialPlanId,
       });
       setSaved(null);
@@ -343,7 +343,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       next ?? {
         ...defaultVideoSetup,
         category: ugc ? "ugc" : "product",
-        title: ugc ? "Untitled UGC video" : defaultVideoSetup.title,
+        title: ugc ? "Untitled creator video" : defaultVideoSetup.title,
         campaignPlanId: initialPlanId,
       }
     );
@@ -468,8 +468,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
           },
           {
             ugc: true,
-            title: "UGC videos",
-            subtitle: "Creator-led stories and testimonials",
+            title: "Creator videos",
+            subtitle: "Choose an AI presenter or model to bring your story to life",
             icon: Users,
           },
         ].map(({ ugc, title, subtitle, icon: Icon }) => (
@@ -502,7 +502,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
             role="status"
             className="mb-6 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-950"
           >
-            <p className="font-medium">Prepare your UGC video</p>
+            <p className="font-medium">Prepare your creator video</p>
             <p>
               {ugcGenerationMessage} Your settings and selected models stay with
               the draft.
@@ -909,7 +909,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   <p className="text-xs leading-5 text-muted-foreground">
                     {dirty ? "Unsaved changes. " : ""}
                     {isUgc
-                      ? "Saving a UGC setup uses no AI credits."
+                      ? "Saving a creator video setup uses no AI credits."
                       : (problem ??
                         "Credits are reserved when you generate. Confirmed failures and cancellations are refunded.")}
                   </p>
@@ -1080,7 +1080,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 id="video-history-heading" className="font-semibold">
-                  {isUgc ? "Recent UGC videos" : "Recent product videos"}
+                  {isUgc ? "Recent creator videos" : "Recent product videos"}
                 </h3>
                 <Button
                   size="icon"

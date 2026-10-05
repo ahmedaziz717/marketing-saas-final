@@ -8,7 +8,7 @@ function Library() {
       <PageHeader
         eyebrow="Shared content"
         title="Asset Library"
-        description="Review submissions and reuse approved images, videos, UGC, and source assets. Create new content and manage working drafts in Create."
+        description="Review submissions and reuse approved images, videos, creator content, and source assets. Create new content and manage working drafts in Create."
         action={
           <Link
             href="/app/creatives"

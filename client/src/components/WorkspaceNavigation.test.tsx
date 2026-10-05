@@ -235,7 +235,7 @@ it("keeps app editors, historic links, and roadmap labels understandable", () =>
     "Measure / Advertising"
   );
   expect(workspacePageLabel("/app/creatives/video", "type=ugc")).toBe(
-    "Create / UGC video"
+    "Create / Creator video"
   );
   expect(workspacePageLabel("/app/briefs")).toBe("Create / Campaign plans");
   expect(workspaceSection("/app/creatives/workflows")).toBe("Create");

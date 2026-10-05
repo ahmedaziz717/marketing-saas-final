@@ -175,7 +175,7 @@ export function workspacePageLabel(location: string, search = "") {
       images: "Image creator",
       video:
         new URLSearchParams(search).get("type") === "ugc"
-          ? "UGC video"
+          ? "Creator video"
           : "Product video",
       ads: "Ad builder",
       social: "Social composer",

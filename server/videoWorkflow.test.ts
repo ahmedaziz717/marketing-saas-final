@@ -303,7 +303,7 @@ describe("durable video generation", () => {
     });
     await expect(
       owner.video.quote({ organizationId: org, setup: settings })
-    ).rejects.toThrow("UGC generation is coming next");
+    ).rejects.toThrow("Creator video generation is coming next");
     await expect(
       owner.video.generate({
         organizationId: org,
@@ -311,7 +311,7 @@ describe("durable video generation", () => {
         revision: updated.revision,
         quotedCredits: 0,
       })
-    ).rejects.toThrow("UGC generation is coming next");
+    ).rejects.toThrow("Creator video generation is coming next");
     expect(await state.db.select().from(aiUsage)).toHaveLength(0);
     expect(await state.db.select().from(creditLedger)).toHaveLength(0);
     expect(state.submit).not.toHaveBeenCalled();

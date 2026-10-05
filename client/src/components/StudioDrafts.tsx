@@ -335,7 +335,7 @@ export function StudioDrafts({ planId }: { planId?: number }) {
                       ? "Ad"
                       : item.type === "videos"
                         ? item.videoJob?.category === "ugc" || item.asset?.isUgc
-                          ? "UGC video"
+                          ? "Creator video"
                           : "Video"
                         : "File";
               const Icon =

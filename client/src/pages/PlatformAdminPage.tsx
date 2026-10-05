@@ -1094,8 +1094,8 @@ function Administration() {
             Product video generation uses the Higgsfield API. Add the complete
             API credential as <code>HF_API_KEY</code> to both the web service
             and background worker, then redeploy both. API billing is separate
-            from a Higgsfield website subscription. UGC generation will use
-            Creatify in a later release.
+            from a Higgsfield website subscription. Creator video generation
+            will use Creatify in a later release.
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
             <span>

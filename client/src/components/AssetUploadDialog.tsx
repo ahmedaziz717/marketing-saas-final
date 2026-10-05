@@ -262,7 +262,7 @@ export function AssetUploadDialog({
               disabled={busy}
               onChange={event => setUgc(event.target.checked)}
             />
-            User-generated / creator content
+            Creator or customer content
           </label>
           {ugc && (
             <label className="flex items-start gap-2 rounded-xl bg-muted p-3 text-sm">

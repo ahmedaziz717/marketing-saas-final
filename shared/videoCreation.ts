@@ -2,7 +2,7 @@ import { z } from "zod";
 import { personReferenceKey, personReferenceSchema } from "./creativeBuilder";
 
 export const ugcGenerationMessage =
-  "UGC generation is coming next. You can choose models and save your video setup now.";
+  "Creator video generation is coming next. You can choose models and save your video setup now.";
 
 export const videoModes = [
   {
@@ -62,7 +62,7 @@ export const videoSetupSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["people"],
-        message: "Model selection is available for UGC videos.",
+        message: "Model selection is available for creator videos.",
       });
     if (
       new Set(setup.people.map(personReferenceKey)).size !== setup.people.length

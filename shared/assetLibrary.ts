@@ -4,7 +4,7 @@ export type AssetKey = `asset:${number}` | `creative:${number}`;
 export type AssetView = "all" | "images" | "videos" | "ugc" | "source";
 export const ASSET_VIEWS: { id: AssetView; label: string }[] = [
   { id: "all", label: "All assets" }, { id: "images", label: "Image assets" },
-  { id: "videos", label: "Video assets" }, { id: "ugc", label: "User-generated content" },
+  { id: "videos", label: "Video assets" }, { id: "ugc", label: "Creator content" },
   { id: "source", label: "Brand & product assets" },
 ];
 export type LibraryAsset = {
