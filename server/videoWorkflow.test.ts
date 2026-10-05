@@ -488,7 +488,11 @@ describe("durable video generation", () => {
     await tick();
     state.submit
       .mockRejectedValueOnce(new HiggsfieldError(0, true, "Timeout"))
-      .mockResolvedValueOnce(accepted);
+      .mockResolvedValueOnce({
+        ...accepted,
+        status_url: accepted.status_url.replace("https:", "http:"),
+        cancel_url: accepted.cancel_url.replace("https:", "http:"),
+      });
     await tick();
     await tick();
     expect(state.signed).toHaveBeenCalledTimes(1);
@@ -502,6 +506,7 @@ describe("durable video generation", () => {
     });
     await tick();
     await tick();
+    expect(state.poll).toHaveBeenCalledWith(providerId, accepted.status_url);
     const result = await owner.video.get({ organizationId: org, id: job.id });
     expect(result.status).toBe("completed");
     expect(result.assetKey).toMatch(/^asset:/);

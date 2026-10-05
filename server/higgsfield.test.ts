@@ -4,6 +4,8 @@ import {
   downloadVideo,
   HiggsfieldError,
   pollHiggsfield,
+  providerUrls,
+  requestUrl,
   submitHiggsfield,
 } from "./lib/higgsfield";
 const request = vi.fn();
@@ -89,4 +91,34 @@ it("blocks unsupported endpoints and private result downloads before external IO
     "private"
   );
   expect(request).not.toHaveBeenCalled();
+});
+it("upgrades API response links to HTTPS while preserving the request and security boundaries", async () => {
+  const urls = providerUrls({
+    request_id: id,
+    status: "queued",
+    status_url: `http://api.higgsfield.ai/requests/${id}/status`,
+    cancel_url: `http://api.higgsfield.ai/requests/${id}/cancel`,
+  });
+  expect(urls.providerStatusUrl).toBe(
+    `https://api.higgsfield.ai/requests/${id}/status`
+  );
+  expect(urls.providerCancelUrl).toBe(
+    `https://api.higgsfield.ai/requests/${id}/cancel`
+  );
+  request.mockResolvedValue(
+    new Response(JSON.stringify({ request_id: id, status: "queued" }))
+  );
+  await pollHiggsfield(id, urls.providerStatusUrl);
+  expect(request.mock.calls[0][0]).toBe(urls.providerStatusUrl);
+  expect(request.mock.calls[0][1].redirect).toBe("error");
+  for (const url of [
+    `http://api.higgsfield.ai.evil.test/requests/${id}/status`,
+    `https://evil.test/requests/${id}/status`,
+    `http://api.higgsfield.ai:8080/requests/${id}/status`,
+    `http://user:secret@api.higgsfield.ai/requests/${id}/status`,
+    `http://api.higgsfield.ai/requests/another/status`,
+    `http://api.higgsfield.ai/requests/${id}/status?secret=1`,
+  ])
+    expect(() => requestUrl(url, id, "status")).toThrow();
+  expect(request).toHaveBeenCalledTimes(1);
 });

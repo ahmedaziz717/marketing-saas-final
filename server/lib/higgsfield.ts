@@ -38,6 +38,9 @@ export function requestUrl(
   } catch {
     throw new HiggsfieldUrlError({ action, reason: "malformed_url" });
   }
+  // The API may return an http URL behind its proxy. Never send credentials
+  // over HTTP: upgrade only the exact API host before validating the full route.
+  if (parsed.origin === "http://api.higgsfield.ai") parsed.protocol = "https:";
   if (
     parsed.origin !== API ||
     parsed.username ||
@@ -50,6 +53,8 @@ export function requestUrl(
       action,
       reason: "unexpected_url_shape",
       expectedOrigin: parsed.origin === API,
+      expectedHost: parsed.hostname === "api.higgsfield.ai",
+      secureTransport: parsed.protocol === "https:",
       hasCredentials: !!(parsed.username || parsed.password),
       hasQuery: !!parsed.search,
       hasFragment: !!parsed.hash,

@@ -18,6 +18,8 @@ it("explains rejected provider routes without logging URL secrets", () => {
     action: "status",
     reason: "unexpected_url_shape",
     expectedOrigin: true,
+    expectedHost: true,
+    secureTransport: true,
     hasCredentials: true,
     hasQuery: true,
     hasFragment: false,
