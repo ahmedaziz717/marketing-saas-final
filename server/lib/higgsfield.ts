@@ -21,13 +21,23 @@ export class HiggsfieldError extends Error {
   }
 }
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
+export class HiggsfieldUrlError extends Error {
+  constructor(public diagnostic: Record<string, string | boolean>) {
+    super("Invalid generation status URL");
+  }
+}
 export function requestUrl(
   url: string,
   id: string,
   action: "status" | "cancel"
 ) {
   if (!idPattern.test(id)) throw new Error("Invalid generation request ID");
-  const parsed = new URL(url);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new HiggsfieldUrlError({ action, reason: "malformed_url" });
+  }
   if (
     parsed.origin !== API ||
     parsed.username ||
@@ -36,7 +46,25 @@ export function requestUrl(
     parsed.hash ||
     parsed.pathname !== `/requests/${id}/${action}`
   )
-    throw new Error("Invalid generation status URL");
+    throw new HiggsfieldUrlError({
+      action,
+      reason: "unexpected_url_shape",
+      expectedOrigin: parsed.origin === API,
+      hasCredentials: !!(parsed.username || parsed.password),
+      hasQuery: !!parsed.search,
+      hasFragment: !!parsed.hash,
+      // Report only known route words, never raw URLs, query tokens or credentials.
+      pathShape: parsed.pathname
+        .split("/")
+        .map(part =>
+          part === id
+            ? ":request_id"
+            : ["", "requests", "status", "cancel", "v1"].includes(part)
+              ? part
+              : ":other"
+        )
+        .join("/"),
+    });
   return parsed.toString();
 }
 const resultSchema = z.object({

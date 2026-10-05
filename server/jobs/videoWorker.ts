@@ -37,6 +37,7 @@ import {
   storageClient,
 } from "../storage";
 import { mp4Info } from "../lib/videoMedia";
+import { videoFailureDiagnostic } from "../lib/videoDiagnostics";
 
 export async function videoWorkerHeartbeat(db: LibraryDatabase) {
   const value = {
@@ -432,6 +433,15 @@ export async function processNextVideoJob(db: LibraryDatabase) {
       });
     await recordProviderResult(db, job, result);
   } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "video.processing_error",
+        jobId: job.id,
+        phase: job.status,
+        attempt: job.attempts,
+        diagnostic: videoFailureDiagnostic(error),
+      })
+    );
     if (
       error instanceof HiggsfieldError &&
       !error.ambiguous &&
