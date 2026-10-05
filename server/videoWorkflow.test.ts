@@ -21,6 +21,17 @@ const state = vi.hoisted(() => ({
   signed: vi.fn(),
   upload: vi.fn(),
   storedVideo: "",
+  llm: vi.fn(),
+  image: vi.fn(),
+}));
+vi.mock("./_core/llm", async original => ({
+  ...(await original<typeof import("./_core/llm")>()),
+  listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
+  invokeLLM: (...args: any[]) => state.llm(...args),
+}));
+vi.mock("./lib/creativeImages", async original => ({
+  ...(await original<typeof import("./lib/creativeImages")>()),
+  readGenerationSource: (...args: any[]) => state.image(...args),
 }));
 vi.mock("./db", () => ({
   getDb: async () => state.db,
@@ -50,6 +61,8 @@ import {
   users,
   brandAssets,
   brandKits,
+  products,
+  productImages,
 } from "../drizzle/schema";
 import { videoJobs, providerWorkers } from "../drizzle/videoSchema";
 import {
@@ -63,12 +76,19 @@ import {
   videoRequestBody,
   videoSetupProblem,
   videoSetupSchema,
+  videoPrompt,
   type VideoSetup,
 } from "../shared/videoCreation";
 import { processNextVideoJob, videoWorkerHeartbeat } from "./jobs/videoWorker";
 import { HiggsfieldError, requestUrl } from "./lib/higgsfield";
 import { mp4Info } from "./lib/videoMedia";
 import { defaultVideoRates, videoQuote } from "./lib/videoPricing";
+import { aiScope } from "./lib/aiMetering";
+import {
+  resolveVideoReferences,
+  validateVideoReferences,
+  publicVideoJob,
+} from "./lib/videoJobs";
 let engine: PGlite,
   org: number,
   otherOrg: number,
@@ -76,6 +96,7 @@ let engine: PGlite,
   imageId: number,
   videoId: number,
   foreignId: number;
+let productId: number, catalogImageId: number, foreignCatalogImageId: number;
 let owner: ReturnType<typeof appRouter.createCaller>,
   outsider: typeof owner,
   reviewer: typeof owner;
@@ -154,6 +175,38 @@ beforeAll(async () => {
     }))
   );
   for (const organizationId of [org, otherOrg]) {
+    const [product] = await db
+      .insert(products)
+      .values({
+        organizationId,
+        name: "Studio lamp",
+        sku: "LAMP-01",
+        dedupeKey: "video-lamp",
+        productUrl: "https://example.test/lamp",
+        description: "A brass lamp.",
+        specifications: {},
+        provenance: {},
+        status: "approved",
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
+      .returning();
+    const [catalogImage] = await db
+      .insert(productImages)
+      .values({
+        organizationId,
+        productId: product.id,
+        sourceUrl: "https://example.test/lamp.png",
+        storageKey: `org-${organizationId}/product.png`,
+        url: "/media/product.png",
+        isPrimary: 1,
+        createdAtMs: now,
+      })
+      .returning();
+    if (organizationId === org) {
+      productId = product.id;
+      catalogImageId = catalogImage.id;
+    } else foreignCatalogImageId = catalogImage.id;
     const [kit] = await db
       .insert(brandKits)
       .values({
@@ -217,6 +270,16 @@ beforeAll(async () => {
   });
 });
 beforeEach(async () => {
+  state.llm.mockReset();
+  state.image.mockReset();
+  state.image.mockImplementation(async (key: string) => ({
+    b64Json: Buffer.from(key).toString("base64"),
+    mimeType: "image/png",
+  }));
+  await state.db
+    .update(products)
+    .set({ status: "approved" })
+    .where(eq(products.id, productId));
   state.submit.mockReset();
   state.poll.mockReset();
   state.cancel.mockReset();
@@ -272,6 +335,158 @@ const accepted = {
 };
 
 describe("durable video generation", () => {
+  it("combines approved catalog and asset images in order, and rejects foreign or withdrawn catalog references", async () => {
+    const settings = {
+      ...setup(),
+      imageKeys: [`product_image:${catalogImageId}`, `asset:${imageId}`],
+    };
+    const images = await owner.video.catalogImages({
+      organizationId: org,
+      search: "lamp-01",
+    });
+    expect(images.items.map(item => item.key)).toEqual([
+      `product_image:${catalogImageId}`,
+    ]);
+    expect(
+      (
+        await owner.video.catalogImages({
+          organizationId: org,
+          selectedOnly: true,
+          selectedKeys: [`product_image:${foreignCatalogImageId}`],
+        })
+      ).items
+    ).toEqual([]);
+    const refs = await resolveVideoReferences(state.db, org, settings);
+    expect(refs.map(ref => ref.key)).toEqual(settings.imageKeys);
+    const job = await queued(settings);
+    state.submit.mockResolvedValue({ id: "mixed-reference-request" });
+    await tick();
+    await tick();
+    const payload = state.submit.mock.calls[0][1];
+    expect(JSON.stringify(payload)).toContain(`org-${org}/product.png`);
+    expect(JSON.stringify(payload).indexOf("product.png")).toBeLessThan(
+      JSON.stringify(payload).indexOf("reference.png")
+    );
+    await expect(
+      owner.video.quote({
+        organizationId: org,
+        setup: {
+          ...setup(),
+          imageKeys: [`product_image:${foreignCatalogImageId}`],
+        },
+      })
+    ).rejects.toThrow(/unavailable/);
+    await state.db
+      .update(products)
+      .set({ status: "pending" })
+      .where(eq(products.id, productId));
+    await expect(
+      validateVideoReferences(state.db, {
+        organizationId: org,
+        references: refs,
+      })
+    ).rejects.toThrow(/unavailable/);
+    expect(
+      (await owner.video.catalogImages({ organizationId: org })).items
+    ).toEqual([]);
+    expect(job.credits).toBeGreaterThan(0);
+  });
+
+  it("drafts a metered-scope prompt from actual ordered images and protects workspace boundaries", async () => {
+    let scope: unknown;
+    state.llm.mockImplementation(async () => {
+      scope = aiScope.getStore();
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                prompt:
+                  "Orbit around the brass lamp in Image 1, then ease into a close-up of its finish.",
+              }),
+            },
+          },
+        ],
+      };
+    });
+    const settings = {
+      ...setup(),
+      prompt: "",
+      mode: "edit" as const,
+      sourceVideoKey: null,
+      imageKeys: [`product_image:${catalogImageId}`, `asset:${imageId}`],
+    };
+    const result = await owner.video.draftPrompt({
+      organizationId: org,
+      setup: settings,
+    });
+    expect(result.prompt).toContain("Image 1");
+    expect(scope).toMatchObject({
+      organizationId: org,
+      actorUserId: ownerId,
+      operation: "video.draftPrompt",
+    });
+    const parts = state.llm.mock.calls[0][0].messages[1].content;
+    expect(
+      parts
+        .filter((part: any) => part.type === "image_url")
+        .map((part: any) => part.image_url.url)
+    ).toEqual([
+      `data:image/png;base64,${Buffer.from(`org-${org}/product.png`).toString("base64")}`,
+      `data:image/png;base64,${Buffer.from(`org-${org}/reference.png`).toString("base64")}`,
+    ]);
+    expect(parts[0].text).toContain("Creative theme");
+    expect(parts[1].text).toContain("A brass lamp.");
+    state.llm.mockClear();
+    await expect(
+      owner.video.draftPrompt({
+        organizationId: org,
+        setup: {
+          ...settings,
+          imageKeys: [`product_image:${foreignCatalogImageId}`],
+        },
+      })
+    ).rejects.toThrow(/unavailable/);
+    await expect(
+      reviewer.video.draftPrompt({ organizationId: org, setup: settings })
+    ).rejects.toThrow();
+    expect(state.llm).not.toHaveBeenCalled();
+    expect(await state.db.select().from(videoJobs)).toHaveLength(0);
+  });
+
+  it("applies video direction to the provider prompt and preserves old saved prompts", () => {
+    const settings = {
+      ...setup(),
+      direction: {
+        ...defaultVideoSetup.direction!,
+        theme: "holiday" as const,
+        mood: "warm" as const,
+        artStyle: "cinematic" as const,
+        setting: "lifestyle" as const,
+        placement: "left" as const,
+        extraDirection: "Snow outside the window",
+      },
+    };
+    const request = videoRequestBody(settings, ["image"]);
+    expect(request.prompt).toContain("Holiday");
+    expect(request.prompt).toContain("Cinematic");
+    expect(request.prompt).toContain("without people");
+    expect(request.prompt).toContain("toward the left");
+    expect(request.prompt).toContain("Snow outside the window");
+    expect(videoPrompt({ ...settings, direction: undefined })).toBe(
+      settings.prompt
+    );
+    expect(
+      publicVideoJob({ setup: { ...settings, direction: undefined } } as any)
+        .setup.direction
+    ).toBeNull();
+    expect(
+      videoSetupSchema.safeParse({
+        ...settings,
+        sourceVideoKey: `product_image:${catalogImageId}`,
+      }).success
+    ).toBe(false);
+  });
   it("keeps UGC settings and selected models when saving and reopening, without generating or charging", async () => {
     const settings = {
       ...setup(),

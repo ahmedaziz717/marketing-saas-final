@@ -9,9 +9,7 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Search,
   Sparkles,
-  Upload,
   Users,
   Volume2,
   VolumeX,
@@ -22,20 +20,16 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
 import { AssetUploadDialog } from "./AssetUploadDialog";
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
-import type { LibraryAsset } from "@shared/assetLibrary";
+import { VideoReferencePicker } from "./VideoReferencePicker";
+import { VideoCreativeDirection } from "./VideoCreativeDirection";
 import { studioDraftsHref } from "@shared/contentWorkflow";
 import {
   activeVideoStatuses,
   defaultVideoSetup,
+  defaultVideoDirection,
+  type VideoImageChoice,
   ugcGenerationMessage,
   videoModes,
   videoRatios,
@@ -49,162 +43,6 @@ const field =
   "mt-2 h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 type SavedVideo = { id: string; revision: number; status: string };
 
-function ReferencePicker({
-  kind,
-  assets,
-  selected,
-  limit,
-  onChange,
-  onClose,
-  onUpload,
-}: {
-  kind: "images" | "video";
-  assets: LibraryAsset[];
-  selected: string[];
-  limit: number;
-  onChange: (keys: string[]) => void;
-  onClose: () => void;
-  onUpload: () => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [origin, setOrigin] = useState("all");
-  const choices = assets.filter(
-    asset =>
-      (kind === "video"
-        ? asset.mimeType === "video/mp4"
-        : asset.mediaType === "image" && asset.mimeType !== "image/gif") &&
-      !["rejected", "changes_requested"].includes(asset.state) &&
-      (origin === "all" || asset.origin === origin) &&
-      asset.name.toLowerCase().includes(search.toLowerCase())
-  );
-  return (
-    <Dialog
-      open
-      onOpenChange={open => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="flex max-h-[88dvh] flex-col overflow-hidden sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {kind === "video"
-              ? "Choose a source video"
-              : "Choose reference images"}
-          </DialogTitle>
-          <DialogDescription>
-            {kind === "video"
-              ? "Use an MP4 clip of 4–30 seconds."
-              : `Choose up to ${limit} images from your workspace. The order matches the image numbers in your prompt.`}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-wrap gap-3">
-          <label className="relative min-w-0 flex-1">
-            <Search
-              size={16}
-              className="absolute left-3 top-3.5 text-muted-foreground"
-            />
-            <span className="sr-only">Search references</span>
-            <Input
-              className="h-11 pl-9"
-              value={search}
-              placeholder="Search your assets…"
-              onChange={e => setSearch(e.target.value)}
-            />
-          </label>
-          <select
-            aria-label="Reference origin"
-            className={field + " !mt-0 !w-auto"}
-            value={origin}
-            onChange={e => setOrigin(e.target.value)}
-          >
-            <option value="all">All assets</option>
-            <option value="generated">AI generated</option>
-            <option value="uploaded">Uploaded</option>
-          </select>
-          <Button variant="outline" className="h-11" onClick={onUpload}>
-            <Upload size={16} className="mr-2" />
-            Upload
-          </Button>
-        </div>
-        <div className="min-h-0 overflow-y-auto p-1">
-          {choices.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {choices.map(asset => {
-                const checked = selected.includes(asset.key);
-                return (
-                  <button
-                    key={asset.key}
-                    type="button"
-                    aria-label={asset.name}
-                    aria-pressed={checked}
-                    disabled={
-                      !checked && selected.length >= limit && kind !== "video"
-                    }
-                    onClick={() =>
-                      onChange(
-                        kind === "video"
-                          ? [asset.key]
-                          : checked
-                            ? selected.filter(key => key !== asset.key)
-                            : [...selected, asset.key]
-                      )
-                    }
-                    className={`relative min-w-0 overflow-hidden rounded-xl border-2 text-left disabled:opacity-40 ${checked ? "border-primary bg-primary/5" : "border-transparent bg-muted/40 hover:border-primary/40"}`}
-                  >
-                    {kind === "video" ? (
-                      <div className="flex aspect-video items-center justify-center bg-slate-900 text-white">
-                        <Film size={32} />
-                      </div>
-                    ) : (
-                      <img
-                        src={asset.url}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-square w-full object-contain p-2"
-                      />
-                    )}
-                    {checked && (
-                      <span className="absolute right-2 top-2 rounded-full bg-primary p-1 text-primary-foreground">
-                        <Check size={15} />
-                      </span>
-                    )}
-                    <span
-                      className="block truncate px-3 pt-2 text-sm font-medium"
-                      title={asset.name}
-                    >
-                      {asset.name}
-                    </span>
-                    <span className="block px-3 pb-3 pt-1 text-xs text-muted-foreground">
-                      {asset.width && asset.height
-                        ? `${asset.width} × ${asset.height}`
-                        : asset.mediaType}
-                      {asset.durationSeconds
-                        ? ` · ${asset.durationSeconds.toFixed(1)}s`
-                        : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              No matching references. Upload files or try another search.
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t pt-4">
-          <p className="text-sm text-muted-foreground">
-            {selected.length} selected
-          </p>
-          <Button onClick={onClose}>
-            Use selected {kind === "video" ? "video" : "images"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const { organizationId, membership } = useWorkspace();
   const scope = { organizationId: organizationId! };
@@ -217,6 +55,10 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const [setup, setSetup] = useState<VideoSetup>({
     ...defaultVideoSetup,
     category: requestedUgc ? "ugc" : "product",
+    direction: {
+      ...defaultVideoDirection,
+      setting: requestedUgc ? "people" : "product",
+    },
     title: requestedUgc ? "Untitled creator video" : defaultVideoSetup.title,
     campaignPlanId: initialPlanId,
   });
@@ -228,6 +70,11 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const [picker, setPicker] = useState<"images" | "video" | null>(null);
   const [upload, setUpload] = useState(false);
   const [uploadKind, setUploadKind] = useState<"images" | "video">("images");
+  const [undoPrompt, setUndoPrompt] = useState<string | null>(null);
+  const [promptPending, setPromptPending] = useState(false);
+  const setupRef = useRef(setup);
+  setupRef.current = setup;
+  const editorContext = useRef({ organizationId, selectedId, locked: false });
   const loadedId = useRef<string | null>(null);
   const utils = trpc.useUtils();
   const options = trpc.video.options.useQuery(scope, {
@@ -261,6 +108,29 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       ? detail.data
       : history.data?.find(job => job.id === selectedId);
   const locked = !!selectedId && (current?.status ?? saved?.status) !== "draft";
+  editorContext.current = { organizationId, selectedId, locked };
+  const catalogSelection = trpc.video.catalogImages.useQuery(
+    {
+      ...scope,
+      selectedOnly: true,
+      selectedKeys: setup.imageKeys.filter(key =>
+        key.startsWith("product_image:")
+      ),
+    },
+    {
+      enabled:
+        !!organizationId &&
+        setup.imageKeys.some(key => key.startsWith("product_image:")),
+    }
+  );
+  const referenceMap = new Map<string, VideoImageChoice>([
+    ...(assets.data ?? []).map(
+      asset => [asset.key, asset] as [string, VideoImageChoice]
+    ),
+    ...(catalogSelection.data?.items ?? []).map(
+      asset => [asset.key, asset] as [string, VideoImageChoice]
+    ),
+  ]);
   const active = !!current && activeVideoStatuses.includes(current.status);
   const assetMap = new Map(
     (assets.data ?? []).map(asset => [asset.key as string, asset])
@@ -288,6 +158,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   );
   const quoteCurrent = JSON.stringify(quoteSetup) === JSON.stringify(setup);
   const problem = videoSetupProblem(setup);
+  const promptDraft = trpc.video.draftPrompt.useMutation();
   const save = trpc.video.save.useMutation();
   const generate = trpc.video.generate.useMutation();
   const cancel = trpc.video.cancel.useMutation();
@@ -299,6 +170,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       setSaved(current);
       setDirty(false);
       setError("");
+      setUndoPrompt(null);
     }
   }, [current]);
   useEffect(() => {
@@ -307,7 +179,9 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       setSetup({
         ...defaultVideoSetup,
         category: requestedUgc ? "ugc" : "product",
-        title: requestedUgc ? "Untitled creator video" : defaultVideoSetup.title,
+        title: requestedUgc
+          ? "Untitled creator video"
+          : defaultVideoSetup.title,
         campaignPlanId: initialPlanId,
       });
       setSaved(null);
@@ -328,10 +202,49 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     if (completed) void utils.assetLibrary.studioList.invalidate(scope);
   }, [completed, organizationId]);
   const update = (changes: Partial<VideoSetup>) => {
-    setSetup(previous => ({ ...previous, ...changes }));
+    const next = { ...setupRef.current, ...changes };
+    setupRef.current = next;
+    setSetup(next);
     setDirty(true);
     setError("");
   };
+  async function draftFromImages() {
+    if (promptPending || locked || busy || !setup.imageKeys.length) return;
+    const requestSetup = setupRef.current;
+    const context = editorContext.current;
+    setPromptPending(true);
+    setError("");
+    try {
+      const result = await promptDraft.mutateAsync({
+        ...scope,
+        setup: requestSetup,
+      });
+      if (
+        setupRef.current !== requestSetup ||
+        editorContext.current.organizationId !== context.organizationId ||
+        editorContext.current.selectedId !== context.selectedId ||
+        editorContext.current.locked
+      ) {
+        toast.info(
+          "Your setup changed while the prompt was being generated. Your newer edits have been kept."
+        );
+        return;
+      }
+      setUndoPrompt(requestSetup.prompt);
+      update({ prompt: result.prompt });
+      toast.success(
+        "Video prompt generated. Review it before generating your video."
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The prompt could not be generated. Try again."
+      );
+    } finally {
+      setPromptPending(false);
+    }
+  }
   const refresh = () =>
     Promise.all([
       utils.video.list.invalidate(scope),
@@ -343,11 +256,16 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
       next ?? {
         ...defaultVideoSetup,
         category: ugc ? "ugc" : "product",
+        direction: {
+          ...defaultVideoDirection,
+          setting: ugc ? "people" : "product",
+        },
         title: ugc ? "Untitled creator video" : defaultVideoSetup.title,
         campaignPlanId: initialPlanId,
       }
     );
     setSaved(null);
+    setUndoPrompt(null);
     loadedId.current = null;
     setDirty(!!next);
     setError("");
@@ -427,7 +345,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   }
   const references = setup.imageKeys.map(key => ({
     key,
-    asset: assetMap.get(key),
+    asset: referenceMap.get(key),
   }));
   const source = setup.sourceVideoKey
     ? assetMap.get(setup.sourceVideoKey)
@@ -469,7 +387,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
           {
             ugc: true,
             title: "Creator videos",
-            subtitle: "Choose an AI presenter or model to bring your story to life",
+            subtitle:
+              "Choose an AI presenter or model to bring your story to life",
             icon: Users,
           },
         ].map(({ ugc, title, subtitle, icon: Icon }) => (
@@ -685,10 +604,17 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   )}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Use different angles, products, or visual references. Mention
-                  “Image 1” or “Image 2” in your description.
+                  Choose catalog product photos, image assets, or uploads.
+                  Mention “Image 1” or “Image 2” in your description.
                 </p>
               </div>
+              <VideoCreativeDirection
+                value={setup.direction}
+                onChange={direction => update({ direction })}
+                disabled={
+                  busy || locked || (!!selectedId && !current && !saved)
+                }
+              />
               {isUgc && (
                 <LifestylePersonPicker
                   setup={{ shot: "multiple", people: setup.people }}
@@ -703,6 +629,45 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                 />
               )}
               <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      promptPending || !setup.imageKeys.length || busy || locked
+                    }
+                    onClick={() => void draftFromImages()}
+                  >
+                    {promptPending ? (
+                      <Loader2 size={15} className="mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles size={15} className="mr-2" />
+                    )}
+                    {promptPending
+                      ? "Reading images…"
+                      : setup.prompt
+                        ? "Regenerate from images"
+                        : "Generate prompt from images"}
+                  </Button>
+                  {undoPrompt !== null && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline"
+                      onClick={() => {
+                        update({ prompt: undoPrompt });
+                        setUndoPrompt(null);
+                      }}
+                    >
+                      Undo prompt
+                    </button>
+                  )}
+                </div>
+                {!setup.imageKeys.length && (
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Add an image to have AI draft the scene and camera movement.
+                  </p>
+                )}
                 <label htmlFor="video-prompt" className="text-sm font-medium">
                   Describe your video{" "}
                   {setup.mode !== "motion" && (
@@ -1143,7 +1108,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
         </div>
       </>
       {picker && (
-        <ReferencePicker
+        <VideoReferencePicker
+          organizationId={organizationId!}
           kind={picker}
           assets={assets.data ?? []}
           selected={

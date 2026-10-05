@@ -94,11 +94,14 @@ afterEach(cleanup);
 describe("Creative Builder controls", () => {
   it("searches monthly themes and saves editable main and theme prompt layers", async () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
-    expect(screen.getByText(/124 directions/)).toBeTruthy();
+    expect(screen.getByText(/124 themes available/)).toBeTruthy();
+    expect(screen.queryByLabelText("Search creative themes")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.change(screen.getByLabelText("Search creative themes"), {
       target: { value: "Cyber Monday" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Cyber Monday" }));
+    fireEvent.click(screen.getByText("Customize prompts"));
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(CREATIVE_THEMES["cyber-monday"].direction);
@@ -148,6 +151,7 @@ describe("Creative Builder controls", () => {
       { id: 44, name: "Saved Cyber", setup: savedSetup, updatedAtMs: 55 },
     ];
     render(<CreativeBuilder onGenerated={vi.fn()} />);
+    fireEvent.click(screen.getByText("Customize prompts"));
     await waitFor(() =>
       expect(
         (screen.getByLabelText("Main prompt") as HTMLTextAreaElement).value
@@ -156,16 +160,12 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(savedSetup.themePrompt);
+    expect((screen.getByLabelText("Mood") as HTMLSelectElement).value).toBe(
+      "premium"
+    );
     expect(
-      screen
-        .getByRole("button", { name: "Premium" })
-        .getAttribute("aria-pressed")
-    ).toBe("true");
-    expect(
-      screen
-        .getByRole("button", { name: "Editorial" })
-        .getAttribute("aria-pressed")
-    ).toBe("true");
+      (screen.getByLabelText("Art style") as HTMLSelectElement).value
+    ).toBe("editorial");
     expect(
       (screen.getByLabelText("Product setting") as HTMLSelectElement).value
     ).toBe("multiple");
@@ -182,6 +182,7 @@ describe("Creative Builder controls", () => {
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       savedSetup.copy.headline
     );
+    fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.click(screen.getByRole("button", { name: "Holiday" }));
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       CREATIVE_THEMES.holiday.headline
@@ -224,12 +225,14 @@ describe("Creative Builder controls", () => {
     fireEvent.change(screen.getByLabelText("Call to action"), {
       target: { value: "My exact CTA" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.click(
       screen.getByRole("button", { name: CREATIVE_THEMES.spotlight.name })
     );
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       "My exact headline"
     );
+    fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.click(
       screen.getByRole("button", { name: CREATIVE_THEMES.holiday.name })
     );
@@ -260,8 +263,12 @@ describe("Creative Builder controls", () => {
     });
     expect(CREATIVE_MOODS).toHaveLength(8);
     expect(CREATIVE_ART_STYLES).toHaveLength(8);
-    fireEvent.click(screen.getByRole("button", { name: "Vibrant" }));
-    fireEvent.click(screen.getByRole("button", { name: "Animation" }));
+    fireEvent.change(screen.getByLabelText("Mood"), {
+      target: { value: "vibrant" },
+    });
+    fireEvent.change(screen.getByLabelText("Art style"), {
+      target: { value: "animation" },
+    });
     const setting = screen.getByLabelText("Product setting");
     expect(
       Array.from((setting as HTMLSelectElement).options).map(

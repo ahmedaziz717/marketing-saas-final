@@ -22,12 +22,17 @@ import { storageGetBase64 } from "../storage";
 import { mp4Info } from "./videoMedia";
 import { higgsfieldConfigured } from "./higgsfield";
 import { appendActivity } from "./activity";
+import { readVideoCatalogImage } from "./videoCatalog";
 
 export type VideoJob = typeof videoJobs.$inferSelect;
 export function publicVideoJob(job: VideoJob) {
   return {
     id: job.id,
-    setup: { ...defaultVideoSetup, ...job.setup },
+    setup: {
+      ...defaultVideoSetup,
+      ...job.setup,
+      direction: job.setup.direction ?? null,
+    },
     revision: job.revision,
     status: job.status,
     credits: job.credits,
@@ -142,6 +147,12 @@ export async function resolveVideoReferences(
       : []),
   ];
   for (const key of keys) {
+    if (key.startsWith("product_image:")) {
+      refs.push(
+        (await readVideoCatalogImage(db, organizationId, key)).reference
+      );
+      continue;
+    }
     const asset = await readLibraryAsset(db, organizationId, key),
       video = key === setup.sourceVideoKey && setup.mode !== "create";
     if (
@@ -247,9 +258,21 @@ export async function resolveVideoReferences(
 }
 export async function validateVideoReferences(
   db: LibraryDatabase | LibraryTransaction,
-  job: VideoJob
+  job: Pick<VideoJob, "organizationId" | "references">
 ) {
   for (const ref of job.references) {
+    if (ref.key.startsWith("product_image:")) {
+      const current = await readVideoCatalogImage(
+        db,
+        job.organizationId,
+        ref.key
+      );
+      if (current.reference.fingerprint !== ref.fingerprint)
+        throw new Error(
+          "A product reference changed. Prepare a new draft with the current product images."
+        );
+      continue;
+    }
     const asset = await readLibraryAsset(db, job.organizationId, ref.key);
     if (
       asset.fingerprint !== ref.fingerprint ||

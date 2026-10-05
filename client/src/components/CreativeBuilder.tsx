@@ -4,32 +4,16 @@ import { isPeopleShot } from "@shared/lifestylePeople";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
-  Box,
-  Brush,
-  Camera,
   Check,
-  Clapperboard,
-  Film,
-  Flame,
-  Gem,
   ImageIcon,
-  Layers,
   Loader2,
   Maximize2,
-  Moon,
-  Newspaper,
   PackageSearch,
-  PartyPopper,
   RotateCcw,
   Save,
-  ScanLine,
   Search,
-  Square,
   Sparkles,
-  Sun,
   X,
-  Zap,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -53,6 +37,7 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "./ui/button";
 import { CreativeThemeLibrary } from "./CreativeThemeLibrary";
+import { CreativeDirectionSelect } from "./CreativeDirectionSelect";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import {
@@ -68,71 +53,6 @@ const selectClass =
 const labelClass = "mb-2 block text-sm font-medium";
 const sectionClass = "surface p-5 sm:p-6";
 type Props = { onGenerated: () => void; initialPlanId?: number };
-
-const visualDirectionIcons: Record<string, LucideIcon> = {
-  sparkles: Sparkles,
-  zap: Zap,
-  moon: Moon,
-  square: Square,
-  flame: Flame,
-  sun: Sun,
-  party: PartyPopper,
-  gem: Gem,
-  camera: Camera,
-  clapperboard: Clapperboard,
-  brush: Brush,
-  box: Box,
-  newspaper: Newspaper,
-  film: Film,
-  layers: Layers,
-  scan: ScanLine,
-};
-
-function VisualDirectionOptions<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: ReadonlyArray<{
-    id: T;
-    name: string;
-    icon: string;
-    direction: string;
-  }>;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div>
-      <span className={labelClass}>{label}</span>
-      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
-        {options.map(option => {
-          const Icon = visualDirectionIcons[option.icon] ?? Sparkles;
-          const selected = option.id === value;
-          return (
-            <button
-              type="button"
-              key={option.id}
-              aria-pressed={selected}
-              title={option.direction}
-              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                selected
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5"
-              }`}
-              onClick={() => onChange(option.id)}
-            >
-              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-              {option.name}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   const { organizationId, membership } = useWorkspace();
@@ -529,6 +449,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
             </h2>
             <CreativeThemeLibrary
               selectedTheme={setup.theme}
+              disabled={busy || !canEdit}
               onSelect={theme => {
                 const next = applyCreativeTheme(setupRef.current, theme.id);
                 if (next === setupRef.current) return;
@@ -536,91 +457,101 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 change(next);
               }}
             />
-            <div className="mt-5 grid gap-4 rounded-2xl border border-border bg-muted/25 p-4">
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <label
-                      className="text-sm font-medium"
-                      htmlFor="creative-base-prompt"
-                    >
-                      Main prompt
-                    </label>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Applied to every creative in this setup.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      change({
-                        ...setup,
-                        basePrompt: DEFAULT_CREATIVE_BASE_PROMPT,
-                      })
-                    }
-                  >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                    Reset
-                  </Button>
-                </div>
-                <Textarea
-                  id="creative-base-prompt"
-                  value={setup.basePrompt}
-                  maxLength={8000}
-                  rows={6}
-                  onChange={event =>
-                    change({ ...setup, basePrompt: event.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <label
-                      className="text-sm font-medium"
-                      htmlFor="creative-theme-prompt"
-                    >
-                      Theme prompt
-                    </label>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Starts from the selected theme and remains fully editable.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      change({
-                        ...setup,
-                        themePrompt: getCreativeTheme(setup.theme).direction,
-                      })
-                    }
-                  >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                    Reset
-                  </Button>
-                </div>
-                <Textarea
-                  id="creative-theme-prompt"
-                  value={
-                    setup.themePrompt ?? getCreativeTheme(setup.theme).direction
-                  }
-                  maxLength={4000}
-                  rows={4}
-                  onChange={event =>
-                    change({ ...setup, themePrompt: event.target.value })
-                  }
-                />
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Prompt edits guide styling and composition only. Approved
-                product facts, claims, logo rules, and publishing safeguards
-                remain authoritative.
+            <details className="mt-3 rounded-xl border bg-muted/20 p-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Customize prompts
+              </summary>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Optional: adjust the main instructions and selected theme.
               </p>
-            </div>
+              <div className="mt-4 grid gap-4">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <label
+                        className="text-sm font-medium"
+                        htmlFor="creative-base-prompt"
+                      >
+                        Main prompt
+                      </label>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Applied to every creative in this setup.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        change({
+                          ...setup,
+                          basePrompt: DEFAULT_CREATIVE_BASE_PROMPT,
+                        })
+                      }
+                    >
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                      Reset
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="creative-base-prompt"
+                    value={setup.basePrompt}
+                    maxLength={8000}
+                    rows={6}
+                    onChange={event =>
+                      change({ ...setup, basePrompt: event.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <label
+                        className="text-sm font-medium"
+                        htmlFor="creative-theme-prompt"
+                      >
+                        Theme prompt
+                      </label>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Starts from the selected theme and remains fully
+                        editable.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        change({
+                          ...setup,
+                          themePrompt: getCreativeTheme(setup.theme).direction,
+                        })
+                      }
+                    >
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                      Reset
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="creative-theme-prompt"
+                    value={
+                      setup.themePrompt ??
+                      getCreativeTheme(setup.theme).direction
+                    }
+                    maxLength={4000}
+                    rows={4}
+                    onChange={event =>
+                      change({ ...setup, themePrompt: event.target.value })
+                    }
+                  />
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Prompt edits guide styling and composition only. Approved
+                  product facts, claims, logo rules, and publishing safeguards
+                  remain authoritative.
+                </p>
+              </div>
+            </details>
           </section>
           <section className={sectionClass}>
             <h2 className="mb-3 text-base font-semibold">
@@ -844,10 +775,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   Business profile:{" "}
                   {options.data?.brand?.businessProfile?.summary ||
                     "Add promotion details above or complete your business profile."}{" "}
-                  <Link
-                    href="/app/brand"
-                    className="text-primary underline"
-                  >
+                  <Link href="/app/brand" className="text-primary underline">
                     Edit business profile
                   </Link>
                 </p>
@@ -1053,14 +981,14 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
             <h2 className="mb-4 text-base font-semibold">
               4. Creative direction
             </h2>
-            <div className="grid gap-5">
-              <VisualDirectionOptions
+            <div className="grid gap-5 sm:grid-cols-2">
+              <CreativeDirectionSelect
                 label="Mood"
                 value={setup.mood}
                 options={CREATIVE_MOODS}
                 onChange={mood => change({ ...setupRef.current, mood })}
               />
-              <VisualDirectionOptions
+              <CreativeDirectionSelect
                 label="Art style"
                 value={setup.artStyle}
                 options={CREATIVE_ART_STYLES}

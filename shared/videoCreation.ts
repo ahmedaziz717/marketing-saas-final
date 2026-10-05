@@ -1,5 +1,17 @@
 import { z } from "zod";
-import { personReferenceKey, personReferenceSchema } from "./creativeBuilder";
+import {
+  CREATIVE_ART_STYLES,
+  CREATIVE_MOODS,
+  getCreativeArtStyle,
+  getCreativeMood,
+  personReferenceKey,
+  personReferenceSchema,
+} from "./creativeBuilder";
+import {
+  CREATIVE_THEMES,
+  getCreativeTheme,
+  type CreativeThemeId,
+} from "./creativeThemes";
 
 export const ugcGenerationMessage =
   "Creator video generation is coming next. You can choose models and save your video setup now.";
@@ -41,6 +53,50 @@ export const videoRatios = [
 ] as const;
 export const videoResolutions = ["480p", "720p", "1080p"] as const;
 const assetKey = z.string().regex(/^(asset|creative):[1-9][0-9]*$/);
+export const videoImageKey = z
+  .string()
+  .regex(/^(asset|creative|product_image):[1-9][0-9]*$/);
+export const videoDirectionSchema = z.object({
+  theme: z.custom<CreativeThemeId>(
+    value => typeof value === "string" && Boolean(CREATIVE_THEMES[value])
+  ),
+  themePrompt: z.string().trim().max(4000).default(""),
+  mood: z.enum(
+    CREATIVE_MOODS.map(option => option.id) as [
+      "clean",
+      ...Array<(typeof CREATIVE_MOODS)[number]["id"]>,
+    ]
+  ),
+  artStyle: z.enum(
+    CREATIVE_ART_STYLES.map(option => option.id) as [
+      "realistic",
+      ...Array<(typeof CREATIVE_ART_STYLES)[number]["id"]>,
+    ]
+  ),
+  setting: z.enum(["product", "lifestyle", "people"]).default("product"),
+  placement: z.enum(["auto", "left", "center", "right"]).default("auto"),
+  extraDirection: z.string().trim().max(4000).default(""),
+});
+export type VideoDirection = z.infer<typeof videoDirectionSchema>;
+export const defaultVideoDirection: VideoDirection = {
+  theme: "spotlight",
+  themePrompt: "",
+  mood: "clean",
+  artStyle: "realistic",
+  setting: "product",
+  placement: "auto",
+  extraDirection: "",
+};
+export type VideoImageChoice = {
+  key: string;
+  name: string;
+  url: string;
+  detail?: string;
+  origin: "catalog" | "uploaded" | "generated";
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+};
 export const videoSetupSchema = z
   .object({
     category: z.enum(["product", "ugc"]).default("product"),
@@ -48,7 +104,8 @@ export const videoSetupSchema = z
     title: z.string().trim().min(1).max(160),
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
-    imageKeys: z.array(assetKey).max(9),
+    imageKeys: z.array(videoImageKey).max(9),
+    direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
     duration: z.number().int().min(4).max(30),
     aspectRatio: z.enum(videoRatios),
@@ -81,6 +138,7 @@ export const defaultVideoSetup: VideoSetup = {
   mode: "create",
   prompt: "",
   imageKeys: [],
+  direction: defaultVideoDirection,
   sourceVideoKey: null,
   duration: 5,
   aspectRatio: "16:9",
@@ -147,6 +205,31 @@ export function videoEndpoint(setup: VideoSetup) {
   return `bytedance/seedance-2.5/${task}`;
 }
 
+/** Older saved jobs keep their exact prompt unless creative direction was selected. */
+export function videoPrompt(setup: VideoSetup) {
+  if (!setup.direction) return setup.prompt;
+  const direction = setup.direction,
+    theme = getCreativeTheme(direction.theme);
+  return [
+    setup.prompt,
+    `Creative theme — ${theme.name}: ${direction.themePrompt || theme.direction}`,
+    `Mood — ${getCreativeMood(direction.mood).name}: ${getCreativeMood(direction.mood).direction}`,
+    `Art style — ${getCreativeArtStyle(direction.artStyle).name}: ${getCreativeArtStyle(direction.artStyle).direction}`,
+    direction.setting === "product"
+      ? "Setting: focus on the product, service, or brand concept; no people."
+      : direction.setting === "lifestyle"
+        ? "Setting: a relevant lifestyle environment without people."
+        : "Setting: a relevant lifestyle environment with people.",
+    direction.placement === "auto"
+      ? "Compose the subject naturally for the selected video format."
+      : `Keep the main subject toward the ${direction.placement} of the frame.`,
+    direction.extraDirection,
+    "Adapt this visual direction into coherent motion. Preserve reference subjects, product geometry and materials. Theme names and examples are visual inspiration, not factual offers. Do not invent discounts, claims, prices, logos, or on-screen copy. Add speech or text only when explicitly requested in the video description.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /** Send only fields documented for this endpoint. Hidden controls never leak into requests. */
 export function videoRequestBody(
   setup: VideoSetup,
@@ -154,7 +237,8 @@ export function videoRequestBody(
   source?: string
 ) {
   const body: Record<string, unknown> = { resolution: setup.resolution };
-  if (setup.prompt) body.prompt = setup.prompt;
+  const prompt = videoPrompt(setup);
+  if (prompt) body.prompt = prompt;
   if (images.length) body.image_urls = images;
   if (setup.mode === "motion") return { ...body, video_url: source };
   body.output_format = "mp4";

@@ -29,10 +29,57 @@ import {
   validateVideoPeople,
 } from "../lib/videoJobs";
 import { videoQuote, videoRate } from "../lib/videoPricing";
+import { listVideoCatalogImages } from "../lib/videoCatalog";
+import { draftVideoPrompt } from "../lib/videoPrompt";
+import { categorizeGenerationError } from "../lib/generation";
 
 const scope = z.object({ organizationId: z.number().int().positive() });
 const reference = scope.extend({ id: z.string().uuid() });
 export const videoRouter = router({
+  catalogImages: protectedProcedure
+    .input(
+      scope.extend({
+        search: z.string().trim().max(200).default(""),
+        offset: z.number().int().min(0).max(100000).default(0),
+        selectedOnly: z.boolean().default(false),
+        selectedKeys: z
+          .array(z.string().regex(/^product_image:[1-9][0-9]*$/))
+          .max(9)
+          .default([]),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...studioRoles,
+      ]);
+      return listVideoCatalogImages(
+        await libraryDatabase(),
+        input.organizationId,
+        input
+      );
+    }),
+  draftPrompt: protectedProcedure
+    .input(scope.extend({ setup: videoSetupSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...studioRoles,
+      ]);
+      try {
+        return await draftVideoPrompt(
+          await libraryDatabase(),
+          input.organizationId,
+          input.setup
+        );
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: categorizeGenerationError(
+            error instanceof Error ? error.message : ""
+          ).userMessage,
+        });
+      }
+    }),
   options: protectedProcedure.input(scope).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
       ...studioRoles,
