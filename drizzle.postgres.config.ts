@@ -12,6 +12,7 @@ export default defineConfig({
     "./drizzle/websiteSchema.ts",
     "./drizzle/platformSchema.ts",
     "./drizzle/videoSchema.ts",
+    "./drizzle/workflowSchema.ts",
   ],
   out: "./drizzle/postgres",
   dialect: "postgresql",

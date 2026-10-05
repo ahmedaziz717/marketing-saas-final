@@ -9,6 +9,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProductOverviewPage from "./pages/ProductOverviewPage";
 import PlannedFeaturePage from "./pages/PlannedFeaturePage";
+import CreativeWorkflowsPage from "./pages/CreativeWorkflowsPage";
 import { PRODUCT_FEATURES } from "@shared/frameProduct";
 import PlatformWebsitePage from "./pages/PlatformWebsitePage";
 import Home from "./pages/Home";
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/app/roadmap" component={ProductOverviewPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={CreativesPage} />
+      <Route path="/app/creatives/workflows" component={CreativeWorkflowsPage} />
       {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(
         view => (
           <Route

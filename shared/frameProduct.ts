@@ -32,7 +32,7 @@ export const PRODUCT_FEATURES = [
     id: "creative_workflows",
     name: "Creative workflows",
     stage: "create",
-    availability: "planned",
+    availability: "available",
     href: "/app/creatives/workflows",
     description:
       "Connect ideas, generation, editing, and placement versions in a reusable visual workflow. Use the same brand context and assets as the creation apps.",

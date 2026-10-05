@@ -35,7 +35,7 @@ export function CreateNavigation({ planId }: { planId?: number }) {
           href: "/app/creatives/workflows",
           icon: Workflow,
           active: workflows,
-          planned: true,
+          planned: false,
         },
       ].map(({ label, href, icon: Icon, active, planned }) => (
         <Link

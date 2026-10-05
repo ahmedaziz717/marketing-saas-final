@@ -173,7 +173,7 @@ it("offers six working apps, honest roadmap labels, and shared campaign context"
     "Apps",
     "Drafts",
     "Campaign plans",
-    "WorkflowsPlanned",
+    "Workflows",
   ]);
   expect(
     nav.getByRole("link", { name: "Apps" }).getAttribute("aria-current")

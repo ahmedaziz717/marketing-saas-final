@@ -56,7 +56,6 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
       {
         label: "Creative workflows",
         path: "/app/creatives/workflows",
-        planned: true,
       },
     ],
   },
