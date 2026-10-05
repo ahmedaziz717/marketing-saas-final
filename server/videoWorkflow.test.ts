@@ -490,8 +490,14 @@ describe("durable video generation", () => {
       .mockRejectedValueOnce(new HiggsfieldError(0, true, "Timeout"))
       .mockResolvedValueOnce({
         ...accepted,
-        status_url: accepted.status_url.replace("https:", "http:"),
-        cancel_url: accepted.cancel_url.replace("https:", "http:"),
+        status_url: accepted.status_url.replace(
+          "api.higgsfield.ai",
+          "different-host.example"
+        ),
+        cancel_url: accepted.cancel_url.replace(
+          "api.higgsfield.ai",
+          "different-host.example"
+        ),
       });
     await tick();
     await tick();

@@ -92,12 +92,12 @@ it("blocks unsupported endpoints and private result downloads before external IO
   );
   expect(request).not.toHaveBeenCalled();
 });
-it("upgrades API response links to HTTPS while preserving the request and security boundaries", async () => {
+it("tracks a provider request on the documented API without forwarding credentials to response-link hosts", async () => {
   const urls = providerUrls({
     request_id: id,
     status: "queued",
-    status_url: `http://api.higgsfield.ai/requests/${id}/status`,
-    cancel_url: `http://api.higgsfield.ai/requests/${id}/cancel`,
+    status_url: `https://different-host.example/requests/${id}/status`,
+    cancel_url: `https://different-host.example/requests/${id}/cancel`,
   });
   expect(urls.providerStatusUrl).toBe(
     `https://api.higgsfield.ai/requests/${id}/status`

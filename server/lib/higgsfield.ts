@@ -38,9 +38,6 @@ export function requestUrl(
   } catch {
     throw new HiggsfieldUrlError({ action, reason: "malformed_url" });
   }
-  // The API may return an http URL behind its proxy. Never send credentials
-  // over HTTP: upgrade only the exact API host before validating the full route.
-  if (parsed.origin === "http://api.higgsfield.ai") parsed.protocol = "https:";
   if (
     parsed.origin !== API ||
     parsed.username ||
@@ -176,18 +173,13 @@ export async function cancelHiggsfield(id: string, url: string) {
 }
 export function providerUrls(result: HiggsfieldResult) {
   const id = result.request_id;
+  // Resolve the validated request ID through the documented API routes.
+  // Response links can name a different host; never forward credentials there.
+  // https://docs.higgsfield.ai/docs/api-reference/requests/get-request-status
   return {
     providerRequestId: id,
-    providerStatusUrl: requestUrl(
-      result.status_url ?? `${API}/requests/${id}/status`,
-      id,
-      "status"
-    ),
-    providerCancelUrl: requestUrl(
-      result.cancel_url ?? `${API}/requests/${id}/cancel`,
-      id,
-      "cancel"
-    ),
+    providerStatusUrl: requestUrl(`${API}/requests/${id}/status`, id, "status"),
+    providerCancelUrl: requestUrl(`${API}/requests/${id}/cancel`, id, "cancel"),
   };
 }
 
