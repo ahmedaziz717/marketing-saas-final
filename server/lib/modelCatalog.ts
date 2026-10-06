@@ -250,6 +250,72 @@ export async function syncOpenAIModelAvailability(db: Database) {
     checkedAtMs: now,
   };
 }
+/** One complete action at the catalog defaults; never expose wholesale quotes
+ * through the customer catalog. Token-based image quotes remain provisional.
+ */
+export function defaultModelActionQuote(
+  model: ModelDefinition,
+  base: ProviderRate
+) {
+  const rate = configuredModelRate(model, base);
+  const defaults = modelDefaults(model);
+  if (model.kind === "image") {
+    const tokenBased =
+      model.provider === "openai" && rate.perRequestUsd == null;
+    const costMicros =
+      rate.perRequestUsd != null
+        ? Math.round(rate.perRequestUsd * 1e6)
+        : (rate.estimatedCostMicros ?? null);
+    return {
+      costMicros,
+      credits: estimatedActionCredits(rate),
+      basis: tokenBased ? "Configured estimate" : "Default settings estimate",
+      settings: [
+        "1 image",
+        ...Object.entries(defaults).map(
+          ([key, value]) => `${key.replaceAll("_", " ")}: ${value}`
+        ),
+      ].join(" · "),
+    };
+  }
+  const seconds = Number(defaults.duration ?? 5);
+  const source = requiresVideo(model);
+  const refs: VideoReference[] = source
+    ? [
+        {
+          key: "asset:1",
+          name: "Source",
+          mimeType: "video/mp4",
+          storageKey: "",
+          fingerprint: "",
+          durationSeconds: seconds,
+          width: 1280,
+          height: 720,
+        },
+      ]
+    : [];
+  const resolution = String(defaults.resolution ?? "720p");
+  const aspectRatio = String(defaults.aspect_ratio ?? "16:9");
+  const quote = videoQuote(
+    {
+      ...defaultVideoSetup,
+      modelId: model.id,
+      mode: modelVideoMode(model),
+      duration: seconds,
+      resolution,
+      aspectRatio,
+      sourceVideoKey: source ? "asset:1" : null,
+    },
+    refs,
+    rate
+  );
+  return {
+    costMicros: quote.costMicros,
+    credits: quote.credits,
+    basis: "Default settings estimate",
+    settings: `${seconds}s video · ${resolution} · ${aspectRatio}${source ? ` · ${seconds}s source at 1280 × 720` : ""}${defaults.sound != null ? ` · sound: ${defaults.sound}` : ""}`,
+  };
+}
 export async function publicModelCatalog(db: Database) {
   const [settings, rows, policy] = await Promise.all([
     db.select().from(aiModelSettings),
@@ -294,43 +360,13 @@ export async function publicModelCatalog(db: Database) {
           )
         )
           reason ||= "Pricing verification required";
-        const rate = configuredModelRate(model, {
+        const rate = {
           ...base,
           billingMode: "cost",
           markupPercent: base.markupPercent ?? policy.markupPercent,
           creditValueMicros: policy.creditValueMicros,
-        });
-        if (model.kind === "image") credits = estimatedActionCredits(rate);
-        else {
-          const source = requiresVideo(model);
-          const refs: VideoReference[] = source
-            ? [
-                {
-                  key: "asset:1",
-                  name: "Source",
-                  mimeType: "video/mp4",
-                  storageKey: "",
-                  fingerprint: "",
-                  durationSeconds: seconds,
-                  width: 1280,
-                  height: 720,
-                },
-              ]
-            : [];
-          credits = videoQuote(
-            {
-              ...defaultVideoSetup,
-              modelId: model.id,
-              mode: modelVideoMode(model),
-              duration: seconds,
-              resolution: String(defaults.resolution ?? "720p"),
-              aspectRatio: String(defaults.aspect_ratio ?? "16:9"),
-              sourceVideoKey: source ? "asset:1" : null,
-            },
-            refs,
-            rate
-          ).credits;
-        }
+        } satisfies ProviderRate;
+        credits = defaultModelActionQuote(model, rate).credits;
       } catch {
         reason ||= "Pricing verification required";
       }

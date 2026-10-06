@@ -70,6 +70,26 @@ it("limits offering changes to platform admins and rejects unknown models", asyn
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 
+it("exposes wholesale action estimates only to platform admins while keeping customer quotes consistent", async () => {
+  await expect(owner.adminCatalog()).rejects.toMatchObject({
+    code: "FORBIDDEN",
+  });
+  const adminModels = (await admin.adminCatalog()).models;
+  const customerModels = await owner.catalog({ organizationId: 1 });
+  const adminImage = adminModels.find(m => m.id === "openai:gpt-image-2")!;
+  expect(adminImage.actionEstimate).toMatchObject({
+    costMicros: 200000,
+    credits: adminImage.estimatedCredits,
+    basis: "Configured estimate",
+  });
+  for (const model of customerModels) {
+    expect(model).not.toHaveProperty("actionEstimate");
+    expect(model.estimatedCredits).toBe(
+      adminModels.find(m => m.id === model.id)?.actionEstimate?.credits ?? null
+    );
+  }
+});
+
 it("hides disabled models, blocks saved selections, and preserves their route, pricing, and verification", async () => {
   const id = "openai:gpt-image-2.5-flare";
   const routeId = "higgsfield:marketing-studio/image/flare";

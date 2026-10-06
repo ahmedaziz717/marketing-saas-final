@@ -22,6 +22,8 @@ import {
 } from "../../shared/modelCatalog";
 import {
   compatibleRoutes,
+  defaultModelActionQuote,
+  defaultModelRate,
   imageModelQuote,
   initializeModelCatalog,
   modelRate,
@@ -111,7 +113,29 @@ export const modelsRouter = router({
     const policy = await getCreditPolicy(db),
       settings = await db.select().from(aiModelSettings),
       rates = await db.select().from(providerRates);
-    return { policy, models: await publicModelCatalog(db), settings, rates };
+    const models = (await publicModelCatalog(db)).map(model => {
+      const definition = generationModel(model.routeId)!;
+      const base =
+        rates.find(
+          r =>
+            r.provider === definition.provider &&
+            r.model === definition.providerModel
+        )?.config ?? defaultModelRate(definition);
+      let actionEstimate: ReturnType<typeof defaultModelActionQuote> | null =
+        null;
+      try {
+        actionEstimate = defaultModelActionQuote(definition, {
+          ...base,
+          billingMode: "cost",
+          markupPercent: base.markupPercent ?? policy.markupPercent,
+          creditValueMicros: policy.creditValueMicros,
+        });
+      } catch {
+        /* Unpriced models stay unpriced; never display zero cost. */
+      }
+      return { ...model, actionEstimate };
+    });
+    return { policy, models, settings, rates };
   }),
   savePolicy: adminProcedure
     .input(creditPolicySchema)

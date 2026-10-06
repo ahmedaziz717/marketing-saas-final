@@ -3,6 +3,7 @@ import {
   defaultCreditPolicy,
   retailCredits,
   estimatedActionCredits,
+  actionPriceBreakdown,
 } from "../../shared/aiCredits";
 import {
   generationModel,
@@ -19,12 +20,69 @@ import {
   configuredModelRate,
   defaultModelRate,
   compatibleRoutes,
+  defaultModelActionQuote,
 } from "./modelCatalog";
 import { videoQuote } from "./videoPricing";
 import {
   newWorkflowNode,
   workflowRunProblem,
 } from "../../shared/creativeWorkflow";
+
+it("shows wholesale credit equivalents without rounding before markup, and discloses the rounded retail dollar amount", () => {
+  expect(actionPriceBreakdown(5700, defaultCreditPolicy)).toEqual({
+    providerUsd: 0.0057,
+    providerCredits: 0.57,
+    retailUsd: 0.0114,
+    retailCredits: 2,
+    chargedUsd: 0.02,
+  });
+  expect(
+    actionPriceBreakdown(200000, {
+      markupPercent: 50,
+      creditValueMicros: 20000,
+    })
+  ).toEqual({
+    providerUsd: 0.2,
+    providerCredits: 10,
+    retailUsd: 0.3,
+    retailCredits: 15,
+    chargedUsd: 0.3,
+  });
+  expect(actionPriceBreakdown(0, defaultCreditPolicy).retailCredits).toBe(0);
+  expect(() =>
+    actionPriceBreakdown(5000, { ...defaultCreditPolicy, creditValueMicros: 0 })
+  ).toThrow();
+});
+
+it("quotes a whole default video, preserves provider overrides, and labels configured image estimates", () => {
+  const kling = generationModel(
+    "higgsfield:kling-video/v3.0/pro/text-to-video"
+  )!;
+  const rate = { ...defaultModelRate(kling), ...defaultCreditPolicy };
+  expect(defaultModelActionQuote(kling, rate)).toMatchObject({
+    costMicros: 840000,
+    credits: 168,
+    settings: expect.stringContaining("5s video"),
+  });
+  expect(
+    defaultModelActionQuote(kling, { ...rate, perSecondUsd: 0.1 })
+  ).toMatchObject({ costMicros: 500000, credits: 100 });
+  expect(
+    defaultModelActionQuote(kling, { ...rate, perRequestUsd: 0.3 })
+  ).toMatchObject({ costMicros: 300000, credits: 60 });
+  const image = generationModel("openai:gpt-image-2")!;
+  expect(
+    defaultModelActionQuote(image, {
+      ...defaultModelRate(image),
+      ...defaultCreditPolicy,
+    })
+  ).toMatchObject({
+    costMicros: 200000,
+    credits: 40,
+    basis: "Configured estimate",
+    settings: "1 image · quality: medium",
+  });
+});
 
 it("applies 100% markup, rounds once per action, and allows policy overrides", () => {
   expect(retailCredits(200000, defaultCreditPolicy)).toBe(40);

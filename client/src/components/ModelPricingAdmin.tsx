@@ -11,7 +11,11 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { generationModel, generationModels } from "@shared/modelCatalog";
-import { defaultCreditPolicy, retailCredits } from "@shared/aiCredits";
+import {
+  actionPriceBreakdown,
+  defaultCreditPolicy,
+  retailCredits,
+} from "@shared/aiCredits";
 import type { ProviderRate } from "@shared/platformAdmin";
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -19,6 +23,8 @@ const money = (n: number) =>
     currency: "USD",
     maximumFractionDigits: 4,
   }).format(n);
+const creditNumber = (n: number) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(n);
 function ImageTokenRates({
   rate,
   multiplier = 1,
@@ -278,23 +284,41 @@ export function ModelPricingAdmin() {
         it off to hide it from customer choices and block new generation
         requests. Changes save immediately.
       </p>
-      <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-        OpenAI image prices are based on text input, image input, and image
-        output tokens. Cost per image varies with the model, quality,
-        dimensions, and references. Upfront credit reservations are provisional;
-        completed requests settle from reported usage at their saved rates and
-        markup.
-      </p>
+      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground space-y-2">
+        <p className="font-medium text-foreground">
+          Per-action pricing · 1 credit ={" "}
+          {money(currentPolicy.creditValueMicros / 1e6)}
+        </p>
+        <p>
+          Each row shows the estimated provider cost and retail price for one
+          image or one complete video at the settings listed. Cost credits are
+          the dollar equivalent before markup. Retail credits round up once per
+          action; their dollar equivalent is shown when rounding changes the
+          price.
+        </p>
+        <p>
+          OpenAI action estimates use the configured estimate shown below.
+          Models can share that estimate even when their token rates differ.
+          Final cost depends on actual input and output tokens, quality,
+          dimensions, and references.
+        </p>
+        {policy && (
+          <p className="font-medium text-primary">
+            Previewing unsaved pricing defaults. Save above to apply them.
+          </p>
+        )}
+      </div>
       <section className="surface overflow-x-auto">
-        <table className="w-full min-w-[800px] text-left text-sm">
+        <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
               {[
                 "Model",
                 "Offer this model",
-                "API provider",
-                "Provider pricing",
-                "Retail pricing / credits",
+                "Cost / action (USD)",
+                "Cost in credits",
+                "Retail / action (USD)",
+                "Retail credits",
                 "Markup",
                 "Availability",
                 "",
@@ -321,40 +345,70 @@ export function ModelPricingAdmin() {
                       r.provider === definition.provider &&
                       r.model === definition.providerModel
                   )?.config;
-                const rules = rate?.costRules ?? definition.costRules;
-                const min = rules.length
-                    ? Math.min(...rules.map(r => r.usd))
-                    : null,
-                  max = rules.length
-                    ? Math.max(...rules.map(r => r.usd))
-                    : null;
-                const cost =
-                  rate?.perRequestUsd ??
-                  rate?.perSecondUsd ??
-                  (rate?.estimatedCostMicros != null
-                    ? rate.estimatedCostMicros / 1e6
-                    : max);
                 const tokenPricing =
                   definition.provider === "openai" &&
                   definition.kind === "image" &&
                   rate?.perRequestUsd == null;
-                const unit =
-                  rate?.perSecondUsd != null
-                    ? "second"
-                    : rate?.perRequestUsd != null
-                      ? definition.kind === "image"
-                        ? "image"
-                        : "request"
-                      : (rules[0]?.unit ?? "action");
                 const markup =
                   rate?.markupPercent ?? currentPolicy.markupPercent;
+                const estimate = m.actionEstimate;
+                const prices =
+                  estimate?.costMicros != null &&
+                  currentPolicy.creditValueMicros > 0
+                    ? actionPriceBreakdown(estimate.costMicros, {
+                        ...currentPolicy,
+                        markupPercent: markup,
+                      })
+                    : null;
                 return (
-                  <tr key={m.id} className="border-b last:border-0">
-                    <td className="p-3">
+                  <tr key={m.id} className="border-b align-top last:border-0">
+                    <td className="p-3 min-w-[230px] max-w-[320px]">
                       <p className="font-medium">{m.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {m.maker} · {m.variant} · {m.kind}
                       </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        API:{" "}
+                        {m.provider === "openai"
+                          ? "OpenAI · Direct"
+                          : "Higgsfield"}
+                      </p>
+                      <p className="mt-2 text-xs font-medium">
+                        {estimate?.basis ?? "Pricing required"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {estimate?.settings}
+                      </p>
+                      {tokenPricing && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-primary">
+                            Token rates & verification
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            <ImageTokenRates rate={rate} />
+                            <p className="text-[11px] text-muted-foreground">
+                              {rate?.pricingVerifiedAt
+                                ? `Verified ${new Date(rate.pricingVerifiedAt).toLocaleDateString()}`
+                                : "Pricing verification required"}
+                            </p>
+                            {rate?.sourceUrl && (
+                              <a
+                                className="text-[11px] text-primary underline"
+                                href={rate.sourceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Pricing source
+                              </a>
+                            )}
+                          </div>
+                        </details>
+                      )}
+                      {rate?.pricingError && (
+                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                          {rate.pricingError}
+                        </p>
+                      )}
                     </td>
                     <td className="p-3">
                       <label className="flex items-center gap-2 whitespace-nowrap">
@@ -376,86 +430,44 @@ export function ModelPricingAdmin() {
                         </span>
                       </label>
                     </td>
-                    <td className="p-3">
-                      {m.provider === "openai"
-                        ? "OpenAI · Direct"
-                        : "Higgsfield"}
+                    <td className="p-3 tabular-nums">
+                      <p className="text-base font-semibold">
+                        {prices ? money(prices.providerUsd) : "—"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Estimated provider cost
+                      </p>
                     </td>
-                    <td className="p-3">
-                      {tokenPricing ? (
-                        <>
-                          <ImageTokenRates rate={rate} />
-                          <p className="mt-2 text-[11px] text-muted-foreground">
-                            {rate?.pricingVerifiedAt
-                              ? `Verified ${new Date(rate.pricingVerifiedAt).toLocaleDateString()}`
-                              : "Pricing verification required"}
-                          </p>
-                          {rate?.sourceUrl && (
-                            <a
-                              className="text-[11px] text-primary underline"
-                              href={rate.sourceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Pricing source
-                            </a>
-                          )}
-                          {rate?.pricingError && (
-                            <p className="mt-1 max-w-[240px] text-xs text-amber-700 dark:text-amber-300">
-                              {rate.pricingError}
-                            </p>
-                          )}
-                        </>
-                      ) : cost == null ? (
-                        "Pricing required"
-                      ) : (
-                        `${money(cost)} / ${unit}`
-                      )}
-                      {min != null && min !== max && (
-                        <p className="text-[11px] text-muted-foreground">
-                          Published range: {money(min)}–{money(max!)}
-                        </p>
-                      )}
+                    <td className="p-3 tabular-nums">
+                      <p className="text-base font-semibold">
+                        {prices ? creditNumber(prices.providerCredits) : "—"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Credit equivalent
+                      </p>
                     </td>
-                    <td className="p-3">
-                      {tokenPricing ? (
-                        <>
-                          <ImageTokenRates
-                            rate={rate}
-                            multiplier={1 + markup / 100}
-                          />
-                          <p className="mt-2 max-w-[230px] text-[11px] text-muted-foreground">
-                            Total token cost converts to credits; rounded once
-                            per request.
+                    <td className="p-3 tabular-nums bg-violet-500/5">
+                      <p className="text-base font-semibold">
+                        {prices ? money(prices.retailUsd) : "—"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        After {markup}% markup
+                      </p>
+                    </td>
+                    <td className="p-3 tabular-nums bg-violet-500/5">
+                      <p className="text-base font-semibold">
+                        {prices ? creditNumber(prices.retailCredits) : "—"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Credits / action
+                      </p>
+                      {prices &&
+                        Math.abs(prices.chargedUsd - prices.retailUsd) >
+                          0.0000005 && (
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {money(prices.chargedUsd)} after rounding
                           </p>
-                          <details className="mt-2 max-w-[230px] text-[11px] text-muted-foreground">
-                            <summary className="cursor-pointer">
-                              Upfront reservation
-                            </summary>
-                            <p className="mt-1">
-                              {m.estimatedCredits == null
-                                ? "Not configured"
-                                : `${m.estimatedCredits} credits at default settings`}
-                              . This is a provisional hold, not a fixed price
-                              per image. Quality can change the reservation.
-                            </p>
-                          </details>
-                        </>
-                      ) : cost == null ? (
-                        "Depends on output"
-                      ) : (
-                        <>
-                          {money(cost * (1 + markup / 100))}
-                          <p className="text-xs text-muted-foreground">
-                            ≈{" "}
-                            {retailCredits(cost * 1e6, {
-                              ...currentPolicy,
-                              markupPercent: markup,
-                            })}{" "}
-                            credits / {unit}
-                          </p>
-                        </>
-                      )}
+                        )}
                     </td>
                     <td className="p-3">
                       {markup}%

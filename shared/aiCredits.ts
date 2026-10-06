@@ -25,6 +25,24 @@ export function rateCreditPolicy(rate: ProviderRate): CreditPolicy {
     creditValueMicros: rate.creditValueMicros ?? 10000,
   };
 }
+/** Provider credits express the dollar cost at the platform credit value. Only
+ * the retail charge is rounded up; rounding wholesale first inflates markup.
+ */
+export function actionPriceBreakdown(costMicros: number, policy: CreditPolicy) {
+  if (
+    !Number.isFinite(policy.creditValueMicros) ||
+    policy.creditValueMicros <= 0
+  )
+    throw new Error("Credit value must be positive");
+  const credits = retailCredits(costMicros, policy);
+  return {
+    providerUsd: costMicros / 1e6,
+    providerCredits: costMicros / policy.creditValueMicros,
+    retailUsd: (costMicros * (1 + policy.markupPercent / 100)) / 1e6,
+    retailCredits: credits,
+    chargedUsd: (credits * policy.creditValueMicros) / 1e6,
+  };
+}
 export function estimatedActionCredits(rate: ProviderRate) {
   if (rate.billingMode !== "cost") return rate.credits;
   const cost =
