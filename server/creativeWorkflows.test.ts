@@ -9,6 +9,11 @@ const state = vi.hoisted(() => ({
   image: vi.fn(),
   llm: vi.fn(),
   read: vi.fn(),
+  report: vi.fn(),
+  metaRead: vi.fn(),
+  metaReview: vi.fn(),
+  metaApply: vi.fn(),
+  metaVerify: vi.fn(),
 }));
 vi.mock("./db", () => ({
   getDb: async () => state.db,
@@ -41,6 +46,20 @@ vi.mock("./_core/llm", () => ({
   },
   listLLMModels: async () => [],
 }));
+vi.mock("./lib/channelReports", async importOriginal => ({
+  ...(await importOriginal<typeof import("./lib/channelReports")>()),
+  adsReport: (...args: any[]) => state.report(...args),
+}));
+vi.mock("./lib/metaManagement", async importOriginal => ({
+  ...(await importOriginal<typeof import("./lib/metaManagement")>()),
+  readMetaObject: (...args: any[]) => state.metaRead(...args),
+  reviewMetaChange: (...args: any[]) => state.metaReview(...args),
+  applyMetaChange: (...args: any[]) => state.metaApply(...args),
+  verifyMetaReview: (...args: any[]) => state.metaVerify(...args),
+}));
+import { channelConnections, publications } from "../drizzle/channelSchema";
+import { encryptToken } from "./lib/secureToken";
+import { businessWorkflowTemplate } from "../shared/workflowPlatform";
 import { workflowsRouter } from "./routers/workflows";
 import {
   organizations,
@@ -54,7 +73,11 @@ import {
   creativeWorkflowRuns,
 } from "../drizzle/workflowSchema";
 import { videoJobs, providerWorkers } from "../drizzle/videoSchema";
-import { aiUsage, creditLedger } from "../drizzle/platformSchema";
+import {
+  aiUsage,
+  creditLedger,
+  platformAccounts,
+} from "../drizzle/platformSchema";
 import { processNextWorkflowRun } from "./jobs/workflowWorker";
 import {
   workflowGraphProblem,
@@ -151,6 +174,9 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await state.db.delete(creativeWorkflowRuns);
+  await state.db.delete(publications);
+  await state.db.delete(channelConnections);
+  await state.db.delete(platformAccounts);
   await state.db.delete(creativeWorkflows);
   await state.db.delete(creditLedger);
   await state.db.delete(aiUsage);
@@ -446,4 +472,370 @@ it("pins a durable video child job and reserves video credits only once", async 
     (await owner.get({ organizationId: org, id: saved.id })).runs[0].steps.video
       .videoJobId
   ).toBe(child[0].id);
+});
+
+function textGraph(text = "Published value"): WorkflowGraph {
+  const input = newWorkflowNode("text", "input");
+  input.config.text = text;
+  return {
+    nodes: [input, newWorkflowNode("output", "output")],
+    edges: [
+      { id: "text-output", source: "input", target: "output", port: "result" },
+    ],
+  };
+}
+async function connection(
+  organizationId = org,
+  channel: "facebook" | "meta_ads" = "meta_ads"
+) {
+  vi.stubEnv(
+    "INTEGRATION_TOKEN_ENCRYPTION_SECRET",
+    "workflow-encryption-secret-for-tests"
+  );
+  const [c] = await state.db
+    .insert(channelConnections)
+    .values({
+      id: randomUUID(),
+      organizationId,
+      channel,
+      accountId: "12345",
+      name: "Test account",
+      status: "connected",
+      credentials: encryptToken("test-access-token"),
+      details: {
+        capabilities: ["read", "publish", "report"],
+        timezone: "America/New_York",
+        pageId: "98765",
+      },
+      connectedByUserId: ownerId,
+      verifiedAtMs: Date.now(),
+      updatedAtMs: Date.now(),
+    })
+    .returning();
+  return c;
+}
+it("publishes immutable App versions in each family and isolates their inputs", async () => {
+  const saved = await owner.save({
+    organizationId: org,
+    family: "measure",
+    name: "Reusable report",
+    graph: textGraph(),
+  });
+  const v1 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    description: "First release",
+  });
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: saved.name,
+    graph: textGraph("New draft value"),
+  });
+  const v2 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 2,
+  });
+  expect(v2.version).toBe(2);
+  expect(
+    (await owner.getApp({ organizationId: org, id: v1.id })).graph.nodes[0]
+      .config.text
+  ).toBe("Published value");
+  expect(
+    await owner.list({ organizationId: org, family: "measure" })
+  ).toHaveLength(1);
+  expect(
+    await owner.list({ organizationId: org, family: "create" })
+  ).toHaveLength(0);
+  await expect(
+    outsider.getApp({ organizationId: otherOrg, id: v1.id })
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(
+    owner.quote({
+      organizationId: org,
+      id: saved.id,
+      revision: 2,
+      appVersionId: v1.id,
+      inputs: [{ id: "output", text: "Override executable step" }],
+    })
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  const input = {
+    organizationId: org,
+    id: saved.id,
+    revision: 2,
+    appVersionId: v1.id,
+    inputs: [{ id: "input", text: "Declared input" }],
+  };
+  const estimate = await owner.quote(input);
+  await owner.run({
+    ...input,
+    quotedCredits: estimate.credits,
+    requestId: randomUUID(),
+  });
+  await finish();
+  const run = (await owner.get({ organizationId: org, id: saved.id })).runs[0];
+  expect(run.appVersionId).toBe(v1.id);
+  expect(run.steps.output.outputs).toEqual([
+    { type: "text", text: "Declared input" },
+  ]);
+  expect(
+    (await owner.getApp({ organizationId: org, id: v1.id })).graph.nodes[0]
+      .config.text
+  ).toBe("Published value");
+});
+it("composes pinned Apps across families and prevents foreign App execution", async () => {
+  const inner = textGraph("Pinned content");
+  inner.nodes[0].type = "app_input";
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Creative App",
+    family: "create",
+    graph: inner,
+  });
+  const app = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  const call = newWorkflowNode("app", "app");
+  call.config.appVersionId = app.id;
+  const graph = textGraph("Incoming brief");
+  graph.nodes.splice(1, 0, call);
+  graph.edges = [
+    { id: "a", source: "input", target: "app", port: "context" },
+    { id: "b", source: "app", target: "output", port: "result" },
+  ];
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: saved.name,
+    graph: textGraph("Unpublished change"),
+  });
+  const outer = await queue(graph);
+  await finish(20);
+  const result = (await owner.get({ organizationId: org, id: outer.saved.id }))
+    .runs[0];
+  expect(result.status).toBe("completed");
+  expect(result.steps.output.outputs).toEqual([
+    { type: "text", text: "Incoming brief" },
+    { type: "text", text: "Pinned content" },
+  ]);
+  const foreign = await outsider.save({
+    organizationId: otherOrg,
+    family: "activate",
+    name: "Foreign",
+    graph,
+  });
+  await expect(
+    outsider.quote({ organizationId: otherOrg, id: foreign.id, revision: 1 })
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  const internal = textGraph();
+  internal.nodes[0].type = "app_output";
+  await expect(
+    owner.save({
+      organizationId: org,
+      name: "Forged internal node",
+      graph: internal,
+    })
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+});
+it("pauses at exact-input review, enforces reviewer access, and resumes after approval", async () => {
+  const graph = textGraph();
+  graph.nodes.splice(1, 0, newWorkflowNode("review", "review"));
+  graph.edges = [
+    { id: "a", source: "input", target: "review", port: "context" },
+    { id: "b", source: "review", target: "output", port: "result" },
+  ];
+  const { saved, run } = await queue(graph);
+  await finish();
+  let result = (await owner.get({ organizationId: org, id: saved.id })).runs[0];
+  expect(result.steps.review.status).toBe("waiting");
+  expect(result.steps.output.status).toBe("pending");
+  await expect(
+    reviewer.reviewStep({
+      organizationId: org,
+      id: run.id,
+      nodeId: "review",
+      approve: true,
+    })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
+    outsider.reviewStep({
+      organizationId: otherOrg,
+      id: run.id,
+      nodeId: "review",
+      approve: true,
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await owner.reviewStep({
+    organizationId: org,
+    id: run.id,
+    nodeId: "review",
+    approve: true,
+  });
+  await finish();
+  result = (await owner.get({ organizationId: org, id: saved.id })).runs[0];
+  expect(result.status).toBe("completed");
+  expect(result.steps.review.approvedByUserId).toBe(ownerId);
+  await expect(
+    owner.reviewStep({
+      organizationId: org,
+      id: run.id,
+      nodeId: "review",
+      approve: true,
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+});
+it("keeps waits durable and lets a stopped waiting run end without downstream calls", async () => {
+  const graph = textGraph();
+  const wait = newWorkflowNode("wait", "wait");
+  wait.config.waitMinutes = 60;
+  graph.nodes.splice(1, 0, wait);
+  graph.edges = [
+    { id: "a", source: "input", target: "wait", port: "context" },
+    { id: "b", source: "wait", target: "output", port: "result" },
+  ];
+  const { saved, run } = await queue(graph);
+  await finish();
+  const first = (await owner.get({ organizationId: org, id: saved.id })).runs[0]
+    .steps.wait.wakeAtMs;
+  await finish();
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id })).runs[0].steps.wait
+      .wakeAtMs
+  ).toBe(first);
+  await owner.stop({ organizationId: org, id: run.id });
+  await tick();
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id })).runs[0].status
+  ).toBe("stopped");
+});
+it("runs read-only reports with exhausted AI credits and rejects another workspace's connection", async () => {
+  await state.db
+    .insert(platformAccounts)
+    .values({
+      organizationId: org,
+      enforceCredits: 1,
+      aiPaused: 1,
+      updatedAtMs: Date.now(),
+    });
+  await state.db
+    .insert(creditLedger)
+    .values({
+      id: randomUUID(),
+      organizationId: org,
+      period: new Date().toISOString().slice(0, 7),
+      amount: -10,
+      reason: "Existing usage",
+      createdAtMs: Date.now(),
+    });
+  const c = await connection();
+  state.report.mockResolvedValue({
+    summary: { spend: 40, impressions: 500, roas: null },
+    campaigns: [],
+    currency: "USD",
+    timezone: "America/New_York",
+    attribution: "account",
+    truncated: false,
+  });
+  const report = newWorkflowNode("meta_report", "report");
+  report.config.connectionId = c.id;
+  report.config.datePreset = "yesterday";
+  const graph = {
+    nodes: [report, newWorkflowNode("output", "output")],
+    edges: [{ id: "a", source: "report", target: "output", port: "result" }],
+  };
+  const { saved, quote } = await queue(graph);
+  expect(quote.credits).toBe(0);
+  await finish();
+  const result = (await owner.get({ organizationId: org, id: saved.id }))
+    .runs[0];
+  expect(result.status).toBe("completed");
+  expect((result.steps.output.outputs![0] as any).data.metrics.roas).toBeNull();
+  expect(state.report).toHaveBeenCalledOnce();
+  expect(state.llm).not.toHaveBeenCalled();
+  const foreign = await connection(otherOrg);
+  graph.nodes[0].config.connectionId = foreign.id;
+  const denied = await owner.save({
+    organizationId: org,
+    name: "Wrong account",
+    graph,
+  });
+  await expect(
+    owner.quote({ organizationId: org, id: denied.id, revision: 1 })
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+it("creates one Facebook draft and waits for publication approval without sending", async () => {
+  const c = await connection(org, "facebook");
+  const graph = businessWorkflowTemplate("facebook-delivery")!;
+  graph.nodes.find(n => n.type === "facebook_post")!.config.connectionId = c.id;
+  const { saved } = await queue(graph);
+  await finish();
+  await finish();
+  const result = (await owner.get({ organizationId: org, id: saved.id }))
+    .runs[0];
+  expect(result.steps.post.status).toBe("completed");
+  expect(result.steps.delivery.status).toBe("waiting");
+  const drafts = await state.db.select().from(publications);
+  expect(drafts).toHaveLength(1);
+  expect(drafts[0].state).toBe("needs_review");
+  expect(drafts[0].externalId).toBeNull();
+});
+it("requires an explicit activation confirmation and cannot activate the same reviewed step twice", async () => {
+  const c = await connection(),
+    node = newWorkflowNode("meta_activate", "activate");
+  node.config.connectionId = c.id;
+  node.config.adId = "123456";
+  state.metaRead.mockResolvedValue({
+    id: "123456",
+    name: "Paused test ad",
+    status: "PAUSED",
+  });
+  state.metaReview.mockResolvedValue({
+    before: { id: "123456", name: "Paused test ad", status: "PAUSED" },
+    params: { status: "ACTIVE" },
+    warnings: ["Existing budgets apply"],
+    ticket: "signed-test-ticket",
+  });
+  state.metaVerify.mockReturnValue({ userId: ownerId });
+  state.metaApply.mockResolvedValue({ id: "123456", success: true });
+  const { saved, run } = await queue({
+    nodes: [node, newWorkflowNode("output", "output")],
+    edges: [{ id: "a", source: "activate", target: "output", port: "result" }],
+  });
+  await finish();
+  expect(state.metaApply).not.toHaveBeenCalled();
+  await expect(
+    owner.reviewStep({
+      organizationId: org,
+      id: run.id,
+      nodeId: "activate",
+      approve: true,
+    })
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await owner.reviewStep({
+    organizationId: org,
+    id: run.id,
+    nodeId: "activate",
+    approve: true,
+    confirmActivation: true,
+  });
+  await expect(
+    owner.reviewStep({
+      organizationId: org,
+      id: run.id,
+      nodeId: "activate",
+      approve: true,
+      confirmActivation: true,
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await finish();
+  expect(state.metaApply).toHaveBeenCalledOnce();
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id })).runs[0].status
+  ).toBe("completed");
 });

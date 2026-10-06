@@ -14,6 +14,7 @@ import { defaultVideoSetup, type VideoSetup } from "../../shared/videoCreation";
 import {
   isGenerationNode,
   workflowAncestors,
+  workflowNodes,
   workflowOrder,
   workflowRunProblem,
   workflowSignature,
@@ -26,6 +27,7 @@ import {
   libraryDatabase,
   readLibraryAsset,
   type LibraryDatabase,
+  type LibraryTransaction,
 } from "./assetLibrary";
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { videoQuote, videoRate } from "./videoPricing";
@@ -33,6 +35,10 @@ import { REQUIRED_IMAGE_MODEL_ID, REQUIRED_TEXT_MODEL_ID } from "./models";
 import { imageModelQuote } from "./modelCatalog";
 import { workflowImageSize } from "../../shared/imageActionEstimate";
 import { effectiveRate } from "./creditPricing";
+import {
+  resolveWorkflowApps,
+  validateWorkflowConnections,
+} from "./workflowApps";
 import { estimatedActionCredits } from "../../shared/aiCredits";
 
 export type CreativeWorkflowRun = typeof creativeWorkflowRuns.$inferSelect;
@@ -40,6 +46,7 @@ export function publicWorkflowRun(run: CreativeWorkflowRun) {
   return {
     id: run.id,
     workflowId: run.workflowId,
+    appVersionId: run.appVersionId,
     graph: run.graph,
     steps: run.steps,
     status: run.status,
@@ -51,7 +58,7 @@ export function publicWorkflowRun(run: CreativeWorkflowRun) {
   };
 }
 export async function getWorkflow(
-  db: LibraryDatabase,
+  db: LibraryDatabase | LibraryTransaction,
   organizationId: number,
   id: string
 ) {
@@ -110,7 +117,7 @@ export async function workflowNodeCredits(
   if (node.type === "generate_video") {
     const source = input.find(v => v.type === "video");
     const key =
-      source && source.type !== "text"
+      source && source.type === "video"
         ? source.key
         : node.config.sourceVideoKey;
     const setup = workflowVideoSetup(node, "Workflow prompt", [], key);
@@ -171,7 +178,7 @@ export async function validateWorkflowValues(
   values: WorkflowValue[]
 ) {
   for (const value of values) {
-    if (value.type === "text") continue;
+    if (value.type !== "image" && value.type !== "video") continue;
     const current =
       value.type === "image"
         ? (await workflowImageReferences(db, organizationId, [value.key]))[0]
@@ -195,6 +202,7 @@ export async function prepareWorkflowRun(
   graph: WorkflowGraph,
   target?: string
 ) {
+  graph = await resolveWorkflowApps(db, organizationId, graph);
   if (target && !graph.nodes.some(n => n.id === target))
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -205,6 +213,10 @@ export async function prepareWorkflowRun(
     : new Set(graph.nodes.map(n => n.id));
   const problem = workflowRunProblem(graph, selected);
   if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+  await validateWorkflowConnections(db, organizationId, {
+    ...graph,
+    nodes: graph.nodes.filter(n => selected.has(n.id)),
+  });
   // Capture source fingerprints before considering cached upstream results.
   const references: Awaited<ReturnType<typeof workflowImageReferences>> = [];
   for (const node of graph.nodes.filter(
@@ -248,6 +260,26 @@ export async function prepareWorkflowRun(
     const node = graph.nodes.find(n => n.id === id)!;
     if (target && id !== target && isGenerationNode(node.type)) {
       const ancestors = workflowAncestors(graph, id);
+      if (
+        graph.nodes.some(
+          n =>
+            ancestors.has(n.id) &&
+            [
+              "meta_report",
+              "facebook_report",
+              "review",
+              "wait",
+              "facebook_post",
+              "meta_ad",
+              "deliver_publication",
+              "meta_activate",
+            ].includes(n.type)
+        )
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Use Run all so “${node.title}” uses fresh evidence and approvals.`,
+        });
       const sourceKeys = graph.nodes
         .filter(n => ancestors.has(n.id))
         .flatMap(n =>
@@ -286,6 +318,7 @@ export async function prepareWorkflowRun(
     }
   }
   return {
+    graph,
     steps,
     creditsByNode,
     references,
@@ -300,6 +333,13 @@ export function workflowInputs(
 ) {
   return graph.edges
     .filter(e => e.target === node.id && (!port || e.port === port))
-    .flatMap(e => steps[e.source]?.outputs ?? []);
+    .flatMap(e => {
+      const type = workflowNodes[node.type].inputs.find(
+        p => p.id === e.port
+      )?.type;
+      return (steps[e.source]?.outputs ?? []).filter(
+        value => type === "any" || value.type === type
+      );
+    });
 }
 export { libraryDatabase };

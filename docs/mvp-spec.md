@@ -1,5 +1,10 @@
 # Creative Production SaaS — MVP Specification
 
+Historical specification for the original Frame MVP. For EvokeLoop's
+forward-looking direction, see the [general architecture baseline](general-architecture.md).
+Existing security and approval requirements remain applicable until deliberately
+revised in a reviewed implementation; the new direction does not bypass them.
+
 ## Product promise
 
 The product gives creative and performance-marketing teams one controlled path from an approved brand system and campaign brief to reviewable Meta image ads, with a human decision required before any publishing operation.

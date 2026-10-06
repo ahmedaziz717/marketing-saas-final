@@ -1145,3 +1145,300 @@
   font-size: 10px;
   font-weight: 600;
 }
+
+/* Shared workflow workspaces: section color is context, content stays neutral. */
+[data-family="create"] {
+  --wf-accent: #7455dc;
+}
+[data-family="activate"] {
+  --wf-accent: #346ac9;
+}
+[data-family="measure"] {
+  --wf-accent: #148071;
+}
+[data-family="optimize"] {
+  --wf-accent: #a56a13;
+}
+.wf-library[data-family="activate"] {
+  --wf-accent: #346ac9;
+}
+.wf-library[data-family="measure"] {
+  --wf-accent: #148071;
+}
+.wf-library[data-family="optimize"] {
+  --wf-accent: #a56a13;
+}
+.wf-library-heading > button,
+.wf-header-actions > button:last-child {
+  background: var(--wf-accent, #7455dc);
+}
+.wf-template[data-color="teal"] {
+  --tint: #148071;
+}
+.wf-templates {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+}
+.wf-apps-section {
+  margin: 32px 0;
+}
+.wf-app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.wf-app-card {
+  position: relative;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+}
+.wf-app-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  color: var(--wf-accent, #7455dc);
+  background: color-mix(in srgb, var(--wf-accent, #7455dc) 12%, transparent);
+  margin-bottom: 15px;
+}
+.wf-app-card h3 {
+  font-weight: 600;
+  margin: 8px 0;
+}
+.wf-app-card p,
+.wf-app-empty p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wf-app-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+  font-size: 12px;
+}
+.wf-app-card a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wf-app-card a:first-child {
+  font-weight: 600;
+  color: var(--wf-accent, #7455dc);
+}
+.wf-version {
+  position: absolute;
+  top: 24px;
+  right: 22px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--muted);
+  font-size: 11px;
+}
+.wf-app-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+.wf-setting-help {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.wf-node-body > .wf-setting-help {
+  padding: 10px 2px 0;
+}
+.wf-result-link {
+  display: block;
+  padding: 10px;
+  color: var(--wf-accent, #7455dc);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.wf-data-result {
+  text-align: left;
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border-radius: 10px;
+  background: var(--muted);
+  font-size: 12px;
+}
+.wf-data-result p {
+  color: var(--muted-foreground);
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.wf-data-result span {
+  color: var(--wf-accent, #7455dc);
+}
+.wf-palette-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 14px 0;
+  font-size: 12px;
+}
+.wf-palette-filter select,
+.wf-app-form select {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  width: 100%;
+}
+.wf-node-group:not(:has(button)) {
+  display: none;
+}
+.wf-date-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.wf-attention-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+}
+.wf-attention {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid
+    color-mix(in srgb, var(--wf-accent, #7455dc) 25%, var(--border));
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 13px;
+}
+.wf-attention p {
+  color: var(--muted-foreground);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.wf-attention > a {
+  flex-shrink: 0;
+  text-decoration: underline;
+}
+.wf-evidence {
+  max-height: 430px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.wf-review-facts {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 12px;
+  font-size: 13px;
+}
+.wf-review-facts dt {
+  color: var(--muted-foreground);
+}
+.wf-app-runner {
+  max-width: 1250px;
+  margin: auto;
+}
+.wf-app-runner header {
+  padding: 24px 0 32px;
+}
+.wf-app-runner h1 {
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  margin: 12px 0;
+}
+.wf-app-runner header p {
+  color: var(--muted-foreground);
+  margin-bottom: 18px;
+}
+.wf-app-runner header a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.wf-app-run-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 24px;
+}
+.wf-app-form,
+.wf-app-results {
+  min-width: 0;
+  padding: 26px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.wf-app-form h2,
+.wf-app-results h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 22px;
+}
+.wf-app-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+.wf-app-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  padding: 14px;
+  resize: vertical;
+}
+.wf-app-form > p,
+.wf-app-results > p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+.wf-app-output {
+  margin-top: 18px;
+}
+.wf-app-output img,
+.wf-app-output video {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.wf-editor .wf-header-actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 800px) {
+  .wf-app-run-layout {
+    grid-template-columns: 1fr;
+  }
+  .wf-attention {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .wf-header-actions .wf-library-link {
+    display: none;
+  }
+  .wf-library-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

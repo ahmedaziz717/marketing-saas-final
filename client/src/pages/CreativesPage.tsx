@@ -1,3 +1,5 @@
+import "@/styles/workflows.css";
+import { WorkflowApps } from "@/components/WorkflowApps";
 import { VideoStudio } from "@/components/VideoStudio";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
@@ -256,6 +258,12 @@ function Studio() {
               );
             })}
           </div>
+          {organizationId &&
+            ["owner", "admin", "creator", "publisher"].includes(
+              membership?.role ?? ""
+            ) && (
+              <WorkflowApps organizationId={organizationId} family="create" />
+            )}
           <div className="studio-planned-section">
             <div className="studio-section-heading">
               <div>

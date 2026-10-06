@@ -28,7 +28,17 @@ import {
   Play,
   Link2,
   GripVertical,
+  Send,
+  BarChart3,
+  Clock,
+  ShieldCheck,
+  AppWindow,
+  Target,
+  ArrowDownToLine,
 } from "lucide-react";
+import { Link } from "wouter";
+import { WorkflowBusinessSettings } from "./WorkflowBusinessSettings";
+import { workflowSections, workflowValueText } from "@shared/workflowPlatform";
 import { toast } from "sonner";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
 import {
@@ -63,6 +73,7 @@ import {
   type WorkflowNodeType,
   type WorkflowValue,
   type WorkflowSteps,
+  type WorkflowFamily,
 } from "@shared/creativeWorkflow";
 import type { LibraryAsset } from "@shared/assetLibrary";
 
@@ -74,6 +85,20 @@ const icons = {
   generate_image: ImageIcon,
   generate_video: Film,
   output: GitBranch,
+  app: AppWindow,
+  app_input: ArrowDownToLine,
+  app_output: AppWindow,
+  review: ShieldCheck,
+  wait: Clock,
+  facebook_post: Send,
+  meta_ad: Send,
+  deliver_publication: Send,
+  meta_activate: Play,
+  meta_report: BarChart3,
+  facebook_report: BarChart3,
+  compare_metrics: BarChart3,
+  optimize_metric: Target,
+  optimize_copy: Sparkles,
 };
 const NODE_WIDTH = 276;
 const outPoint = (node: WorkflowNode) => ({
@@ -101,6 +126,8 @@ export function WorkflowCanvas({
   run,
   onRunNode,
   busy,
+  family = "create",
+  connectedChannels = [],
 }: {
   graph: WorkflowGraph;
   onChange: (graph: WorkflowGraph) => void;
@@ -109,10 +136,15 @@ export function WorkflowCanvas({
   run?: Run;
   onRunNode: (id: string) => void;
   busy: boolean;
+  family?: WorkflowFamily;
+  connectedChannels?: string[];
 }) {
   const [selected, setSelected] = useState<string | null>(null),
     [library, setLibrary] = useState(!graph.nodes.length),
     [nodeSearch, setNodeSearch] = useState("");
+  const [paletteFamily, setPaletteFamily] = useState<WorkflowFamily | "all">(
+    family
+  );
   const [view, setView] = useState({ x: 35, y: 40, zoom: 0.8 }),
     [connecting, setConnecting] = useState<string | null>(null),
     [cursor, setCursor] = useState({ x: 0, y: 0 });
@@ -419,6 +451,7 @@ export function WorkflowCanvas({
               step = run?.steps[node.id],
               stale =
                 run &&
+                node.type !== "app" &&
                 workflowSignature(run.graph, node.id) !==
                   workflowSignature(graph, node.id);
             return (
@@ -463,7 +496,8 @@ export function WorkflowCanvas({
                         "Previous result"
                       ) : ["running", "waiting"].includes(step.status) ? (
                         <>
-                          <Loader2 size={11} className="animate-spin" /> Running
+                          <Loader2 size={11} className="animate-spin" />{" "}
+                          {step.status === "waiting" ? "Waiting" : "Running"}
                         </>
                       ) : step.status === "completed" ? (
                         <>
@@ -571,10 +605,23 @@ export function WorkflowCanvas({
                               ? "Connect a result to preview it"
                               : node.type === "generate_video"
                                 ? "Your video starts here"
-                                : "Your next image starts here"}
+                                : node.type === "generate_image"
+                                  ? "Your next image starts here"
+                                  : meta.description}
                       </span>
                       {node.config.text && <p>{node.config.text}</p>}
                     </div>
+                  )}
+                  {step?.waitingReason && (
+                    <p className="wf-setting-help">{step.waitingReason}</p>
+                  )}
+                  {step?.publicationId && (
+                    <Link
+                      className="wf-result-link"
+                      href={`/app/publishing?publication=${step.publicationId}`}
+                    >
+                      Review publication →
+                    </Link>
                   )}
                   {step?.error && (
                     <p className="wf-node-error" role="alert">
@@ -691,13 +738,41 @@ export function WorkflowCanvas({
                 aria-label="Search steps"
               />
             </label>
-            {["Inputs", "Generate", "Utilities"].map(group => (
+            <label className="wf-palette-filter">
+              Capabilities
+              <select
+                aria-label="Node section"
+                value={paletteFamily}
+                onChange={e =>
+                  setPaletteFamily(e.target.value as typeof paletteFamily)
+                }
+              >
+                {Object.entries(workflowSections).map(([id, section]) => (
+                  <option key={id} value={id}>
+                    {section.name}
+                  </option>
+                ))}
+                <option value="all">All sections</option>
+              </select>
+            </label>
+            {Array.from(
+              new Set(Object.values(workflowNodes).map(m => m.group))
+            ).map(group => (
               <div className="wf-node-group" key={group}>
                 <h3>{group}</h3>
                 {Object.entries(workflowNodes)
                   .filter(
                     ([, meta]) =>
                       meta.group === group &&
+                      !meta.hidden &&
+                      (!meta.channel ||
+                        connectedChannels.includes(meta.channel)) &&
+                      (paletteFamily === "all" ||
+                        (!meta.family &&
+                          ["Inputs", "Apps", "Control", "Utilities"].includes(
+                            meta.group
+                          )) ||
+                        (meta.family ?? "create") === paletteFamily) &&
                       `${meta.name} ${meta.description}`
                         .toLowerCase()
                         .includes(nodeSearch.toLowerCase())
@@ -722,6 +797,10 @@ export function WorkflowCanvas({
                   })}
               </div>
             ))}
+            <p className="wf-setting-help">
+              Connected channels add their available steps.{" "}
+              <Link href="/app/settings/integrations">Manage connections</Link>
+            </p>
           </aside>
         )}
         {selectedNode && !library && (
@@ -746,6 +825,28 @@ export function WorkflowCanvas({
                   }
                 />
               </label>
+              {[
+                "app",
+                "app_input",
+                "review",
+                "wait",
+                "facebook_post",
+                "meta_ad",
+                "deliver_publication",
+                "meta_activate",
+                "meta_report",
+                "facebook_report",
+                "compare_metrics",
+                "optimize_metric",
+                "optimize_copy",
+              ].includes(selectedNode.type) && (
+                <WorkflowBusinessSettings
+                  key={selectedNode.id}
+                  node={selectedNode}
+                  organizationId={organizationId}
+                  onChange={config}
+                />
+              )}
               {selectedNode.type === "image" ? (
                 <Button
                   variant="outline"
@@ -754,7 +855,15 @@ export function WorkflowCanvas({
                   <ImageIcon size={16} /> Choose image
                 </Button>
               ) : (
-                selectedNode.type !== "output" && (
+                [
+                  "text",
+                  "combine",
+                  "assistant",
+                  "generate_image",
+                  "generate_video",
+                  "app_input",
+                  "optimize_copy",
+                ].includes(selectedNode.type) && (
                   <label>
                     {selectedNode.type === "combine"
                       ? "Additional text (optional)"
@@ -997,7 +1106,9 @@ export function WorkflowCanvas({
                   </details>
                 </>
               )}
-              {["assistant", "generate_image"].includes(selectedNode.type) && (
+              {["assistant", "generate_image", "optimize_copy"].includes(
+                selectedNode.type
+              ) && (
                 <label className="wf-checkbox">
                   <input
                     type="checkbox"
@@ -1204,7 +1315,7 @@ export function WorkflowCanvas({
             <video src={preview.url} controls className="max-h-[70vh] w-full" />
           ) : (
             <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap text-sm">
-              {preview?.type === "text" ? preview.text : ""}
+              {preview ? workflowValueText(preview) : ""}
             </pre>
           )}
         </DialogContent>
@@ -1298,6 +1409,29 @@ function ResultPreview({
   value: WorkflowValue;
   onPreview: () => void;
 }) {
+  if (value.type === "publication")
+    return (
+      <Link
+        className="wf-result-link"
+        href={`/app/publishing?publication=${value.id}`}
+      >
+        {value.name}
+        <br />
+        Open publication →
+      </Link>
+    );
+  if (value.type === "data" || value.type === "decision")
+    return (
+      <button className="wf-data-result" onClick={onPreview}>
+        <strong>{value.name}</strong>
+        <p>
+          {value.type === "decision"
+            ? String(value.data.recommendation ?? "View decision")
+            : "View measurements and reporting context"}
+        </p>
+        <span>Inspect result →</span>
+      </button>
+    );
   if (value.type === "text")
     return (
       <div className="wf-text-result">
@@ -1321,6 +1455,7 @@ function ResultPreview({
         </div>
       </div>
     );
+  if (value.type !== "image" && value.type !== "video") return null;
   return (
     <button
       className="wf-media-result"

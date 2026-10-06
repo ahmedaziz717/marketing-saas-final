@@ -5,12 +5,18 @@ import { z } from "zod";
 import {
   creativeWorkflows,
   creativeWorkflowRuns,
+  workflowAppVersions,
 } from "../../drizzle/workflowSchema";
 import {
   workflowGraphSchema,
   workflowGraphProblem,
+  workflowFamilies,
+  workflowRoles,
+  workflowRunProblem,
+  isGenerationNode,
 } from "../../shared/creativeWorkflow";
-import { studioRoles } from "../../shared/assetWorkflow";
+import { getWorkflowApp, resolveWorkflowApps } from "../lib/workflowApps";
+import { reviewWorkflowStepProcedure } from "./workflowReview";
 import { protectedProcedure, router } from "../_core/trpc";
 import { requireOrganizationRole } from "../lib/access";
 import { withOrganizationTransaction, appendActivity } from "../lib/activity";
@@ -24,34 +30,205 @@ import {
 const scope = z.object({ organizationId: z.number().int().positive() });
 const reference = scope.extend({ id: z.string().uuid() });
 const runInput = reference.extend({
+  appVersionId: z.string().uuid().optional(),
+  inputs: z
+    .array(
+      z.object({
+        id: z.string().max(80),
+        text: z.string().max(10000).optional(),
+        imageKey: z
+          .string()
+          .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
+          .optional(),
+      })
+    )
+    .max(40)
+    .optional(),
   revision: z.number().int().positive(),
   target: z.string().max(80).optional(),
 });
+async function runnable(
+  db: Awaited<ReturnType<typeof libraryDatabase>>,
+  input: z.infer<typeof runInput>
+) {
+  const workflow = await getWorkflow(db, input.organizationId, input.id);
+  if (!input.appVersionId) return workflow;
+  const app = await getWorkflowApp(
+    db,
+    input.organizationId,
+    input.appVersionId
+  );
+  if (app.workflowId !== workflow.id)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose the matching workflow for this App.",
+    });
+  const graph = structuredClone(app.graph);
+  for (const field of input.inputs ?? []) {
+    const node = graph.nodes.find(n => n.id === field.id);
+    if (!node || !["text", "image", "app_input"].includes(node.type))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only declared App inputs can be changed.",
+      });
+    if (node.type === "image" && field.imageKey)
+      node.config.imageKey = field.imageKey;
+    else if (
+      ["text", "app_input"].includes(node.type) &&
+      field.text !== undefined
+    )
+      node.config.text = field.text;
+  }
+  return { ...workflow, graph, revision: input.revision };
+}
 export const workflowsRouter = router({
-  list: protectedProcedure.input(scope).query(async ({ ctx, input }) => {
-    await requireOrganizationRole(ctx.user.id, input.organizationId, [
-      ...studioRoles,
-    ]);
-    return (await libraryDatabase())
-      .select({
-        id: creativeWorkflows.id,
-        name: creativeWorkflows.name,
-        revision: creativeWorkflows.revision,
-        updatedAtMs: creativeWorkflows.updatedAtMs,
-      })
-      .from(creativeWorkflows)
-      .where(
-        and(
-          eq(creativeWorkflows.organizationId, input.organizationId),
-          eq(creativeWorkflows.archived, 0)
-        )
+  reviewStep: reviewWorkflowStepProcedure,
+  listApps: protectedProcedure
+    .input(scope.extend({ family: z.enum(workflowFamilies).optional() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...workflowRoles,
+      ]);
+      const rows = await (
+        await libraryDatabase()
       )
-      .orderBy(desc(creativeWorkflows.updatedAtMs))
-      .limit(250);
+        .select({ app: workflowAppVersions })
+        .from(workflowAppVersions)
+        .innerJoin(
+          creativeWorkflows,
+          and(
+            eq(creativeWorkflows.id, workflowAppVersions.workflowId),
+            eq(creativeWorkflows.organizationId, input.organizationId),
+            eq(creativeWorkflows.archived, 0)
+          )
+        )
+        .where(
+          and(
+            eq(workflowAppVersions.organizationId, input.organizationId),
+            input.family
+              ? eq(workflowAppVersions.family, input.family)
+              : undefined
+          )
+        )
+        .orderBy(desc(workflowAppVersions.createdAtMs))
+        .limit(1000);
+      return rows.map(r => r.app);
+    }),
+  getApp: protectedProcedure.input(reference).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, [
+      ...workflowRoles,
+    ]);
+    return getWorkflowApp(
+      await libraryDatabase(),
+      input.organizationId,
+      input.id
+    );
   }),
+  publishApp: protectedProcedure
+    .input(
+      reference.extend({
+        revision: z.number().int().positive(),
+        description: z.string().trim().max(600).default(""),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...workflowRoles,
+      ]);
+      const db = await libraryDatabase();
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        const workflow = await getWorkflow(tx, input.organizationId, input.id);
+        if (workflow.revision !== input.revision)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Save the latest workflow before publishing an App.",
+          });
+        if (!workflow.graph.nodes.some(n => n.type === "output"))
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Add an Output step to declare this App’s results.",
+          });
+        if (workflow.graph.nodes.some(n => n.type === "app_output"))
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "App result steps are managed by the workflow runner.",
+          });
+        await resolveWorkflowApps(tx, input.organizationId, workflow.graph);
+        const [latest] = await tx
+          .select()
+          .from(workflowAppVersions)
+          .where(
+            and(
+              eq(workflowAppVersions.workflowId, input.id),
+              eq(workflowAppVersions.organizationId, input.organizationId)
+            )
+          )
+          .orderBy(desc(workflowAppVersions.version))
+          .limit(1);
+        const [app] = await tx
+          .insert(workflowAppVersions)
+          .values({
+            id: randomUUID(),
+            organizationId: input.organizationId,
+            workflowId: workflow.id,
+            version: (latest?.version ?? 0) + 1,
+            workflowRevision: workflow.revision,
+            family: workflow.family,
+            name: workflow.name,
+            description: input.description,
+            graph: workflow.graph,
+            actorUserId: ctx.user.id,
+            createdAtMs: Date.now(),
+          })
+          .returning();
+        await appendActivity(
+          {
+            organizationId: input.organizationId,
+            actorUserId: ctx.user.id,
+            action: "workflow.app_published",
+            entityType: "workflow_app",
+            entityId: app.id,
+            payload: {
+              workflowId: workflow.id,
+              version: app.version,
+              revision: workflow.revision,
+            },
+          },
+          tx
+        );
+        return app;
+      });
+    }),
+  list: protectedProcedure
+    .input(scope.extend({ family: z.enum(workflowFamilies).optional() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...workflowRoles,
+      ]);
+      return (await libraryDatabase())
+        .select({
+          id: creativeWorkflows.id,
+          family: creativeWorkflows.family,
+          name: creativeWorkflows.name,
+          revision: creativeWorkflows.revision,
+          updatedAtMs: creativeWorkflows.updatedAtMs,
+        })
+        .from(creativeWorkflows)
+        .where(
+          and(
+            eq(creativeWorkflows.organizationId, input.organizationId),
+            eq(creativeWorkflows.archived, 0),
+            input.family
+              ? eq(creativeWorkflows.family, input.family)
+              : undefined
+          )
+        )
+        .orderBy(desc(creativeWorkflows.updatedAtMs))
+        .limit(250);
+    }),
   get: protectedProcedure.input(reference).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
-      ...studioRoles,
+      ...workflowRoles,
     ]);
     const db = await libraryDatabase(),
       workflow = await getWorkflow(db, input.organizationId, input.id);
@@ -74,13 +251,19 @@ export const workflowsRouter = router({
         id: z.string().uuid().optional(),
         revision: z.number().int().positive().optional(),
         name: z.string().trim().min(1).max(100),
+        family: z.enum(workflowFamilies).optional(),
         graph: workflowGraphSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...studioRoles,
+        ...workflowRoles,
       ]);
+      if (input.graph.nodes.some(n => n.type === "app_output"))
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "App result steps are managed by the workflow runner.",
+        });
       const problem = workflowGraphProblem(input.graph);
       if (problem)
         throw new TRPCError({ code: "BAD_REQUEST", message: problem });
@@ -91,6 +274,7 @@ export const workflowsRouter = router({
           const [saved] = await tx
             .update(creativeWorkflows)
             .set({
+              ...(input.family ? { family: input.family } : {}),
               name: input.name,
               graph: input.graph,
               revision: (input.revision ?? 0) + 1,
@@ -120,6 +304,7 @@ export const workflowsRouter = router({
             organizationId: input.organizationId,
             actorUserId: ctx.user.id,
             name: input.name,
+            family: input.family ?? "create",
             graph: input.graph,
             createdAtMs: now,
             updatedAtMs: now,
@@ -132,7 +317,7 @@ export const workflowsRouter = router({
     .input(reference)
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...studioRoles,
+        ...workflowRoles,
       ]);
       const db = await libraryDatabase();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
@@ -165,10 +350,10 @@ export const workflowsRouter = router({
     }),
   quote: protectedProcedure.input(runInput).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
-      ...studioRoles,
+      ...workflowRoles,
     ]);
     const db = await libraryDatabase(),
-      workflow = await getWorkflow(db, input.organizationId, input.id);
+      workflow = await runnable(db, input);
     if (workflow.revision !== input.revision)
       throw new TRPCError({
         code: "CONFLICT",
@@ -181,8 +366,33 @@ export const workflowsRouter = router({
       workflow.graph,
       input.target
     );
+    if (
+      prepared.graph.nodes.some(
+        n =>
+          prepared.steps[n.id] &&
+          ["deliver_publication", "meta_activate"].includes(n.type)
+      )
+    )
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "publisher",
+      ]);
+    if (
+      prepared.graph.nodes.some(
+        n => prepared.steps[n.id] && isGenerationNode(n.type)
+      )
+    )
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+      ]);
     return {
       credits: prepared.credits,
+      nodeNames: Object.fromEntries(
+        prepared.graph.nodes.map(n => [n.id, n.title])
+      ),
       creditsByNode: prepared.creditsByNode,
       reused: Object.values(prepared.steps).filter(s => s.status === "reused")
         .length,
@@ -197,7 +407,7 @@ export const workflowsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...studioRoles,
+        ...workflowRoles,
       ]);
       const db = await libraryDatabase();
       const [replay] = await db
@@ -211,7 +421,7 @@ export const workflowsRouter = router({
           )
         );
       if (replay) return publicWorkflowRun(replay);
-      const workflow = await getWorkflow(db, input.organizationId, input.id);
+      const workflow = await runnable(db, input);
       if (workflow.revision !== input.revision)
         throw new TRPCError({
           code: "CONFLICT",
@@ -224,6 +434,28 @@ export const workflowsRouter = router({
         workflow.graph,
         input.target
       );
+      if (
+        prepared.graph.nodes.some(
+          n =>
+            prepared.steps[n.id] &&
+            ["deliver_publication", "meta_activate"].includes(n.type)
+        )
+      )
+        await requireOrganizationRole(ctx.user.id, input.organizationId, [
+          "owner",
+          "admin",
+          "publisher",
+        ]);
+      if (
+        prepared.graph.nodes.some(
+          n => prepared.steps[n.id] && isGenerationNode(n.type)
+        )
+      )
+        await requireOrganizationRole(ctx.user.id, input.organizationId, [
+          "owner",
+          "admin",
+          "creator",
+        ]);
       if (prepared.credits !== input.quotedCredits)
         throw new TRPCError({
           code: "CONFLICT",
@@ -252,7 +484,10 @@ export const workflowsRouter = router({
               eq(creativeWorkflows.archived, 0)
             )
           );
-        if (current?.revision !== input.revision)
+        if (
+          !current ||
+          (!input.appVersionId && current.revision !== input.revision)
+        )
           throw new TRPCError({
             code: "CONFLICT",
             message: "The workflow changed. Review a new estimate.",
@@ -274,8 +509,10 @@ export const workflowsRouter = router({
           });
         const state = await creditState(tx, input.organizationId);
         if (
-          state.account?.aiPaused ||
-          (state.account?.enforceCredits && state.remaining < prepared.credits)
+          prepared.credits > 0 &&
+          (state.account?.aiPaused ||
+            (state.account?.enforceCredits &&
+              state.remaining < prepared.credits))
         )
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -291,7 +528,8 @@ export const workflowsRouter = router({
             workflowId: workflow.id,
             organizationId: input.organizationId,
             actorUserId: ctx.user.id,
-            graph: workflow.graph,
+            appVersionId: input.appVersionId ?? null,
+            graph: prepared.graph,
             steps: prepared.steps,
             references: prepared.references,
             creditsByNode: prepared.creditsByNode,
@@ -319,7 +557,7 @@ export const workflowsRouter = router({
     }),
   stop: protectedProcedure.input(reference).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
-      ...studioRoles,
+      ...workflowRoles,
     ]);
     await (
       await libraryDatabase()

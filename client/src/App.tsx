@@ -61,7 +61,9 @@ function Router() {
       <Route path="/app/roadmap" component={ProductOverviewPage} />
       <Route path="/app/creatives" component={CreativesPage} />
       <Route path="/app/creatives/overview" component={CreativesPage} />
-      <Route path="/app/creatives/workflows" component={CreativeWorkflowsPage} />
+      <Route path="/app/creatives/workflows">
+        <CreativeWorkflowsPage />
+      </Route>
       {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(
         view => (
           <Route
@@ -71,6 +73,21 @@ function Router() {
           />
         )
       )}
+      <Route path="/app/activate/workflows">
+        <CreativeWorkflowsPage family="activate" />
+      </Route>
+      <Route path="/app/activate/automations">
+        <Redirect to="/app/activate/workflows" />
+      </Route>
+      <Route path="/app/measure/workflows">
+        <CreativeWorkflowsPage family="measure" />
+      </Route>
+      <Route path="/app/optimize/workflows">
+        <CreativeWorkflowsPage family="optimize" />
+      </Route>
+      <Route path="/app/optimize">
+        <CreativeWorkflowsPage family="optimize" />
+      </Route>
       {PRODUCT_FEATURES.filter(
         feature => feature.availability === "planned"
       ).map(feature => (
@@ -80,7 +97,6 @@ function Router() {
           component={PlannedFeaturePage}
         />
       ))}
-      <Route path="/app/optimize" component={ProductOverviewPage} />
       <Route path="/app/library" component={AssetLibraryPage} />
       <Route path="/app/social" component={ProductOverviewPage} />
       <Route path="/app/social/facebook" component={SocialMediaPage} />

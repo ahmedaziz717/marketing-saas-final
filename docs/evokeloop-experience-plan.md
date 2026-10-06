@@ -1,5 +1,11 @@
 # EvokeLoop experience redesign - implementation plan
 
+For the forward-looking product architecture, use the
+[general architecture baseline](general-architecture.md), adopted 2026-10-06.
+The refresh and release notes below retain their historical scope. Creative
+workflows and marketing automations may have distinct interfaces while sharing
+App, engine, control, execution, and evidence contracts.
+
 ## October 2026 workspace refresh
 
 This refresh supersedes the original dashboard navigation and palette below.

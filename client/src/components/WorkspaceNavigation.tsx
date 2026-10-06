@@ -54,7 +54,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
       { label: "Drafts", path: "/app/creatives/drafts" },
       { label: "Campaign plans", path: "/app/plans" },
       {
-        label: "Creative workflows",
+        label: "Workflows & Apps",
         path: "/app/creatives/workflows",
       },
     ],
@@ -72,9 +72,8 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
       { label: "Facebook", path: "/app/social/facebook" },
       { label: "Calendar", path: "/app/publishing" },
       {
-        label: "Automations",
-        path: "/app/activate/automations",
-        planned: true,
+        label: "Workflows & Apps",
+        path: "/app/activate/workflows",
       },
     ],
   },
@@ -83,9 +82,10 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     label: "Measure",
     path: "/app/analytics",
     group: "Measure",
-    aliases: ["/app/attribution", "/app/incrementality"],
+    aliases: ["/app/attribution", "/app/incrementality", "/app/measure"],
     children: [
       { label: "Overview", path: "/app/analytics", analyticsView: "overview" },
+      { label: "Workflows & Apps", path: "/app/measure/workflows" },
       {
         label: "Advertising",
         path: "/app/analytics/advertising",
@@ -103,7 +103,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     label: "Optimize",
     path: "/app/optimize",
     group: "Optimize",
-    roadmap: true,
+    children: [{ label: "Workflows & Apps", path: "/app/optimize/workflows" }],
   },
   {
     icon: FolderOpen,

@@ -12,6 +12,7 @@ import {
   Workflow,
   Archive,
   Play,
+  AppWindow,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -34,51 +35,86 @@ import {
   type WorkflowGraph,
 } from "@shared/creativeWorkflow";
 import "@/styles/workflows.css";
+import {
+  businessWorkflowTemplates,
+  businessWorkflowTemplate,
+  workflowSections,
+} from "@shared/workflowPlatform";
+import type { WorkflowFamily } from "@shared/creativeWorkflow";
+import { WorkflowApps, WorkflowAppRunner } from "@/components/WorkflowApps";
+import { WorkflowRunReview } from "@/components/WorkflowRunReview";
 
-export default function CreativeWorkflowsPage() {
+export default function CreativeWorkflowsPage({
+  family = "create",
+}: {
+  family?: WorkflowFamily;
+}) {
   return (
     <WorkspaceGate>
-      <WorkflowWorkspace />
+      <WorkflowWorkspace family={family} />
     </WorkspaceGate>
   );
 }
-function WorkflowWorkspace() {
+function WorkflowWorkspace({ family }: { family: WorkflowFamily }) {
   const { organizationId, membership } = useWorkspace();
   const search = useSearch(),
     [, navigate] = useLocation();
   const id = new URLSearchParams(search).get("workflow");
+  const appId = new URLSearchParams(search).get("app");
+  const section = workflowSections[family];
   if (!organizationId) return null;
-  if (!["owner", "admin", "creator"].includes(membership?.role ?? ""))
+  if (
+    !["owner", "admin", "creator", "publisher"].includes(membership?.role ?? "")
+  )
     return (
       <div className="surface p-8">
-        A creator role is needed to edit creative workflows.
+        A creator or publisher role is needed to work with workflows.
       </div>
+    );
+  if (appId)
+    return (
+      <WorkflowAppRunner
+        key={`${organizationId}:${appId}`}
+        organizationId={organizationId}
+        id={appId}
+        role={membership!.role}
+        onBack={() => navigate(section.path)}
+      />
     );
   return id ? (
     <WorkflowEditor
       key={`${organizationId}:${id}`}
       id={id}
+      family={family}
       organizationId={organizationId}
       role={membership!.role}
-      onBack={() => navigate("/app/creatives/workflows")}
+      onBack={() => navigate(section.path)}
     />
   ) : (
     <WorkflowLibrary
+      family={family}
       organizationId={organizationId}
-      onOpen={id => navigate(`/app/creatives/workflows?workflow=${id}`)}
+      onOpen={id => navigate(`${section.path}?workflow=${id}`)}
     />
   );
 }
 function WorkflowLibrary({
+  family,
   organizationId,
   onOpen,
 }: {
   organizationId: number;
   onOpen: (id: string) => void;
+  family: WorkflowFamily;
 }) {
+  const section = workflowSections[family];
+  const templates =
+    family === "create"
+      ? WORKFLOW_TEMPLATES
+      : businessWorkflowTemplates.filter(t => t.family === family);
   const [search, setSearch] = useState(""),
     [archiveId, setArchiveId] = useState<string | null>(null);
-  const list = trpc.workflows.list.useQuery({ organizationId });
+  const list = trpc.workflows.list.useQuery({ organizationId, family });
   const save = trpc.workflows.save.useMutation(),
     archive = trpc.workflows.archive.useMutation();
   const create = async (template?: string) => {
@@ -86,9 +122,11 @@ function WorkflowLibrary({
       const item = await save.mutateAsync({
         organizationId,
         name:
-          WORKFLOW_TEMPLATES.find(t => t.id === template)?.name ??
-          "Untitled workflow",
-        graph: workflowTemplate(template ?? ""),
+          templates.find(t => t.id === template)?.name ?? "Untitled workflow",
+        family,
+        graph:
+          businessWorkflowTemplate(template ?? "") ??
+          workflowTemplate(template ?? ""),
       });
       onOpen(item.id);
     } catch (e) {
@@ -96,15 +134,14 @@ function WorkflowLibrary({
     }
   };
   return (
-    <div className="wf-library">
+    <div className="wf-library" data-family={family}>
       <div className="wf-library-heading">
         <div>
-          <span className="wf-eyebrow">CREATE / WORKFLOWS</span>
-          <h1>Good ideas deserve a repeatable process.</h1>
-          <p>
-            Connect your prompts, images, and video tools. Make it once. Make it
-            yours.
-          </p>
+          <span className="wf-eyebrow">
+            {section.name.toUpperCase()} / WORKFLOWS & APPS
+          </span>
+          <h1>{section.heading}</h1>
+          <p>{section.description}</p>
         </div>
         <Button disabled={save.isPending} onClick={() => create()}>
           <Plus size={17} /> New workflow
@@ -116,7 +153,7 @@ function WorkflowLibrary({
           <span>Ready to make your own</span>
         </div>
         <div className="wf-templates">
-          {WORKFLOW_TEMPLATES.map((template, i) => (
+          {templates.map((template, i) => (
             <button
               key={template.id}
               disabled={save.isPending}
@@ -149,6 +186,7 @@ function WorkflowLibrary({
           ))}
         </div>
       </section>
+      <WorkflowApps organizationId={organizationId} family={family} />
       <section>
         <div className="wf-section-title">
           <h2>
@@ -205,7 +243,7 @@ function WorkflowLibrary({
         {!list.isLoading && !list.data?.length && (
           <div className="wf-empty-library">
             <Workflow size={32} />
-            <h3>Your next creative shortcut starts here.</h3>
+            <h3>Your next repeatable process starts here.</h3>
             <p>Pick a template above or start with a blank canvas.</p>
           </div>
         )}
@@ -248,6 +286,7 @@ function WorkflowLibrary({
 }
 function WorkflowEditor({
   id,
+  family,
   organizationId,
   role,
   onBack,
@@ -255,6 +294,7 @@ function WorkflowEditor({
   id: string;
   organizationId: number;
   role: string;
+  family: WorkflowFamily;
   onBack: () => void;
 }) {
   const detail = trpc.workflows.get.useQuery(
@@ -265,11 +305,16 @@ function WorkflowEditor({
     [name, setName] = useState(""),
     [savedString, setSavedString] = useState(""),
     [saveError, setSaveError] = useState("");
+  const [publishOpen, setPublishOpen] = useState(false),
+    [appDescription, setAppDescription] = useState("");
+  const publishApp = trpc.workflows.publishApp.useMutation();
+  const connections = trpc.channels.connections.useQuery({ organizationId });
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [review, setReview] = useState<{
     target?: string;
     credits: number;
     creditsByNode: Record<string, number>;
+    nodeNames: Record<string, string>;
     reused: number;
     requestId: string;
     revision: number;
@@ -379,7 +424,7 @@ function WorkflowEditor({
     active = runs.find(r => ["queued", "running"].includes(r.status)),
     shown = runs.find(r => r.id === selectedRun) ?? runs[0];
   return (
-    <div className="wf-editor">
+    <div className="wf-editor" data-family={family}>
       <header className="wf-editor-header">
         <button
           className="wf-icon-button"
@@ -440,15 +485,25 @@ function WorkflowEditor({
                 const copied = await save.mutateAsync({
                   organizationId,
                   name: `${name.slice(0, 90)} (copy)`,
+                  family,
                   graph,
                 });
-                navigate(`/app/creatives/workflows?workflow=${copied.id}`);
+                navigate(
+                  `${workflowSections[family].path}?workflow=${copied.id}`
+                );
               } catch (e) {
                 toast.error((e as Error).message);
               }
             }}
           >
             <Copy size={16} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPublishOpen(true)}
+          >
+            <AppWindow size={15} /> Publish as App
           </Button>
           <Link href="/app/library" className="wf-library-link">
             Asset Library <ArrowRight size={14} />
@@ -475,6 +530,12 @@ function WorkflowEditor({
       )}
       <WorkflowCanvas
         graph={graph}
+        family={family}
+        connectedChannels={
+          connections.data?.items
+            .filter(c => c.status === "connected")
+            .map(c => c.channel) ?? []
+        }
         onChange={setGraph}
         organizationId={organizationId}
         role={role}
@@ -522,7 +583,7 @@ function WorkflowEditor({
           ) : (
             <>
               <strong>Ready when you are</strong>
-              <span>Connect steps, then run your creative process.</span>
+              <span>Connect steps, then run your workflow.</span>
             </>
           )}
         </div>
@@ -564,11 +625,62 @@ function WorkflowEditor({
           )}
         </div>
       </footer>
+      <WorkflowRunReview
+        organizationId={organizationId}
+        run={active}
+        onRefresh={() => detail.refetch()}
+        role={role}
+      />
       {shown?.error && (
         <div className="wf-error" role="alert">
           {shown.error}
         </div>
       )}
+      <Dialog
+        open={publishOpen}
+        onOpenChange={open => !publishApp.isPending && setPublishOpen(open)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish {name} as an App</DialogTitle>
+            <DialogDescription>
+              Your team can run a simple App or reuse this version as a step in
+              another workflow. Future workflow edits are drafts until you
+              publish a new version.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="space-y-2">
+            App description
+            <Input
+              value={appDescription}
+              maxLength={600}
+              onChange={e => setAppDescription(e.target.value)}
+              placeholder="What does this App help your team do?"
+            />
+          </label>
+          <Button
+            disabled={publishApp.isPending || save.isPending}
+            onClick={async () => {
+              try {
+                await saveNow();
+                const app = await publishApp.mutateAsync({
+                  organizationId,
+                  id,
+                  revision: revision.current,
+                  description: appDescription,
+                });
+                setPublishOpen(false);
+                toast.success(`App version ${app.version} published`);
+                navigate(`${workflowSections[family].path}?app=${app.id}`);
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+          >
+            Publish App version
+          </Button>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!review}
         onOpenChange={open => !open && !run.isPending && setReview(null)}
@@ -581,8 +693,9 @@ function WorkflowEditor({
                 : "Run this workflow?"}
             </DialogTitle>
             <DialogDescription>
-              Generation uses AI credits. Images and videos are saved as drafts
-              in your Asset Library. Text stays in the workflow history.
+              Generation uses AI credits. Delivery steps can queue approved
+              publications. Ad activation pauses for an explicit review. Results
+              and decisions stay in run history.
             </DialogDescription>
           </DialogHeader>
           <div className="wf-credit-total">
@@ -595,8 +708,9 @@ function WorkflowEditor({
               .map(([nodeId, credits]) => (
                 <div className="flex justify-between text-sm" key={nodeId}>
                   <span>
-                    {graph.nodes.find(n => n.id === nodeId)?.title ??
-                      workflowNodes.text.name}
+                    {review?.nodeNames[nodeId] ??
+                      graph.nodes.find(n => n.id === nodeId)?.title ??
+                      "App step"}
                   </span>
                   <span>{credits} credits</span>
                 </div>

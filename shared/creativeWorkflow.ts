@@ -1,4 +1,18 @@
 import { z } from "zod";
+import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
+export const workflowFamilies = [
+  "create",
+  "activate",
+  "measure",
+  "optimize",
+] as const;
+export type WorkflowFamily = (typeof workflowFamilies)[number];
+export const workflowRoles = [
+  "owner",
+  "admin",
+  "creator",
+  "publisher",
+] as const;
 import {
   generationModel,
   modelOptionsSchema,
@@ -15,15 +29,39 @@ export const workflowNodeTypes = [
   "generate_image",
   "generate_video",
   "output",
+  "app_input",
+  "app",
+  "app_output",
+  "review",
+  "wait",
+  "facebook_post",
+  "meta_ad",
+  "deliver_publication",
+  "meta_activate",
+  "meta_report",
+  "facebook_report",
+  "compare_metrics",
+  "optimize_metric",
+  "optimize_copy",
 ] as const;
 export type WorkflowNodeType = (typeof workflowNodeTypes)[number];
-export type WorkflowPortType = "text" | "image" | "video" | "any";
+export type WorkflowPortType =
+  | "text"
+  | "image"
+  | "video"
+  | "data"
+  | "publication"
+  | "decision"
+  | "any";
 export const workflowNodes: Record<
   WorkflowNodeType,
   {
     name: string;
     description: string;
     group: string;
+    family?: WorkflowFamily;
+    channel?: "facebook" | "meta_ads";
+    hidden?: boolean;
     output: WorkflowPortType;
     inputs: {
       id: string;
@@ -92,6 +130,139 @@ export const workflowNodes: Record<
     output: "any",
     inputs: [{ id: "result", name: "Results", type: "any", multiple: true }],
   },
+  app_input: {
+    name: "App input",
+    description: "Receive content from the workflow using this App.",
+    group: "Inputs",
+    output: "any",
+    inputs: [{ id: "context", name: "Content", type: "any", multiple: true }],
+  },
+  app: {
+    name: "Run an App",
+    description: "Use a published App from any section, pinned to a version.",
+    group: "Apps",
+    output: "any",
+    inputs: [{ id: "context", name: "Content", type: "any", multiple: true }],
+  },
+  app_output: {
+    name: "App result",
+    description: "Collect the result of a versioned App.",
+    group: "Apps",
+    hidden: true,
+    output: "any",
+    inputs: [{ id: "result", name: "Results", type: "any", multiple: true }],
+  },
+  review: {
+    name: "Human review",
+    description: "Pause for an authorized person to review the exact inputs.",
+    group: "Control",
+    output: "any",
+    inputs: [{ id: "context", name: "Review", type: "any", multiple: true }],
+  },
+  wait: {
+    name: "Wait",
+    description: "Resume after a configured observation or waiting period.",
+    group: "Control",
+    output: "any",
+    inputs: [{ id: "context", name: "Content", type: "any", multiple: true }],
+  },
+  facebook_post: {
+    name: "Create Facebook post",
+    description: "Prepare text or an image post for publication approval.",
+    group: "Facebook",
+    family: "activate",
+    channel: "facebook",
+    output: "publication",
+    inputs: [
+      { id: "text", name: "Caption", type: "text", multiple: true },
+      { id: "image", name: "Image", type: "image" },
+    ],
+  },
+  meta_ad: {
+    name: "Create Meta ad",
+    description: "Prepare an image ad under an existing campaign and ad set.",
+    group: "Meta Ads",
+    family: "activate",
+    channel: "meta_ads",
+    output: "publication",
+    inputs: [
+      { id: "text", name: "Ad copy", type: "text", multiple: true },
+      { id: "image", name: "Image", type: "image" },
+    ],
+  },
+  deliver_publication: {
+    name: "Publish or schedule",
+    description:
+      "Wait for publication approval, then deliver at the chosen time. New Meta ads are paused.",
+    group: "Delivery",
+    family: "activate",
+    output: "publication",
+    inputs: [{ id: "publication", name: "Publication", type: "publication" }],
+  },
+  meta_activate: {
+    name: "Activate existing Meta ad",
+    description:
+      "Review and activate a selected ad using its existing ad-set budget and targeting.",
+    group: "Meta Ads",
+    family: "activate",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [],
+  },
+  meta_report: {
+    name: "Meta Ads performance",
+    description:
+      "Fetch account or campaign performance for a selected reporting period.",
+    group: "Meta Ads",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [],
+  },
+  facebook_report: {
+    name: "Facebook performance",
+    description:
+      "Fetch Page insights and recent post results with their reporting context.",
+    group: "Facebook",
+    family: "measure",
+    channel: "facebook",
+    output: "data",
+    inputs: [],
+  },
+  compare_metrics: {
+    name: "Compare results",
+    description:
+      "Compare compatible measurements against a baseline, preserving missing values.",
+    group: "Analysis",
+    family: "measure",
+    output: "data",
+    inputs: [
+      { id: "current", name: "Current", type: "data" },
+      { id: "baseline", name: "Baseline", type: "data" },
+    ],
+  },
+  optimize_metric: {
+    name: "Evaluate objective",
+    description:
+      "Compare a chosen metric with a target and abstain when evidence is insufficient.",
+    group: "Engines",
+    family: "optimize",
+    output: "decision",
+    inputs: [{ id: "evidence", name: "Evidence", type: "data" }],
+  },
+  optimize_copy: {
+    name: "Improve copy from evidence",
+    description:
+      "Propose copy or prompt improvements grounded in supplied results and brand rules.",
+    group: "Engines",
+    family: "optimize",
+    output: "text",
+    inputs: [
+      { id: "text", name: "Brief", type: "text", multiple: true },
+      { id: "evidence", name: "Evidence", type: "any", multiple: true },
+      { id: "image", name: "Images", type: "image", multiple: true },
+    ],
+  },
 };
 const id = z
   .string()
@@ -107,6 +278,55 @@ export const workflowNodeSchema = z.object({
   x: z.number().min(-10000).max(10000),
   y: z.number().min(-10000).max(10000),
   config: z.object({
+    appVersionId: z.string().uuid().optional(),
+    connectionId: z.string().uuid().optional(),
+    campaignId: z.string().regex(/^\d*$/).max(100).optional(),
+    adSetId: z.string().regex(/^\d*$/).max(100).optional(),
+    adId: z.string().regex(/^\d*$/).max(100).optional(),
+    headline: z.string().max(200).optional(),
+    destinationUrl: linkSchema.optional(),
+    scheduledAtMs: z.number().int().safe().positive().nullable().optional(),
+    timezone: timezoneSchema.optional(),
+    waitMinutes: z.number().int().min(1).max(43200).optional(),
+    datePreset: z
+      .enum([
+        "today",
+        "yesterday",
+        "7",
+        "14",
+        "30",
+        "90",
+        "this_month",
+        "last_month",
+        "this_year",
+        "last_year",
+        "365",
+        "custom",
+      ])
+      .optional(),
+    range: rangeSchema.optional(),
+    previousPeriod: z.boolean().optional(),
+    metric: z
+      .enum([
+        "roas",
+        "spend",
+        "clicks",
+        "linkClicks",
+        "impressions",
+        "purchases",
+        "purchaseValue",
+        "leads",
+        "registrations",
+        "trials",
+        "subscriptions",
+        "page_post_engagements",
+        "page_media_view",
+      ])
+      .optional(),
+    goal: z.number().finite().min(0).max(1000000000).optional(),
+    goalDirection: z.enum(["at_least", "at_most"]).optional(),
+    minimumImpressions: z.number().int().min(0).max(1000000000).optional(),
+    minimumAgeHours: z.number().int().min(0).max(8760).optional(),
     modelId: z.string().max(240).optional(),
     sourceVideoKey: z
       .string()
@@ -137,6 +357,15 @@ export type WorkflowGraph = z.infer<typeof workflowGraphSchema>;
 export type WorkflowNode = WorkflowGraph["nodes"][number];
 export type WorkflowEdge = WorkflowGraph["edges"][number];
 export type WorkflowValue =
+  | { type: "data" | "decision"; name: string; data: Record<string, unknown> }
+  | {
+      type: "publication";
+      id: string;
+      revision: number;
+      name: string;
+      channel: "facebook" | "meta_ads";
+      fingerprint: string;
+    }
   | { type: "text"; text: string }
   | {
       type: "image" | "video";
@@ -150,12 +379,28 @@ export type WorkflowStep = {
   outputs?: WorkflowValue[];
   error?: string;
   videoJobId?: string;
+  waitingReason?: string;
+  wakeAtMs?: number;
+  approvedByUserId?: number;
+  approvedAtMs?: number;
+  reviewHash?: string;
+  publicationId?: string;
+  reviewData?: {
+    before: Record<string, unknown> | null;
+    params: Record<string, string>;
+    warnings: string[];
+    ticket: string;
+    change: Record<string, unknown>;
+  };
+
   startedAtMs?: number;
   finishedAtMs?: number;
 };
 export type WorkflowSteps = Record<string, WorkflowStep>;
 export const isGenerationNode = (type: WorkflowNodeType) =>
-  ["assistant", "generate_image", "generate_video"].includes(type);
+  ["assistant", "generate_image", "generate_video", "optimize_copy"].includes(
+    type
+  );
 export function newWorkflowNode(
   type: WorkflowNodeType,
   id: string,
@@ -209,9 +454,11 @@ export function workflowGraphProblem(graph: WorkflowGraph): string | null {
     if (
       !port ||
       source.type === "output" ||
-      (port.type !== "any" && workflowNodes[source.type].output !== port.type)
+      (port.type !== "any" &&
+        workflowNodes[source.type].output !== "any" &&
+        workflowNodes[source.type].output !== port.type)
     )
-      return "Connect matching content types: text to text, or images to images.";
+      return "Connect matching content types, or use an App output with compatible content.";
     const key = `${edge.source}:${edge.target}:${edge.port}`;
     if (connections.has(key) || ids.has(edge.id))
       return "This connection already exists.";
@@ -297,6 +544,45 @@ export function workflowRunProblem(
       )
         return `${model.name} does not accept a source video. Choose another model for “${node.title}”.`;
     }
+    if (node.type === "app" && !node.config.appVersionId)
+      return `Choose a published App for “${node.title}”.`;
+    if (workflowNodes[node.type].channel && !node.config.connectionId)
+      return `Choose a connected account for “${node.title}”.`;
+    if (
+      node.type === "meta_ad" &&
+      (!node.config.adSetId ||
+        !node.config.destinationUrl ||
+        !graph.edges.some(e => e.target === node.id && e.port === "image"))
+    )
+      return `Choose an ad set, destination URL, and image for “${node.title}”.`;
+    if (node.type === "meta_activate" && !node.config.adId)
+      return `Choose an existing ad for “${node.title}”.`;
+    if (
+      ["meta_report", "facebook_report"].includes(node.type) &&
+      node.config.datePreset === "custom" &&
+      !node.config.range
+    )
+      return `Choose a date range for “${node.title}”.`;
+    if (
+      [
+        "review",
+        "deliver_publication",
+        "optimize_metric",
+        "compare_metrics",
+      ].includes(node.type) &&
+      workflowNodes[node.type].inputs.some(
+        p => !graph.edges.some(e => e.target === node.id && e.port === p.id)
+      )
+    )
+      return `Connect all inputs to “${node.title}”.`;
+    if (node.type === "optimize_metric" && node.config.goal === undefined)
+      return `Set a target for “${node.title}”.`;
+    if (
+      node.type === "facebook_post" &&
+      !node.config.text.trim() &&
+      !graph.edges.some(e => e.target === node.id)
+    )
+      return `Connect content or write a caption for “${node.title}”.`;
     if (node.type === "text" && !node.config.text.trim())
       return `Add text to “${node.title}”.`;
     if (node.type === "image" && !node.config.imageKey)

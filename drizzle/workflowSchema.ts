@@ -5,9 +5,14 @@ import {
   json,
   text,
   varchar,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { appSchema, organizations, users } from "./schema";
-import type { WorkflowGraph, WorkflowSteps } from "../shared/creativeWorkflow";
+import type {
+  WorkflowGraph,
+  WorkflowSteps,
+  WorkflowFamily,
+} from "../shared/creativeWorkflow";
 import type { VideoReference } from "../shared/videoCreation";
 
 export const creativeWorkflows = appSchema
@@ -22,6 +27,10 @@ export const creativeWorkflows = appSchema
         .notNull()
         .references(() => users.id),
       name: text("name").notNull(),
+      family: text("family")
+        .$type<WorkflowFamily>()
+        .notNull()
+        .default("create"),
       graph: json("graph").$type<WorkflowGraph>().notNull(),
       revision: integer("revision").notNull().default(1),
       archived: integer("archived").notNull().default(0),
@@ -52,6 +61,7 @@ export const creativeWorkflowRuns = appSchema
         .notNull()
         .references(() => users.id),
       graph: json("graph").$type<WorkflowGraph>().notNull(),
+      appVersionId: varchar("appVersionId", { length: 36 }),
       steps: json("steps").$type<WorkflowSteps>().notNull(),
       references: json("references")
         .$type<VideoReference[]>()
@@ -79,6 +89,35 @@ export const creativeWorkflowRuns = appSchema
         t.createdAtMs
       ),
       index("creative_workflow_runs_queue").on(t.status, t.leaseUntilMs),
+    ]
+  )
+  .enableRLS();
+
+export const workflowAppVersions = appSchema
+  .table(
+    "workflow_app_versions",
+    {
+      id: varchar("id", { length: 36 }).primaryKey(),
+      organizationId: integer("organizationId")
+        .notNull()
+        .references(() => organizations.id),
+      workflowId: varchar("workflowId", { length: 36 })
+        .notNull()
+        .references(() => creativeWorkflows.id, { onDelete: "cascade" }),
+      version: integer("version").notNull(),
+      workflowRevision: integer("workflowRevision").notNull(),
+      family: text("family").$type<WorkflowFamily>().notNull(),
+      name: text("name").notNull(),
+      description: text("description").notNull().default(""),
+      graph: json("graph").$type<WorkflowGraph>().notNull(),
+      actorUserId: integer("actorUserId")
+        .notNull()
+        .references(() => users.id),
+      createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    },
+    t => [
+      uniqueIndex("workflow_app_version_unique").on(t.workflowId, t.version),
+      index("workflow_app_org_created").on(t.organizationId, t.createdAtMs),
     ]
   )
   .enableRLS();
