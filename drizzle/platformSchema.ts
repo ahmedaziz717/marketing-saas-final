@@ -9,6 +9,24 @@ import {
 } from "drizzle-orm/pg-core";
 import { appSchema, organizations, users } from "./schema";
 import type { ProviderRate } from "../shared/platformAdmin";
+import type { CreditPolicy } from "../shared/aiCredits";
+export const aiPricingPolicy = appSchema
+  .table("ai_pricing_policy", {
+    id: text("id").primaryKey(),
+    config: json("config").$type<CreditPolicy>().notNull(),
+    updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+  })
+  .enableRLS();
+export const aiModelSettings = appSchema
+  .table("ai_model_settings", {
+    id: text("id").primaryKey(),
+    enabled: integer("enabled").notNull().default(1),
+    routeId: text("routeId"),
+    availability: text("availability"),
+    checkedAtMs: bigint("checkedAtMs", { mode: "number" }),
+    updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+  })
+  .enableRLS();
 export const platformTiers = appSchema.table("platform_tiers", {
   id: varchar("id", { length: 42 }).primaryKey(),
   name: text("name").notNull(),

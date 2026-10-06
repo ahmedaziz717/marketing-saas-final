@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { useAssetCopy } from "@/hooks/useAssetCopy";
 import type { CopySet } from "@shared/adCopy";
@@ -67,7 +68,8 @@ export function AdCopyAssistant({
             ? "Generate post copy"
             : source === key && options.length
               ? "Regenerate all 5 sets"
-              : "Generate 5 copy sets"}
+              : "Generate 5 copy sets"}{" "}
+        <ActionCredits organizationId={organizationId} />
       </Button>
       <p className="text-xs text-muted-foreground">
         Uses the actual selected images and saved business/brand context. Review
@@ -94,7 +96,8 @@ export function AdCopyAssistant({
                 disabled={generate.isPending}
                 onClick={() => generate.generate({ index: i, field: "set" })}
               >
-                Regenerate option {i + 1}
+                Regenerate option {i + 1}{" "}
+                <ActionCredits organizationId={organizationId} />
               </Button>
             </div>
           </div>

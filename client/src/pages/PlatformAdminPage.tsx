@@ -15,6 +15,7 @@ import { utcCreditMonth, type ProviderRate } from "@shared/platformAdmin";
 import { toast } from "sonner";
 import { rememberWorkspace } from "@/lib/workspaceSelection";
 import { OpenAIBilling } from "@/components/OpenAIBilling";
+import { ModelPricingAdmin } from "@/components/ModelPricingAdmin";
 import {
   Dialog,
   DialogContent,
@@ -1080,6 +1081,7 @@ function Administration() {
           </form>
         </div>
       )}
+      {tab === "Models & credits" && <ModelPricingAdmin />}
       {tab === "Provider rates" && (
         <section className="surface mb-6 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1193,16 +1195,35 @@ function Administration() {
               future requests; historical estimates retain their pricing
               snapshot.
             </p>
-            {config.data?.rates.map(r => (
-              <button
-                key={r.id}
-                className="mb-3 block w-full break-words rounded-xl border p-4 text-left"
-                onClick={() => setRate(r.config)}
+            <label className="block text-sm">
+              Choose a provider rate
+              <select
+                className={field + " mt-2 w-full"}
+                value={`${rate.provider}/${rate.model}/${rate.kind}`}
+                onChange={e => {
+                  const selected = config.data?.rates.find(
+                    r => `${r.provider}/${r.model}/${r.kind}` === e.target.value
+                  );
+                  if (selected) setRate(selected.config);
+                }}
               >
-                {r.provider} / {r.model} · {r.kind} · {r.config.credits} credits
-                {r.kind === "video" ? "/second" : ""}
-              </button>
-            ))}
+                <option value="">Select a model…</option>
+                {config.data?.rates.map(r => (
+                  <option
+                    key={r.id}
+                    value={`${r.provider}/${r.model}/${r.kind}`}
+                  >
+                    {r.provider} / {r.model} · {r.kind}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <a
+              href="/admin/models"
+              className="mt-3 inline-block text-sm text-primary underline"
+            >
+              Browse model prices and provider routes
+            </a>
             <h3 className="mt-5 font-semibold">
               Models observed in this report
             </h3>
@@ -1277,15 +1298,43 @@ function Administration() {
                 <option>other</option>
               </select>
             </Field>
-            <NumberField
-              label={
-                rate.kind === "video"
-                  ? "AI credits per billable second"
-                  : "AI credits per request"
-              }
-              value={rate.credits}
-              onChange={credits => setRate({ ...rate, credits })}
-            />
+            <Field label="Markup override (%; blank uses global default)">
+              <Input
+                type="number"
+                min={0}
+                max={1000}
+                value={rate.markupPercent ?? ""}
+                placeholder="Global default"
+                onChange={e =>
+                  setRate({
+                    ...rate,
+                    markupPercent:
+                      e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+            <Field label="Estimated provider cost per request (USD; text/image reservation)">
+              <Input
+                type="number"
+                min={0}
+                step="any"
+                value={
+                  rate.estimatedCostMicros == null
+                    ? ""
+                    : rate.estimatedCostMicros / 1e6
+                }
+                onChange={e =>
+                  setRate({
+                    ...rate,
+                    estimatedCostMicros:
+                      e.target.value === ""
+                        ? undefined
+                        : Math.round(Number(e.target.value) * 1e6),
+                  })
+                }
+              />
+            </Field>
             {(
               [
                 "inputPerMillion",
@@ -1341,10 +1390,9 @@ function Administration() {
                 <p className="rounded-xl bg-muted p-3 text-xs leading-5">
                   Video costs are estimates from the saved rate and measured
                   output dimensions/duration. Promotions and account discounts
-                  are not automatically imported. Credits use source + output
-                  seconds for Seedance and source seconds for motion transfer.
-                  Review Higgsfield’s current published rates before changing
-                  these settings.
+                  are not automatically imported. Credits apply the saved markup
+                  to the estimated provider cost. Review Higgsfield’s current
+                  published rates before changing these settings.
                 </p>
               </>
             )}

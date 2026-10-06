@@ -1,5 +1,13 @@
 import { z } from "zod";
 import {
+  generationModel,
+  modelOptionsSchema,
+  modelRequestBody,
+  modelDefaults,
+  requiresVideo,
+  type ModelOptions,
+} from "./modelCatalog";
+import {
   CREATIVE_ART_STYLES,
   CREATIVE_MOODS,
   getCreativeArtStyle,
@@ -100,6 +108,8 @@ export type VideoImageChoice = {
 export const videoSetupSchema = z
   .object({
     category: z.enum(["product", "ugc"]).default("product"),
+    modelId: z.string().max(240).optional(),
+    modelOptions: modelOptionsSchema.optional(),
     people: z.array(personReferenceSchema).max(4).default([]),
     title: z.string().trim().min(1).max(160),
     mode: z.enum(["create", "edit", "extend", "motion"]),
@@ -107,9 +117,9 @@ export const videoSetupSchema = z
     imageKeys: z.array(videoImageKey).max(9),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
-    duration: z.number().int().min(4).max(30),
-    aspectRatio: z.enum(videoRatios),
-    resolution: z.enum(videoResolutions),
+    duration: z.number().int().min(1).max(120),
+    aspectRatio: z.string().max(20),
+    resolution: z.string().max(20),
     sound: z.boolean(),
     bitrate: z.enum(["default", "high"]),
     campaignPlanId: z.number().int().positive().optional(),
@@ -147,6 +157,25 @@ export const defaultVideoSetup: VideoSetup = {
   bitrate: "default",
 };
 export function videoSetupProblem(setup: VideoSetup): string | null {
+  if (new Set(setup.imageKeys).size !== setup.imageKeys.length)
+    return "Choose each reference image only once.";
+  if (setup.modelId) {
+    const model = generationModel(setup.modelId);
+    if (!model || model.kind !== "video") return "Choose a video model.";
+    try {
+      modelRequestBody(model, {
+        prompt: videoPrompt(setup),
+        images: setup.imageKeys.map(() => "https://reference.invalid/image"),
+        video: setup.sourceVideoKey
+          ? "https://reference.invalid/video"
+          : undefined,
+        options: videoModelOptions(setup),
+      });
+    } catch (error) {
+      return error instanceof Error ? error.message : "Check model settings.";
+    }
+    return null;
+  }
   if (new Set(setup.imageKeys).size !== setup.imageKeys.length)
     return "Choose each reference image only once.";
   if (setup.mode !== "create" && !setup.sourceVideoKey)
@@ -189,9 +218,13 @@ export type VideoReference = {
   durationSeconds?: number;
 };
 export function videoModelKey(setup: VideoSetup) {
+  if (setup.modelId)
+    return generationModel(setup.modelId)?.providerModel ?? "invalid";
   return `${setup.mode === "motion" ? "genjutsu" : "seedance-2.5"}/${setup.resolution}`;
 }
 export function videoEndpoint(setup: VideoSetup) {
+  if (setup.modelId)
+    return generationModel(setup.modelId)?.providerModel ?? "invalid";
   if (setup.mode === "motion")
     return "higgsfield/genjutsu/motion-transfer/v1.0";
   const task =
@@ -236,6 +269,17 @@ export function videoRequestBody(
   images: string[],
   source?: string
 ) {
+  if (setup.modelId) {
+    const model = generationModel(setup.modelId);
+    if (!model || model.kind !== "video")
+      throw new Error("Choose a video model.");
+    return modelRequestBody(model, {
+      prompt: videoPrompt(setup),
+      images,
+      video: source,
+      options: videoModelOptions(setup),
+    });
+  }
   const body: Record<string, unknown> = { resolution: setup.resolution };
   const prompt = videoPrompt(setup);
   if (prompt) body.prompt = prompt;
@@ -249,4 +293,30 @@ export function videoRequestBody(
   if (setup.mode === "create") body.aspect_ratio = setup.aspectRatio;
   else body.video_url = source;
   return body;
+}
+
+export function videoModelOptions(setup: VideoSetup): ModelOptions {
+  const model = generationModel(setup.modelId || "");
+  if (!model) return {};
+  const p = model.inputSchema.properties;
+  return {
+    ...modelDefaults(model),
+    ...setup.modelOptions,
+    ...(p.duration ? { duration: setup.duration } : {}),
+    ...(p.resolution ? { resolution: setup.resolution } : {}),
+    ...(p.aspect_ratio ? { aspect_ratio: setup.aspectRatio } : {}),
+    ...(p.generate_audio && setup.modelOptions?.generate_audio === undefined
+      ? { generate_audio: setup.sound }
+      : {}),
+    ...(p.sound && setup.modelOptions?.sound === undefined
+      ? {
+          sound:
+            p.sound.type === "boolean"
+              ? setup.sound
+              : setup.sound
+                ? "on"
+                : "off",
+        }
+      : {}),
+  };
 }

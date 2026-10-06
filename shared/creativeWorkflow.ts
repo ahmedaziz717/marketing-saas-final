@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  generationModel,
+  modelOptionsSchema,
+  referenceCapacity,
+  requiresVideo,
+} from "./modelCatalog";
 import { videoDirectionSchema, defaultVideoDirection } from "./videoCreation";
 
 export const workflowNodeTypes = [
@@ -70,12 +76,13 @@ export const workflowNodes: Record<
   },
   generate_video: {
     name: "Generate video",
-    description: "Bring a still to life, or create from a prompt.",
+    description: "Create, edit, or extend video with your chosen model.",
     group: "Generate",
     output: "video",
     inputs: [
       { id: "text", name: "Prompt", type: "text", multiple: true },
       { id: "image", name: "References", type: "image", multiple: true },
+      { id: "video", name: "Source video", type: "video", multiple: false },
     ],
   },
   output: {
@@ -100,15 +107,22 @@ export const workflowNodeSchema = z.object({
   x: z.number().min(-10000).max(10000),
   y: z.number().min(-10000).max(10000),
   config: z.object({
+    modelId: z.string().max(240).optional(),
+    sourceVideoKey: z
+      .string()
+      .regex(/^(asset|creative):[1-9][0-9]*$/)
+      .nullable()
+      .optional(),
+    modelOptions: modelOptionsSchema.optional(),
     text: z.string().max(10000).default(""),
     imageKey: z
       .string()
       .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
       .nullable()
       .default(null),
-    ratio: z.enum(["1:1", "4:5", "9:16", "16:9"]).default("1:1"),
-    duration: z.number().int().min(4).max(30).default(5),
-    resolution: z.enum(["480p", "720p", "1080p"]).default("720p"),
+    ratio: z.string().max(20).default("1:1"),
+    duration: z.number().int().min(1).max(120).default(5),
+    resolution: z.string().max(20).default("720p"),
     useBrand: z.boolean().default(true),
     direction: videoDirectionSchema.nullable().default(null),
   }),
@@ -205,7 +219,7 @@ export function workflowGraphProblem(graph: WorkflowGraph): string | null {
     ids.add(edge.id);
     if (
       graph.edges.filter(e => e.target === target.id && e.port === edge.port)
-        .length > (port.type === "image" ? 9 : 12)
+        .length > (!port.multiple ? 1 : port.type === "image" ? 9 : 12)
     )
       return "Too many inputs for this step.";
   }
@@ -250,12 +264,46 @@ export function workflowRunProblem(
   if (structural) return structural;
   if (!graph.nodes.length) return "Add a step to your workflow first.";
   for (const node of graph.nodes.filter(n => !selected || selected.has(n.id))) {
+    const model = node.config.modelId
+      ? generationModel(node.config.modelId)
+      : undefined;
+    if (
+      ["generate_image", "generate_video"].includes(node.type) &&
+      node.config.modelId
+    ) {
+      if (!model || `generate_${model.kind}` !== node.type)
+        return `Choose a compatible model for “${node.title}”.`;
+      const images = graph.edges.filter(
+        e => e.target === node.id && e.port === "image"
+      ).length;
+      const video =
+        !!node.config.sourceVideoKey ||
+        graph.edges.some(e => e.target === node.id && e.port === "video");
+      if (images > referenceCapacity(model))
+        return `${model.name} supports ${referenceCapacity(model)} reference images. Remove extra connections from “${node.title}” or choose another model.`;
+      if (
+        !images &&
+        (model.inputSchema.required ?? []).some(k =>
+          ["image_url", "image_urls", "first_frame_url"].includes(k)
+        )
+      )
+        return `Connect a reference image to “${node.title}”.`;
+      if (requiresVideo(model) && !video)
+        return `Choose or connect a source video for “${node.title}”.`;
+      if (
+        video &&
+        !model.inputSchema.properties.video_url &&
+        !model.inputSchema.properties.video_urls
+      )
+        return `${model.name} does not accept a source video. Choose another model for “${node.title}”.`;
+    }
     if (node.type === "text" && !node.config.text.trim())
       return `Add text to “${node.title}”.`;
     if (node.type === "image" && !node.config.imageKey)
       return `Choose an image for “${node.title}”.`;
     if (
       ["assistant", "generate_image", "generate_video"].includes(node.type) &&
+      (!model || !!model.inputSchema.properties.prompt) &&
       !node.config.text.trim() &&
       !graph.edges.some(e => e.target === node.id && e.port === "text")
     )
@@ -265,7 +313,11 @@ export function workflowRunProblem(
       !graph.edges.some(e => e.target === node.id)
     )
       return `Connect an input to “${node.title}”.`;
-    if (node.type === "generate_video" && node.config.ratio === "4:5")
+    if (
+      node.type === "generate_video" &&
+      !node.config.modelId &&
+      node.config.ratio === "4:5"
+    )
       return "Video supports square, portrait 9:16, or landscape 16:9. Choose one in the video step.";
   }
   return null;

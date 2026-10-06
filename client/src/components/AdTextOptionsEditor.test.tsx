@@ -14,6 +14,7 @@ import { observable } from "@trpc/server/observable";
 import { trpc } from "@/lib/trpc";
 import { AdTextOptionsEditor } from "./AdTextOptionsEditor";
 import { copyContentFromSets, type CopyContent } from "@shared/adCopy";
+vi.mock("./ActionCredits", () => ({ ActionCredits: () => null }));
 const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
 const options = Array.from({ length: 5 }, (_, i) => ({

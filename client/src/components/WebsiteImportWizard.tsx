@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { OfferingDiscovery } from "./OfferingDiscovery";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -677,6 +678,10 @@ export function WebsiteImportWizard({
           disabled={active}
         />
       </div>
+      <p className="text-xs text-muted-foreground">
+        <ActionCredits organizationId={organizationId} /> per AI analysis
+        request. The total depends on how many pages need analysis.
+      </p>
       {job && (
         <section className="rounded-2xl bg-muted/60 p-5" aria-live="polite">
           <div className="flex items-center justify-between gap-3">

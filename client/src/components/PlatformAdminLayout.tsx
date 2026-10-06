@@ -26,6 +26,7 @@ export const adminSections = [
   { slug: "usage", title: "Usage & costs", icon: Activity },
   { slug: "billing", title: "OpenAI billing", icon: CreditCard },
   { slug: "tiers", title: "Tiers", icon: Layers },
+  { slug: "models", title: "Models & credits", icon: Layers },
   { slug: "pricing", title: "Provider rates", icon: Settings2 },
   { slug: "finance", title: "Financial entries", icon: Receipt },
   { slug: "audit", title: "Audit", icon: BookOpen },

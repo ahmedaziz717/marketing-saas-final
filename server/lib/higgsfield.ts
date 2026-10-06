@@ -1,10 +1,14 @@
 import https from "node:https";
 import { z } from "zod";
 import { assertPublicUrl } from "./websiteCrawler";
+import { generationModels } from "../../shared/modelCatalog";
 
 const API = "https://api.higgsfield.ai";
-export function higgsfieldConfigured() {
-  return !!credential() && process.env.VIDEO_GENERATION_ENABLED !== "false";
+export function higgsfieldConfigured(kind: "image" | "video" = "video") {
+  return (
+    !!credential() &&
+    (kind === "image" || process.env.VIDEO_GENERATION_ENABLED !== "false")
+  );
 }
 function credential() {
   return (process.env.HF_API_KEY || process.env.HF_CREDENTIALS || "")
@@ -82,6 +86,7 @@ const resultSchema = z.object({
   status_url: z.string().optional(),
   cancel_url: z.string().optional(),
   video: z.object({ url: z.string().url() }).optional(),
+  images: z.array(z.object({ url: z.string().url() })).optional(),
 });
 export type HiggsfieldResult = z.infer<typeof resultSchema>;
 
@@ -147,8 +152,9 @@ export async function submitHiggsfield(
   id: string
 ) {
   if (
-    !/^(bytedance\/seedance-2\.5\/(text-to-video|reference-to-video|video-edit|video-extend)|higgsfield\/genjutsu\/motion-transfer\/v1\.0)$/.test(
-      endpoint
+    !generationModels.some(
+      model =>
+        model.provider === "higgsfield" && model.providerModel === endpoint
     )
   )
     throw new Error("Unsupported video operation");

@@ -681,7 +681,7 @@ describe("durable video generation", () => {
     expect(await state.db.select().from(aiUsage)).toHaveLength(1);
     const ledger = await state.db.select().from(creditLedger);
     expect(ledger).toHaveLength(1);
-    expect(ledger[0].amount).toBe(-235);
+    expect(ledger[0].amount).toBe(-463);
     expect(
       JSON.stringify(
         await owner.video.get({ organizationId: org, id: draft.id })
@@ -693,7 +693,7 @@ describe("durable video generation", () => {
     await expect(queued()).rejects.toThrow("administrator setup");
     await videoWorkerHeartbeat(state.db);
     await state.db.update(platformTiers).set({ monthlyCredits: 1 });
-    await expect(queued()).rejects.toThrow("235 AI credits");
+    await expect(queued()).rejects.toThrow("463 AI credits");
     await state.db.update(platformAccounts).set({ aiPaused: 1 });
     await expect(queued()).rejects.toThrow("paused");
     expect(await state.db.select().from(aiUsage)).toHaveLength(0);
@@ -745,7 +745,7 @@ describe("durable video generation", () => {
     const [usage] = await state.db.select().from(aiUsage);
     expect(usage).toMatchObject({
       status: "succeeded",
-      credits: 235,
+      credits: 463,
       costMicros: 2311200,
     });
     expect(usage.usage.costBasis).toBe("published_rate_estimate");
@@ -836,7 +836,7 @@ describe("durable video generation", () => {
     };
     expect(
       (await owner.video.quote({ organizationId: org, setup: edit })).credits
-    ).toBe(470);
+    ).toBe(555);
     const request = videoRequestBody(
       edit,
       ["https://reference.test/a.png"],

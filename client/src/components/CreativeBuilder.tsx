@@ -1,3 +1,6 @@
+import { ActionCredits } from "./ActionCredits";
+import { ModelPicker, ModelSettings } from "./ModelPicker";
+import { DEFAULT_IMAGE_MODEL } from "@shared/modelCatalog";
 import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { LifestylePersonPicker } from "./LifestylePersonPicker";
 import { isPeopleShot } from "@shared/lifestylePeople";
@@ -107,6 +110,15 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   );
   const logo = logos.find(asset => asset.id === setup.logoAssetId);
   const count = outputCount(setup);
+  const creditQuote = trpc.models.imageQuote.useQuery(
+    {
+      organizationId: organizationId!,
+      modelId: setup.modelId,
+      options: setup.modelOptions,
+      count: Math.max(1, count),
+    },
+    { enabled: !!organizationId && count > 0, retry: false }
+  );
   const issues = generationSetupIssues(setup);
   if (
     setup.promotionMode === "platform" &&
@@ -271,6 +283,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
         ...result,
         expectedUpdatedAtMs: result.updatedAtMs,
         requestId: crypto.randomUUID(),
+        quotedCredits: creditQuote.data?.credits,
       });
       await Promise.all([
         utils.creatives.overview.invalidate(),
@@ -334,6 +347,24 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
 
   return (
     <div className="space-y-5">
+      <section className="surface grid gap-5 p-5 lg:grid-cols-2">
+        <ModelPicker
+          organizationId={organizationId!}
+          kind="image"
+          value={setup.modelId}
+          disabled={busy}
+          onChange={(modelId, modelOptions) =>
+            change({ ...setup, modelId, modelOptions })
+          }
+        />
+        <ModelSettings
+          organizationId={organizationId}
+          modelId={setup.modelId ?? DEFAULT_IMAGE_MODEL}
+          options={setup.modelOptions}
+          disabled={busy}
+          onChange={modelOptions => change({ ...setup, modelOptions })}
+        />
+      </section>
       <CampaignPlanSelect
         value={setup.campaignPlanId}
         onChange={(id, plan) =>
@@ -1163,7 +1194,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Refresh copy
+                  Refresh copy <ActionCredits organizationId={organizationId} />
                 </Button>
               </div>
             </div>
@@ -1401,7 +1432,12 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
           onClick={() => setReviewOpen(true)}
         >
           <Sparkles className="mr-2 h-4 w-4" />
-          Review & generate
+          Review & generate{" "}
+          {creditQuote.data && (
+            <span className="ml-2 text-xs">
+              ≈ {creditQuote.data.credits} credits
+            </span>
+          )}
         </Button>
       </div>
       {generate.isPending && (
@@ -1528,7 +1564,26 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
             every size before approval. Compact sizes may need shorter copy or
             fewer spec callouts.
           </p>
-          <Button disabled={busy || !!issues.length} onClick={generateSet}>
+          <p className="text-sm font-medium">
+            {creditQuote.data
+              ? `Estimated cost: ${creditQuote.data.credits.toLocaleString()} credits for ${count} images`
+              : creditQuote.error
+                ? creditQuote.error.message
+                : "Calculating credits…"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Token-based generation settles from actual usage. Other providers
+            use published cost estimates.
+          </p>
+          <Button
+            disabled={
+              busy ||
+              !!issues.length ||
+              !creditQuote.data ||
+              creditQuote.isFetching
+            }
+            onClick={generateSet}
+          >
             <Sparkles className="mr-2 h-4 w-4" />
             Generate with AI
           </Button>

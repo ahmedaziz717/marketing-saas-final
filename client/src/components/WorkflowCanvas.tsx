@@ -30,6 +30,13 @@ import {
   GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ModelPicker, ModelSettings } from "./ModelPicker";
+import {
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_VIDEO_MODEL,
+  generationModel,
+  type ModelOptions,
+} from "@shared/modelCatalog";
 import { trpc } from "@/lib/trpc";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -110,6 +117,7 @@ export function WorkflowCanvas({
     [connecting, setConnecting] = useState<string | null>(null),
     [cursor, setCursor] = useState({ x: 0, y: 0 });
   const [pickImage, setPickImage] = useState<string | null>(null),
+    [pickVideo, setPickVideo] = useState<string | null>(null),
     [uploadFor, setUploadFor] = useState<string | null>(null),
     [preview, setPreview] = useState<WorkflowValue | null>(null);
   const [past, setPast] = useState<WorkflowGraph[]>([]),
@@ -575,6 +583,18 @@ export function WorkflowCanvas({
                   )}
                 </div>
                 <footer className="wf-node-footer">
+                  {["generate_image", "generate_video"].includes(node.type) && (
+                    <span className="wf-model-label">
+                      {
+                        generationModel(
+                          node.config.modelId ||
+                            (node.type === "generate_image"
+                              ? DEFAULT_IMAGE_MODEL
+                              : DEFAULT_VIDEO_MODEL)
+                        )?.name
+                      }
+                    </span>
+                  )}
                   <span>
                     {node.type === "text"
                       ? `${node.config.text.length} characters`
@@ -588,6 +608,9 @@ export function WorkflowCanvas({
                               : "Collect workflow results"
                             : meta.output}
                   </span>
+                  {isGenerationNode(node.type) && (
+                    <NodeCredits organizationId={organizationId} node={node} />
+                  )}
                   {isGenerationNode(node.type) && (
                     <button
                       disabled={busy}
@@ -755,64 +778,146 @@ export function WorkflowCanvas({
                 selectedNode.type
               ) && (
                 <>
-                  <div className="wf-settings-row">
-                    <label>
-                      Aspect ratio
-                      <select
-                        value={selectedNode.config.ratio}
-                        onChange={e =>
-                          config({
-                            ratio: e.target
-                              .value as WorkflowNode["config"]["ratio"],
-                          })
-                        }
-                      >
-                        {(selectedNode.type === "generate_video"
-                          ? ["16:9", "9:16", "1:1"]
-                          : ["1:1", "4:5", "9:16", "16:9"]
-                        ).map(r => (
-                          <option key={r}>{r}</option>
-                        ))}
-                      </select>
-                    </label>
-                    {selectedNode.type === "generate_video" && (
+                  <ModelPicker
+                    organizationId={organizationId}
+                    kind={
+                      selectedNode.type === "generate_image" ? "image" : "video"
+                    }
+                    value={selectedNode.config.modelId}
+                    disabled={busy}
+                    onChange={(modelId, modelOptions) =>
+                      config({
+                        modelId,
+                        modelOptions,
+                        duration: Number(modelOptions.duration ?? 5),
+                        resolution: String(modelOptions.resolution ?? "720p"),
+                        ratio: String(modelOptions.aspect_ratio ?? "1:1"),
+                      })
+                    }
+                  />
+                  <ModelSettings
+                    organizationId={organizationId}
+                    modelId={selectedNode.config.modelId}
+                    options={selectedNode.config.modelOptions}
+                    disabled={busy}
+                    onChange={modelOptions =>
+                      config({
+                        modelOptions,
+                        duration: Number(
+                          modelOptions.duration ?? selectedNode.config.duration
+                        ),
+                        resolution: String(
+                          modelOptions.resolution ??
+                            selectedNode.config.resolution
+                        ),
+                        ratio: String(
+                          modelOptions.aspect_ratio ?? selectedNode.config.ratio
+                        ),
+                      })
+                    }
+                  />
+                  {(!selectedNode.config.modelId ||
+                    selectedNode.config.modelId.startsWith("openai:")) && (
+                    <div className="wf-settings-row">
                       <label>
-                        Resolution
+                        Aspect ratio
                         <select
-                          value={selectedNode.config.resolution}
+                          value={selectedNode.config.ratio}
                           onChange={e =>
                             config({
-                              resolution: e.target
-                                .value as WorkflowNode["config"]["resolution"],
+                              ratio: e.target
+                                .value as WorkflowNode["config"]["ratio"],
                             })
                           }
                         >
-                          {["480p", "720p", "1080p"].map(r => (
+                          {(selectedNode.type === "generate_video"
+                            ? ["16:9", "9:16", "1:1"]
+                            : ["1:1", "4:5", "9:16", "16:9"]
+                          ).map(r => (
                             <option key={r}>{r}</option>
                           ))}
                         </select>
                       </label>
-                    )}
-                  </div>
-                  {selectedNode.type === "generate_video" && (
-                    <label>
-                      Duration (seconds)
-                      <Input
-                        type="number"
-                        min={4}
-                        max={30}
-                        value={selectedNode.config.duration}
-                        onChange={e =>
-                          config({
-                            duration: Math.max(
-                              4,
-                              Math.min(30, Number(e.target.value) || 5)
-                            ),
-                          })
-                        }
-                      />
-                    </label>
+                      {selectedNode.type === "generate_video" && (
+                        <label>
+                          Resolution
+                          <select
+                            value={selectedNode.config.resolution}
+                            onChange={e =>
+                              config({
+                                resolution: e.target
+                                  .value as WorkflowNode["config"]["resolution"],
+                              })
+                            }
+                          >
+                            {["480p", "720p", "1080p"].map(r => (
+                              <option key={r}>{r}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
                   )}
+                  {!selectedNode.config.modelId &&
+                    selectedNode.type === "generate_video" && (
+                      <label>
+                        Duration (seconds)
+                        <Input
+                          type="number"
+                          min={4}
+                          max={30}
+                          value={selectedNode.config.duration}
+                          onChange={e =>
+                            config({
+                              duration: Math.max(
+                                4,
+                                Math.min(30, Number(e.target.value) || 5)
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                    )}
+                  {selectedNode.type === "generate_video" &&
+                    (() => {
+                      const model = generationModel(
+                        selectedNode.config.modelId || DEFAULT_VIDEO_MODEL
+                      );
+                      return !!(
+                        model?.inputSchema.properties.video_url ||
+                        model?.inputSchema.properties.video_urls
+                      );
+                    })() && (
+                      <div className="space-y-2 rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Connect a source video step, or choose a saved clip.
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={() => setPickVideo(selectedNode.id)}
+                        >
+                          <Film size={14} />
+                          {selectedNode.config.sourceVideoKey
+                            ? "Change source video"
+                            : "Choose source video"}
+                        </Button>
+                        {selectedNode.config.sourceVideoKey && (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span>
+                              {assets.data?.find(
+                                a =>
+                                  a.key === selectedNode.config.sourceVideoKey
+                              )?.name || "Selected clip"}
+                            </span>
+                            <button
+                              onClick={() => config({ sourceVideoKey: null })}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   <details className="wf-direction">
                     <summary>
                       Creative direction <Settings2 size={14} />
@@ -1023,6 +1128,34 @@ export function WorkflowCanvas({
           }}
         />
       )}
+      {pickVideo && (
+        <VideoReferencePicker
+          organizationId={organizationId}
+          kind="video"
+          assets={assets.data ?? []}
+          selected={
+            graph.nodes.find(n => n.id === pickVideo)?.config.sourceVideoKey
+              ? [
+                  graph.nodes.find(n => n.id === pickVideo)!.config
+                    .sourceVideoKey!,
+                ]
+              : []
+          }
+          limit={1}
+          onChange={keys => {
+            const node = graph.nodes.find(n => n.id === pickVideo);
+            if (node)
+              update(node.id, {
+                config: { ...node.config, sourceVideoKey: keys[0] ?? null },
+              });
+          }}
+          onClose={() => setPickVideo(null)}
+          onUpload={() => {
+            setUploadFor(pickVideo);
+            setPickVideo(null);
+          }}
+        />
+      )}
       <AssetUploadDialog
         open={!!uploadFor}
         organizationId={organizationId}
@@ -1030,13 +1163,24 @@ export function WorkflowCanvas({
         parent={null}
         defaultDisposition="draft"
         defaultPurpose="source"
-        mediaFilter="image"
+        mediaFilter={
+          graph.nodes.find(n => n.id === uploadFor)?.type === "generate_video"
+            ? "video"
+            : "image"
+        }
         onClose={() => setUploadFor(null)}
         onSaved={() => assets.refetch()}
         onComplete={key => {
           const node = graphRef.current.nodes.find(n => n.id === uploadFor);
           if (node)
-            update(node.id, { config: { ...node.config, imageKey: key } });
+            update(node.id, {
+              config: {
+                ...node.config,
+                ...(node.type === "generate_video"
+                  ? { sourceVideoKey: key }
+                  : { imageKey: key }),
+              },
+            });
           setUploadFor(null);
         }}
       />
@@ -1066,6 +1210,41 @@ export function WorkflowCanvas({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+function NodeCredits({
+  organizationId,
+  node,
+}: {
+  organizationId: number;
+  node: WorkflowNode;
+}) {
+  const [quoted, setQuoted] = useState(node);
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setQuoted({ ...node, x: 0, y: 0, title: "Step" }),
+      500
+    );
+    return () => clearTimeout(timer);
+  }, [node.config, node.type, node.id]);
+  const quote = trpc.models.nodeQuote.useQuery(
+    { organizationId, node: quoted },
+    { staleTime: 15000, retry: false }
+  );
+  return (
+    <span
+      className="ml-auto whitespace-nowrap text-[10px] text-violet-600 dark:text-violet-300"
+      title={
+        quote.error?.message ||
+        "Estimated credits. Final usage is settled after generation."
+      }
+    >
+      {quote.data
+        ? `≈ ${quote.data.credits} credits`
+        : quote.error
+          ? "Check inputs"
+          : "Estimating…"}
+    </span>
   );
 }
 function InputImage({

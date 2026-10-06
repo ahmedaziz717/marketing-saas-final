@@ -1,18 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
-  put: vi.fn(async () => ({ key: "org-1/creative.png", url: "/manus-storage/creative.png" })),
+  put: vi.fn(async () => ({
+    key: "org-1/creative.png",
+    url: "/manus-storage/creative.png",
+  })),
   prepare: vi.fn(async (bytes: Buffer) => bytes),
 }));
 
 vi.mock("./storage", () => ({ storagePut: mocked.put }));
-vi.mock("./lib/creativeImages", () => ({ prepareCreativeOutput: mocked.prepare }));
+vi.mock("./lib/creativeImages", () => ({
+  prepareCreativeOutput: mocked.prepare,
+}));
 
 import { ENV } from "./_core/env";
 import {
   generateSunburstImage,
   sunburstCanvasSize,
 } from "./lib/openaiSunburst";
+import { defaultModelRate } from "./lib/modelCatalog";
+import { generationModel, DEFAULT_IMAGE_MODEL } from "../shared/modelCatalog";
 import { REQUIRED_IMAGE_MODEL_ID } from "./lib/models";
 
 const originalKey = ENV.openAiApiKey;
@@ -22,13 +29,14 @@ describe("direct GPT Image 2.5 Sunburst client", () => {
     ENV.openAiApiKey = "server-only-test-key";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: [{ b64_json: Buffer.from("generated").toString("base64") }],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        )
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [{ b64_json: Buffer.from("generated").toString("base64") }],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
       )
     );
   });
@@ -41,6 +49,7 @@ describe("direct GPT Image 2.5 Sunburst client", () => {
 
   it("sends raster references only to the Sunburst image-edit endpoint", async () => {
     const result = await generateSunburstImage({
+      rateSnapshot: defaultModelRate(generationModel(DEFAULT_IMAGE_MODEL)!),
       prompt: "Create the approved product advertisement.",
       originalImages: [{ b64Json: "cG5n", mimeType: "image/png" }],
       outputSize: { width: 1080, height: 1350, background: "#ffffff" },
@@ -67,6 +76,7 @@ describe("direct GPT Image 2.5 Sunburst client", () => {
     ENV.openAiApiKey = "";
     await expect(
       generateSunburstImage({
+        rateSnapshot: defaultModelRate(generationModel(DEFAULT_IMAGE_MODEL)!),
         prompt: "test",
         outputSize: { width: 1080, height: 1080, background: "#ffffff" },
         storagePrefix: "org-1/creatives/7",

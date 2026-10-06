@@ -11,6 +11,12 @@ import {
   providerRates,
 } from "../../drizzle/platformSchema";
 import { withOrganizationTransaction } from "./activity";
+import { effectiveRate } from "./creditPricing";
+import {
+  estimatedActionCredits,
+  retailCredits,
+  rateCreditPolicy,
+} from "../../shared/aiCredits";
 import {
   estimateCostMicros,
   estimateImageCostMicros,
@@ -68,25 +74,21 @@ export async function meteredCall<T>(
   provider: string,
   model: string,
   kind: "text" | "image" | "other",
-  call: () => Promise<{ value: T; usage?: Record<string, unknown> }>
+  call: (context: {
+    id: string;
+    record: (metadata: Record<string, unknown>) => Promise<void>;
+  }) => Promise<{ value: T; usage?: Record<string, unknown> }>,
+  options?: { rateSnapshot?: ProviderRate }
 ): Promise<T> {
   const scope = aiScope.getStore();
   // Unit tests without a request context do not access production persistence.
-  if (process.env.NODE_ENV === "test" && !scope) return (await call()).value;
+  if (process.env.NODE_ENV === "test" && !scope)
+    return (await call({ id: randomUUID(), record: async () => {} })).value;
   const db = await getDb();
   if (!db) throw new Error("AI usage accounting is unavailable. Please retry.");
-  const [pricing] = await db
-    .select()
-    .from(providerRates)
-    .where(
-      and(
-        eq(providerRates.provider, provider),
-        eq(providerRates.model, model),
-        eq(providerRates.kind, kind)
-      )
-    );
-  const rate = pricing?.config as ProviderRate | undefined,
-    credits = rate?.credits ?? (kind === "image" ? 10 : 1),
+  const rate =
+      options?.rateSnapshot ?? (await effectiveRate(db, provider, model, kind)),
+    credits = estimatedActionCredits(rate),
     id = randomUUID(),
     period = utcCreditMonth(),
     createdAtMs = Date.now();
@@ -133,8 +135,27 @@ export async function meteredCall<T>(
   else await db.transaction(start);
   let result: Awaited<ReturnType<typeof call>>;
   try {
-    result = await call();
+    result = await call({
+      id,
+      record: async metadata => {
+        await db
+          .update(aiUsage)
+          .set({ usage: metadata })
+          .where(eq(aiUsage.id, id));
+      },
+    });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      "keepReservation" in error &&
+      error.keepReservation
+    ) {
+      await db
+        .update(aiUsage)
+        .set({ status: "attention", finishedAtMs: Date.now() })
+        .where(eq(aiUsage.id, id));
+      throw error;
+    }
     const failed = async (tx: any) => {
       await tx
         .update(aiUsage)
@@ -170,17 +191,47 @@ export async function meteredCall<T>(
     kind === "image"
       ? estimateImageCostMicros(rate, usage)
       : estimateCostMicros(rate, input, output, cached);
-  await db
-    .update(aiUsage)
-    .set({
-      status: "succeeded",
-      usage,
-      inputTokens: input,
-      outputTokens: output,
-      cachedTokens: cached,
-      costMicros: cost,
-      finishedAtMs: Date.now(),
-    })
-    .where(eq(aiUsage.id, id));
+  const finalCredits =
+    cost == null
+      ? credits
+      : rate.billingMode === "cost"
+        ? retailCredits(cost, rateCreditPolicy(rate))
+        : credits;
+  const settle = async (tx: any) => {
+    await tx
+      .update(aiUsage)
+      .set({
+        status: "succeeded",
+        usage: {
+          ...usage,
+          reservedCredits: credits,
+          pricingStatus: cost == null ? "awaiting_cost" : "calculated",
+          retailMicros: finalCredits * (rate.creditValueMicros ?? 10000),
+        },
+        credits: finalCredits,
+        inputTokens: input,
+        outputTokens: output,
+        cachedTokens: cached,
+        costMicros: cost,
+        finishedAtMs: Date.now(),
+      })
+      .where(eq(aiUsage.id, id));
+    if (scope && credits !== finalCredits)
+      await tx
+        .insert(creditLedger)
+        .values({
+          id: `settle:${id}`,
+          organizationId: scope.organizationId,
+          period,
+          amount: credits - finalCredits,
+          reason: "Settled against provider usage and saved markup",
+          actorUserId: scope.actorUserId,
+          createdAtMs: Date.now(),
+        })
+        .onConflictDoNothing();
+  };
+  if (scope)
+    await withOrganizationTransaction(db, scope.organizationId, settle);
+  else await db.transaction(settle);
   return result.value;
 }

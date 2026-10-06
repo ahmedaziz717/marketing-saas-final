@@ -3,10 +3,14 @@ import { providerRates } from "../../drizzle/platformSchema";
 import type { ProviderRate } from "../../shared/platformAdmin";
 import {
   videoModelKey,
+  videoModelOptions,
   type VideoSetup,
   type VideoReference,
 } from "../../shared/videoCreation";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
+import { effectiveRate } from "./creditPricing";
+import { resolveModel, modelRate } from "./modelCatalog";
+import { retailCredits, rateCreditPolicy } from "../../shared/aiCredits";
 
 export const defaultVideoRates: ProviderRate[] = [
   "seedance-2.5",
@@ -38,6 +42,12 @@ export async function videoRate(
   db: LibraryDatabase | LibraryTransaction,
   setup: VideoSetup
 ) {
+  if (setup.modelId)
+    return modelRate(
+      db,
+      await resolveModel(db, setup.modelId, "video"),
+      videoModelOptions(setup)
+    );
   const model = videoModelKey(setup);
   const [row] = await db
     .select()
@@ -49,13 +59,18 @@ export async function videoRate(
         eq(providerRates.kind, "video")
       )
     );
-  return row?.config ?? defaultVideoRates.find(rate => rate.model === model)!;
+  return effectiveRate(
+    db,
+    "higgsfield",
+    model,
+    "video",
+    row?.config ?? defaultVideoRates.find(rate => rate.model === model)!
+  );
 }
 export function videoSeconds(setup: VideoSetup, refs: VideoReference[]) {
-  const source =
-    setup.mode === "create"
-      ? 0
-      : (refs.find(r => r.key === setup.sourceVideoKey)?.durationSeconds ?? 0);
+  const source = !setup.sourceVideoKey
+    ? 0
+    : (refs.find(r => r.key === setup.sourceVideoKey)?.durationSeconds ?? 0);
   const output = ["edit", "motion"].includes(setup.mode)
     ? source
     : setup.duration;
@@ -76,8 +91,18 @@ export function videoQuote(
   const [a, b] = (setup.mode === "create" ? setup.aspectRatio : "16:9")
     .split(":")
     .map(Number);
-  const short = Number.parseInt(setup.resolution),
-    ratio = a / b;
+  const short =
+      (
+        {
+          "2K": 1440,
+          "4K": 2160,
+          "1k": 1024,
+          "2k": 2048,
+          "4k": 2160,
+        } as Record<string, number>
+      )[setup.resolution] ??
+      (Number.parseInt(setup.resolution) || 720),
+    ratio = Number.isFinite(a / b) ? a / b : 16 / 9;
   const sourceVideo = refs.find(r => r.key === setup.sourceVideoKey);
   const outputRatio =
     setup.mode !== "create" && sourceVideo?.width && sourceVideo.height
@@ -96,10 +121,12 @@ export function videoQuote(
   const costMicros =
     rate.perRequestUsd != null
       ? Math.round(rate.perRequestUsd * 1e6)
-      : setup.mode === "motion"
-        ? rate.perSecondUsd == null
-          ? null
-          : Math.round(seconds.billed * rate.perSecondUsd * 1e6)
+      : rate.perSecondUsd != null
+        ? Math.round(
+            Math.ceil(measured?.durationSeconds ?? seconds.output) *
+              rate.perSecondUsd *
+              1e6
+          )
         : rate.outputPerMillion == null
           ? null
           : Math.round(
@@ -108,11 +135,14 @@ export function videoQuote(
                 (seconds.source ? (rate.videoInputMultiplier ?? 0.6) : 1)
             );
   return {
-    credits: Math.ceil(rate.credits * seconds.billed),
+    credits:
+      rate.billingMode === "cost" && costMicros != null
+        ? retailCredits(costMicros, rateCreditPolicy(rate))
+        : Math.ceil(rate.credits * seconds.billed),
     costMicros,
     durationSeconds: seconds.output,
     sourceSeconds: seconds.source,
-    videoTokens: setup.mode === "motion" ? null : videoTokens,
+    videoTokens: rate.outputPerMillion == null ? null : videoTokens,
     estimated: true as const,
   };
 }

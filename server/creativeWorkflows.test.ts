@@ -108,17 +108,15 @@ beforeAll(async () => {
     .returning();
   org = orgs[0].id;
   otherOrg = orgs[1].id;
-  await db
-    .insert(organizationMemberships)
-    .values(
-      people.map((u: any, i: number) => ({
-        userId: u.id,
-        organizationId: i === 1 ? otherOrg : org,
-        role: i === 2 ? "reviewer" : "owner",
-        status: "active",
-        createdAtMs: now,
-      }))
-    );
+  await db.insert(organizationMemberships).values(
+    people.map((u: any, i: number) => ({
+      userId: u.id,
+      organizationId: i === 1 ? otherOrg : org,
+      role: i === 2 ? "reviewer" : "owner",
+      status: "active",
+      createdAtMs: now,
+    }))
+  );
   for (const organizationId of [org, otherOrg]) {
     const [brand] = await db
       .insert(brandKits)
@@ -284,7 +282,7 @@ it("isolates workspaces and creator roles, including referenced assets", async (
 });
 it("executes a metered image pipeline, retains draft outputs, and deduplicates a run", async () => {
   const { saved, run, input, quote } = await queue(pipeline());
-  expect(quote.credits).toBe(11);
+  expect(quote.credits).toBe(50);
   expect((await owner.run(input)).id).toBe(run.id);
   await finish();
   const result = await owner.get({ organizationId: org, id: saved.id });
@@ -313,7 +311,7 @@ it("executes a metered image pipeline, retains draft outputs, and deduplicates a
     [org, "succeeded", "workflow.generate_image"],
   ]);
   const ledger = await state.db.select().from(creditLedger);
-  expect(ledger.reduce((n: number, r: any) => n + r.amount, 0)).toBe(-11);
+  expect(ledger.reduce((n: number, r: any) => n + r.amount, 0)).toBe(-41);
 });
 it("runs one node with unchanged upstream outputs, but rejects stale upstream results", async () => {
   const { saved } = await queue(pipeline());
@@ -324,7 +322,7 @@ it("runs one node with unchanged upstream outputs, but rejects stale upstream re
     revision: 1,
     target: "render",
   });
-  expect(quote.credits).toBe(10);
+  expect(quote.credits).toBe(40);
   expect(quote.reused).toBe(1);
   await owner.run({
     organizationId: org,
@@ -332,7 +330,7 @@ it("runs one node with unchanged upstream outputs, but rejects stale upstream re
     revision: 1,
     target: "render",
     requestId: randomUUID(),
-    quotedCredits: 10,
+    quotedCredits: 40,
   });
   await finish();
   expect(state.llm).toHaveBeenCalledTimes(1);
@@ -443,7 +441,7 @@ it("pins a durable video child job and reserves video credits only once", async 
   expect(child[0].status).toBe("queued");
   const usage = await state.db.select().from(aiUsage);
   expect(usage).toHaveLength(1);
-  expect(usage[0].credits).toBe(105);
+  expect(usage[0].credits).toBe(116);
   expect(
     (await owner.get({ organizationId: org, id: saved.id })).runs[0].steps.video
       .videoJobId

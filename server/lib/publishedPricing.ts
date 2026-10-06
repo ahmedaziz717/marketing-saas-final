@@ -4,7 +4,15 @@ import { providerRates } from "../../drizzle/platformSchema";
 import { getDb } from "../db";
 import type { ProviderRate } from "../../shared/platformAdmin";
 
-const models = ["gpt-5.5", "gpt-image-2.5-sunburst"] as const;
+const models = [
+  "gpt-5.5",
+  "gpt-image-2.5-sunburst",
+  "gpt-image-2.5-flare",
+  "gpt-image-2",
+  "gpt-image-1.5",
+  "gpt-image-1",
+  "gpt-image-1-mini",
+] as const;
 const day = 86400000;
 export function parsePublishedPricing(model: string, markdown: string) {
   if (
@@ -48,11 +56,11 @@ export function parsePublishedPricing(model: string, markdown: string) {
     prices.longContextInputMultiplier = Number(context[2]);
     prices.longContextOutputMultiplier = Number(context[3]);
   } else {
-    if (!section.includes("Text output is not billed"))
-      throw new Error("Image pricing requires review");
     prices.imageInputPerMillion = tokens("Image tokens", "Input");
     prices.imageOutputPerMillion = tokens("Image tokens", "Output");
-    prices.outputPerMillion = 0;
+    prices.outputPerMillion = section.includes("Text output is not billed")
+      ? 0
+      : tokens("Text tokens", "Output");
   }
   return {
     prices,

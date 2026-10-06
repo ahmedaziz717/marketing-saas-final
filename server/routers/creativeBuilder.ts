@@ -1,3 +1,6 @@
+import { imageModelQuote } from "../lib/modelCatalog";
+import { referenceCapacity, generationModel } from "../../shared/modelCatalog";
+import type { ProviderRate } from "../../shared/platformAdmin";
 import {
   promotionContext,
   selectedPeople,
@@ -220,11 +223,12 @@ export async function runBuilderJob(
     jobId: number;
     setup: CreativeSetup;
     resolved: Awaited<ReturnType<typeof loadInputs>>;
+    rateSnapshot?: ProviderRate;
   }
 ) {
   const { organizationId, actorUserId, briefId, jobId, setup, resolved } = args;
   try {
-    const imageModel = REQUIRED_IMAGE_MODEL_ID;
+    const imageModel = setup.modelId ?? REQUIRED_IMAGE_MODEL_ID;
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
       : null;
@@ -272,6 +276,9 @@ export async function runBuilderJob(
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
         const image = await generateSunburstImage({
+          modelId: setup.modelId,
+          modelOptions: setup.modelOptions,
+          rateSnapshot: args.rateSnapshot,
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
           prompt: buildCreativePrompt({
@@ -291,7 +298,12 @@ export async function runBuilderJob(
         });
         if (!image.url || !image.storageKey)
           throw new Error("Image generation returned an incomplete result");
-        if (!master) master = await readGenerationSource(image.storageKey);
+        if (
+          !master &&
+          (!setup.modelId ||
+            referenceCapacity(generationModel(setup.modelId)!) > sources.length)
+        )
+          master = await readGenerationSource(image.storageKey);
         generated.push({
           organizationId: organizationId,
           briefId: briefId,
@@ -903,6 +915,7 @@ export const creativeBuilderRouter = router({
         briefId: z.number().int().positive(),
         expectedUpdatedAtMs: z.number().int(),
         requestId: z.string().uuid(),
+        quotedCredits: z.number().int().min(0).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -941,6 +954,42 @@ export const creativeBuilderRouter = router({
           message: issues.join(" "),
         });
       const resolved = await loadInputs(db, input.organizationId, setup);
+      const generationQuote = await imageModelQuote(
+        db,
+        setup.modelId,
+        setup.modelOptions
+      );
+      const productReferences =
+        setup.promotionMode === "platform"
+          ? 0
+          : setup.productMode === "together"
+            ? resolved.products.filter(p => p.image).length
+            : resolved.products.some(p => p.image)
+              ? 1
+              : 0;
+      const referenceCount =
+        productReferences +
+        (resolved.references?.length ?? 0) +
+        (resolved.logo ? 1 : 0) +
+        selectedPeople(setup).length;
+      if (referenceCount > referenceCapacity(generationQuote.model))
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `${generationQuote.model.name} supports ${referenceCapacity(generationQuote.model)} reference images; this creative needs ${referenceCount}. Select a compatible model or fewer references/formats.`,
+        });
+      const generatedCount =
+        setup.formatIds.length *
+        (setup.promotionMode === "platform"
+          ? 1
+          : setup.productMode === "together"
+            ? 1
+            : setup.products.length);
+      if (input.quotedCredits !== generationQuote.credits * generatedCount)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Review the current credit estimate before generating.",
+        });
+      setup.modelId = generationQuote.model.id;
       if (resolved.brand.status !== "active")
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -948,6 +997,11 @@ export const creativeBuilderRouter = router({
         });
       const snapshot = {
         kind: "builder_v1",
+        generationQuote: {
+          rate: generationQuote.rate,
+          credits: generationQuote.credits,
+          modelId: generationQuote.model.id,
+        },
         resolved,
         setup,
         brand: resolved.brand,

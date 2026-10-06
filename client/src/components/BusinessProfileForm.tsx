@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -116,7 +117,8 @@ export function BusinessProfileForm({
         >
           {suggest.isPending
             ? "Reading website…"
-            : "Suggest answers from website"}
+            : "Suggest answers from website"}{" "}
+          <ActionCredits organizationId={organizationId} />
         </Button>
         {(
           [

@@ -1,3 +1,12 @@
+import { ActionCredits } from "./ActionCredits";
+import { ModelPicker, ModelSettings } from "./ModelPicker";
+import {
+  generationModel,
+  modelVideoMode,
+  requiresVideo,
+  DEFAULT_VIDEO_MODEL,
+  type ModelOptions,
+} from "@shared/modelCatalog";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -32,6 +41,7 @@ import {
   type VideoImageChoice,
   ugcGenerationMessage,
   videoModes,
+  videoModelOptions,
   videoRatios,
   videoResolutions,
   videoSetupProblem,
@@ -54,6 +64,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     `/app/creatives/video${id || ugc || initialPlanId ? "?" + new URLSearchParams({ ...(id ? { video: id } : {}), ...(ugc ? { type: "ugc" } : {}), ...(initialPlanId ? { plan: String(initialPlanId) } : {}) }) : ""}`;
   const [setup, setSetup] = useState<VideoSetup>({
     ...defaultVideoSetup,
+    modelId: DEFAULT_VIDEO_MODEL,
     category: requestedUgc ? "ugc" : "product",
     direction: {
       ...defaultVideoDirection,
@@ -63,6 +74,28 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     campaignPlanId: initialPlanId,
   });
   const isUgc = setup.category === "ugc";
+  function modelOptionsChanged(modelId: string, modelOptions: ModelOptions) {
+    const model = generationModel(modelId)!;
+    update({
+      modelId,
+      modelOptions,
+      mode: modelVideoMode(model),
+      sourceVideoKey:
+        model.inputSchema.properties.video_url ||
+        model.inputSchema.properties.video_urls
+          ? setup.sourceVideoKey
+          : null,
+      duration: Number(modelOptions.duration ?? 5),
+      resolution: String(modelOptions.resolution ?? "720p"),
+      aspectRatio: String(modelOptions.aspect_ratio ?? "16:9"),
+      sound:
+        typeof modelOptions.generate_audio === "boolean"
+          ? modelOptions.generate_audio
+          : typeof modelOptions.sound === "boolean"
+            ? modelOptions.sound
+            : true,
+    });
+  }
   const [saved, setSaved] = useState<SavedVideo | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -472,39 +505,65 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   className="mt-2"
                 />
               </div>
-              <div>
-                <p className="mb-2 text-sm font-medium">
-                  What would you like to do?
-                </p>
-                <div
-                  aria-label="Video operation"
-                  className="grid grid-cols-2 gap-2"
-                >
-                  {videoModes.map(mode => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      aria-pressed={setup.mode === mode.id}
-                      onClick={() =>
-                        update({
-                          mode: mode.id,
-                          imageKeys: setup.imageKeys.slice(
-                            0,
-                            mode.id === "motion" ? 8 : 9
-                          ),
-                        })
-                      }
-                      className={`rounded-xl border px-3 py-2.5 text-sm ${setup.mode === mode.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
+              <ModelPicker
+                organizationId={organizationId!}
+                kind="video"
+                value={setup.modelId}
+                disabled={locked || busy}
+                onChange={modelOptionsChanged}
+              />
+              {setup.modelId && (
+                <ModelSettings
+                  organizationId={organizationId}
+                  modelId={setup.modelId}
+                  options={videoModelOptions(setup)}
+                  disabled={locked || busy}
+                  onChange={o => modelOptionsChanged(setup.modelId!, o)}
+                />
+              )}
+              {!setup.modelId && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">
+                    What would you like to do?
+                  </p>
+                  <div
+                    aria-label="Video operation"
+                    className="grid grid-cols-2 gap-2"
+                  >
+                    {videoModes.map(mode => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        aria-pressed={setup.mode === mode.id}
+                        onClick={() =>
+                          update({
+                            mode: mode.id,
+                            imageKeys: setup.imageKeys.slice(
+                              0,
+                              mode.id === "motion" ? 8 : 9
+                            ),
+                          })
+                        }
+                        className={`rounded-xl border px-3 py-2.5 text-sm ${setup.mode === mode.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    {
+                      videoModes.find(mode => mode.id === setup.mode)
+                        ?.description
+                    }
+                  </p>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  {videoModes.find(mode => mode.id === setup.mode)?.description}
-                </p>
-              </div>
-              {setup.mode !== "create" && (
+              )}
+              {(setup.mode !== "create" ||
+                (setup.modelId &&
+                  (generationModel(setup.modelId)?.inputSchema.properties
+                    .video_url ||
+                    generationModel(setup.modelId)?.inputSchema.properties
+                      .video_urls))) && (
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">
@@ -648,7 +707,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       ? "Reading images…"
                       : setup.prompt
                         ? "Regenerate from images"
-                        : "Generate prompt from images"}
+                        : "Generate prompt from images"}{" "}
+                    <ActionCredits organizationId={organizationId} />
                   </Button>
                   {undoPrompt !== null && (
                     <button
@@ -711,90 +771,100 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {["create", "extend"].includes(setup.mode) && (
-                  <label className="text-sm font-medium">
-                    {setup.mode === "extend" ? "Extension length" : "Duration"}
-                    <select
-                      className={field}
-                      value={setup.duration}
-                      onChange={e =>
-                        update({ duration: Number(e.target.value) })
-                      }
-                    >
-                      {Array.from({ length: 27 }, (_, i) => i + 4).map(
-                        seconds => (
-                          <option key={seconds} value={seconds}>
-                            {seconds} seconds
+              {!setup.modelId && (
+                <div className="grid grid-cols-2 gap-4">
+                  {["create", "extend"].includes(setup.mode) && (
+                    <label className="text-sm font-medium">
+                      {setup.mode === "extend"
+                        ? "Extension length"
+                        : "Duration"}
+                      <select
+                        className={field}
+                        value={setup.duration}
+                        onChange={e =>
+                          update({ duration: Number(e.target.value) })
+                        }
+                      >
+                        {Array.from({ length: 27 }, (_, i) => i + 4).map(
+                          seconds => (
+                            <option key={seconds} value={seconds}>
+                              {seconds} seconds
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  )}
+                  {setup.mode === "create" && (
+                    <label className="text-sm font-medium">
+                      Aspect ratio
+                      <select
+                        className={field}
+                        value={setup.aspectRatio}
+                        onChange={e =>
+                          update({
+                            aspectRatio: e.target
+                              .value as VideoSetup["aspectRatio"],
+                          })
+                        }
+                      >
+                        {videoRatios.map(ratio => (
+                          <option key={ratio} value={ratio}>
+                            {ratio}
+                            {ratio === "9:16"
+                              ? " · Vertical"
+                              : ratio === "16:9"
+                                ? " · Landscape"
+                                : ratio === "1:1"
+                                  ? " · Square"
+                                  : ""}
                           </option>
-                        )
-                      )}
-                    </select>
-                  </label>
-                )}
-                {setup.mode === "create" && (
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label className="text-sm font-medium">
-                    Aspect ratio
+                    Resolution
                     <select
                       className={field}
-                      value={setup.aspectRatio}
+                      value={setup.resolution}
                       onChange={e =>
                         update({
-                          aspectRatio: e.target
-                            .value as VideoSetup["aspectRatio"],
+                          resolution: e.target
+                            .value as VideoSetup["resolution"],
                         })
                       }
                     >
-                      {videoRatios.map(ratio => (
-                        <option key={ratio} value={ratio}>
-                          {ratio}
-                          {ratio === "9:16"
-                            ? " · Vertical"
-                            : ratio === "16:9"
-                              ? " · Landscape"
-                              : ratio === "1:1"
-                                ? " · Square"
-                                : ""}
-                        </option>
+                      {videoResolutions.map(resolution => (
+                        <option key={resolution}>{resolution}</option>
                       ))}
                     </select>
                   </label>
-                )}
-                <label className="text-sm font-medium">
-                  Resolution
-                  <select
-                    className={field}
-                    value={setup.resolution}
-                    onChange={e =>
-                      update({
-                        resolution: e.target.value as VideoSetup["resolution"],
-                      })
-                    }
-                  >
-                    {videoResolutions.map(resolution => (
-                      <option key={resolution}>{resolution}</option>
-                    ))}
-                  </select>
-                </label>
-                {setup.mode !== "motion" && (
-                  <label className="text-sm font-medium">
-                    Bitrate
-                    <select
-                      className={field}
-                      value={setup.bitrate}
-                      onChange={e =>
-                        update({
-                          bitrate: e.target.value as VideoSetup["bitrate"],
-                        })
-                      }
-                    >
-                      <option value="default">Automatic</option>
-                      <option value="high">High</option>
-                    </select>
-                  </label>
-                )}
-              </div>
-              {setup.mode !== "create" && (
+                  {setup.mode !== "motion" && (
+                    <label className="text-sm font-medium">
+                      Bitrate
+                      <select
+                        className={field}
+                        value={setup.bitrate}
+                        onChange={e =>
+                          update({
+                            bitrate: e.target.value as VideoSetup["bitrate"],
+                          })
+                        }
+                      >
+                        <option value="default">Automatic</option>
+                        <option value="high">High</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
+              {(setup.mode !== "create" ||
+                (setup.modelId &&
+                  (generationModel(setup.modelId)?.inputSchema.properties
+                    .video_url ||
+                    generationModel(setup.modelId)?.inputSchema.properties
+                      .video_urls))) && (
                 <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
                   Framing follows your source video.
                   {["edit", "motion"].includes(setup.mode)
@@ -802,7 +872,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                     : ""}
                 </p>
               )}
-              {setup.mode !== "motion" && (
+              {!setup.modelId && setup.mode !== "motion" && (
                 <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
                   <span className="flex items-center gap-2 text-sm">
                     {setup.sound ? (
@@ -867,7 +937,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       {isUgc ? "Generation coming soon" : "Generate"}
                       {!isUgc &&
                         (quoteCurrent && quote.data && !problem
-                          ? ` · ${quote.data.credits.toLocaleString()} credits`
+                          ? ` · ≈ ${quote.data.credits.toLocaleString()} credits`
                           : " video")}
                     </Button>
                   </div>
@@ -876,7 +946,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                     {isUgc
                       ? "Saving a creator video setup uses no AI credits."
                       : (problem ??
-                        "Credits are reserved when you generate. Confirmed failures and cancellations are refunded.")}
+                        "Estimated credits are reserved before generation and adjusted for the finished output. Confirmed provider failures are refunded.")}
                   </p>
                 </>
               ) : (

@@ -6,6 +6,28 @@ export const tierInput = z.object({
   monthlyPriceUsd: z.number().min(0).max(1000000),
 });
 export const rateInput = z.object({
+  billingMode: z.enum(["fixed", "cost"]).optional(),
+  markupPercent: z.number().min(0).max(1000).nullable().optional(),
+  creditValueMicros: z.number().int().positive().optional(),
+  estimatedCostMicros: z
+    .number()
+    .int()
+    .min(0)
+    .max(1000000000)
+    .nullable()
+    .optional(),
+  costRules: z
+    .array(
+      z.object({
+        when: z.record(
+          z.string(),
+          z.union([z.string(), z.number(), z.boolean()])
+        ),
+        usd: z.number().nonnegative(),
+        unit: z.enum(["image", "second", "request", "video_token"]),
+      })
+    )
+    .optional(),
   provider: z.string().trim().min(1).max(80),
   model: z.string().trim().min(1).max(160),
   kind: z.enum(["text", "image", "video", "other"]),

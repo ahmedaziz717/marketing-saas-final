@@ -4,6 +4,7 @@ import {
   modelMatchesShot,
 } from "./lifestylePeople";
 import { z } from "zod";
+import { modelOptionsSchema } from "./modelCatalog";
 import {
   CREATIVE_THEMES,
   DEFAULT_CREATIVE_BASE_PROMPT,
@@ -298,6 +299,8 @@ export function selectedPeople(setup: {
 
 export const creativeSetupSchema = z
   .object({
+    modelId: z.string().max(240).optional(),
+    modelOptions: modelOptionsSchema.optional(),
     campaignPlanId: z.number().int().positive().optional(),
     version: z.literal(1),
     name: z.string().trim().min(1).max(180),

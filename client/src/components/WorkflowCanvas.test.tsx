@@ -13,6 +13,10 @@ vi.mock("sonner", () => ({ toast: { error: api.error, success: vi.fn() } }));
 vi.mock("./AssetUploadDialog", () => ({ AssetUploadDialog: () => null }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    models: {
+      nodeQuote: { useQuery: () => ({ data: { credits: 40 } }) },
+      catalog: { useQuery: () => ({ data: [] }) },
+    },
     assetLibrary: {
       studioList: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
     },

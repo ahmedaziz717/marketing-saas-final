@@ -183,7 +183,10 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         code: "CONFLICT",
         message: step.error || "This step failed.",
       });
-    if ((await workflowNodeCredits(db, node)) !== run.creditsByNode[current])
+    if (
+      (await workflowNodeCredits(db, node, run.organizationId, input)) !==
+      run.creditsByNode[current]
+    )
       throw new TRPCError({
         code: "CONFLICT",
         message:
@@ -212,7 +215,13 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
       )
       .map(v => v.key);
     if (node.type === "generate_video") {
-      const setup = workflowVideoSetup(node, text, imageKeys),
+      const videoInput = input.find(v => v.type === "video");
+      const setup = workflowVideoSetup(
+          node,
+          text,
+          imageKeys,
+          videoInput && videoInput.type !== "text" ? videoInput.key : undefined
+        ),
         jobId = randomUUID();
       // Store the durable child ID together with the waiting step before any paid call.
       await withOrganizationTransaction(db, run.organizationId, async tx => {
@@ -372,12 +381,19 @@ async function executeStep(
       throw new Error("The prompt writer returned an invalid response");
     return [{ type: "text", text: output.trim() }];
   }
-  const dimensions = {
-    "1:1": [1080, 1080],
-    "4:5": [1080, 1350],
-    "9:16": [1080, 1920],
-    "16:9": [1920, 1080],
-  }[node.config.ratio];
+  const [ratioWidth, ratioHeight] = node.config.ratio.split(":").map(Number);
+  const dimensions =
+    (
+      {
+        "1:1": [1080, 1080],
+        "4:5": [1080, 1350],
+        "9:16": [1080, 1920],
+        "16:9": [1920, 1080],
+      } as Record<string, number[]>
+    )[node.config.ratio] ??
+    (ratioWidth > 0 && ratioHeight > 0
+      ? [1080, Math.round((1080 * ratioHeight) / ratioWidth)]
+      : [1080, 1080]);
   const d = node.config.direction;
   const direction = d
     ? [
@@ -389,6 +405,8 @@ async function executeStep(
       ].join("\n")
     : "";
   const result = await generateSunburstImage({
+    modelId: node.config.modelId,
+    modelOptions: node.config.modelOptions,
     prompt: [
       text,
       direction,

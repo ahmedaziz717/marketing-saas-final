@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { ScanSearch, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -69,7 +70,8 @@ export function BrandWebsiteScanner({
           ) : (
             <ScanSearch className="mr-2 h-4 w-4" />
           )}
-          {scan.isPending ? "Scanning website…" : "Scan website"}
+          {scan.isPending ? "Scanning website…" : "Scan website"}{" "}
+          <ActionCredits organizationId={organizationId} />
         </Button>
         <Button
           type="button"

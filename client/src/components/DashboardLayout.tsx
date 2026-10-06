@@ -3,6 +3,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useTheme } from "@/contexts/ThemeContext";
 import { rememberWorkspace } from "@/lib/workspaceSelection";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CreditBalance } from "./CreditBalance";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -268,6 +269,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="evoke-toolbar-actions">
+            {organizationId && (
+              <CreditBalance organizationId={organizationId} />
+            )}
             <a
               href="/contact"
               aria-label="Help"

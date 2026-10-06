@@ -45,6 +45,10 @@ vi.mock("./LifestylePersonPicker", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    models: {
+      catalog: { useQuery: () => ({ data: [] }) },
+      credits: { useQuery: () => ({ data: { textEstimate: 10 } }) },
+    },
     useUtils: () => ({
       video: { list: { invalidate: vi.fn() }, get: { invalidate: vi.fn() } },
       assetLibrary: { studioList: { invalidate: vi.fn() } },
@@ -115,7 +119,7 @@ it("combines catalog photos and assets, generates an editable prompt, undoes it,
   expect(
     (
       screen.getByRole("button", {
-        name: "Generate prompt from images",
+        name: /^Generate prompt from images/,
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
@@ -143,7 +147,7 @@ it("combines catalog photos and assets, generates an editable prompt, undoes it,
     target: { value: "cinematic" },
   });
   fireEvent.click(
-    screen.getByRole("button", { name: "Generate prompt from images" })
+    screen.getByRole("button", { name: /^Generate prompt from images/ })
   );
   await waitFor(() =>
     expect(
@@ -182,7 +186,7 @@ it("preserves edits made while a prompt is generating", async () => {
   render(<VideoStudio />);
   chooseProduct();
   fireEvent.click(
-    screen.getByRole("button", { name: "Generate prompt from images" })
+    screen.getByRole("button", { name: /^Generate prompt from images/ })
   );
   fireEvent.change(screen.getByLabelText(/Describe your video/), {
     target: { value: "Keep my latest edit" },

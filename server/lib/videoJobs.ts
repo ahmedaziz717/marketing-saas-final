@@ -142,9 +142,7 @@ export async function resolveVideoReferences(
   const refs: VideoReference[] = [];
   const keys = [
     ...setup.imageKeys,
-    ...(setup.mode !== "create" && setup.sourceVideoKey
-      ? [setup.sourceVideoKey]
-      : []),
+    ...(setup.sourceVideoKey ? [setup.sourceVideoKey] : []),
   ];
   for (const key of keys) {
     if (key.startsWith("product_image:")) {
@@ -154,7 +152,7 @@ export async function resolveVideoReferences(
       continue;
     }
     const asset = await readLibraryAsset(db, organizationId, key),
-      video = key === setup.sourceVideoKey && setup.mode !== "create";
+      video = key === setup.sourceVideoKey;
     if (
       video
         ? asset.mimeType !== "video/mp4"

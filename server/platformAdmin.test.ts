@@ -134,6 +134,7 @@ it("reserves credits, blocks overspend, refunds failures, retains usage and snap
     outputPerMillion: 8,
     perRequestUsd: null,
     note: "test rates",
+    estimatedCostMicros: 350,
   } as ProviderRate;
   await admin.saveRate(rate);
   const scope = { organizationId, actorUserId: 2, operation: "test" };
@@ -249,7 +250,7 @@ it("prices image usage automatically within the requesting account and snapshots
   expect(saved.costMicros).toBe(38447);
   expect(saved.rateSnapshot.imageInputPerMillion).toBe(8);
   expect(saved.rateSnapshot.sourceUrl).toContain("gpt-image-2.5-sunburst");
-  expect((await creditState(state.db, organizationId)).remaining).toBe(90);
+  expect((await creditState(state.db, organizationId)).remaining).toBe(92);
 });
 it("backfills valid historical usage without repricing existing costs or changing credits, and audits once", async () => {
   const { organizationId } = await admin.createAccount({
@@ -265,42 +266,40 @@ it("backfills valid historical usage without repricing existing costs or changin
     output_tokens_details: { text_tokens: 0, image_tokens: 628 },
   };
   for (let i = 0; i < ids.length; i++)
-    await state.db
-      .insert(aiUsage)
-      .values({
-        id: ids[i],
-        organizationId,
-        actorUserId: 2,
-        operation: "legacy-image",
+    await state.db.insert(aiUsage).values({
+      id: ids[i],
+      organizationId,
+      actorUserId: 2,
+      operation: "legacy-image",
+      provider: "openai",
+      model: "gpt-image-2.5-sunburst",
+      kind: "image",
+      status: "succeeded",
+      credits: 10,
+      period: "2026-09",
+      createdAtMs: Date.parse("2026-09-29T23:00:00Z"),
+      usage:
+        i === 2
+          ? { ...usage, input_tokens: 5 }
+          : i === 3
+            ? {
+                ...usage,
+                input_tokens_details: { text_tokens: "bad", image_tokens: 1 },
+              }
+            : usage,
+      costMicros: i === 1 ? 123 : null,
+      rateSnapshot: {
         provider: "openai",
         model: "gpt-image-2.5-sunburst",
         kind: "image",
-        status: "succeeded",
         credits: 10,
-        period: "2026-09",
-        createdAtMs: Date.parse("2026-09-29T23:00:00Z"),
-        usage:
-          i === 2
-            ? { ...usage, input_tokens: 5 }
-            : i === 3
-              ? {
-                  ...usage,
-                  input_tokens_details: { text_tokens: "bad", image_tokens: 1 },
-                }
-              : usage,
-        costMicros: i === 1 ? 123 : null,
-        rateSnapshot: {
-          provider: "openai",
-          model: "gpt-image-2.5-sunburst",
-          kind: "image",
-          credits: 10,
-          inputPerMillion: null,
-          outputPerMillion: null,
-          cachedInputPerMillion: null,
-          perRequestUsd: null,
-          note: "old unpriced",
-        },
-      });
+        inputPerMillion: null,
+        outputPerMillion: null,
+        cachedInputPerMillion: null,
+        perRequestUsd: null,
+        note: "old unpriced",
+      },
+    });
   const migration = readFileSync(
     "drizzle/postgres/0008_verified_image_token_rates.sql",
     "utf8"
@@ -337,6 +336,18 @@ it("holds the last credit while a provider request is still running", async () =
     name: "Pending credit",
     ownerEmail: "owner@test.com",
     tierId: "tiny",
+  });
+  await admin.saveRate({
+    provider: "pending-provider",
+    model: "model",
+    kind: "text",
+    credits: 1,
+    inputPerMillion: null,
+    outputPerMillion: null,
+    cachedInputPerMillion: null,
+    perRequestUsd: null,
+    estimatedCostMicros: 5000,
+    note: "Unknown actual cost stays reserved",
   });
   let finish!: () => void;
   let started!: () => void;
@@ -393,14 +404,132 @@ it("records idempotent manual costs/revenue and includes adjustments in account 
   expect(JSON.stringify(accounts)).not.toContain("inviteHash");
 });
 it("paginates and filters large account directories without exposing invitation secrets", async () => {
-  const inserted = await state.db.insert(organizations).values(Array.from({length: 61}, (_, i) => ({ name: `Scale fixture ${String(i).padStart(3,"0")}`, slug: `scale-fixture-${i}`, createdByUserId: 1, createdAtMs: Date.now() }))).returning();
-  await state.db.insert(platformAccounts).values(inserted.map((row: any, i: number) => ({organizationId: row.id, tierId: "trial", aiPaused: i % 2, enforceCredits: 1, ownerEmail: `scale-${i}@test.com`, notes: "", updatedAtMs: Date.now()})));
-  const first = await admin.accounts({search:"Scale fixture"});
-  expect(first.total).toBe(61); expect(first.items).toHaveLength(50);
-  const next = await admin.accounts({search:"Scale fixture", after:first.next});
-  expect(next.items).toHaveLength(11); expect(next.total).toBe(61); expect(next.next).toBeUndefined();
-  expect(new Set([...first.items,...next.items].map((r:any) => r.organization.id)).size).toBe(61);
-  const paused = await admin.accounts({search:"Scale fixture",status:"paused",tierId:"trial"});
-  expect(paused.total).toBe(30); expect(paused.items.every((r:any)=> r.account.aiPaused===1)).toBe(true);
+  const inserted = await state.db
+    .insert(organizations)
+    .values(
+      Array.from({ length: 61 }, (_, i) => ({
+        name: `Scale fixture ${String(i).padStart(3, "0")}`,
+        slug: `scale-fixture-${i}`,
+        createdByUserId: 1,
+        createdAtMs: Date.now(),
+      }))
+    )
+    .returning();
+  await state.db
+    .insert(platformAccounts)
+    .values(
+      inserted.map((row: any, i: number) => ({
+        organizationId: row.id,
+        tierId: "trial",
+        aiPaused: i % 2,
+        enforceCredits: 1,
+        ownerEmail: `scale-${i}@test.com`,
+        notes: "",
+        updatedAtMs: Date.now(),
+      }))
+    );
+  const first = await admin.accounts({ search: "Scale fixture" });
+  expect(first.total).toBe(61);
+  expect(first.items).toHaveLength(50);
+  const next = await admin.accounts({
+    search: "Scale fixture",
+    after: first.next,
+  });
+  expect(next.items).toHaveLength(11);
+  expect(next.total).toBe(61);
+  expect(next.next).toBeUndefined();
+  expect(
+    new Set([...first.items, ...next.items].map((r: any) => r.organization.id))
+      .size
+  ).toBe(61);
+  const paused = await admin.accounts({
+    search: "Scale fixture",
+    status: "paused",
+    tierId: "trial",
+  });
+  expect(paused.total).toBe(30);
+  expect(paused.items.every((r: any) => r.account.aiPaused === 1)).toBe(true);
   expect(JSON.stringify(first)).not.toContain("inviteHash");
+});
+
+it("keeps the accepted markup on an in-flight request and applies new pricing only to later requests", async () => {
+  const { modelsRouter } = await import("./routers/models");
+  const modelAdmin = modelsRouter.createCaller({
+    user: { id: 1, role: "admin", email: "admin@test.com" },
+    req: {},
+    res: {},
+  } as any);
+  const modelOwner = modelsRouter.createCaller({
+    user: { id: 2, role: "user", email: "owner@test.com" },
+    req: {},
+    res: {},
+  } as any);
+  await expect(
+    modelOwner.savePolicy({ markupPercent: 100, creditValueMicros: 10000 })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const { organizationId } = await admin.createAccount({
+    name: "Price snapshot",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  await admin.saveRate({
+    provider: "fixed-cost-test",
+    model: "image",
+    kind: "image",
+    credits: 1,
+    inputPerMillion: null,
+    outputPerMillion: null,
+    cachedInputPerMillion: null,
+    perRequestUsd: 0.2,
+    note: "Fixed published test cost",
+  });
+  let release!: () => void, started!: () => void;
+  const began = new Promise<void>(resolve => {
+    started = resolve;
+  });
+  const pending = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const run = (call: any) =>
+    aiScope.run(
+      { organizationId, actorUserId: 2, operation: "pricing.snapshot" },
+      () => meteredCall("fixed-cost-test", "image", "image", call)
+    );
+  const first = run(async () => {
+    started();
+    await pending;
+    return { value: "first" };
+  });
+  await began;
+  try {
+    expect((await creditState(state.db, organizationId)).remaining).toBe(60);
+    await modelAdmin.savePolicy({
+      markupPercent: 200,
+      creditValueMicros: 10000,
+    });
+    release();
+    await first;
+    await run(async () => ({ value: "second" }));
+    const rows = await state.db
+      .select()
+      .from(aiUsage)
+      .where(eq(aiUsage.organizationId, organizationId));
+    expect(
+      rows.map((r: any) => r.credits).sort((a: number, b: number) => a - b)
+    ).toEqual([40, 60]);
+    expect(
+      rows
+        .map((r: any) => r.rateSnapshot.markupPercent)
+        .sort((a: number, b: number) => a - b)
+    ).toEqual([100, 200]);
+    expect(rows.every((r: any) => r.costMicros === 200000)).toBe(true);
+    expect((await creditState(state.db, organizationId)).remaining).toBe(0);
+  } finally {
+    release();
+    await first;
+    await modelAdmin.savePolicy({
+      markupPercent: 100,
+      creditValueMicros: 10000,
+    });
+  }
 });

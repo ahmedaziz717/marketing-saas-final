@@ -28,6 +28,13 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    models: {
+      imageQuote: {
+        useQuery: () => ({ data: { credits: 120 }, isFetching: false }),
+      },
+      catalog: { useQuery: () => ({ data: [] }) },
+      credits: { useQuery: () => ({ data: { textEstimate: 10 } }) },
+    },
     useUtils: () => ({
       creativeBuilder: { options: { invalidate: api.invalidate } },
       creatives: { overview: { invalidate: api.invalidate } },
@@ -247,7 +254,7 @@ describe("Creative Builder controls", () => {
     ).toBe(CREATIVE_THEMES.holiday.cta);
     expect(api.refresh.mutateAsync).not.toHaveBeenCalled();
     expect(screen.getByText("300 × 250")).toBeTruthy();
-    expect(screen.queryByText(/GPT|Sunburst|OpenAI/i)).toBeNull();
+    expect(screen.getByText("GPT Image 2.5 Sunburst")).toBeTruthy();
   });
 
   it("saves the selected product image, specs, logo, channel and direction; copy refresh and undo retain them", async () => {
@@ -293,7 +300,7 @@ describe("Creative Builder controls", () => {
     expect(
       screen.queryByRole("button", { name: "Browse 500 models" })
     ).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh copy" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh copy/ }));
     await waitFor(() =>
       expect(
         (screen.getByLabelText("Headline") as HTMLInputElement).value
@@ -354,7 +361,7 @@ describe("Creative Builder controls", () => {
         })
     );
     render(<CreativeBuilder onGenerated={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh copy" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh copy/ }));
     fireEvent.change(screen.getByLabelText("Headline"), {
       target: { value: "Keep my newer edit" },
     });
@@ -370,7 +377,7 @@ describe("Creative Builder controls", () => {
     const onGenerated = vi.fn();
     render(<CreativeBuilder onGenerated={onGenerated} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Studio lamp/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Review & generate" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Review & generate/ }));
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Generate with AI" }));
     await waitFor(() => expect(onGenerated).toHaveBeenCalledOnce());
@@ -394,7 +401,7 @@ describe("Creative Builder controls", () => {
     expect(
       (
         screen.getByRole("button", {
-          name: "Review & generate",
+          name: /^Review & generate/,
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true);

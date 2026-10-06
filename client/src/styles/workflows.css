@@ -514,6 +514,7 @@
   opacity: 0.7;
 }
 .wf-node-footer {
+  flex-wrap: wrap;
   border-top: 1px solid var(--border);
   padding: 10px 12px;
   display: flex;
@@ -1136,4 +1137,11 @@
   .wf-template {
     transition: none;
   }
+}
+
+.wf-node-footer > .wf-model-label {
+  flex-basis: 100%;
+  color: var(--foreground);
+  font-size: 10px;
+  font-weight: 600;
 }

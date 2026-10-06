@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, lte } from "drizzle-orm";
-import { aiUsage } from "../../drizzle/platformSchema";
+import { aiUsage, creditLedger } from "../../drizzle/platformSchema";
 import { brandAssets, brandKits } from "../../drizzle/schema";
 import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
 import {
@@ -228,11 +228,24 @@ async function saveOutput(db: LibraryDatabase, job: VideoJob) {
       await tx
         .update(aiUsage)
         .set({
+          credits:
+            usage.rateSnapshot.billingMode === "cost"
+              ? quote.credits
+              : usage.credits,
           costMicros: quote.costMicros,
           usage: {
             ...usage.usage,
             ...quote,
-            credits: job.credits,
+            reservedCredits: job.credits,
+            retailMicros:
+              (usage.rateSnapshot.billingMode === "cost"
+                ? quote.credits
+                : usage.credits) *
+              (usage.rateSnapshot.creditValueMicros ?? 10000),
+            credits:
+              usage.rateSnapshot.billingMode === "cost"
+                ? quote.credits
+                : usage.credits,
             outputWidth: info.width,
             outputHeight: info.height,
             outputDurationSeconds: info.durationSeconds,
@@ -240,11 +253,30 @@ async function saveOutput(db: LibraryDatabase, job: VideoJob) {
           },
         })
         .where(eq(aiUsage.id, job.id));
+      if (
+        usage.rateSnapshot.billingMode === "cost" &&
+        quote.credits !== job.credits
+      ) {
+        await tx
+          .insert(creditLedger)
+          .values({
+            id: `settle:${job.id}`,
+            organizationId: job.organizationId,
+            actorUserId: job.actorUserId,
+            period: usage.period,
+            amount: job.credits - quote.credits,
+            reason: "Settled video dimensions, duration and saved markup",
+            createdAtMs: Date.now(),
+          })
+          .onConflictDoNothing();
+        job.credits = quote.credits;
+      }
     }
     await tx
       .update(videoJobs)
       .set({
         status: "completed",
+        credits: job.credits,
         outputAssetId: asset.id,
         outputUrl: null,
         requestBody: null,

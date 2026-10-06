@@ -16,6 +16,10 @@ import { registerChannelOAuth } from "../lib/channelConnections";
 import { getDb, closeDb } from "../db";
 import { startWebsiteNotificationDelivery } from "../lib/websiteNotifications";
 import { startPublishedPricingChecks } from "../lib/publishedPricing";
+import {
+  initializeModelCatalog,
+  syncOpenAIModelAvailability,
+} from "../lib/modelCatalog";
 import { verifyOpenAIBilling } from "../lib/openaiCosts";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -98,7 +102,15 @@ async function startServer() {
   });
   const stopNotifications = startWebsiteNotificationDelivery();
   verifyOpenAIBilling();
-  startPublishedPricingChecks();
+  void getDb()
+    .then(async db => {
+      if (db) {
+        await initializeModelCatalog(db);
+        await syncOpenAIModelAvailability(db);
+      }
+    })
+    .catch(() => console.error("Model catalog synchronization needs review"))
+    .finally(() => startPublishedPricingChecks());
   process.on("SIGTERM", () => {
     server.close(() => {
       void stopNotifications()

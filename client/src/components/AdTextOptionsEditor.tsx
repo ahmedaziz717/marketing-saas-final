@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { MoreHorizontal, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import {
@@ -100,7 +101,8 @@ export function AdTextOptionsEditor({
             ? "Generating 5 copy sets…"
             : hasCopy
               ? "Regenerate all 5 sets"
-              : "Generate 5 copy sets"}
+              : "Generate 5 copy sets"}{" "}
+          <ActionCredits organizationId={organizationId} />
         </Button>
       </div>
       <details className="text-sm">
@@ -211,7 +213,8 @@ export function AdTextOptionsEditor({
                                 generator.generate({ index, field: "set" })
                               }
                             >
-                              Regenerate full set {index + 1} (all 3 fields)
+                              Regenerate full set {index + 1} (all 3 fields){" "}
+                              <ActionCredits organizationId={organizationId} />
                             </DropdownMenuItem>
                             {index > 0 && (
                               <DropdownMenuItem

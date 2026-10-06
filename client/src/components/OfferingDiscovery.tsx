@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -48,7 +49,8 @@ export function OfferingDiscovery({
         disabled={!url || discover.isPending || save.isPending}
         onClick={() => discover.mutate({ organizationId, website: url })}
       >
-        {discover.isPending ? "Reading website…" : "Find offerings"}
+        {discover.isPending ? "Reading website…" : "Find offerings"}{" "}
+        <ActionCredits organizationId={organizationId} />
       </Button>
       {discover.isSuccess && !drafts.length && (
         <p className="text-sm">

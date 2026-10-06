@@ -1,3 +1,4 @@
+import { ActionCredits } from "./ActionCredits";
 import { studioContentHref } from "@shared/contentWorkflow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -497,7 +498,8 @@ export function PublishingCalendar({
               }}
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              Draft this week's captions
+              Draft this week's captions{" "}
+              <ActionCredits organizationId={organizationId} />
             </Button>
           )}
         </div>

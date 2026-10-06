@@ -1,3 +1,8 @@
+import {
+  generationModel,
+  modelVideoMode,
+  requiresVideo,
+} from "../../shared/modelCatalog";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
@@ -25,6 +30,9 @@ import {
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { videoQuote, videoRate } from "./videoPricing";
 import { REQUIRED_IMAGE_MODEL_ID, REQUIRED_TEXT_MODEL_ID } from "./models";
+import { imageModelQuote } from "./modelCatalog";
+import { effectiveRate } from "./creditPricing";
+import { estimatedActionCredits } from "../../shared/aiCredits";
 
 export type CreativeWorkflowRun = typeof creativeWorkflowRuns.$inferSelect;
 export function publicWorkflowRun(run: CreativeWorkflowRun) {
@@ -66,41 +74,78 @@ export async function getWorkflow(
 export function workflowVideoSetup(
   node: WorkflowNode,
   text: string,
-  imageKeys: string[]
+  imageKeys: string[],
+  sourceVideoKey?: string | null
 ): VideoSetup {
   return {
     ...defaultVideoSetup,
+    modelId: node.config.modelId,
+    modelOptions: node.config.modelOptions,
+    mode: modelVideoMode(generationModel(node.config.modelId || "")),
+    sourceVideoKey: sourceVideoKey ?? node.config.sourceVideoKey ?? null,
+    sound: Boolean(
+      node.config.modelOptions?.generate_audio ??
+        node.config.modelOptions?.sound ??
+        true
+    ),
     title: node.title,
     prompt: text,
     imageKeys,
     duration: node.config.duration,
     resolution: node.config.resolution,
-    aspectRatio: node.config.ratio === "4:5" ? "9:16" : node.config.ratio,
+    aspectRatio:
+      !node.config.modelId && node.config.ratio === "4:5"
+        ? "9:16"
+        : node.config.ratio,
     direction: node.config.direction,
   };
 }
 export async function workflowNodeCredits(
   db: LibraryDatabase,
-  node: WorkflowNode
+  node: WorkflowNode,
+  organizationId?: number,
+  input: WorkflowValue[] = []
 ) {
   if (node.type === "generate_video") {
-    const setup = workflowVideoSetup(node, "Workflow prompt", []);
-    return videoQuote(setup, [], await videoRate(db, setup)).credits;
+    const source = input.find(v => v.type === "video");
+    const key =
+      source && source.type !== "text"
+        ? source.key
+        : node.config.sourceVideoKey;
+    const setup = workflowVideoSetup(node, "Workflow prompt", [], key);
+    const refs =
+      key && organizationId
+        ? await resolveVideoReferences(db, organizationId, {
+            ...defaultVideoSetup,
+            mode: "edit",
+            prompt: "Workflow source",
+            sourceVideoKey: key,
+          })
+        : [];
+    const model = generationModel(node.config.modelId || "");
+    if (!key && model && requiresVideo(model)) {
+      setup.sourceVideoKey = "asset:1";
+      refs.push({
+        key: "asset:1",
+        storageKey: "",
+        fingerprint: "",
+        name: "Estimated upstream video",
+        mimeType: "video/mp4",
+        durationSeconds: node.config.duration,
+        width: 1280,
+        height: 720,
+      });
+    }
+    return videoQuote(setup, refs, await videoRate(db, setup)).credits;
   }
   if (!isGenerationNode(node.type)) return 0;
-  const kind = node.type === "generate_image" ? "image" : "text",
-    model = kind === "image" ? REQUIRED_IMAGE_MODEL_ID : REQUIRED_TEXT_MODEL_ID;
-  const [row] = await db
-    .select()
-    .from(providerRates)
-    .where(
-      and(
-        eq(providerRates.provider, "openai"),
-        eq(providerRates.model, model),
-        eq(providerRates.kind, kind)
-      )
-    );
-  return row?.config.credits ?? (kind === "image" ? 10 : 1);
+  if (node.type === "generate_image")
+    return (
+      await imageModelQuote(db, node.config.modelId, node.config.modelOptions)
+    ).credits;
+  const kind = "text",
+    model = REQUIRED_TEXT_MODEL_ID;
+  return estimatedActionCredits(await effectiveRate(db, "openai", model, kind));
 }
 export async function workflowImageReferences(
   db: LibraryDatabase,
@@ -165,6 +210,18 @@ export async function prepareWorkflowRun(
       ]))
     );
   }
+  for (const node of graph.nodes.filter(
+    n => selected.has(n.id) && n.config.sourceVideoKey
+  )) {
+    references.push(
+      ...(await resolveVideoReferences(db, organizationId, {
+        ...defaultVideoSetup,
+        mode: "edit",
+        prompt: "Workflow source",
+        sourceVideoKey: node.config.sourceVideoKey!,
+      }))
+    );
+  }
   await validateVideoReferences(db, { organizationId, references });
   const previous = target
     ? await db
@@ -186,8 +243,13 @@ export async function prepareWorkflowRun(
     if (target && id !== target && isGenerationNode(node.type)) {
       const ancestors = workflowAncestors(graph, id);
       const sourceKeys = graph.nodes
-        .filter(n => ancestors.has(n.id) && n.type === "image")
-        .map(n => n.config.imageKey);
+        .filter(n => ancestors.has(n.id))
+        .flatMap(n =>
+          [
+            n.type === "image" ? n.config.imageKey : null,
+            n.config.sourceVideoKey,
+          ].filter(Boolean)
+        );
       const prior = previous.find(
         run =>
           ["completed", "reused"].includes(run.steps[id]?.status) &&
@@ -209,7 +271,12 @@ export async function prepareWorkflowRun(
       creditsByNode[id] = 0;
     } else {
       steps[id] = { status: "pending" };
-      creditsByNode[id] = await workflowNodeCredits(db, node);
+      creditsByNode[id] = await workflowNodeCredits(
+        db,
+        node,
+        organizationId,
+        workflowInputs(graph, steps, node)
+      );
     }
   }
   return {
