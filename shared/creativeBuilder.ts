@@ -536,6 +536,22 @@ export function outputCount(setup: CreativeSetup) {
         : setup.products.length)
   );
 }
+/** Same order as the generation worker: each product group, largest format first. */
+export function creativeImageOutputs(setup: CreativeSetup) {
+  const formats = setup.formatIds
+    .map(id => formatDetails(id)!)
+    .filter(Boolean)
+    .sort((a, b) => b.width * b.height - a.width * a.height);
+  const groups =
+    setup.promotionMode === "platform"
+      ? 1
+      : setup.productMode === "together"
+        ? Math.min(1, setup.products.length)
+        : setup.products.length;
+  return Array.from({ length: groups }, () =>
+    formats.map(({ width, height }) => ({ width, height }))
+  ).flat();
+}
 export function generationSetupIssues(setup: CreativeSetup) {
   const issues: string[] = [];
   if (setup.promotionMode !== "platform" && !setup.products.length)

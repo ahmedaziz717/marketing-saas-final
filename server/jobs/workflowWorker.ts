@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { workflowImageSize } from "../../shared/imageActionEstimate";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { creativeWorkflowRuns } from "../../drizzle/workflowSchema";
@@ -381,19 +382,8 @@ async function executeStep(
       throw new Error("The prompt writer returned an invalid response");
     return [{ type: "text", text: output.trim() }];
   }
-  const [ratioWidth, ratioHeight] = node.config.ratio.split(":").map(Number);
-  const dimensions =
-    (
-      {
-        "1:1": [1080, 1080],
-        "4:5": [1080, 1350],
-        "9:16": [1080, 1920],
-        "16:9": [1920, 1080],
-      } as Record<string, number[]>
-    )[node.config.ratio] ??
-    (ratioWidth > 0 && ratioHeight > 0
-      ? [1080, Math.round((1080 * ratioHeight) / ratioWidth)]
-      : [1080, 1080]);
+  const outputSize = workflowImageSize(node.config.ratio);
+  const dimensions = [outputSize.width, outputSize.height];
   const d = node.config.direction;
   const direction = d
     ? [

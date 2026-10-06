@@ -1,6 +1,7 @@
 import { videoQuote } from "./videoPricing";
 import {
   defaultVideoSetup,
+  videoModelOptions,
   type VideoReference,
 } from "../../shared/videoCreation";
 import { and, eq } from "drizzle-orm";
@@ -28,7 +29,13 @@ import {
   estimateOpenAIImageAction,
   defaultImageActionAssumptions,
   type ImageActionAssumptions,
+  imageProviderSize,
+  type ImageOutputSize,
 } from "../../shared/imageActionEstimate";
+import {
+  defaultVideoActionAssumptions,
+  type VideoActionAssumptions,
+} from "../../shared/videoActionEstimate";
 import { effectiveRate, getCreditPolicy } from "./creditPricing";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
 import { ENV } from "../_core/env";
@@ -162,23 +169,21 @@ export async function modelRate(
 export function configuredModelRate(
   model: ModelDefinition,
   rate: ProviderRate,
-  options: ModelOptions = {}
+  options: ModelOptions = {},
+  imageSize = defaultImageActionAssumptions.size
 ) {
   const settings = { ...modelDefaults(model), ...options };
   if (model.provider === "openai") {
-    const factor: Record<string, number> = {
-      low: 0.35,
-      medium: 1,
-      high: 2,
-      xhigh: 4,
-      max: 8,
-    };
+    if (rate.perRequestUsd != null) return rate;
     return {
       ...rate,
-      estimatedCostMicros: Math.ceil(
-        (rate.estimatedCostMicros ?? 200000) *
-          (factor[String(settings.quality)] ?? 1)
-      ),
+      estimatedCostMicros: estimateOpenAIImageAction(rate, {
+        ...defaultImageActionAssumptions,
+        size: imageSize,
+        quality: String(
+          settings.quality ?? "medium"
+        ) as ImageActionAssumptions["quality"],
+      }).costMicros,
     };
   }
   if (rate.perRequestUsd != null || rate.perSecondUsd != null) return rate;
@@ -216,11 +221,46 @@ export function configuredModelRate(
 export async function imageModelQuote(
   db: Database,
   id?: string,
-  options: ModelOptions = {}
+  options: ModelOptions = {},
+  outputSize?: ImageOutputSize
 ) {
-  const model = await resolveModel(db, id, "image"),
-    rate = await modelRate(db, model, options);
+  const model = await resolveModel(db, id, "image");
+  let rate = await modelRate(db, model, options);
+  if (outputSize)
+    rate = configuredModelRate(
+      model,
+      rate,
+      options,
+      imageProviderSize(
+        model.providerModel,
+        outputSize.width,
+        outputSize.height
+      )
+    );
   return { model, rate, credits: estimatedActionCredits(rate) };
+}
+export async function imageBatchQuote(
+  db: Database,
+  id: string | undefined,
+  options: ModelOptions = {},
+  outputs: ImageOutputSize[]
+) {
+  const base = await imageModelQuote(db, id, options);
+  const quotes = outputs.map(output => {
+    const rate = configuredModelRate(
+      base.model,
+      base.rate,
+      options,
+      imageProviderSize(base.model.providerModel, output.width, output.height)
+    );
+    return { rate, credits: estimatedActionCredits(rate) };
+  });
+  return {
+    model: base.model,
+    rate: base.rate,
+    quotes,
+    credits: quotes.reduce((sum, quote) => sum + quote.credits, 0),
+  };
 }
 export async function syncOpenAIModelAvailability(db: Database) {
   if (!ENV.openAiApiKey)
@@ -278,61 +318,33 @@ export function defaultModelActionQuote(
     return {
       costMicros,
       credits: estimatedActionCredits(rate),
-      basis: tokenBased ? "Configured estimate" : "Default settings estimate",
+      basis: tokenBased ? "Token-based estimate" : "Default settings estimate",
       settings: [
         "1 image",
+        ...(tokenBased
+          ? ["1024 × 1024", "1,000 text input tokens · no reference input"]
+          : []),
         ...Object.entries(defaults).map(
           ([key, value]) => `${key.replaceAll("_", " ")}: ${value}`
         ),
       ].join(" · "),
     };
   }
-  const seconds = Number(defaults.duration ?? 5);
-  const source = requiresVideo(model);
-  const refs: VideoReference[] = source
-    ? [
-        {
-          key: "asset:1",
-          name: "Source",
-          mimeType: "video/mp4",
-          storageKey: "",
-          fingerprint: "",
-          durationSeconds: seconds,
-          width: 1280,
-          height: 720,
-        },
-      ]
-    : [];
-  const resolution = String(defaults.resolution ?? "720p");
-  const aspectRatio = String(defaults.aspect_ratio ?? "16:9");
-  const quote = videoQuote(
-    {
-      ...defaultVideoSetup,
-      modelId: model.id,
-      mode: modelVideoMode(model),
-      duration: seconds,
-      resolution,
-      aspectRatio,
-      sourceVideoKey: source ? "asset:1" : null,
-    },
-    refs,
-    rate
-  );
-  return {
-    costMicros: quote.costMicros,
-    credits: quote.credits,
-    basis: "Default settings estimate",
-    settings: `${seconds}s video · ${resolution} · ${aspectRatio}${source ? ` · ${seconds}s source at 1280 × 720` : ""}${defaults.sound != null ? ` · sound: ${defaults.sound}` : ""}`,
-  };
+  return videoModelActionQuote(model, base, defaultVideoActionAssumptions);
 }
-/** Admin comparisons use a stated workload, not the upfront credit hold. The
- * reservation remains available separately and completed usage is unchanged.
- */
+/** Admin comparisons and customer quotes share the same calculation.
+ * Comparison assumptions never change saved rates or completed usage. */
 export function adminModelActionQuote(
   model: ModelDefinition,
   rate: ProviderRate,
-  assumptions: ImageActionAssumptions = defaultImageActionAssumptions
+  assumptions: ImageActionAssumptions = defaultImageActionAssumptions,
+  videoAssumptions: VideoActionAssumptions = defaultVideoActionAssumptions
 ) {
+  if (model.kind === "video")
+    return {
+      ...videoModelActionQuote(model, rate, videoAssumptions),
+      calculation: null,
+    };
   if (
     model.provider === "openai" &&
     model.kind === "image" &&
@@ -354,6 +366,78 @@ export function adminModelActionQuote(
       ? { basis: "Per-request provider rate" }
       : {}),
     calculation: null,
+  };
+}
+export function videoModelActionQuote(
+  model: ModelDefinition,
+  base: ProviderRate,
+  assumptions: VideoActionAssumptions
+) {
+  const defaults = modelDefaults(model),
+    props = model.inputSchema.properties;
+  const options: ModelOptions = { ...defaults };
+  for (const [key, value] of [
+    ["duration", assumptions.duration],
+    ["resolution", assumptions.resolution],
+    ["aspect_ratio", assumptions.aspectRatio],
+  ] as const) {
+    if (value === "default") continue;
+    if (!props[key])
+      throw new Error(
+        `This model does not offer a ${key.replaceAll("_", " ")} setting. Choose Model default.`
+      );
+    options[key] = value;
+  }
+  if (assumptions.sound !== "default") {
+    const key = props.generate_audio
+      ? "generate_audio"
+      : props.sound
+        ? "sound"
+        : null;
+    if (!key)
+      throw new Error(
+        "This model does not offer an audio setting. Choose Model default."
+      );
+    options[key] =
+      props[key].type === "boolean"
+        ? assumptions.sound === "on"
+        : assumptions.sound;
+  }
+  const problem = modelOptionsProblem(model, options);
+  if (problem) throw new Error(problem);
+  const source = requiresVideo(model);
+  const seconds = Number(options.duration ?? defaults.duration ?? 5);
+  const setup = {
+    ...defaultVideoSetup,
+    modelId: model.id,
+    modelOptions: options,
+    mode: modelVideoMode(model),
+    duration: seconds,
+    resolution: String(options.resolution ?? "720p"),
+    aspectRatio: String(options.aspect_ratio ?? "16:9"),
+    sourceVideoKey: source ? "asset:1" : null,
+  };
+  const refs: VideoReference[] = source
+    ? [
+        {
+          key: "asset:1",
+          name: "Source",
+          mimeType: "video/mp4",
+          storageKey: "",
+          fingerprint: "",
+          durationSeconds: assumptions.sourceSeconds,
+          width: 1280,
+          height: 720,
+        },
+      ]
+    : [];
+  const rate = configuredModelRate(model, base, videoModelOptions(setup));
+  const quote = videoQuote(setup, refs, rate);
+  return {
+    costMicros: quote.costMicros,
+    credits: quote.credits,
+    basis: "Video settings estimate",
+    settings: `${quote.durationSeconds}s video · ${props.resolution ? setup.resolution : "model resolution"} · ${props.aspect_ratio ? setup.aspectRatio : "model framing"}${source ? ` · ${assumptions.sourceSeconds}s source at 1280 × 720` : ""}${options.sound != null || options.generate_audio != null ? ` · audio: ${options.sound ?? (options.generate_audio ? "on" : "off")}` : ""}`,
   };
 }
 export async function publicModelCatalog(db: Database) {

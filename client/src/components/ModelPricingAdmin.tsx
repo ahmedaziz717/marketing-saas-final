@@ -22,6 +22,22 @@ import {
   imageActionAssumptionsSchema,
   type ImageActionAssumptions,
 } from "@shared/imageActionEstimate";
+import {
+  defaultVideoActionAssumptions,
+  videoActionAssumptionsSchema,
+  type VideoActionAssumptions,
+} from "@shared/videoActionEstimate";
+const videoChoices = (key: string) =>
+  Array.from(
+    new Set(
+      generationModels
+        .filter(m => m.kind === "video")
+        .flatMap(m => m.inputSchema.properties[key]?.enum ?? [])
+        .map(String)
+    )
+  )
+    .filter(v => v !== "default")
+    .sort();
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -66,10 +82,18 @@ export function ModelPricingAdmin() {
   const [estimateForm, setEstimateForm] = useState(
     defaultImageActionAssumptions
   );
-  const catalog = trpc.models.adminCatalog.useQuery({ imageEstimate }),
+  const [videoEstimate, setVideoEstimate] = useState(
+    defaultVideoActionAssumptions
+  );
+  const [videoForm, setVideoForm] = useState(defaultVideoActionAssumptions);
+  const catalog = trpc.models.adminCatalog.useQuery({
+      imageEstimate,
+      videoEstimate,
+    }),
     utils = trpc.useUtils();
   const [search, setSearch] = useState(""),
-    [kind, setKind] = useState("all"),
+    [kind, setKind] = useState("image"),
+    [provider, setProvider] = useState("all"),
     [edit, setEdit] = useState<string | null>(null);
   const [policy, setPolicy] = useState<{
     markupPercent: number;
@@ -153,6 +177,16 @@ export function ModelPricingAdmin() {
         )
       : [edited]
     : [];
+  const visibleModels =
+    catalog.data?.models.filter(
+      m =>
+        m.kind === kind &&
+        (provider === "all" ||
+          generationModel(m.routeId)?.provider === provider) &&
+        `${m.name} ${m.maker} ${generationModel(m.routeId)?.provider} ${m.variant}`
+          .toLowerCase()
+          .includes(search.toLowerCase())
+    ) ?? [];
   return (
     <div className="space-y-6">
       <section className="surface p-5">
@@ -273,21 +307,32 @@ export function ModelPricingAdmin() {
           Manage token rates and request estimates
         </a>
       </section>
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Input
+          className="min-w-[200px] flex-1"
+          aria-label="Search models"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search models, makers, or providers…"
         />
         <select
           aria-label="Model type"
-          className="rounded-xl border bg-background px-3"
+          className="h-10 rounded-xl border bg-background px-3"
           value={kind}
           onChange={e => setKind(e.target.value)}
         >
-          <option value="all">All types</option>
-          <option value="image">Image</option>
-          <option value="video">Video</option>
+          <option value="image">Images</option>
+          <option value="video">Videos</option>
+        </select>
+        <select
+          aria-label="Provider"
+          className="h-10 rounded-xl border bg-background px-3"
+          value={provider}
+          onChange={e => setProvider(e.target.value)}
+        >
+          <option value="all">All providers</option>
+          <option value="openai">OpenAI</option>
+          <option value="higgsfield">Higgsfield</option>
         </select>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -307,107 +352,259 @@ export function ModelPricingAdmin() {
           action; their dollar equivalent is shown when rounding changes the
           price.
         </p>
-        <p>
-          OpenAI comparisons use each model’s token rates and output estimate
-          for the image settings below. Final cost uses actual reported tokens.
-          Upfront credit reservations are separate and may be higher.
-        </p>
-        <details className="rounded-lg border bg-background p-3">
-          <summary className="cursor-pointer text-foreground">
-            <span className="font-medium">Image estimate settings</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {imageEstimate.size.replace("x", " × ")} · {imageEstimate.quality}{" "}
-              · {creditNumber(imageEstimate.textInputTokens)} text +{" "}
-              {creditNumber(imageEstimate.imageInputTokens)} image input tokens
-            </span>
-          </summary>
-          <form
-            className="mt-4 space-y-3"
-            onSubmit={e => {
-              e.preventDefault();
-              const parsed =
-                imageActionAssumptionsSchema.safeParse(estimateForm);
-              if (parsed.success) setImageEstimate(parsed.data);
-            }}
-          >
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <label className="space-y-1 text-xs">
-                <span>Image quality</span>
-                <select
-                  className="h-10 w-full rounded-lg border bg-background px-2"
-                  value={estimateForm.quality}
-                  onChange={e =>
-                    setEstimateForm({
-                      ...estimateForm,
-                      quality: e.target
-                        .value as ImageActionAssumptions["quality"],
-                    })
-                  }
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </label>
-              <label className="space-y-1 text-xs">
-                <span>Image dimensions</span>
-                <select
-                  className="h-10 w-full rounded-lg border bg-background px-2"
-                  value={estimateForm.size}
-                  onChange={e =>
-                    setEstimateForm({
-                      ...estimateForm,
-                      size: e.target.value as ImageActionAssumptions["size"],
-                    })
-                  }
-                >
-                  <option value="1024x1024">Square · 1024 × 1024</option>
-                  <option value="1024x1536">Portrait · 1024 × 1536</option>
-                  <option value="1536x1024">Landscape · 1536 × 1024</option>
-                </select>
-              </label>
-              {(
-                [
-                  ["textInputTokens", "Text input tokens"],
-                  ["imageInputTokens", "Reference image input tokens"],
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field} className="space-y-1 text-xs">
-                  <span>{label}</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={1000000}
-                    step={1}
-                    value={estimateForm[field]}
+        {kind === "image" ? (
+          <p>
+            OpenAI comparisons use each model’s token rates and output estimate
+            for the image settings below. Final cost uses actual reported
+            tokens. Other image providers use their model defaults and published
+            action rates.
+          </p>
+        ) : (
+          <p>
+            Video estimates use duration and supported model settings. Models
+            that do not support your choices are marked unavailable for this
+            comparison.
+          </p>
+        )}
+        {kind === "image" ? (
+          <details className="rounded-lg border bg-background p-3">
+            <summary className="cursor-pointer text-foreground">
+              <span className="font-medium">Image estimate settings</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {imageEstimate.size.replace("x", " × ")} ·{" "}
+                {imageEstimate.quality} ·{" "}
+                {creditNumber(imageEstimate.textInputTokens)} text +{" "}
+                {creditNumber(imageEstimate.imageInputTokens)} image input
+                tokens
+              </span>
+            </summary>
+            <form
+              className="mt-4 space-y-3"
+              onSubmit={e => {
+                e.preventDefault();
+                const parsed =
+                  imageActionAssumptionsSchema.safeParse(estimateForm);
+                if (parsed.success) setImageEstimate(parsed.data);
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <label className="space-y-1 text-xs">
+                  <span>Image quality</span>
+                  <select
+                    className="h-10 w-full rounded-lg border bg-background px-2"
+                    value={estimateForm.quality}
                     onChange={e =>
                       setEstimateForm({
                         ...estimateForm,
-                        [field]: Number(e.target.value),
+                        quality: e.target
+                          .value as ImageActionAssumptions["quality"],
+                      })
+                    }
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">Extra high · Image 2.5</option>
+                    <option value="max">Maximum · Image 2.5</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span>Image dimensions</span>
+                  <select
+                    className="h-10 w-full rounded-lg border bg-background px-2"
+                    value={estimateForm.size}
+                    onChange={e =>
+                      setEstimateForm({
+                        ...estimateForm,
+                        size: e.target.value as ImageActionAssumptions["size"],
+                      })
+                    }
+                  >
+                    <option value="1024x1024">Square · 1024 × 1024</option>
+                    <option value="1024x1536">Portrait · 1024 × 1536</option>
+                    <option value="1536x1024">Landscape · 1536 × 1024</option>
+                    <option value="1536x1536">
+                      Large square · 1536 × 1536
+                    </option>
+                    <option value="1232x1536">
+                      Feed 4:5 canvas · 1232 × 1536
+                    </option>
+                    <option value="864x1536">
+                      Vertical 9:16 canvas · 864 × 1536
+                    </option>
+                    <option value="1536x864">
+                      Wide 16:9 canvas · 1536 × 864
+                    </option>
+                  </select>
+                </label>
+                {(
+                  [
+                    ["textInputTokens", "Text input tokens"],
+                    ["imageInputTokens", "Reference image input tokens"],
+                  ] as const
+                ).map(([field, label]) => (
+                  <label key={field} className="space-y-1 text-xs">
+                    <span>{label}</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1000000}
+                      step={1}
+                      value={estimateForm[field]}
+                      onChange={e =>
+                        setEstimateForm({
+                          ...estimateForm,
+                          [field]: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs">
+                Input counts are comparison assumptions, not measured usage. The
+                default is a 1,000-token prompt with no reference image. These
+                settings affect only this admin comparison; provider rates,
+                customer reservations, and completed usage are unchanged.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  !imageActionAssumptionsSchema.safeParse(estimateForm)
+                    .success || catalog.isFetching
+                }
+              >
+                {catalog.isFetching
+                  ? "Calculating…"
+                  : "Apply estimate settings"}
+              </Button>
+            </form>
+          </details>
+        ) : (
+          <details className="rounded-lg border bg-background p-3" open>
+            <summary className="cursor-pointer text-foreground">
+              <span className="font-medium">Video estimate settings</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {videoEstimate.duration === "default"
+                  ? "Model duration"
+                  : `${videoEstimate.duration}s`}{" "}
+                ·{" "}
+                {videoEstimate.resolution === "default"
+                  ? "Model resolution"
+                  : videoEstimate.resolution}
+              </span>
+            </summary>
+            <form
+              className="mt-4 space-y-3"
+              onSubmit={e => {
+                e.preventDefault();
+                const parsed =
+                  videoActionAssumptionsSchema.safeParse(videoForm);
+                if (parsed.success) setVideoEstimate(parsed.data);
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <label className="space-y-1 text-xs">
+                  <span>Video duration</span>
+                  <select
+                    className="h-10 w-full rounded-lg border bg-background px-2"
+                    value={videoForm.duration}
+                    onChange={e =>
+                      setVideoForm({
+                        ...videoForm,
+                        duration:
+                          e.target.value === "default"
+                            ? "default"
+                            : Number(e.target.value),
+                      })
+                    }
+                  >
+                    <option value="default">Model default</option>
+                    {[3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 30, 60].map(n => (
+                      <option key={n} value={n}>
+                        {n} seconds
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {(
+                  [
+                    ["resolution", "resolution", "Video resolution"],
+                    ["aspectRatio", "aspect_ratio", "Aspect ratio"],
+                  ] as const
+                ).map(([field, key, label]) => (
+                  <label key={field} className="space-y-1 text-xs">
+                    <span>{label}</span>
+                    <select
+                      className="h-10 w-full rounded-lg border bg-background px-2"
+                      value={videoForm[field]}
+                      onChange={e =>
+                        setVideoForm({ ...videoForm, [field]: e.target.value })
+                      }
+                    >
+                      <option value="default">Model default</option>
+                      {videoChoices(key).map(value => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                <label className="space-y-1 text-xs">
+                  <span>Audio</span>
+                  <select
+                    className="h-10 w-full rounded-lg border bg-background px-2"
+                    value={videoForm.sound}
+                    onChange={e =>
+                      setVideoForm({
+                        ...videoForm,
+                        sound: e.target
+                          .value as VideoActionAssumptions["sound"],
+                      })
+                    }
+                  >
+                    <option value="default">Model default</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span>Source clip (seconds)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={videoForm.sourceSeconds}
+                    onChange={e =>
+                      setVideoForm({
+                        ...videoForm,
+                        sourceSeconds: Number(e.target.value),
                       })
                     }
                   />
                 </label>
-              ))}
-            </div>
-            <p className="text-xs">
-              Input counts are comparison assumptions, not measured usage. The
-              default is a 1,000-token prompt with no reference image. These
-              settings affect only this admin comparison; provider rates,
-              customer reservations, and completed usage are unchanged.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={
-                !imageActionAssumptionsSchema.safeParse(estimateForm).success ||
-                catalog.isFetching
-              }
-            >
-              {catalog.isFetching ? "Calculating…" : "Apply estimate settings"}
-            </Button>
-          </form>
-        </details>
+              </div>
+              <p className="text-xs">
+                Source length applies to models that edit, extend, or use a
+                reference video (assumed 1280 × 720). Model default uses each
+                model’s supported preset. These controls change this comparison
+                only.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  !videoActionAssumptionsSchema.safeParse(videoForm).success ||
+                  catalog.isFetching
+                }
+              >
+                {catalog.isFetching ? "Calculating…" : "Apply video settings"}
+              </Button>
+            </form>
+          </details>
+        )}
         {policy && (
           <p className="font-medium text-primary">
             Previewing unsaved pricing defaults. Save above to apply them.
@@ -437,214 +634,219 @@ export function ModelPricingAdmin() {
             </tr>
           </thead>
           <tbody>
-            {catalog.data?.models
-              .filter(
-                m =>
-                  (kind === "all" || m.kind === kind) &&
-                  `${m.name} ${m.maker} ${m.provider} ${m.variant}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
-              )
-              .map(m => {
-                const definition = generationModel(m.routeId)!,
-                  rate = catalog.data!.rates.find(
-                    r =>
-                      r.provider === definition.provider &&
-                      r.model === definition.providerModel
-                  )?.config;
-                const tokenPricing =
-                  definition.provider === "openai" &&
-                  definition.kind === "image" &&
-                  rate?.perRequestUsd == null;
-                const markup =
-                  rate?.markupPercent ?? currentPolicy.markupPercent;
-                const estimate = m.actionEstimate;
-                const prices =
-                  estimate?.costMicros != null &&
-                  currentPolicy.creditValueMicros > 0
-                    ? actionPriceBreakdown(estimate.costMicros, {
-                        ...currentPolicy,
-                        markupPercent: markup,
-                      })
-                    : null;
-                return (
-                  <tr key={m.id} className="border-b align-top last:border-0">
-                    <td className="p-3 min-w-[230px] max-w-[320px]">
-                      <p className="font-medium">{m.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.maker} · {m.variant} · {m.kind}
-                      </p>
-                      <p className="mt-2 text-xs font-medium">
-                        {estimate?.basis ?? "Pricing required"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {estimate?.settings}
-                      </p>
-                      {tokenPricing && (
-                        <details className="mt-2 text-xs">
-                          <summary className="cursor-pointer text-primary">
-                            Calculation & token rates
-                          </summary>
-                          <div className="mt-2 space-y-2">
-                            {estimate?.calculation && (
-                              <div className="space-y-2 border-b pb-2">
-                                <dl className="space-y-1">
-                                  {(
+            {visibleModels.map(m => {
+              const definition = generationModel(m.routeId)!,
+                rate = catalog.data!.rates.find(
+                  r =>
+                    r.provider === definition.provider &&
+                    r.model === definition.providerModel
+                )?.config;
+              const tokenPricing =
+                definition.provider === "openai" &&
+                definition.kind === "image" &&
+                rate?.perRequestUsd == null;
+              const markup = rate?.markupPercent ?? currentPolicy.markupPercent;
+              const estimate = m.actionEstimate;
+              const prices =
+                estimate?.costMicros != null &&
+                currentPolicy.creditValueMicros > 0
+                  ? actionPriceBreakdown(estimate.costMicros, {
+                      ...currentPolicy,
+                      markupPercent: markup,
+                    })
+                  : null;
+              return (
+                <tr key={m.id} className="border-b align-top last:border-0">
+                  <td className="p-3 min-w-[230px] max-w-[320px]">
+                    <p className="font-medium">{m.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.maker} · {m.variant} · {m.kind}
+                    </p>
+                    <p className="mt-2 text-xs font-medium">
+                      {estimate?.basis ?? "Estimate unavailable"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {estimate?.settings ?? m.estimateProblem}
+                    </p>
+                    {tokenPricing && (
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-primary">
+                          Calculation & token rates
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          {estimate?.calculation && (
+                            <div className="space-y-2 border-b pb-2">
+                              <dl className="space-y-1">
+                                {(
+                                  [
                                     [
-                                      [
-                                        `Text input · ${creditNumber(estimate.calculation.assumptions.textInputTokens)} tokens`,
-                                        estimate.calculation.textInputMicros,
-                                      ],
-                                      [
-                                        `Image input · ${creditNumber(estimate.calculation.assumptions.imageInputTokens)} tokens`,
-                                        estimate.calculation.imageInputMicros,
-                                      ],
-                                      [
-                                        `Image output · ${estimate.calculation.approximateOutputTokens ? "≈ " : ""}${creditNumber(estimate.calculation.outputTokens)} tokens`,
-                                        estimate.calculation.imageOutputMicros,
-                                      ],
-                                    ] as const
-                                  ).map(([label, micros]) => (
-                                    <div
-                                      key={label}
-                                      className="flex justify-between gap-3"
-                                    >
-                                      <dt className="text-muted-foreground">
-                                        {label}
-                                      </dt>
-                                      <dd className="tabular-nums">
-                                        {money(micros / 1e6)}
-                                      </dd>
-                                    </div>
-                                  ))}
-                                </dl>
-                                <a
-                                  href={estimate.calculation.sourceUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block text-[11px] text-primary underline"
-                                >
-                                  {estimate.calculation.source}
-                                </a>
-                              </div>
-                            )}
-                            <ImageTokenRates rate={rate} />
-                            <p className="text-[11px] text-muted-foreground">
-                              {rate?.pricingVerifiedAt
-                                ? `Verified ${new Date(rate.pricingVerifiedAt).toLocaleDateString()}`
-                                : "Pricing verification required"}
-                            </p>
-                            {rate?.sourceUrl && (
+                                      `Text input · ${creditNumber(estimate.calculation.assumptions.textInputTokens)} tokens`,
+                                      estimate.calculation.textInputMicros,
+                                    ],
+                                    [
+                                      `Image input · ${creditNumber(estimate.calculation.assumptions.imageInputTokens)} tokens`,
+                                      estimate.calculation.imageInputMicros,
+                                    ],
+                                    [
+                                      `Image output · ${estimate.calculation.approximateOutputTokens ? "≈ " : ""}${creditNumber(estimate.calculation.outputTokens)} tokens`,
+                                      estimate.calculation.imageOutputMicros,
+                                    ],
+                                  ] as const
+                                ).map(([label, micros]) => (
+                                  <div
+                                    key={label}
+                                    className="flex justify-between gap-3"
+                                  >
+                                    <dt className="text-muted-foreground">
+                                      {label}
+                                    </dt>
+                                    <dd className="tabular-nums">
+                                      {money(micros / 1e6)}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
                               <a
-                                className="text-[11px] text-primary underline"
-                                href={rate.sourceUrl}
+                                href={estimate.calculation.sourceUrl}
                                 target="_blank"
                                 rel="noreferrer"
+                                className="block text-[11px] text-primary underline"
                               >
-                                Pricing source
+                                {estimate.calculation.source}
                               </a>
-                            )}
-                          </div>
-                        </details>
-                      )}
-                      {rate?.pricingError && (
-                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                          {rate.pricingError}
+                            </div>
+                          )}
+                          <ImageTokenRates rate={rate} />
+                          <p className="text-[11px] text-muted-foreground">
+                            {rate?.pricingVerifiedAt
+                              ? `Verified ${new Date(rate.pricingVerifiedAt).toLocaleDateString()}`
+                              : "Pricing verification required"}
+                          </p>
+                          {rate?.sourceUrl && (
+                            <a
+                              className="text-[11px] text-primary underline"
+                              href={rate.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Pricing source
+                            </a>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                    {rate?.pricingError && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        {rate.pricingError}
+                      </p>
+                    )}
+                  </td>
+                  <td className="p-3 whitespace-nowrap">
+                    <p className="font-medium">
+                      {definition.provider === "openai"
+                        ? "OpenAI"
+                        : "Higgsfield"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {definition.provider === "openai"
+                        ? "Direct API"
+                        : "API provider"}
+                    </p>
+                  </td>
+                  <td className="p-3">
+                    <label className="flex items-center gap-2 whitespace-nowrap">
+                      <Switch
+                        aria-label={`Offer ${m.name} · ${m.variant}`}
+                        checked={m.enabled}
+                        disabled={setEnabled.isPending}
+                        onCheckedChange={enabled =>
+                          setEnabled.mutate({ id: m.id, enabled })
+                        }
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {setEnabled.isPending &&
+                        setEnabled.variables?.id === m.id
+                          ? "Saving…"
+                          : m.enabled
+                            ? "On"
+                            : "Off"}
+                      </span>
+                    </label>
+                  </td>
+                  <td className="p-3 tabular-nums">
+                    <p className="text-base font-semibold">
+                      {prices ? money(prices.providerUsd) : "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Estimated provider cost
+                    </p>
+                  </td>
+                  <td className="p-3 tabular-nums">
+                    <p className="text-base font-semibold">
+                      {prices ? creditNumber(prices.providerCredits) : "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Credit equivalent
+                    </p>
+                  </td>
+                  <td className="p-3 tabular-nums bg-violet-500/5">
+                    <p className="text-base font-semibold">
+                      {prices ? money(prices.retailUsd) : "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      After {markup}% markup
+                    </p>
+                  </td>
+                  <td className="p-3 tabular-nums bg-violet-500/5">
+                    <p className="text-base font-semibold">
+                      {prices ? creditNumber(prices.retailCredits) : "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Credits / action
+                    </p>
+                    {prices &&
+                      Math.abs(prices.chargedUsd - prices.retailUsd) >
+                        0.0000005 && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {money(prices.chargedUsd)} after rounding
                         </p>
                       )}
-                    </td>
-                    <td className="p-3 whitespace-nowrap">
-                      <p className="font-medium">
-                        {definition.provider === "openai"
-                          ? "OpenAI"
-                          : "Higgsfield"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {definition.provider === "openai"
-                          ? "Direct API"
-                          : "API provider"}
-                      </p>
-                    </td>
-                    <td className="p-3">
-                      <label className="flex items-center gap-2 whitespace-nowrap">
-                        <Switch
-                          aria-label={`Offer ${m.name} · ${m.variant}`}
-                          checked={m.enabled}
-                          disabled={setEnabled.isPending}
-                          onCheckedChange={enabled =>
-                            setEnabled.mutate({ id: m.id, enabled })
-                          }
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {setEnabled.isPending &&
-                          setEnabled.variables?.id === m.id
-                            ? "Saving…"
-                            : m.enabled
-                              ? "On"
-                              : "Off"}
-                        </span>
-                      </label>
-                    </td>
-                    <td className="p-3 tabular-nums">
-                      <p className="text-base font-semibold">
-                        {prices ? money(prices.providerUsd) : "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Estimated provider cost
-                      </p>
-                    </td>
-                    <td className="p-3 tabular-nums">
-                      <p className="text-base font-semibold">
-                        {prices ? creditNumber(prices.providerCredits) : "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Credit equivalent
-                      </p>
-                    </td>
-                    <td className="p-3 tabular-nums bg-violet-500/5">
-                      <p className="text-base font-semibold">
-                        {prices ? money(prices.retailUsd) : "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        After {markup}% markup
-                      </p>
-                    </td>
-                    <td className="p-3 tabular-nums bg-violet-500/5">
-                      <p className="text-base font-semibold">
-                        {prices ? creditNumber(prices.retailCredits) : "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Credits / action
-                      </p>
-                      {prices &&
-                        Math.abs(prices.chargedUsd - prices.retailUsd) >
-                          0.0000005 && (
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            {money(prices.chargedUsd)} after rounding
-                          </p>
-                        )}
-                    </td>
-                    <td className="p-3">
-                      {markup}%
-                      {rate?.markupPercent == null && (
-                        <p className="text-xs text-muted-foreground">Default</p>
-                      )}
-                    </td>
-                    <td className="p-3 text-xs">
-                      {m.available ? "Available" : m.reason}
-                    </td>
-                    <td className="p-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => open(m.id)}
-                      >
-                        Configure
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
+                  </td>
+                  <td className="p-3">
+                    {markup}%
+                    {rate?.markupPercent == null && (
+                      <p className="text-xs text-muted-foreground">Default</p>
+                    )}
+                  </td>
+                  <td className="p-3 text-xs">
+                    {m.available ? "Available" : m.reason}
+                  </td>
+                  <td className="p-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => open(m.id)}
+                    >
+                      Configure
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+            {visibleModels.length === 0 && (
+              <tr>
+                <td
+                  colSpan={10}
+                  className="p-8 text-center text-muted-foreground"
+                >
+                  {catalog.isPending
+                    ? "Loading models…"
+                    : catalog.error
+                      ? catalog.error.message
+                      : "No models match these filters."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
         {catalog.isLoading && (
@@ -733,20 +935,11 @@ export function ModelPricingAdmin() {
             {(
               [
                 ["markup", "Markup override (%)"],
-                [
-                  "estimate",
-                  "Upfront credit reservation basis (USD, before markup)",
-                ],
                 ["request", "Provider cost per image/request override (USD)"],
                 ["second", "Provider cost per second override (USD)"],
               ] as const
             )
               .filter(([key]) => key !== "second" || edited?.kind === "video")
-              .filter(
-                ([key]) =>
-                  key !== "estimate" ||
-                  generationModel(form.routeId)?.provider === "openai"
-              )
               .map(([key, label]) => (
                 <label key={key} className="block space-y-1 text-sm">
                   <span>{label}</span>
@@ -762,10 +955,10 @@ export function ModelPricingAdmin() {
               ))}
             <p className="text-xs text-muted-foreground">
               Per-request cost takes precedence over per-second pricing. The
-              reservation basis is a provisional estimate at medium quality, not
-              an OpenAI rate or a fixed price per image. Final token costs use
-              reported usage. Missing usage stays marked awaiting cost. Provider
-              rate changes apply to every model routed through that provider
+              image credit estimate is calculated from the model’s token rates,
+              quality, and provider canvas. Final token costs use reported
+              usage. Missing usage stays marked awaiting cost. Provider rate
+              changes apply to every model routed through that provider
               endpoint.
             </p>
             <a

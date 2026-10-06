@@ -31,6 +31,7 @@ import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { videoQuote, videoRate } from "./videoPricing";
 import { REQUIRED_IMAGE_MODEL_ID, REQUIRED_TEXT_MODEL_ID } from "./models";
 import { imageModelQuote } from "./modelCatalog";
+import { workflowImageSize } from "../../shared/imageActionEstimate";
 import { effectiveRate } from "./creditPricing";
 import { estimatedActionCredits } from "../../shared/aiCredits";
 
@@ -141,7 +142,12 @@ export async function workflowNodeCredits(
   if (!isGenerationNode(node.type)) return 0;
   if (node.type === "generate_image")
     return (
-      await imageModelQuote(db, node.config.modelId, node.config.modelOptions)
+      await imageModelQuote(
+        db,
+        node.config.modelId,
+        node.config.modelOptions,
+        workflowImageSize(node.config.ratio)
+      )
     ).credits;
   const kind = "text",
     model = REQUIRED_TEXT_MODEL_ID;

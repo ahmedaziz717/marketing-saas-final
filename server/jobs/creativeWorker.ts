@@ -59,10 +59,12 @@ export async function processNextBuilderJob(db: Database) {
         "Selected source data changed while this job was queued. Review the setup and retry."
       );
     }
-    const price = (
-      job.briefSnapshot.generationQuote as { rate?: unknown } | undefined
-    )?.rate;
+    const savedQuote = job.briefSnapshot.generationQuote as
+      | { rate?: unknown; rates?: unknown[] }
+      | undefined;
+    const price = savedQuote?.rate;
     const rateSnapshot = price ? rateInput.parse(price) : undefined;
+    const rateSnapshots = savedQuote?.rates?.map(rate => rateInput.parse(rate));
     await aiScope.run(
       {
         organizationId: job.organizationId,
@@ -78,6 +80,7 @@ export async function processNextBuilderJob(db: Database) {
           setup,
           resolved,
           rateSnapshot,
+          rateSnapshots,
         })
     );
   } catch {

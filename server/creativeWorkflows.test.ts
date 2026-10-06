@@ -282,7 +282,7 @@ it("isolates workspaces and creator roles, including referenced assets", async (
 });
 it("executes a metered image pipeline, retains draft outputs, and deduplicates a run", async () => {
   const { saved, run, input, quote } = await queue(pipeline());
-  expect(quote.credits).toBe(50);
+  expect(quote.credits).toBe(15); // 10 text credits + 5 for the selected Sunburst canvas.
   expect((await owner.run(input)).id).toBe(run.id);
   await finish();
   const result = await owner.get({ organizationId: org, id: saved.id });
@@ -322,7 +322,7 @@ it("runs one node with unchanged upstream outputs, but rejects stale upstream re
     revision: 1,
     target: "render",
   });
-  expect(quote.credits).toBe(40);
+  expect(quote.credits).toBe(5);
   expect(quote.reused).toBe(1);
   await owner.run({
     organizationId: org,
@@ -330,7 +330,7 @@ it("runs one node with unchanged upstream outputs, but rejects stale upstream re
     revision: 1,
     target: "render",
     requestId: randomUUID(),
-    quotedCredits: 40,
+    quotedCredits: quote.credits,
   });
   await finish();
   expect(state.llm).toHaveBeenCalledTimes(1);

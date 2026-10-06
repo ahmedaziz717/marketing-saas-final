@@ -1,4 +1,5 @@
-import { imageModelQuote } from "../lib/modelCatalog";
+import { imageBatchQuote } from "../lib/modelCatalog";
+import { creativeImageOutputs } from "../../shared/creativeBuilder";
 import { referenceCapacity, generationModel } from "../../shared/modelCatalog";
 import type { ProviderRate } from "../../shared/platformAdmin";
 import {
@@ -224,10 +225,16 @@ export async function runBuilderJob(
     setup: CreativeSetup;
     resolved: Awaited<ReturnType<typeof loadInputs>>;
     rateSnapshot?: ProviderRate;
+    rateSnapshots?: ProviderRate[];
   }
 ) {
   const { organizationId, actorUserId, briefId, jobId, setup, resolved } = args;
   try {
+    if (
+      args.rateSnapshots &&
+      args.rateSnapshots.length !== creativeImageOutputs(setup).length
+    )
+      throw new Error("The saved image quotes do not match this creative set.");
     const imageModel = setup.modelId ?? REQUIRED_IMAGE_MODEL_ID;
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
@@ -251,6 +258,7 @@ export async function runBuilderJob(
           ? [resolved.products]
           : resolved.products.map(product => [product]);
     const generated: Array<typeof creativeVariants.$inferInsert> = [];
+    let outputIndex = 0;
     for (const group of groups) {
       await renewBuilderJob(db, organizationId, jobId);
       const sources = await Promise.all(
@@ -278,7 +286,8 @@ export async function runBuilderJob(
         const image = await generateSunburstImage({
           modelId: setup.modelId,
           modelOptions: setup.modelOptions,
-          rateSnapshot: args.rateSnapshot,
+          rateSnapshot:
+            args.rateSnapshots?.[outputIndex++] ?? args.rateSnapshot,
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
           prompt: buildCreativePrompt({
@@ -954,10 +963,11 @@ export const creativeBuilderRouter = router({
           message: issues.join(" "),
         });
       const resolved = await loadInputs(db, input.organizationId, setup);
-      const generationQuote = await imageModelQuote(
+      const generationQuote = await imageBatchQuote(
         db,
         setup.modelId,
-        setup.modelOptions
+        setup.modelOptions,
+        creativeImageOutputs(setup)
       );
       const productReferences =
         setup.promotionMode === "platform"
@@ -977,14 +987,7 @@ export const creativeBuilderRouter = router({
           code: "BAD_REQUEST",
           message: `${generationQuote.model.name} supports ${referenceCapacity(generationQuote.model)} reference images; this creative needs ${referenceCount}. Select a compatible model or fewer references/formats.`,
         });
-      const generatedCount =
-        setup.formatIds.length *
-        (setup.promotionMode === "platform"
-          ? 1
-          : setup.productMode === "together"
-            ? 1
-            : setup.products.length);
-      if (input.quotedCredits !== generationQuote.credits * generatedCount)
+      if (input.quotedCredits !== generationQuote.credits)
         throw new TRPCError({
           code: "CONFLICT",
           message: "Review the current credit estimate before generating.",
@@ -999,6 +1002,7 @@ export const creativeBuilderRouter = router({
         kind: "builder_v1",
         generationQuote: {
           rate: generationQuote.rate,
+          rates: generationQuote.quotes.map(quote => quote.rate),
           credits: generationQuote.credits,
           modelId: generationQuote.model.id,
         },

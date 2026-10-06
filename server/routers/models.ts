@@ -25,6 +25,7 @@ import {
   adminModelActionQuote,
   defaultModelRate,
   imageModelQuote,
+  imageBatchQuote,
   initializeModelCatalog,
   modelRate,
   publicModelCatalog,
@@ -35,7 +36,11 @@ import { getCreditPolicy, effectiveRate } from "../lib/creditPricing";
 import { syncPublishedPricing } from "../lib/publishedPricing";
 import { workflowNodeSchema } from "../../shared/creativeWorkflow";
 import { workflowNodeCredits } from "../lib/creativeWorkflows";
-import { imageActionAssumptionsSchema } from "../../shared/imageActionEstimate";
+import {
+  imageActionAssumptionsSchema,
+  imageOutputSizeSchema,
+} from "../../shared/imageActionEstimate";
+import { videoActionAssumptionsSchema } from "../../shared/videoActionEstimate";
 const scope = z.object({ organizationId: z.number().int().positive() });
 async function authorized(userId: number, organizationId: number) {
   await requireOrganizationRole(userId, organizationId, [
@@ -96,11 +101,26 @@ export const modelsRouter = router({
         modelId: z.string().max(240).optional(),
         options: modelOptionsSchema.optional(),
         count: z.number().int().min(1).max(144).default(1),
+        outputs: z.array(imageOutputSizeSchema).min(1).max(144).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const db = await authorized(ctx.user.id, input.organizationId),
-        quote = await imageModelQuote(db, input.modelId, input.options);
+      const db = await authorized(ctx.user.id, input.organizationId);
+      if (input.outputs) {
+        const quote = await imageBatchQuote(
+          db,
+          input.modelId,
+          input.options,
+          input.outputs
+        );
+        return {
+          credits: quote.credits,
+          perImage: null,
+          estimated: true,
+          routeId: quote.model.id,
+        };
+      }
+      const quote = await imageModelQuote(db, input.modelId, input.options);
       return {
         credits: quote.credits * input.count,
         perImage: quote.credits,
@@ -111,7 +131,10 @@ export const modelsRouter = router({
   adminCatalog: adminProcedure
     .input(
       z
-        .object({ imageEstimate: imageActionAssumptionsSchema.optional() })
+        .object({
+          imageEstimate: imageActionAssumptionsSchema.optional(),
+          videoEstimate: videoActionAssumptionsSchema.optional(),
+        })
         .optional()
     )
     .query(async ({ input }) => {
@@ -130,6 +153,7 @@ export const modelsRouter = router({
           )?.config ?? defaultModelRate(definition);
         let actionEstimate: ReturnType<typeof adminModelActionQuote> | null =
           null;
+        let estimateProblem: string | null = null;
         try {
           actionEstimate = adminModelActionQuote(
             definition,
@@ -139,12 +163,16 @@ export const modelsRouter = router({
               markupPercent: base.markupPercent ?? policy.markupPercent,
               creditValueMicros: policy.creditValueMicros,
             },
-            input?.imageEstimate
+            input?.imageEstimate,
+            input?.videoEstimate
           );
-        } catch {
-          /* Unpriced models stay unpriced; never display zero cost. */
+        } catch (error) {
+          estimateProblem =
+            error instanceof Error
+              ? error.message
+              : "Estimate unavailable for these settings.";
         }
-        return { ...model, actionEstimate };
+        return { ...model, actionEstimate, estimateProblem };
       });
       return { policy, models, settings, rates };
     }),

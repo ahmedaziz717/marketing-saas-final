@@ -16,7 +16,12 @@ import {
 const state = vi.hoisted(() => ({ db: null as any }));
 vi.mock("./db", () => ({ getDb: async () => state.db }));
 import { modelsRouter } from "./routers/models";
-import { resolveModel } from "./lib/modelCatalog";
+import { resolveModel, imageBatchQuote } from "./lib/modelCatalog";
+import { estimatedActionCredits } from "../shared/aiCredits";
+import {
+  creativeImageOutputs,
+  defaultCreativeSetup,
+} from "../shared/creativeBuilder";
 let engine: PGlite;
 let admin: ReturnType<typeof modelsRouter.createCaller>;
 let owner: ReturnType<typeof modelsRouter.createCaller>;
@@ -61,6 +66,59 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => engine?.close());
 
+it("quotes mixed-size customer batches from the same per-action rates saved for generation", async () => {
+  const [row] = await state.db
+    .select()
+    .from(providerRates)
+    .where(eq(providerRates.model, "gpt-image-2.5-sunburst"));
+  await state.db
+    .update(providerRates)
+    .set({ config: { ...row.config, pricingVerifiedAt: Date.now() } })
+    .where(eq(providerRates.id, row.id));
+  const setup = {
+    ...defaultCreativeSetup(),
+    promotionMode: "platform" as const,
+  };
+  const outputs = creativeImageOutputs(setup);
+  const input = {
+    organizationId: 1,
+    modelId: "openai:gpt-image-2.5-sunburst",
+    options: { quality: "medium" },
+    outputs,
+  };
+  const customer = await owner.imageQuote(input);
+  const generation = await imageBatchQuote(
+    state.db,
+    input.modelId,
+    input.options,
+    outputs
+  );
+  expect(customer.credits).toBe(
+    generation.quotes.reduce(
+      (sum, q) => sum + estimatedActionCredits(q.rate),
+      0
+    )
+  );
+  expect(
+    new Set(generation.quotes.map(q => q.rate.estimatedCostMicros)).size
+  ).toBeGreaterThan(1);
+  expect(customer).not.toHaveProperty("rate");
+  expect(customer).not.toHaveProperty("costMicros");
+  const higher = await owner.imageQuote({
+    ...input,
+    options: { quality: "high" },
+  });
+  expect(higher.credits).toBeGreaterThan(customer.credits);
+  const baseline = await owner.imageQuote({
+    organizationId: 1,
+    modelId: input.modelId,
+  });
+  const catalog = await owner.catalog({ organizationId: 1 });
+  expect(baseline.credits).toBe(
+    catalog.find(m => m.id === input.modelId)?.estimatedCredits
+  );
+});
+
 it("limits offering changes to platform admins and rejects unknown models", async () => {
   await expect(
     owner.setEnabled({ id: "openai:gpt-image-2", enabled: false })
@@ -70,7 +128,7 @@ it("limits offering changes to platform admins and rejects unknown models", asyn
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 
-it("limits comparison estimates to platform admins and keeps customer reservations independent", async () => {
+it("limits comparison estimates to platform admins and keeps comparison changes independent of customer quotes", async () => {
   await expect(owner.adminCatalog()).rejects.toMatchObject({
     code: "FORBIDDEN",
   });
@@ -82,7 +140,7 @@ it("limits comparison estimates to platform admins and keeps customer reservatio
     credits: 12,
     basis: "Token-based comparison",
   });
-  expect(adminImage.estimatedCredits).toBe(40);
+  expect(adminImage.estimatedCredits).toBe(12);
   const high = (
     await admin.adminCatalog({
       imageEstimate: {
@@ -96,7 +154,7 @@ it("limits comparison estimates to platform admins and keeps customer reservatio
   expect(high.actionEstimate?.costMicros).toBeGreaterThan(
     adminImage.actionEstimate!.costMicros!
   );
-  expect(high.estimatedCredits).toBe(40);
+  expect(high.estimatedCredits).toBe(12);
   for (const model of customerModels) {
     expect(model).not.toHaveProperty("actionEstimate");
     expect(model.estimatedCredits).toBe(

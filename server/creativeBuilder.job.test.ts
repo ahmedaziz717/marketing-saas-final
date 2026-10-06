@@ -113,6 +113,30 @@ beforeEach(() => {
 });
 
 describe("creative generation orchestration", () => {
+  it("keeps the frozen quote for each generated size and supports older jobs with one saved rate", async () => {
+    const { db, args } = fixture();
+    args.rateSnapshots = [11000, 22000, 33000].map(estimatedCostMicros => ({
+      provider: "openai",
+      model: "gpt-image-2.5-sunburst",
+      kind: "image",
+      estimatedCostMicros,
+    }));
+    args.rateSnapshot = { estimatedCostMicros: 200000 };
+    await runBuilderJob(db, args);
+    expect(
+      mocked.generate.mock.calls.map(
+        call => call[0].rateSnapshot.estimatedCostMicros
+      )
+    ).toEqual([11000, 22000, 33000]);
+    mocked.generate.mockClear();
+    delete args.rateSnapshots;
+    await runBuilderJob(db, args);
+    expect(
+      mocked.generate.mock.calls.every(
+        call => call[0].rateSnapshot === args.rateSnapshot
+      )
+    ).toBe(true);
+  });
   it("references the first composition for the other sizes while retaining product and logo sources", async () => {
     const { db, args, written, updates } = fixture();
     await runBuilderJob(db, args);

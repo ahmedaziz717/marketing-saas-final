@@ -94,7 +94,8 @@ export function ModelPicker({
             </DialogTitle>
             <DialogDescription>
               Compare models, model makers, and supported inputs. Credits are
-              estimated before you run.
+              estimated at model defaults. Your selected settings are quoted
+              before you run.
             </DialogDescription>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">

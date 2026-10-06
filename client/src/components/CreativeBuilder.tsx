@@ -33,6 +33,7 @@ import {
   generationSetupIssues,
   getCreativeTheme,
   outputCount,
+  creativeImageOutputs,
   type CreativeCopy,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
@@ -116,6 +117,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
       modelId: setup.modelId,
       options: setup.modelOptions,
       count: Math.max(1, count),
+      outputs: count > 0 ? creativeImageOutputs(setup) : undefined,
     },
     { enabled: !!organizationId && count > 0, retry: false }
   );
@@ -1572,8 +1574,10 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 : "Calculating credits…"}
           </p>
           <p className="text-xs text-muted-foreground">
-            Token-based generation settles from actual usage. Other providers
-            use published cost estimates.
+            Image credits reflect your model, quality, and selected sizes.
+            OpenAI estimates assume 1,000 prompt tokens before reference-image
+            input; final credits follow actual usage. Other providers use
+            published cost estimates.
           </p>
           <Button
             disabled={

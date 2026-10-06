@@ -22,18 +22,97 @@ import {
   compatibleRoutes,
   defaultModelActionQuote,
   adminModelActionQuote,
+  videoModelActionQuote,
 } from "./modelCatalog";
 import {
   defaultImageActionAssumptions,
   estimateOpenAIImageAction,
+  imageProviderSize,
+  workflowImageSize,
 } from "../../shared/imageActionEstimate";
+import { defaultVideoActionAssumptions } from "../../shared/videoActionEstimate";
 import { videoQuote } from "./videoPricing";
+
+it("uses the requested video settings, shares customer calculations, and rejects unsupported settings", () => {
+  const model = generationModel(
+    "higgsfield:kling-video/v3.0/pro/text-to-video"
+  )!;
+  const rate = {
+    ...defaultModelRate(model),
+    ...defaultCreditPolicy,
+    costRules: [
+      { when: { sound: "on" }, unit: "second" as const, usd: 0.2 },
+      { when: { sound: "off" }, unit: "second" as const, usd: 0.1 },
+    ],
+  };
+  const estimate = (duration: number, sound: "on" | "off") =>
+    videoModelActionQuote(model, rate, {
+      ...defaultVideoActionAssumptions,
+      duration,
+      sound,
+    });
+  const on = estimate(5, "on"),
+    off = estimate(5, "off");
+  expect(on.costMicros).toBeGreaterThan(off.costMicros!);
+  expect(estimate(10, "on").costMicros).toBe(on.costMicros! * 2);
+  const setup = {
+    ...defaultVideoSetup,
+    modelId: model.id,
+    duration: 10,
+    modelOptions: { sound: "on" },
+  };
+  expect(estimate(10, "on").credits).toBe(
+    videoQuote(
+      setup,
+      [],
+      configuredModelRate(model, rate, videoModelOptions(setup))
+    ).credits
+  );
+  expect(() =>
+    videoModelActionQuote(model, rate, {
+      ...defaultVideoActionAssumptions,
+      resolution: "1080p",
+    })
+  ).toThrow(/does not offer/);
+  const seedance = generationModel(
+    "higgsfield:bytedance/seedance-2.5/text-to-video"
+  )!;
+  const base = { ...defaultModelRate(seedance), ...defaultCreditPolicy };
+  expect(
+    videoModelActionQuote(seedance, base, {
+      ...defaultVideoActionAssumptions,
+      resolution: "1080p",
+    }).costMicros
+  ).toBeGreaterThan(
+    videoModelActionQuote(seedance, base, {
+      ...defaultVideoActionAssumptions,
+      resolution: "720p",
+    }).costMicros!
+  );
+});
+
+it("estimates the actual image provider canvas and all supported qualities without changing the final output dimensions", () => {
+  const model = generationModel("openai:gpt-image-2.5-sunburst")!;
+  const rate = { ...defaultModelRate(model), ...defaultCreditPolicy };
+  expect(imageProviderSize(model.providerModel, 1080, 1920)).toBe("864x1536");
+  expect(imageProviderSize("gpt-image-1", 1080, 1920)).toBe("1024x1536");
+  expect(workflowImageSize("16:9")).toEqual({ width: 1920, height: 1080 });
+  const costs = ["low", "medium", "high", "xhigh", "max"].map(
+    quality =>
+      configuredModelRate(model, rate, { quality }, "1536x1536")
+        .estimatedCostMicros!
+  );
+  expect(costs.every((cost, i) => !i || cost > costs[i - 1])).toBe(true);
+  expect(
+    configuredModelRate(model, rate, {}, "1536x1536").estimatedCostMicros
+  ).toBeGreaterThan(configuredModelRate(model, rate).estimatedCostMicros!);
+});
 import {
   newWorkflowNode,
   workflowRunProblem,
 } from "../../shared/creativeWorkflow";
 
-it("prices each OpenAI comparison from its own rates and output estimate instead of the shared credit reservation", () => {
+it("prices each OpenAI comparison from its own rates and output estimate and aligns customer estimates with admin comparisons", () => {
   const examples = [
     ["gpt-image-2.5-sunburst", 5, 8, 30, 18170],
     ["gpt-image-2.5-flare", 5, 8, 30, 18170],
@@ -57,7 +136,7 @@ it("prices each OpenAI comparison from its own rates and output estimate instead
       costMicros,
       basis: "Token-based comparison",
     });
-    expect(defaultModelActionQuote(model, rate).costMicros).toBe(200000);
+    expect(defaultModelActionQuote(model, rate).costMicros).toBe(costMicros);
     expect(
       adminModelActionQuote(model, { ...rate, estimatedCostMicros: 500000 })
         .costMicros
@@ -187,10 +266,10 @@ it("quotes a whole default video, preserves provider overrides, and labels confi
       ...defaultCreditPolicy,
     })
   ).toMatchObject({
-    costMicros: 200000,
-    credits: 40,
-    basis: "Configured estimate",
-    settings: "1 image · quality: medium",
+    costMicros: 57680,
+    credits: 12,
+    basis: "Token-based estimate",
+    settings: expect.stringContaining("1024 × 1024"),
   });
 });
 

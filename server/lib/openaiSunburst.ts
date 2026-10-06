@@ -2,6 +2,7 @@ import { meteredCall } from "./aiMetering";
 import { storagePut, storageClient, assetBucket } from "../storage";
 import { libraryDatabase } from "./assetLibrary";
 import { imageModelQuote } from "./modelCatalog";
+import { imageProviderSize } from "../../shared/imageActionEstimate";
 import {
   modelRequestBody,
   referenceCapacity,
@@ -38,13 +39,7 @@ export type GenerateSunburstOptions = {
 };
 
 export function sunburstCanvasSize(width: number, height: number) {
-  const ratio = Math.min(3, Math.max(1 / 3, width / height));
-  const longEdge = 1536;
-  const round16 = (value: number) =>
-    Math.max(512, Math.min(1536, Math.round(value / 16) * 16));
-  const modelWidth = ratio >= 1 ? longEdge : round16(longEdge * ratio);
-  const modelHeight = ratio >= 1 ? round16(longEdge / ratio) : longEdge;
-  return `${modelWidth}x${modelHeight}`;
+  return imageProviderSize("gpt-image-2.5-sunburst", width, height);
 }
 
 export function requireSunburstCredential() {
@@ -65,7 +60,15 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
     : await imageModelQuote(
         await libraryDatabase(),
         options.modelId,
-        options.modelOptions
+        generationModel(options.modelId ?? DEFAULT_IMAGE_MODEL)?.provider ===
+          "openai"
+          ? {
+              ...options.modelOptions,
+              quality:
+                options.modelOptions?.quality ?? options.quality ?? "medium",
+            }
+          : options.modelOptions,
+        options.outputSize
       );
   if (
     !quote.model ||
@@ -90,16 +93,11 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
     "image",
     async () => {
       const legacy = model.providerModel.startsWith("gpt-image-1");
-      const size = legacy
-        ? options.outputSize.width === options.outputSize.height
-          ? "1024x1024"
-          : options.outputSize.width > options.outputSize.height
-            ? "1536x1024"
-            : "1024x1536"
-        : sunburstCanvasSize(
-            options.outputSize.width,
-            options.outputSize.height
-          );
+      const size = imageProviderSize(
+        model.providerModel,
+        options.outputSize.width,
+        options.outputSize.height
+      );
       const quality = String(
         options.modelOptions?.quality ?? options.quality ?? "medium"
       );
