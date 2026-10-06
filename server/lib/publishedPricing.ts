@@ -14,6 +14,64 @@ const models = [
   "gpt-image-1-mini",
 ] as const;
 const day = 86400000;
+/** The central image table is authoritative when a model page omits prices. */
+export function parsePublishedImagePricing(model: string, markdown: string) {
+  if (
+    !models.includes(model as (typeof models)[number]) ||
+    !model.startsWith("gpt-image-")
+  )
+    throw new Error("Unrecognized image model");
+  const imageSection = markdown.split(/\nImage generation models\n/)[1];
+  const standard = imageSection
+    ?.split(/\nStandard\n/)[1]
+    ?.split(/\nBatch\n/)[0];
+  if (
+    !imageSection?.includes("Prices per 1M tokens.") ||
+    !standard?.includes("| Model | Modality | Input | Cached input | Output |")
+  )
+    throw new Error("Standard image pricing unavailable");
+  const rows = standard
+    .split("\n")
+    .filter(line => line.startsWith(`| ${model} |`))
+    .map(line =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map(v => v.trim())
+    );
+  const text = rows.filter(row => row[1] === "Text"),
+    image = rows.filter(row => row[1] === "Image");
+  if (
+    rows.length !== 2 ||
+    text.length !== 1 ||
+    image.length !== 1 ||
+    rows.some(row => row.length !== 5)
+  )
+    throw new Error("Ambiguous model pricing; review required");
+  const price = (value: string, allowNoOutput = false) => {
+    if (value === "-" && allowNoOutput) return 0;
+    if (!/^\$[0-9]+(?:\.[0-9]+)?$/.test(value))
+      throw new Error("Invalid image price");
+    const n = Number(value.slice(1));
+    if (!Number.isFinite(n) || n > 1000000)
+      throw new Error("Invalid image price");
+    return n;
+  };
+  return {
+    prices: {
+      inputPerMillion: price(text[0][2]),
+      cachedInputPerMillion: price(text[0][3]),
+      outputPerMillion: price(text[0][4], true),
+      imageInputPerMillion: price(image[0][2]),
+      imageOutputPerMillion: price(image[0][4]),
+      perRequestUsd: null,
+    } satisfies Partial<ProviderRate>,
+    version: createHash("sha256")
+      .update(rows.map(row => row.join("|")).join("\n"))
+      .digest("hex")
+      .slice(0, 16),
+  };
+}
 export function parsePublishedPricing(model: string, markdown: string) {
   if (
     !models.includes(model as (typeof models)[number]) ||
@@ -106,7 +164,10 @@ export async function syncPublishedPricing(force = false) {
         continue;
       if (!force && Date.now() - (row.config.pricingCheckedAt ?? 0) < day)
         continue;
-      const sourceUrl = `https://developers.openai.com/api/docs/models/${row.model}`;
+      const imageModel = row.model.startsWith("gpt-image-");
+      const sourceUrl = imageModel
+        ? "https://developers.openai.com/api/docs/pricing"
+        : `https://developers.openai.com/api/docs/models/${row.model}`;
       let config: ProviderRate;
       try {
         const response = await fetch(sourceUrl + ".md", {
@@ -117,7 +178,9 @@ export async function syncPublishedPricing(force = false) {
         const markdown = await response.text();
         if (markdown.length > 200000)
           throw new Error("Unexpected pricing document");
-        const { prices, version } = parsePublishedPricing(row.model, markdown);
+        const { prices, version } = imageModel
+          ? parsePublishedImagePricing(row.model, markdown)
+          : parsePublishedPricing(row.model, markdown);
         config = {
           ...row.config,
           ...prices,

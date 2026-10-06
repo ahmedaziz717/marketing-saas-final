@@ -281,12 +281,16 @@ export function ModelPricingAdmin() {
                   rate?.perSecondUsd ??
                   (rate?.estimatedCostMicros != null
                     ? rate.estimatedCostMicros / 1e6
-                    : max);
+                    : definition.provider === "openai"
+                      ? 0.2
+                      : max);
                 const unit =
                   rate?.perSecondUsd != null
                     ? "second"
                     : rate?.perRequestUsd != null
-                      ? "image"
+                      ? definition.kind === "image"
+                        ? "image"
+                        : "request"
                       : (rules[0]?.unit ?? "action");
                 const markup =
                   rate?.markupPercent ?? currentPolicy.markupPercent;
@@ -305,8 +309,26 @@ export function ModelPricingAdmin() {
                     </td>
                     <td className="p-3">
                       {cost == null
-                        ? "Token based"
+                        ? "Pricing required"
                         : `${money(cost)} / ${unit}`}
+                      {definition.provider === "openai" &&
+                        rate?.perRequestUsd == null && (
+                          <p className="mt-1 max-w-[250px] text-[11px] text-muted-foreground">
+                            Token estimate. Per 1M: text input{" "}
+                            {rate?.inputPerMillion == null
+                              ? "—"
+                              : money(rate.inputPerMillion)}
+                            ; image input{" "}
+                            {rate?.imageInputPerMillion == null
+                              ? "—"
+                              : money(rate.imageInputPerMillion)}
+                            ; image output{" "}
+                            {rate?.imageOutputPerMillion == null
+                              ? "—"
+                              : money(rate.imageOutputPerMillion)}
+                            .
+                          </p>
+                        )}
                       {min != null && min !== max && (
                         <p className="text-[11px] text-muted-foreground">
                           Published range: {money(min)}–{money(max!)}
