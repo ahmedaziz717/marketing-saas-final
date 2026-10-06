@@ -612,7 +612,7 @@ export function WorkflowCanvas({
                       {node.config.text && <p>{node.config.text}</p>}
                     </div>
                   )}
-                  {step?.waitingReason && (
+                  {step?.status === "waiting" && step.waitingReason && (
                     <p className="wf-setting-help">{step.waitingReason}</p>
                   )}
                   {step?.publicationId && (
