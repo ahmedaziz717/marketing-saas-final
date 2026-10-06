@@ -84,8 +84,8 @@ export function ModelPicker({
         <p className="text-xs text-amber-600">{choice.reason}</p>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-4 overflow-hidden">
-          <div>
+        <DialogContent className="flex max-h-[85vh] flex-col gap-4 overflow-hidden sm:max-w-4xl">
+          <div className="shrink-0 pr-6">
             <DialogTitle>
               Choose an {kind === "image" ? "image" : "AI video"} model
             </DialogTitle>
@@ -94,7 +94,7 @@ export function ModelPicker({
               estimated before you run.
             </DialogDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search
                 size={16}
@@ -120,7 +120,7 @@ export function ModelPicker({
               ))}
             </select>
           </div>
-          <div className="grid min-h-0 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+          <div className="grid min-h-0 auto-rows-max gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
             {visible.map(m => (
               <button
                 type="button"
@@ -133,10 +133,10 @@ export function ModelPicker({
                 }}
                 className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${m.id === selected ? "border-violet-500 bg-violet-500/5" : "hover:border-violet-400 hover:bg-muted/50"} disabled:opacity-50`}
               >
-                <span className="mt-1 rounded-lg bg-violet-500/10 p-2 text-violet-500">
+                <span className="mt-1 shrink-0 rounded-lg bg-violet-500/10 p-2 text-violet-500">
                   <Sparkles size={17} />
                 </span>
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1 break-words">
                   <strong className="block text-sm">{m.name}</strong>
                   <span className="block text-xs text-muted-foreground">
                     {m.variant}
@@ -169,7 +169,7 @@ export function ModelPicker({
                   )}
                 </span>
                 {m.id === selected && (
-                  <Check size={16} className="text-violet-500" />
+                  <Check size={16} className="shrink-0 text-violet-500" />
                 )}
               </button>
             ))}
@@ -187,9 +187,8 @@ export function ModelPicker({
               </p>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Direct pricing identifies a direct provider connection. A discount
-            is shown only when a comparable saving is verified.
+          <p className="shrink-0 text-xs text-muted-foreground">
+            Direct pricing means we connect to the model maker directly.
           </p>
         </DialogContent>
       </Dialog>
