@@ -92,3 +92,40 @@ it("preserves explicit per-request overrides and rejects invalid cached text usa
   expect(estimateCostMicros(rate, 100, 100, 101)).toBeNull();
   expect(estimateCostMicros(rate, -1, 100)).toBeNull();
 });
+it("uses model token rates for completed images regardless of a shared reservation estimate", () => {
+  const reportedUsage = {
+    _evokeloop_api: "images",
+    input_tokens: 2000,
+    input_tokens_details: { text_tokens: 1000, image_tokens: 1000 },
+    output_tokens: 1000,
+  };
+  const models = [
+    ["gpt-image-2.5-sunburst", 5, 8, 30, 43000],
+    ["gpt-image-2.5-flare", 5, 8, 30, 43000],
+    ["gpt-image-2", 5, 8, 30, 43000],
+    ["gpt-image-1.5", 5, 8, 32, 45000],
+    ["gpt-image-1", 5, 10, 40, 55000],
+    ["gpt-image-1-mini", 2, 2.5, 8, 12500],
+  ] as const;
+  for (const [
+    model,
+    inputPerMillion,
+    imageInputPerMillion,
+    imageOutputPerMillion,
+    expected,
+  ] of models) {
+    expect(
+      estimateImageCostMicros(
+        {
+          ...rate,
+          model,
+          inputPerMillion,
+          imageInputPerMillion,
+          imageOutputPerMillion,
+          estimatedCostMicros: 200000,
+        },
+        reportedUsage
+      )
+    ).toBe(expected);
+  }
+});

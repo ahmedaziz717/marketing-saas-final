@@ -12,12 +12,42 @@ import {
 } from "./ui/dialog";
 import { generationModel, generationModels } from "@shared/modelCatalog";
 import { defaultCreditPolicy, retailCredits } from "@shared/aiCredits";
+import type { ProviderRate } from "@shared/platformAdmin";
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 4,
   }).format(n);
+function ImageTokenRates({
+  rate,
+  multiplier = 1,
+}: {
+  rate?: ProviderRate;
+  multiplier?: number;
+}) {
+  return (
+    <div className="min-w-[150px] space-y-1">
+      <p className="text-xs font-medium">Per 1M tokens</p>
+      <dl className="space-y-1 text-xs">
+        {(
+          [
+            ["Text input", rate?.inputPerMillion],
+            ["Image input", rate?.imageInputPerMillion],
+            ["Image output", rate?.imageOutputPerMillion],
+          ] as const
+        ).map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="tabular-nums">
+              {value == null ? "Not verified" : money(value * multiplier)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 export function ModelPricingAdmin() {
   const catalog = trpc.models.adminCatalog.useQuery(),
     utils = trpc.useUtils();
@@ -248,6 +278,13 @@ export function ModelPricingAdmin() {
         it off to hide it from customer choices and block new generation
         requests. Changes save immediately.
       </p>
+      <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+        OpenAI image prices are based on text input, image input, and image
+        output tokens. Cost per image varies with the model, quality,
+        dimensions, and references. Upfront credit reservations are provisional;
+        completed requests settle from reported usage at their saved rates and
+        markup.
+      </p>
       <section className="surface overflow-x-auto">
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead className="border-b bg-muted/50">
@@ -256,8 +293,8 @@ export function ModelPricingAdmin() {
                 "Model",
                 "Offer this model",
                 "API provider",
-                "Provider cost estimate",
-                "Retail / credits",
+                "Provider pricing",
+                "Retail pricing / credits",
                 "Markup",
                 "Availability",
                 "",
@@ -296,9 +333,11 @@ export function ModelPricingAdmin() {
                   rate?.perSecondUsd ??
                   (rate?.estimatedCostMicros != null
                     ? rate.estimatedCostMicros / 1e6
-                    : definition.provider === "openai"
-                      ? 0.2
-                      : max);
+                    : max);
+                const tokenPricing =
+                  definition.provider === "openai" &&
+                  definition.kind === "image" &&
+                  rate?.perRequestUsd == null;
                 const unit =
                   rate?.perSecondUsd != null
                     ? "second"
@@ -343,27 +382,35 @@ export function ModelPricingAdmin() {
                         : "Higgsfield"}
                     </td>
                     <td className="p-3">
-                      {cost == null
-                        ? "Pricing required"
-                        : `${money(cost)} / ${unit}`}
-                      {definition.provider === "openai" &&
-                        rate?.perRequestUsd == null && (
-                          <p className="mt-1 max-w-[250px] text-[11px] text-muted-foreground">
-                            Token estimate. Per 1M: text input{" "}
-                            {rate?.inputPerMillion == null
-                              ? "—"
-                              : money(rate.inputPerMillion)}
-                            ; image input{" "}
-                            {rate?.imageInputPerMillion == null
-                              ? "—"
-                              : money(rate.imageInputPerMillion)}
-                            ; image output{" "}
-                            {rate?.imageOutputPerMillion == null
-                              ? "—"
-                              : money(rate.imageOutputPerMillion)}
-                            .
+                      {tokenPricing ? (
+                        <>
+                          <ImageTokenRates rate={rate} />
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            {rate?.pricingVerifiedAt
+                              ? `Verified ${new Date(rate.pricingVerifiedAt).toLocaleDateString()}`
+                              : "Pricing verification required"}
                           </p>
-                        )}
+                          {rate?.sourceUrl && (
+                            <a
+                              className="text-[11px] text-primary underline"
+                              href={rate.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Pricing source
+                            </a>
+                          )}
+                          {rate?.pricingError && (
+                            <p className="mt-1 max-w-[240px] text-xs text-amber-700 dark:text-amber-300">
+                              {rate.pricingError}
+                            </p>
+                          )}
+                        </>
+                      ) : cost == null ? (
+                        "Pricing required"
+                      ) : (
+                        `${money(cost)} / ${unit}`
+                      )}
                       {min != null && min !== max && (
                         <p className="text-[11px] text-muted-foreground">
                           Published range: {money(min)}–{money(max!)}
@@ -371,7 +418,30 @@ export function ModelPricingAdmin() {
                       )}
                     </td>
                     <td className="p-3">
-                      {cost == null ? (
+                      {tokenPricing ? (
+                        <>
+                          <ImageTokenRates
+                            rate={rate}
+                            multiplier={1 + markup / 100}
+                          />
+                          <p className="mt-2 max-w-[230px] text-[11px] text-muted-foreground">
+                            Total token cost converts to credits; rounded once
+                            per request.
+                          </p>
+                          <details className="mt-2 max-w-[230px] text-[11px] text-muted-foreground">
+                            <summary className="cursor-pointer">
+                              Upfront reservation
+                            </summary>
+                            <p className="mt-1">
+                              {m.estimatedCredits == null
+                                ? "Not configured"
+                                : `${m.estimatedCredits} credits at default settings`}
+                              . This is a provisional hold, not a fixed price
+                              per image. Quality can change the reservation.
+                            </p>
+                          </details>
+                        </>
+                      ) : cost == null ? (
                         "Depends on output"
                       ) : (
                         <>
@@ -496,7 +566,10 @@ export function ModelPricingAdmin() {
             {(
               [
                 ["markup", "Markup override (%)"],
-                ["estimate", "Estimated token-based action cost (USD)"],
+                [
+                  "estimate",
+                  "Upfront credit reservation basis (USD, before markup)",
+                ],
                 ["request", "Provider cost per image/request override (USD)"],
                 ["second", "Provider cost per second override (USD)"],
               ] as const
@@ -521,10 +594,12 @@ export function ModelPricingAdmin() {
                 </label>
               ))}
             <p className="text-xs text-muted-foreground">
-              Per-request cost takes precedence over per-second pricing. Token
-              estimates are used for upfront quotes, then reconciled from usage.
-              Provider rate changes apply to every model routed through that
-              provider endpoint.
+              Per-request cost takes precedence over per-second pricing. The
+              reservation basis is a provisional estimate at medium quality, not
+              an OpenAI rate or a fixed price per image. Final token costs use
+              reported usage. Missing usage stays marked awaiting cost. Provider
+              rate changes apply to every model routed through that provider
+              endpoint.
             </p>
             <a
               className="block text-xs text-primary underline"

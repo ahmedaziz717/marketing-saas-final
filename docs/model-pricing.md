@@ -7,6 +7,7 @@
 - `/admin/tiers` sets monthly package credits. `/admin/accounts` assigns packages, grants extra credits, and controls enforcement. Existing unassigned workspaces remain in tracking mode; this release does not start Stripe billing or grant arbitrary credits.
 - Default pricing is provider cost × 2 (100% markup). One credit represents $0.01 retail. Credits round up once per provider action. A workflow sums its actions; it does not round each token separately.
 - The workspace header shows remaining credits. Apps and workflow steps show an estimate before generation. Token usage and measured video duration can change the final charge.
+- OpenAI image rows show per-million text-input, image-input, and image-output rates, their verification date, and the retail rates after markup. The seeded $0.20 medium-quality reservation is not a published per-image price; it is disclosed separately as an upfront credit hold. Equal per-token rates do not imply equal token consumption or equal final image costs. Reservation overrides remain separate from the rates used to price completed usage.
 
 ## Catalog and routes
 
