@@ -6733,7 +6733,7 @@
     "providerModel": "marketing-studio/image/sunburst",
     "name": "Marketing Studio Image",
     "variant": "2.5 Sunburst",
-    "maker": "Higgsfield",
+    "maker": "OpenAI",
     "kind": "image",
     "inputSchema": {
       "type": "object",
@@ -6988,7 +6988,7 @@
     "providerModel": "marketing-studio/image/flare",
     "name": "Marketing Studio Image",
     "variant": "2.5 Flare",
-    "maker": "Higgsfield",
+    "maker": "OpenAI",
     "kind": "image",
     "inputSchema": {
       "type": "object",

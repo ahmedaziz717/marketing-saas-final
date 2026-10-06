@@ -55,11 +55,12 @@ export const modelsRouter = router({
       ),
       estimated: true,
     })),
-  catalog: protectedProcedure
-    .input(scope)
-    .query(async ({ ctx, input }) =>
-      publicModelCatalog(await authorized(ctx.user.id, input.organizationId))
-    ),
+  catalog: protectedProcedure.input(scope).query(async ({ ctx, input }) => {
+    const catalog = await publicModelCatalog(
+      await authorized(ctx.user.id, input.organizationId)
+    );
+    return catalog.filter(model => model.enabled);
+  }),
   credits: protectedProcedure.input(scope).query(async ({ ctx, input }) => {
     const db = await authorized(ctx.user.id, input.organizationId),
       state = await creditState(db, input.organizationId),
@@ -133,11 +134,40 @@ export const modelsRouter = router({
       });
       return { ok: true };
     }),
+  setEnabled: adminProcedure
+    .input(z.object({ id: z.string().max(240), enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!generationModel(input.id))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown model." });
+      const db = await libraryDatabase();
+      await db.transaction(async tx => {
+        await tx
+          .insert(aiModelSettings)
+          .values({
+            id: input.id,
+            enabled: input.enabled ? 1 : 0,
+            updatedAtMs: Date.now(),
+          })
+          .onConflictDoUpdate({
+            target: aiModelSettings.id,
+            set: {
+              enabled: input.enabled ? 1 : 0,
+              updatedAtMs: Date.now(),
+            },
+          });
+        await tx.insert(platformAudit).values({
+          actorUserId: ctx.user.id,
+          action: "ai.model.offering.updated",
+          payload: input,
+          createdAtMs: Date.now(),
+        });
+      });
+      return input;
+    }),
   saveModel: adminProcedure
     .input(
       z.object({
         id: z.string().max(240),
-        enabled: z.boolean(),
         routeId: z.string().max(240),
         markupPercent: z.number().min(0).max(1000).nullable(),
         estimatedCostUsd: z.number().min(0).max(1000).nullable(),
@@ -164,14 +194,12 @@ export const modelsRouter = router({
           .insert(aiModelSettings)
           .values({
             id: input.id,
-            enabled: input.enabled ? 1 : 0,
             routeId: input.routeId,
             updatedAtMs: Date.now(),
           })
           .onConflictDoUpdate({
             target: aiModelSettings.id,
             set: {
-              enabled: input.enabled ? 1 : 0,
               routeId: input.routeId,
               updatedAtMs: Date.now(),
             },

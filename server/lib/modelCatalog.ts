@@ -343,6 +343,7 @@ export async function publicModelCatalog(db: Database) {
         routeId: model.id,
         provider: model.provider,
         direct: model.provider === "openai",
+        enabled: setting?.enabled !== 0,
         available: !reason,
         reason,
         estimatedCredits: credits,

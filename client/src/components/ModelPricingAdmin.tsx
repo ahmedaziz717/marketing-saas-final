@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Switch } from "./ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,6 @@ export function ModelPricingAdmin() {
     creditValueMicros: number;
   } | null>(null);
   const [form, setForm] = useState({
-    enabled: true,
     routeId: "",
     markup: "",
     estimate: "",
@@ -57,6 +57,17 @@ export function ModelPricingAdmin() {
     },
     onError: e => toast.error(e.message),
   });
+  const setEnabled = trpc.models.setEnabled.useMutation({
+    onSuccess: async data => {
+      toast.success(
+        data.enabled
+          ? "Model offered to customers"
+          : "Model hidden from customers"
+      );
+      await utils.models.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
   const sync = trpc.models.syncAvailability.useMutation({
     onSuccess: data => {
       toast.success(`${data.available.length} OpenAI image models available`);
@@ -67,7 +78,6 @@ export function ModelPricingAdmin() {
   const currentPolicy = policy ?? catalog.data?.policy ?? defaultCreditPolicy;
   function open(id: string) {
     const m = catalog.data!.models.find(x => x.id === id)!,
-      s = catalog.data!.settings.find(x => x.id === id),
       definition = generationModel(m.routeId)!;
     const rate = catalog.data!.rates.find(
       r =>
@@ -75,7 +85,6 @@ export function ModelPricingAdmin() {
         r.model === definition.providerModel
     )?.config;
     setForm({
-      enabled: s?.enabled !== 0,
       routeId: m.routeId,
       markup: rate?.markupPercent == null ? "" : String(rate.markupPercent),
       estimate:
@@ -221,7 +230,7 @@ export function ModelPricingAdmin() {
         <Input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search models or providers…"
+          placeholder="Search models, makers, or providers…"
         />
         <select
           aria-label="Model type"
@@ -234,13 +243,19 @@ export function ModelPricingAdmin() {
           <option value="video">Video</option>
         </select>
       </div>
+      <p className="text-sm text-muted-foreground">
+        Offer this model: turn it on to include it in apps and workflows. Turn
+        it off to hide it from customer choices and block new generation
+        requests. Changes save immediately.
+      </p>
       <section className="surface overflow-x-auto">
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
               {[
                 "Model",
-                "Provider",
+                "Offer this model",
+                "API provider",
                 "Provider cost estimate",
                 "Retail / credits",
                 "Markup",
@@ -258,7 +273,7 @@ export function ModelPricingAdmin() {
               .filter(
                 m =>
                   (kind === "all" || m.kind === kind) &&
-                  `${m.name} ${m.provider} ${m.variant}`
+                  `${m.name} ${m.maker} ${m.provider} ${m.variant}`
                     .toLowerCase()
                     .includes(search.toLowerCase())
               )
@@ -299,8 +314,28 @@ export function ModelPricingAdmin() {
                     <td className="p-3">
                       <p className="font-medium">{m.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {m.variant} · {m.kind}
+                        {m.maker} · {m.variant} · {m.kind}
                       </p>
+                    </td>
+                    <td className="p-3">
+                      <label className="flex items-center gap-2 whitespace-nowrap">
+                        <Switch
+                          aria-label={`Offer ${m.name} · ${m.variant}`}
+                          checked={m.enabled}
+                          disabled={setEnabled.isPending}
+                          onCheckedChange={enabled =>
+                            setEnabled.mutate({ id: m.id, enabled })
+                          }
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {setEnabled.isPending &&
+                          setEnabled.variables?.id === m.id
+                            ? "Saving…"
+                            : m.enabled
+                              ? "On"
+                              : "Off"}
+                        </span>
+                      </label>
                     </td>
                     <td className="p-3">
                       {m.provider === "openai"
@@ -405,7 +440,6 @@ export function ModelPricingAdmin() {
               if (edit)
                 saveModel.mutate({
                   id: edit,
-                  enabled: form.enabled,
                   routeId: form.routeId,
                   markupPercent:
                     form.markup === "" ? null : Number(form.markup),
@@ -417,14 +451,6 @@ export function ModelPricingAdmin() {
                 });
             }}
           >
-            <label className="flex gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={e => setForm({ ...form, enabled: e.target.checked })}
-              />
-              Available to customers
-            </label>
             <label className="block space-y-1 text-sm">
               <span>Provider route</span>
               <select

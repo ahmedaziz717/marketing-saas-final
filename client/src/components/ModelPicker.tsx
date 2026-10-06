@@ -43,8 +43,15 @@ export function ModelPicker({
       value || (kind === "image" ? DEFAULT_IMAGE_MODEL : DEFAULT_VIDEO_MODEL),
     model = generationModel(selected),
     choice = catalog.data?.find(m => m.id === selected);
-  const models = (catalog.data ?? []).filter(m => m.kind === kind),
+  const models = (catalog.data ?? []).filter(
+      m => m.kind === kind && m.enabled !== false
+    ),
     makers = Array.from(new Set(models.map(m => m.maker))).sort();
+  const reason =
+    choice?.reason ??
+    (catalog.isSuccess && !choice
+      ? "This model is no longer offered. Choose another model."
+      : null);
   const visible = models.filter(
     m =>
       (maker === "all" || m.maker === maker) &&
@@ -68,9 +75,7 @@ export function ModelPicker({
           </strong>
           <span className="block truncate text-xs text-muted-foreground">
             {model?.variant}
-            {choice?.provider
-              ? ` · ${choice.provider === "openai" ? "OpenAI" : "Higgsfield"}`
-              : ""}
+            {model?.maker ? ` · ${choice?.maker ?? model.maker}` : ""}
           </span>
         </span>
         {choice?.direct && (
@@ -80,9 +85,7 @@ export function ModelPicker({
         )}
         <ChevronDown size={16} />
       </button>
-      {choice?.reason && (
-        <p className="text-xs text-amber-600">{choice.reason}</p>
-      )}
+      {reason && <p className="text-xs text-amber-600">{reason}</p>}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[85vh] flex-col gap-4 overflow-hidden sm:max-w-4xl">
           <div className="shrink-0 pr-6">
@@ -90,7 +93,7 @@ export function ModelPicker({
               Choose an {kind === "image" ? "image" : "AI video"} model
             </DialogTitle>
             <DialogDescription>
-              Compare models, providers, and supported inputs. Credits are
+              Compare models, model makers, and supported inputs. Credits are
               estimated before you run.
             </DialogDescription>
           </div>
@@ -143,8 +146,13 @@ export function ModelPicker({
                   </span>
                   <span className="mt-2 flex flex-wrap gap-2 text-[11px]">
                     <span className="rounded bg-muted px-1.5 py-0.5">
-                      {m.direct ? "Direct pricing" : "Via Higgsfield"}
+                      {m.maker}
                     </span>
+                    {m.direct && (
+                      <span className="text-violet-600 dark:text-violet-300">
+                        Direct pricing
+                      </span>
+                    )}
                     {m.estimatedCredits != null && (
                       <span>
                         ≈ {m.estimatedCredits} credits /{" "}
