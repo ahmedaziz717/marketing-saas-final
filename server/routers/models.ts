@@ -22,7 +22,7 @@ import {
 } from "../../shared/modelCatalog";
 import {
   compatibleRoutes,
-  defaultModelActionQuote,
+  adminModelActionQuote,
   defaultModelRate,
   imageModelQuote,
   initializeModelCatalog,
@@ -35,6 +35,7 @@ import { getCreditPolicy, effectiveRate } from "../lib/creditPricing";
 import { syncPublishedPricing } from "../lib/publishedPricing";
 import { workflowNodeSchema } from "../../shared/creativeWorkflow";
 import { workflowNodeCredits } from "../lib/creativeWorkflows";
+import { imageActionAssumptionsSchema } from "../../shared/imageActionEstimate";
 const scope = z.object({ organizationId: z.number().int().positive() });
 async function authorized(userId: number, organizationId: number) {
   await requireOrganizationRole(userId, organizationId, [
@@ -107,36 +108,46 @@ export const modelsRouter = router({
         routeId: quote.model.id,
       };
     }),
-  adminCatalog: adminProcedure.query(async () => {
-    const db = await libraryDatabase();
-    await initializeModelCatalog(db);
-    const policy = await getCreditPolicy(db),
-      settings = await db.select().from(aiModelSettings),
-      rates = await db.select().from(providerRates);
-    const models = (await publicModelCatalog(db)).map(model => {
-      const definition = generationModel(model.routeId)!;
-      const base =
-        rates.find(
-          r =>
-            r.provider === definition.provider &&
-            r.model === definition.providerModel
-        )?.config ?? defaultModelRate(definition);
-      let actionEstimate: ReturnType<typeof defaultModelActionQuote> | null =
-        null;
-      try {
-        actionEstimate = defaultModelActionQuote(definition, {
-          ...base,
-          billingMode: "cost",
-          markupPercent: base.markupPercent ?? policy.markupPercent,
-          creditValueMicros: policy.creditValueMicros,
-        });
-      } catch {
-        /* Unpriced models stay unpriced; never display zero cost. */
-      }
-      return { ...model, actionEstimate };
-    });
-    return { policy, models, settings, rates };
-  }),
+  adminCatalog: adminProcedure
+    .input(
+      z
+        .object({ imageEstimate: imageActionAssumptionsSchema.optional() })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const db = await libraryDatabase();
+      await initializeModelCatalog(db);
+      const policy = await getCreditPolicy(db),
+        settings = await db.select().from(aiModelSettings),
+        rates = await db.select().from(providerRates);
+      const models = (await publicModelCatalog(db)).map(model => {
+        const definition = generationModel(model.routeId)!;
+        const base =
+          rates.find(
+            r =>
+              r.provider === definition.provider &&
+              r.model === definition.providerModel
+          )?.config ?? defaultModelRate(definition);
+        let actionEstimate: ReturnType<typeof adminModelActionQuote> | null =
+          null;
+        try {
+          actionEstimate = adminModelActionQuote(
+            definition,
+            {
+              ...base,
+              billingMode: "cost",
+              markupPercent: base.markupPercent ?? policy.markupPercent,
+              creditValueMicros: policy.creditValueMicros,
+            },
+            input?.imageEstimate
+          );
+        } catch {
+          /* Unpriced models stay unpriced; never display zero cost. */
+        }
+        return { ...model, actionEstimate };
+      });
+      return { policy, models, settings, rates };
+    }),
   savePolicy: adminProcedure
     .input(creditPolicySchema)
     .mutation(async ({ ctx, input }) => {

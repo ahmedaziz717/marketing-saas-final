@@ -70,7 +70,7 @@ it("limits offering changes to platform admins and rejects unknown models", asyn
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 
-it("exposes wholesale action estimates only to platform admins while keeping customer quotes consistent", async () => {
+it("limits comparison estimates to platform admins and keeps customer reservations independent", async () => {
   await expect(owner.adminCatalog()).rejects.toMatchObject({
     code: "FORBIDDEN",
   });
@@ -78,14 +78,29 @@ it("exposes wholesale action estimates only to platform admins while keeping cus
   const customerModels = await owner.catalog({ organizationId: 1 });
   const adminImage = adminModels.find(m => m.id === "openai:gpt-image-2")!;
   expect(adminImage.actionEstimate).toMatchObject({
-    costMicros: 200000,
-    credits: adminImage.estimatedCredits,
-    basis: "Configured estimate",
+    costMicros: 57680,
+    credits: 12,
+    basis: "Token-based comparison",
   });
+  expect(adminImage.estimatedCredits).toBe(40);
+  const high = (
+    await admin.adminCatalog({
+      imageEstimate: {
+        quality: "high",
+        size: "1024x1024",
+        textInputTokens: 1000,
+        imageInputTokens: 1000,
+      },
+    })
+  ).models.find(m => m.id === "openai:gpt-image-2")!;
+  expect(high.actionEstimate?.costMicros).toBeGreaterThan(
+    adminImage.actionEstimate!.costMicros!
+  );
+  expect(high.estimatedCredits).toBe(40);
   for (const model of customerModels) {
     expect(model).not.toHaveProperty("actionEstimate");
     expect(model.estimatedCredits).toBe(
-      adminModels.find(m => m.id === model.id)?.actionEstimate?.credits ?? null
+      adminModels.find(m => m.id === model.id)?.estimatedCredits ?? null
     );
   }
 });

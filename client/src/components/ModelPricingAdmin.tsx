@@ -17,6 +17,11 @@ import {
   retailCredits,
 } from "@shared/aiCredits";
 import type { ProviderRate } from "@shared/platformAdmin";
+import {
+  defaultImageActionAssumptions,
+  imageActionAssumptionsSchema,
+  type ImageActionAssumptions,
+} from "@shared/imageActionEstimate";
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -55,7 +60,13 @@ function ImageTokenRates({
   );
 }
 export function ModelPricingAdmin() {
-  const catalog = trpc.models.adminCatalog.useQuery(),
+  const [imageEstimate, setImageEstimate] = useState(
+    defaultImageActionAssumptions
+  );
+  const [estimateForm, setEstimateForm] = useState(
+    defaultImageActionAssumptions
+  );
+  const catalog = trpc.models.adminCatalog.useQuery({ imageEstimate }),
     utils = trpc.useUtils();
   const [search, setSearch] = useState(""),
     [kind, setKind] = useState("all"),
@@ -297,11 +308,106 @@ export function ModelPricingAdmin() {
           price.
         </p>
         <p>
-          OpenAI action estimates use the configured estimate shown below.
-          Models can share that estimate even when their token rates differ.
-          Final cost depends on actual input and output tokens, quality,
-          dimensions, and references.
+          OpenAI comparisons use each model’s token rates and output estimate
+          for the image settings below. Final cost uses actual reported tokens.
+          Upfront credit reservations are separate and may be higher.
         </p>
+        <details className="rounded-lg border bg-background p-3">
+          <summary className="cursor-pointer text-foreground">
+            <span className="font-medium">Image estimate settings</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {imageEstimate.size.replace("x", " × ")} · {imageEstimate.quality}{" "}
+              · {creditNumber(imageEstimate.textInputTokens)} text +{" "}
+              {creditNumber(imageEstimate.imageInputTokens)} image input tokens
+            </span>
+          </summary>
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={e => {
+              e.preventDefault();
+              const parsed =
+                imageActionAssumptionsSchema.safeParse(estimateForm);
+              if (parsed.success) setImageEstimate(parsed.data);
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <label className="space-y-1 text-xs">
+                <span>Image quality</span>
+                <select
+                  className="h-10 w-full rounded-lg border bg-background px-2"
+                  value={estimateForm.quality}
+                  onChange={e =>
+                    setEstimateForm({
+                      ...estimateForm,
+                      quality: e.target
+                        .value as ImageActionAssumptions["quality"],
+                    })
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs">
+                <span>Image dimensions</span>
+                <select
+                  className="h-10 w-full rounded-lg border bg-background px-2"
+                  value={estimateForm.size}
+                  onChange={e =>
+                    setEstimateForm({
+                      ...estimateForm,
+                      size: e.target.value as ImageActionAssumptions["size"],
+                    })
+                  }
+                >
+                  <option value="1024x1024">Square · 1024 × 1024</option>
+                  <option value="1024x1536">Portrait · 1024 × 1536</option>
+                  <option value="1536x1024">Landscape · 1536 × 1024</option>
+                </select>
+              </label>
+              {(
+                [
+                  ["textInputTokens", "Text input tokens"],
+                  ["imageInputTokens", "Reference image input tokens"],
+                ] as const
+              ).map(([field, label]) => (
+                <label key={field} className="space-y-1 text-xs">
+                  <span>{label}</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={1000000}
+                    step={1}
+                    value={estimateForm[field]}
+                    onChange={e =>
+                      setEstimateForm({
+                        ...estimateForm,
+                        [field]: Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="text-xs">
+              Input counts are comparison assumptions, not measured usage. The
+              default is a 1,000-token prompt with no reference image. These
+              settings affect only this admin comparison; provider rates,
+              customer reservations, and completed usage are unchanged.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                !imageActionAssumptionsSchema.safeParse(estimateForm).success ||
+                catalog.isFetching
+              }
+            >
+              {catalog.isFetching ? "Calculating…" : "Apply estimate settings"}
+            </Button>
+          </form>
+        </details>
         {policy && (
           <p className="font-medium text-primary">
             Previewing unsaved pricing defaults. Save above to apply them.
@@ -309,12 +415,13 @@ export function ModelPricingAdmin() {
         )}
       </div>
       <section className="surface overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-left text-sm">
+        <table className="w-full min-w-[1200px] text-left text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
               {[
                 "Model",
-                "Offer this model",
+                "Provider",
+                "Offer",
                 "Cost / action (USD)",
                 "Cost in credits",
                 "Retail / action (USD)",
@@ -367,12 +474,6 @@ export function ModelPricingAdmin() {
                       <p className="text-xs text-muted-foreground">
                         {m.maker} · {m.variant} · {m.kind}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        API:{" "}
-                        {m.provider === "openai"
-                          ? "OpenAI · Direct"
-                          : "Higgsfield"}
-                      </p>
                       <p className="mt-2 text-xs font-medium">
                         {estimate?.basis ?? "Pricing required"}
                       </p>
@@ -382,9 +483,51 @@ export function ModelPricingAdmin() {
                       {tokenPricing && (
                         <details className="mt-2 text-xs">
                           <summary className="cursor-pointer text-primary">
-                            Token rates & verification
+                            Calculation & token rates
                           </summary>
                           <div className="mt-2 space-y-2">
+                            {estimate?.calculation && (
+                              <div className="space-y-2 border-b pb-2">
+                                <dl className="space-y-1">
+                                  {(
+                                    [
+                                      [
+                                        `Text input · ${creditNumber(estimate.calculation.assumptions.textInputTokens)} tokens`,
+                                        estimate.calculation.textInputMicros,
+                                      ],
+                                      [
+                                        `Image input · ${creditNumber(estimate.calculation.assumptions.imageInputTokens)} tokens`,
+                                        estimate.calculation.imageInputMicros,
+                                      ],
+                                      [
+                                        `Image output · ${estimate.calculation.approximateOutputTokens ? "≈ " : ""}${creditNumber(estimate.calculation.outputTokens)} tokens`,
+                                        estimate.calculation.imageOutputMicros,
+                                      ],
+                                    ] as const
+                                  ).map(([label, micros]) => (
+                                    <div
+                                      key={label}
+                                      className="flex justify-between gap-3"
+                                    >
+                                      <dt className="text-muted-foreground">
+                                        {label}
+                                      </dt>
+                                      <dd className="tabular-nums">
+                                        {money(micros / 1e6)}
+                                      </dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                                <a
+                                  href={estimate.calculation.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block text-[11px] text-primary underline"
+                                >
+                                  {estimate.calculation.source}
+                                </a>
+                              </div>
+                            )}
                             <ImageTokenRates rate={rate} />
                             <p className="text-[11px] text-muted-foreground">
                               {rate?.pricingVerifiedAt
@@ -409,6 +552,18 @@ export function ModelPricingAdmin() {
                           {rate.pricingError}
                         </p>
                       )}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      <p className="font-medium">
+                        {definition.provider === "openai"
+                          ? "OpenAI"
+                          : "Higgsfield"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {definition.provider === "openai"
+                          ? "Direct API"
+                          : "API provider"}
+                      </p>
                     </td>
                     <td className="p-3">
                       <label className="flex items-center gap-2 whitespace-nowrap">

@@ -19,7 +19,16 @@ import {
   OPENAI_IMAGE_MODELS,
 } from "../../shared/modelCatalog";
 import type { ProviderRate } from "../../shared/platformAdmin";
-import { estimatedActionCredits } from "../../shared/aiCredits";
+import {
+  estimatedActionCredits,
+  retailCredits,
+  rateCreditPolicy,
+} from "../../shared/aiCredits";
+import {
+  estimateOpenAIImageAction,
+  defaultImageActionAssumptions,
+  type ImageActionAssumptions,
+} from "../../shared/imageActionEstimate";
 import { effectiveRate, getCreditPolicy } from "./creditPricing";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
 import { ENV } from "../_core/env";
@@ -314,6 +323,37 @@ export function defaultModelActionQuote(
     credits: quote.credits,
     basis: "Default settings estimate",
     settings: `${seconds}s video · ${resolution} · ${aspectRatio}${source ? ` · ${seconds}s source at 1280 × 720` : ""}${defaults.sound != null ? ` · sound: ${defaults.sound}` : ""}`,
+  };
+}
+/** Admin comparisons use a stated workload, not the upfront credit hold. The
+ * reservation remains available separately and completed usage is unchanged.
+ */
+export function adminModelActionQuote(
+  model: ModelDefinition,
+  rate: ProviderRate,
+  assumptions: ImageActionAssumptions = defaultImageActionAssumptions
+) {
+  if (
+    model.provider === "openai" &&
+    model.kind === "image" &&
+    rate.perRequestUsd == null
+  ) {
+    const calculation = estimateOpenAIImageAction(rate, assumptions);
+    const format = (n: number) => n.toLocaleString("en-US");
+    return {
+      costMicros: calculation.costMicros,
+      credits: retailCredits(calculation.costMicros, rateCreditPolicy(rate)),
+      basis: "Token-based comparison",
+      settings: `1 image · ${assumptions.size.replace("x", " × ")} · ${assumptions.quality} · ${format(assumptions.textInputTokens)} text + ${format(assumptions.imageInputTokens)} image input tokens`,
+      calculation,
+    };
+  }
+  return {
+    ...defaultModelActionQuote(model, rate),
+    ...(rate.perRequestUsd != null
+      ? { basis: "Per-request provider rate" }
+      : {}),
+    calculation: null,
   };
 }
 export async function publicModelCatalog(db: Database) {

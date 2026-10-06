@@ -21,12 +21,122 @@ import {
   defaultModelRate,
   compatibleRoutes,
   defaultModelActionQuote,
+  adminModelActionQuote,
 } from "./modelCatalog";
+import {
+  defaultImageActionAssumptions,
+  estimateOpenAIImageAction,
+} from "../../shared/imageActionEstimate";
 import { videoQuote } from "./videoPricing";
 import {
   newWorkflowNode,
   workflowRunProblem,
 } from "../../shared/creativeWorkflow";
+
+it("prices each OpenAI comparison from its own rates and output estimate instead of the shared credit reservation", () => {
+  const examples = [
+    ["gpt-image-2.5-sunburst", 5, 8, 30, 18170],
+    ["gpt-image-2.5-flare", 5, 8, 30, 18170],
+    ["gpt-image-2", 5, 8, 30, 57680],
+    ["gpt-image-1.5", 5, 8, 32, 38792],
+    ["gpt-image-1", 5, 10, 40, 47240],
+    ["gpt-image-1-mini", 2, 2.5, 8, 13000],
+  ] as const;
+  for (const [id, text, inputImage, outputImage, costMicros] of examples) {
+    const model = generationModel(`openai:${id}`)!;
+    const rate = {
+      ...defaultModelRate(model),
+      ...defaultCreditPolicy,
+      inputPerMillion: text,
+      imageInputPerMillion: inputImage,
+      imageOutputPerMillion: outputImage,
+      estimatedCostMicros: 200000,
+    };
+    const comparison = adminModelActionQuote(model, rate);
+    expect(comparison).toMatchObject({
+      costMicros,
+      basis: "Token-based comparison",
+    });
+    expect(defaultModelActionQuote(model, rate).costMicros).toBe(200000);
+    expect(
+      adminModelActionQuote(model, { ...rate, estimatedCostMicros: 500000 })
+        .costMicros
+    ).toBe(costMicros);
+    expect(
+      adminModelActionQuote(model, { ...rate, perRequestUsd: 0.1 })
+    ).toMatchObject({
+      costMicros: 100000,
+      credits: 20,
+      basis: "Per-request provider rate",
+      calculation: null,
+    });
+    expect(
+      estimateOpenAIImageAction(rate, {
+        ...defaultImageActionAssumptions,
+        imageInputTokens: 1000,
+      }).costMicros
+    ).toBe(costMicros + 1000 * inputImage);
+    expect(
+      estimateOpenAIImageAction({
+        ...rate,
+        imageOutputPerMillion: outputImage * 2,
+      }).costMicros
+    ).toBe(costMicros * 2 - 1000 * text);
+  }
+});
+
+it("uses the exact model's documented quality and dimension calculation and marks Mini's approximation", () => {
+  const model = generationModel("openai:gpt-image-2.5-sunburst")!;
+  const rate = defaultModelRate(model);
+  const profile = { ...defaultImageActionAssumptions, textInputTokens: 0 };
+  expect(
+    estimateOpenAIImageAction(rate, { ...profile, quality: "low" })
+  ).toMatchObject({ outputTokens: 196, costMicros: 5880 });
+  expect(
+    estimateOpenAIImageAction(rate, { ...profile, quality: "high" })
+  ).toMatchObject({ outputTokens: 1756, costMicros: 52680 });
+  expect(
+    estimateOpenAIImageAction(rate, { ...profile, size: "1536x1024" })
+  ).toMatchObject({ outputTokens: 343, costMicros: 10290 });
+  const legacy = { ...rate, model: "gpt-image-1", imageOutputPerMillion: 40 };
+  expect(
+    estimateOpenAIImageAction(legacy, { ...profile, size: "1024x1536" })
+      .outputTokens
+  ).toBe(1584);
+  expect(
+    estimateOpenAIImageAction(legacy, { ...profile, size: "1536x1024" })
+      .outputTokens
+  ).toBe(1568);
+  expect(
+    estimateOpenAIImageAction({
+      ...legacy,
+      model: "gpt-image-1-mini",
+      imageOutputPerMillion: 8,
+    })
+  ).toMatchObject({
+    approximateOutputTokens: true,
+    source: expect.stringContaining("Mini"),
+  });
+  expect(() =>
+    estimateOpenAIImageAction(rate, { ...profile, size: "auto" } as any)
+  ).toThrow();
+  expect(() =>
+    estimateOpenAIImageAction(rate, { ...profile, textInputTokens: -1 })
+  ).toThrow();
+  expect(() =>
+    estimateOpenAIImageAction({ ...rate, imageOutputPerMillion: null }, profile)
+  ).toThrow(/pricing/);
+  expect(() =>
+    estimateOpenAIImageAction(
+      { ...rate, imageInputPerMillion: null },
+      { ...profile, imageInputTokens: 10 }
+    )
+  ).toThrow(/pricing/);
+  expect(
+    estimateOpenAIImageAction({ ...rate, imageInputPerMillion: null }, profile)
+      .costMicros
+  ).toBe(13170);
+});
 
 it("shows wholesale credit equivalents without rounding before markup, and discloses the rounded retail dollar amount", () => {
   expect(actionPriceBreakdown(5700, defaultCreditPolicy)).toEqual({
