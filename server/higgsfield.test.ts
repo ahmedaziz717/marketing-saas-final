@@ -248,3 +248,28 @@ it("does not send credentials to an unsupported estimate route", async () => {
   ).rejects.toThrow("Unsupported");
   expect(request).not.toHaveBeenCalled();
 });
+
+it("does not convert a live descriptive estimate into an invented discounted price", async () => {
+  const { estimateHiggsfield, HiggsfieldQuoteUnavailableError } = await import(
+    "./lib/higgsfield"
+  );
+  request.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        type: "description",
+        pricing_description:
+          "Token-metered pricing. Actual pricing depends on output dimensions and billable duration. Rates shown are before any applicable customer discount.",
+      })
+    )
+  );
+  await expect(
+    estimateHiggsfield("bytedance/seedance-2.5/text-to-video", {
+      prompt: "Product closeup",
+      duration: 5,
+      resolution: "480p",
+      aspect_ratio: "1:1",
+    })
+  ).rejects.toBeInstanceOf(HiggsfieldQuoteUnavailableError);
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request.mock.calls[0][0]).toContain("/estimate/");
+});

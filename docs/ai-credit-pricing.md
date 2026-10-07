@@ -21,3 +21,9 @@ OpenAI actions use verified token rates and an upfront action estimate. The acce
 `provider_account_estimate` is an authenticated estimate, not a reconciled invoice. Published comparison rates in the admin catalog explicitly exclude account discounts. Customer model lists do not advertise a Higgsfield list-price estimate as an account quote. Keep raw costs and reconciliation details private. A later provider invoice reconciliation may correct wholesale cost and margin, never the customer's accepted credits.
 
 Historical charges are not rewritten by deploying this contract. Review disputed transactions separately against provider request IDs and invoices.
+
+## Live verification — 2026-10-07
+
+Authenticated Kling 3.0 Pro text-to-video quotes successfully produced 143 EL credits for 5 seconds and 286 for 10 seconds with sound on. No paid generation was submitted during verification.
+
+Seedance 2.5 text-to-video returned HTTP 200 with `{type: "description", pricing_description: "..."}` rather than a numeric `usd`. The description explicitly excludes customer discounts and bills by actual output dimensions and duration. Treat this as unavailable pricing, not a transient validation error, and do not parse its prose into an account-specific quote. Seedance and any other descriptive-only model remain blocked until an authoritative numeric quote or an explicitly approved fixed-price policy is available. An exact 100% realized markup and an immutable upfront retail price cannot both be guaranteed when wholesale cost is unknown until completion.

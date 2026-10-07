@@ -24,6 +24,13 @@ export class HiggsfieldError extends Error {
     super(message);
   }
 }
+export class HiggsfieldQuoteUnavailableError extends Error {
+  constructor() {
+    super(
+      "An upfront credit price is not available for this model. Choose another model or ask your administrator to review its pricing. No generation was submitted."
+    );
+  }
+}
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
 export class HiggsfieldUrlError extends Error {
   constructor(public diagnostic: Record<string, string | boolean>) {
@@ -179,6 +186,17 @@ async function apiRequest(
   try {
     const json = await response.json();
     if (estimate) {
+      // Some live endpoints return only undiscounted prose, despite the USD
+      // response documented for estimation. This is not a numeric account quote.
+      if (json?.type === "description" && json?.usd == null) {
+        console.warn(
+          JSON.stringify({
+            event: "generation.quote.unpriced_model",
+            endpoint: new URL(url).pathname.replace(/^\/estimate\//, ""),
+          })
+        );
+        throw new HiggsfieldQuoteUnavailableError();
+      }
       const parsed = estimateSchema.safeParse(json);
       if (!parsed.success) {
         console.warn(
@@ -190,15 +208,6 @@ async function apiRequest(
                 ? Object.keys(json).slice(0, 20)
                 : [],
             usdType: typeof json?.usd,
-            estimateType:
-              typeof json?.type === "string" ? json.type.slice(0, 80) : null,
-            pricingDescription:
-              typeof json?.pricing_description === "string"
-                ? json.pricing_description
-                    .replace(/https?:\/\/\S+/gi, "[URL]")
-                    .replace(/\b(?:Bearer|Key)\s+\S+/gi, "[redacted]")
-                    .slice(0, 4000)
-                : null,
             issues: parsed.error.issues.map(issue => ({
               path: issue.path,
               code: issue.code,
@@ -210,7 +219,8 @@ async function apiRequest(
       return parsed.data;
     }
     return resultSchema.parse(json);
-  } catch {
+  } catch (error) {
+    if (error instanceof HiggsfieldQuoteUnavailableError) throw error;
     throw new HiggsfieldError(
       0,
       true,
@@ -247,6 +257,7 @@ export async function estimateHiggsfield(
     )) as z.infer<typeof estimateSchema>;
     return { costMicros: Math.round(result.usd * 1e6), quotedAtMs: Date.now() };
   } catch (error) {
+    if (error instanceof HiggsfieldQuoteUnavailableError) throw error;
     console.warn(
       JSON.stringify({
         event: "generation.quote.failed",
