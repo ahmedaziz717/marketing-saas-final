@@ -178,7 +178,29 @@ async function apiRequest(
   if (response.status === 202 && url.endsWith("/cancel")) return null;
   try {
     const json = await response.json();
-    return estimate ? estimateSchema.parse(json) : resultSchema.parse(json);
+    if (estimate) {
+      const parsed = estimateSchema.safeParse(json);
+      if (!parsed.success) {
+        console.warn(
+          JSON.stringify({
+            event: "generation.quote.invalid_response",
+            status: response.status,
+            fields:
+              json && typeof json === "object"
+                ? Object.keys(json).slice(0, 20)
+                : [],
+            usdType: typeof json?.usd,
+            issues: parsed.error.issues.map(issue => ({
+              path: issue.path,
+              code: issue.code,
+            })),
+          })
+        );
+        throw new Error("Invalid estimate response");
+      }
+      return parsed.data;
+    }
+    return resultSchema.parse(json);
   } catch {
     throw new HiggsfieldError(
       0,
@@ -215,7 +237,15 @@ export async function estimateHiggsfield(
       true
     )) as z.infer<typeof estimateSchema>;
     return { costMicros: Math.round(result.usd * 1e6), quotedAtMs: Date.now() };
-  } catch {
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "generation.quote.failed",
+        endpoint,
+        status: error instanceof HiggsfieldError ? error.status : null,
+        ambiguous: error instanceof HiggsfieldError ? error.ambiguous : false,
+      })
+    );
     // Estimation does not submit generation and never creates a billable job.
     throw new Error(
       "A credit quote is unavailable for these settings. Check the required inputs or try again. No generation was submitted."
