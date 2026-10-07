@@ -80,7 +80,7 @@ export function ModelPicker({
         </span>
         {choice?.direct && (
           <span className="rounded-full bg-violet-500/10 px-2 py-1 text-[10px] font-medium text-violet-600 dark:text-violet-300">
-            Direct pricing
+            Great Value
           </span>
         )}
         <ChevronDown size={16} />
@@ -151,7 +151,7 @@ export function ModelPicker({
                     </span>
                     {m.direct && (
                       <span className="text-violet-600 dark:text-violet-300">
-                        Direct pricing
+                        Great Value
                       </span>
                     )}
                     {m.estimatedCredits != null && (
@@ -197,7 +197,7 @@ export function ModelPicker({
             )}
           </div>
           <p className="shrink-0 text-xs text-muted-foreground">
-            Direct pricing means we connect to the model maker directly.
+            Compare credit estimates to choose the best fit for your project.
           </p>
         </DialogContent>
       </Dialog>
