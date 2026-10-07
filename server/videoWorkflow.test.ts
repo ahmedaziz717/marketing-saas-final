@@ -79,7 +79,11 @@ import {
   videoPrompt,
   type VideoSetup,
 } from "../shared/videoCreation";
-import { processNextVideoJob, videoWorkerHeartbeat } from "./jobs/videoWorker";
+import {
+  processNextVideoJob,
+  videoWorkerHeartbeat,
+  refreshFailedVideoDiagnostic,
+} from "./jobs/videoWorker";
 import { HiggsfieldError, requestUrl } from "./lib/higgsfield";
 import { mp4Info } from "./lib/videoMedia";
 import { defaultVideoRates, videoQuote } from "./lib/videoPricing";
@@ -793,6 +797,44 @@ describe("durable video generation", () => {
     expect(
       (await owner.video.get({ organizationId: org, id: job.id })).status
     ).toBe("canceled");
+  });
+  it("retains provider failure reasons and can recover older reasons without another generation or refund", async () => {
+    const job = await queued();
+    await tick();
+    state.submit.mockResolvedValue({
+      ...accepted,
+      status: "failed",
+      error: "Unsupported reference dimensions",
+    });
+    await tick();
+    expect(
+      (await owner.video.get({ organizationId: org, id: job.id })).error
+    ).toContain("Unsupported reference dimensions");
+    const ledger = await state.db.select().from(creditLedger);
+    expect(ledger.reduce((sum: number, row: any) => sum + row.amount, 0)).toBe(
+      0
+    );
+    await state.db
+      .update(videoJobs)
+      .set({
+        error:
+          "The provider could not generate this video. AI credits refunded.",
+        nextPollAtMs: 0,
+      })
+      .where(eq(videoJobs.id, job.id));
+    state.poll.mockResolvedValue({
+      ...accepted,
+      status: "failed",
+      error: "Unsupported reference dimensions",
+    });
+    await refreshFailedVideoDiagnostic(state.db);
+    await refreshFailedVideoDiagnostic(state.db);
+    expect(state.poll).toHaveBeenCalledTimes(1);
+    expect(state.submit).toHaveBeenCalledTimes(1);
+    expect(await state.db.select().from(creditLedger)).toEqual(ledger);
+    const saved = await owner.video.get({ organizationId: org, id: job.id });
+    expect(saved.status).toBe("failed");
+    expect(saved.error).toContain("Unsupported reference dimensions");
   });
   it("keeps a completed provider charge when storage fails, and retries saving without another generation", async () => {
     const job = await queued();

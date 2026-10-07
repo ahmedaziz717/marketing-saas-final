@@ -9,7 +9,7 @@ import {
 import { publicationTick } from "./lib/publications";
 import { processNextWebsiteJob } from "./jobs/catalogWorker";
 import { processNextStoreJob } from "./jobs/storeWorker";
-import { processNextVideoJob, videoWorkerHeartbeat } from "./jobs/videoWorker";
+import { processNextVideoJob, videoWorkerHeartbeat, refreshFailedVideoDiagnostic } from "./jobs/videoWorker";
 import { processNextWorkflowRun } from "./jobs/workflowWorker";
 
 let stopping = false;
@@ -38,8 +38,13 @@ async function main() {
     }
   })();
   const videoLoop = (async () => {
+    let lastDiagnosticCheck = 0;
     while (!stopping) {
       try { await processNextVideoJob(db); } catch { console.error("Video worker iteration failed"); }
+      if (Date.now() - lastDiagnosticCheck > 60000) {
+        lastDiagnosticCheck = Date.now();
+        try { await refreshFailedVideoDiagnostic(db); } catch { console.error("Video diagnostic refresh failed"); }
+      }
       await setTimeout(2000);
     }
   })();

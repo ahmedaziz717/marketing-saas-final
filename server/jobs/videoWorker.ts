@@ -1,6 +1,6 @@
 import { readLifestylePortrait } from "../lib/lifestylePeople";
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray, lte, gte, isNotNull, desc } from "drizzle-orm";
 import { aiUsage, creditLedger } from "../../drizzle/platformSchema";
 import { brandAssets, brandKits } from "../../drizzle/schema";
 import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
@@ -29,6 +29,7 @@ import {
   pollHiggsfield,
   providerUrls,
   submitHiggsfield,
+  videoProviderFailureMessage,
   type HiggsfieldResult,
 } from "../lib/higgsfield";
 import {
@@ -50,6 +51,55 @@ export async function videoWorkerHeartbeat(db: LibraryDatabase) {
     .insert(providerWorkers)
     .values(value)
     .onConflictDoUpdate({ target: providerWorkers.id, set: value });
+}
+
+/** Recover the reason for previously failed jobs. This only GETs an existing
+ * request; it never resubmits generation, changes outcome, or touches credits.
+ */
+export async function refreshFailedVideoDiagnostic(db: LibraryDatabase) {
+  if (!higgsfieldConfigured()) return;
+  const legacyError =
+    "The provider could not generate this video. AI credits refunded.";
+  const [job] = await db
+    .select()
+    .from(videoJobs)
+    .where(
+      and(
+        eq(videoJobs.status, "failed"),
+        eq(videoJobs.error, legacyError),
+        isNotNull(videoJobs.providerRequestId),
+        isNotNull(videoJobs.providerStatusUrl),
+        gte(videoJobs.updatedAtMs, Date.now() - 7 * 86400000),
+        lte(videoJobs.nextPollAtMs, Date.now())
+      )
+    )
+    .orderBy(desc(videoJobs.updatedAtMs))
+    .limit(1);
+  if (!job) return;
+  const guard = and(
+    eq(videoJobs.id, job.id),
+    eq(videoJobs.status, "failed"),
+    eq(videoJobs.error, legacyError)
+  );
+  try {
+    const result = await pollHiggsfield(
+      job.providerRequestId!,
+      job.providerStatusUrl!
+    );
+    if (["failed", "nsfw", "canceled"].includes(result.status)) {
+      await db
+        .update(videoJobs)
+        .set({ error: videoProviderFailureMessage(result) })
+        .where(guard);
+      return;
+    }
+  } catch {
+    // A missing/temporarily unavailable provider record must not alter billing.
+  }
+  await db
+    .update(videoJobs)
+    .set({ nextPollAtMs: Date.now() + 3600000 })
+    .where(guard);
 }
 async function updateLeased(
   db: LibraryDatabase,
@@ -102,11 +152,7 @@ async function recordProviderResult(
       db,
       job,
       result.status === "canceled" ? "canceled" : "failed",
-      result.status === "nsfw"
-        ? "The provider declined this content. Review your prompt and references. AI credits refunded."
-        : result.status === "canceled"
-          ? "The provider confirmed cancellation. AI credits refunded."
-          : "The provider could not generate this video. AI credits refunded."
+      videoProviderFailureMessage(result)
     );
     return;
   }

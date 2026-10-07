@@ -7,6 +7,7 @@ import {
   providerUrls,
   requestUrl,
   submitHiggsfield,
+  videoProviderFailureMessage,
 } from "./lib/higgsfield";
 const request = vi.fn();
 const id = "11111111-1111-4111-8111-111111111111";
@@ -18,6 +19,35 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+it("retains the documented failure reason while redacting signed references and credentials", async () => {
+  request.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        request_id: id,
+        status: "failed",
+        error:
+          "Image too small: https://storage.test/image?token=private Key secret-id:secret-value",
+      })
+    )
+  );
+  const result = await pollHiggsfield(
+    id,
+    `https://api.higgsfield.ai/requests/${id}/status`
+  );
+  expect(result.error).toContain("Image too small");
+  const message = videoProviderFailureMessage(result);
+  expect(message).toContain("Image too small");
+  expect(message).toContain("AI credits refunded");
+  expect(message).not.toContain("private");
+  expect(message).not.toContain("secret-value");
+  expect(
+    videoProviderFailureMessage({
+      request_id: id,
+      status: "failed",
+      error: null,
+    })
+  ).toContain("without a detailed reason");
 });
 it("submits a keyed, idempotent JSON request to the documented endpoint", async () => {
   request.mockResolvedValue(

@@ -85,10 +85,40 @@ const resultSchema = z.object({
   ]),
   status_url: z.string().optional(),
   cancel_url: z.string().optional(),
+  error: z.string().nullable().optional(),
   video: z.object({ url: z.string().url() }).optional(),
   images: z.array(z.object({ url: z.string().url() })).optional(),
 });
 export type HiggsfieldResult = z.infer<typeof resultSchema>;
+
+/** Provider errors may echo signed asset URLs. Keep useful diagnostic text,
+ * but never expose temporary URLs, auth headers, or credentials to the UI.
+ */
+export function videoProviderFailureMessage(result: HiggsfieldResult) {
+  if (result.status === "nsfw")
+    return "The video service declined this content. Review your prompt and references. AI credits refunded.";
+  if (result.status === "canceled")
+    return "The video service confirmed cancellation. AI credits refunded.";
+  const reason = (result.error ?? "")
+    .replace(/https?:\/\/\S+/gi, "[reference URL]")
+    .replace(/\b(?:Bearer|Key)\s+\S+/gi, "[credentials removed]")
+    .replace(
+      /\b(?:api[_-]?key|secret|token|authorization)\s*[:=]\s*[^\s,;]+/gi,
+      "[credentials removed]"
+    )
+    .replace(
+      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+      "[token removed]"
+    )
+    .replace(/higgsfield/gi, "video service")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 700);
+  return reason
+    ? `Video generation failed: ${reason} AI credits refunded.`
+    : "The video service reported a generation failure without a detailed reason. AI credits refunded.";
+}
 
 async function apiRequest(url: string, init: RequestInit = {}) {
   const key = credential();
