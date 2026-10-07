@@ -190,6 +190,15 @@ async function apiRequest(
                 ? Object.keys(json).slice(0, 20)
                 : [],
             usdType: typeof json?.usd,
+            estimateType:
+              typeof json?.type === "string" ? json.type.slice(0, 80) : null,
+            pricingDescription:
+              typeof json?.pricing_description === "string"
+                ? json.pricing_description
+                    .replace(/https?:\/\/\S+/gi, "[URL]")
+                    .replace(/\b(?:Bearer|Key)\s+\S+/gi, "[redacted]")
+                    .slice(0, 4000)
+                : null,
             issues: parsed.error.issues.map(issue => ({
               path: issue.path,
               code: issue.code,
