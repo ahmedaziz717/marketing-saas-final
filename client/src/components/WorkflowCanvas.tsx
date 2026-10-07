@@ -1,3 +1,13 @@
+import { WorkflowFormEditor } from "./WorkflowFormEditor";
+import {
+  appFieldSchema,
+  inputKinds,
+  inputLabels,
+  systemInputChoices,
+  fieldChoices,
+  fieldPrompt,
+  type AppField,
+} from "@shared/workflowInputs";
 import {
   useEffect,
   useRef,
@@ -144,6 +154,7 @@ export function WorkflowCanvas({
   const [selected, setSelected] = useState<string | null>(null),
     [library, setLibrary] = useState(!graph.nodes.length),
     [nodeSearch, setNodeSearch] = useState("");
+  const [paletteMode, setPaletteMode] = useState<"steps" | "fields">("steps");
   const [paletteFamily, setPaletteFamily] = useState<WorkflowFamily | "all">(
     family
   );
@@ -279,7 +290,7 @@ export function WorkflowCanvas({
     else change(next);
     setConnecting(null);
   };
-  const add = (type: WorkflowNodeType) => {
+  const add = (type: WorkflowNodeType, fieldKind?: AppField["kind"]) => {
     if (graph.nodes.length >= 40) {
       toast.error("Keep each workflow to 40 steps or fewer.");
       return;
@@ -292,6 +303,13 @@ export function WorkflowCanvas({
       Math.round(x + (graph.nodes.length % 3) * 45),
       Math.round(y + (graph.nodes.length % 3) * 45)
     );
+    if (fieldKind) {
+      node.title = inputLabels[fieldKind];
+      node.config.field = appFieldSchema.parse({
+        kind: fieldKind,
+        source: systemInputChoices(fieldKind).length ? "system" : "custom",
+      });
+    }
     change({ ...graph, nodes: [...graph.nodes, node] });
     setSelected(node.id);
     setLibrary(false);
@@ -491,7 +509,9 @@ export function WorkflowCanvas({
                   <GripVertical size={13} className="wf-drag-hint" />
                 </header>
                 <div className="wf-node-type">
-                  {meta.name}
+                  {node.config.field
+                    ? inputLabels[node.config.field.kind] + " field"
+                    : meta.name}
                   {step && (
                     <span className={`wf-step-state ${step.status}`}>
                       {stale ? (
@@ -564,7 +584,32 @@ export function WorkflowCanvas({
                           : 12,
                   }}
                 >
-                  {node.type === "text" ? (
+                  {node.config.field ? (
+                    <button
+                      className="wf-field-node-preview"
+                      onClick={() => {
+                        setSelected(node.id);
+                        setLibrary(false);
+                      }}
+                    >
+                      <strong>
+                        {node.config.field.defaultValue
+                          ? fieldPrompt(
+                              node.config.field,
+                              node.config.field.defaultValue
+                            )
+                          : "Set up this field"}
+                      </strong>
+                      <span>
+                        {fieldChoices(node.config.field).length
+                          ? `${fieldChoices(node.config.field).length} choices · `
+                          : ""}
+                        {node.config.field.required ? "Required" : "Optional"}
+                        {node.config.field.ai ? " · AI assistance" : ""}
+                      </span>
+                      <span>Configure field →</span>
+                    </button>
+                  ) : node.type === "text" ? (
                     <textarea
                       aria-label={`Text for ${node.title}`}
                       placeholder="Write a brief or prompt…"
@@ -740,65 +785,122 @@ export function WorkflowCanvas({
                 aria-label="Search steps"
               />
             </label>
-            <label className="wf-palette-filter">
-              Capabilities
-              <select
-                aria-label="Node section"
-                value={paletteFamily}
-                onChange={e =>
-                  setPaletteFamily(e.target.value as typeof paletteFamily)
-                }
+            <div className="wf-palette-tabs" aria-label="Add steps or fields">
+              <button
+                aria-pressed={paletteMode === "steps"}
+                onClick={() => setPaletteMode("steps")}
               >
-                {Object.entries(workflowSections).map(([id, section]) => (
-                  <option key={id} value={id}>
-                    {section.name}
-                  </option>
-                ))}
-                <option value="all">All sections</option>
-              </select>
-            </label>
-            {Array.from(
-              new Set(Object.values(workflowNodes).map(m => m.group))
-            ).map(group => (
-              <div className="wf-node-group" key={group}>
-                <h3>{group}</h3>
-                {Object.entries(workflowNodes)
-                  .filter(
-                    ([, meta]) =>
-                      meta.group === group &&
-                      !meta.hidden &&
-                      (!meta.channel ||
-                        connectedChannels.includes(meta.channel)) &&
-                      (paletteFamily === "all" ||
-                        (!meta.family &&
-                          ["Inputs", "Apps", "Control", "Utilities"].includes(
-                            meta.group
-                          )) ||
-                        (meta.family ?? "create") === paletteFamily) &&
-                      `${meta.name} ${meta.description}`
-                        .toLowerCase()
-                        .includes(nodeSearch.toLowerCase())
+                Steps
+              </button>
+              <button
+                aria-pressed={paletteMode === "fields"}
+                onClick={() => setPaletteMode("fields")}
+              >
+                Fields
+              </button>
+            </div>
+            {paletteMode === "fields" ? (
+              <div className="wf-node-group">
+                <h3>APP INPUT FIELDS</h3>
+                <p className="wf-setting-help">
+                  Add a field, configure it here, then connect it to a step. It
+                  also appears in your App form.
+                </p>
+                {inputKinds
+                  .filter(k =>
+                    `${inputLabels[k]} ${k}`
+                      .toLowerCase()
+                      .includes(nodeSearch.toLowerCase())
                   )
-                  .map(([type, meta]) => {
-                    const Icon = icons[type as WorkflowNodeType];
-                    return (
-                      <button
-                        key={type}
-                        onClick={() => add(type as WorkflowNodeType)}
-                      >
-                        <span data-type={type}>
-                          <Icon size={19} />
-                        </span>
-                        <div>
-                          <strong>{meta.name}</strong>
-                          <p>{meta.description}</p>
-                        </div>
-                        <ChevronRight size={14} />
-                      </button>
-                    );
-                  })}
+                  .map(kind => (
+                    <button key={kind} onClick={() => add("app_input", kind)}>
+                      <span data-type="app_input">
+                        <ArrowDownToLine size={19} />
+                      </span>
+                      <div>
+                        <strong>{inputLabels[kind]}</strong>
+                        <p>
+                          {[
+                            "theme",
+                            "art_style",
+                            "choice",
+                            "channel",
+                            "size",
+                          ].includes(kind)
+                            ? "System choices, curated lists or your own options"
+                            : "Defaults, user input and field settings"}
+                        </p>
+                      </div>
+                      <ChevronRight size={14} />
+                    </button>
+                  ))}
               </div>
-            ))}
+            ) : (
+              <>
+                <label className="wf-palette-filter">
+                  Capabilities
+                  <select
+                    aria-label="Node section"
+                    value={paletteFamily}
+                    onChange={e =>
+                      setPaletteFamily(e.target.value as typeof paletteFamily)
+                    }
+                  >
+                    {Object.entries(workflowSections).map(([id, section]) => (
+                      <option key={id} value={id}>
+                        {section.name}
+                      </option>
+                    ))}
+                    <option value="all">All sections</option>
+                  </select>
+                </label>
+                {Array.from(
+                  new Set(Object.values(workflowNodes).map(m => m.group))
+                ).map(group => (
+                  <div className="wf-node-group" key={group}>
+                    <h3>{group}</h3>
+                    {Object.entries(workflowNodes)
+                      .filter(
+                        ([, meta]) =>
+                          meta.group === group &&
+                          !meta.hidden &&
+                          (!meta.channel ||
+                            connectedChannels.includes(meta.channel)) &&
+                          (paletteFamily === "all" ||
+                            (!meta.family &&
+                              [
+                                "Inputs",
+                                "Apps",
+                                "Control",
+                                "Utilities",
+                              ].includes(meta.group)) ||
+                            (meta.family ?? "create") === paletteFamily) &&
+                          `${meta.name} ${meta.description}`
+                            .toLowerCase()
+                            .includes(nodeSearch.toLowerCase())
+                      )
+                      .map(([type, meta]) => {
+                        const Icon = icons[type as WorkflowNodeType];
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => add(type as WorkflowNodeType)}
+                          >
+                            <span data-type={type}>
+                              <Icon size={19} />
+                            </span>
+                            <div>
+                              <strong>{meta.name}</strong>
+                              <p>{meta.description}</p>
+                            </div>
+                            <ChevronRight size={14} />
+                          </button>
+                        );
+                      })}
+                  </div>
+                ))}
+              </>
+            )}
             <p className="wf-setting-help">
               Connected channels add their available steps.{" "}
               <Link href="/app/settings/integrations">Manage connections</Link>
@@ -808,7 +910,11 @@ export function WorkflowCanvas({
         {selectedNode && !library && (
           <aside className="wf-inspector" data-panel>
             <div className="wf-panel-title">
-              <h2>{workflowNodes[selectedNode.type].name}</h2>
+              <h2>
+                {selectedNode.config.field
+                  ? "Field settings"
+                  : workflowNodes[selectedNode.type].name}
+              </h2>
               <button
                 aria-label="Close step settings"
                 onClick={() => setSelected(null)}
@@ -817,16 +923,18 @@ export function WorkflowCanvas({
               </button>
             </div>
             <div className="wf-inspector-body">
-              <label>
-                Step name
-                <Input
-                  value={selectedNode.title}
-                  maxLength={100}
-                  onChange={e =>
-                    update(selectedNode.id, { title: e.target.value })
-                  }
-                />
-              </label>
+              {!selectedNode.config.field && (
+                <label>
+                  Step name
+                  <Input
+                    value={selectedNode.title}
+                    maxLength={100}
+                    onChange={e =>
+                      update(selectedNode.id, { title: e.target.value })
+                    }
+                  />
+                </label>
+              )}
               {(selectedNode.type === "app" ||
                 selectedNode.config.builtinAppId) && (
                 <WorkflowAppPicker
@@ -870,11 +978,13 @@ export function WorkflowCanvas({
                 />
               )}
               {selectedNode.config.field && (
-                <p>
-                  App field: {selectedNode.title}. Open{" "}
-                  <strong>App form</strong> to configure its choices, default
-                  and AI assistance.
-                </p>
+                <WorkflowFormEditor
+                  key={`field-${selectedNode.id}`}
+                  graph={graph}
+                  fieldId={selectedNode.id}
+                  organizationId={organizationId}
+                  onChange={change}
+                />
               )}
               {selectedNode.type === "image" ? (
                 <Button

@@ -23,11 +23,13 @@ export function WorkflowFormEditor({
   onChange,
   organizationId,
   preview = false,
+  fieldId,
 }: {
   graph: WorkflowGraph;
   onChange: (g: WorkflowGraph) => void;
   organizationId: number;
   preview?: boolean;
+  fieldId?: string;
 }) {
   const [kind, setKind] = useState<AppField["kind"]>("theme");
   const [selected, setSelected] = useState("");
@@ -39,7 +41,7 @@ export function WorkflowFormEditor({
   const fields = graph.nodes.filter(
     n => n.type === "app_input" && n.config.field
   );
-  const node = fields.find(n => n.id === selected) ?? fields[0];
+  const node = fields.find(n => n.id === (fieldId ?? selected)) ?? fields[0];
   const f = node?.config.field;
   const update = (patch: Partial<AppField>) => {
     if (!node || !f) return;
@@ -101,75 +103,77 @@ export function WorkflowFormEditor({
       </section>
     );
   return (
-    <section className="wf-form-editor">
-      <aside>
-        <h2>App form</h2>
-        <p>
-          Choose what users provide. Connect each field to the steps that need
-          it.
-        </p>
-        <select
-          aria-label="New field type"
-          value={kind}
-          onChange={e => setKind(e.target.value as AppField["kind"])}
-        >
-          {inputKinds.map(k => (
-            <option key={k} value={k}>
-              {inputLabels[k]}
-            </option>
+    <section className={`wf-form-editor ${fieldId ? "wf-form-inspector" : ""}`}>
+      {!fieldId && (
+        <aside>
+          <h2>App form</h2>
+          <p>
+            Choose what users provide. Connect each field to the steps that need
+            it.
+          </p>
+          <select
+            aria-label="New field type"
+            value={kind}
+            onChange={e => setKind(e.target.value as AppField["kind"])}
+          >
+            {inputKinds.map(k => (
+              <option key={k} value={k}>
+                {inputLabels[k]}
+              </option>
+            ))}
+          </select>
+          <Button
+            onClick={() => {
+              if (graph.nodes.length >= 40) {
+                toast.error("This workflow has reached 40 steps.");
+                return;
+              }
+              const n = newWorkflowNode(
+                "app_input",
+                crypto.randomUUID(),
+                60,
+                80 + fields.length * 120
+              );
+              n.title = inputLabels[kind];
+              n.config.field = appFieldSchema.parse({
+                kind,
+                source: systemInputChoices(kind).length ? "system" : "custom",
+              });
+              onChange({ ...graph, nodes: [...graph.nodes, n] });
+              setSelected(n.id);
+            }}
+          >
+            + Add field
+          </Button>
+          {fields.map((n, index) => (
+            <div className="wf-field-row" key={n.id}>
+              <button
+                className={node?.id === n.id ? "is-selected" : ""}
+                onClick={() => {
+                  setSelected(n.id);
+                  setProposals([]);
+                }}
+              >
+                {n.title}
+                <small>{inputLabels[n.config.field!.kind]}</small>
+              </button>
+              <button
+                aria-label={`Move ${n.title} up`}
+                disabled={!index}
+                onClick={() => {
+                  const nodes = [...graph.nodes];
+                  const a = nodes.findIndex(x => x.id === n.id),
+                    b = nodes.findIndex(x => x.id === fields[index - 1].id);
+                  [nodes[a], nodes[b]] = [nodes[b], nodes[a]];
+                  onChange({ ...graph, nodes });
+                }}
+              >
+                ↑
+              </button>
+            </div>
           ))}
-        </select>
-        <Button
-          onClick={() => {
-            if (graph.nodes.length >= 40) {
-              toast.error("This workflow has reached 40 steps.");
-              return;
-            }
-            const n = newWorkflowNode(
-              "app_input",
-              crypto.randomUUID(),
-              60,
-              80 + fields.length * 120
-            );
-            n.title = inputLabels[kind];
-            n.config.field = appFieldSchema.parse({
-              kind,
-              source: systemInputChoices(kind).length ? "system" : "custom",
-            });
-            onChange({ ...graph, nodes: [...graph.nodes, n] });
-            setSelected(n.id);
-          }}
-        >
-          + Add field
-        </Button>
-        {fields.map((n, index) => (
-          <div className="wf-field-row" key={n.id}>
-            <button
-              className={node?.id === n.id ? "is-selected" : ""}
-              onClick={() => {
-                setSelected(n.id);
-                setProposals([]);
-              }}
-            >
-              {n.title}
-              <small>{inputLabels[n.config.field!.kind]}</small>
-            </button>
-            <button
-              aria-label={`Move ${n.title} up`}
-              disabled={!index}
-              onClick={() => {
-                const nodes = [...graph.nodes];
-                const a = nodes.findIndex(x => x.id === n.id),
-                  b = nodes.findIndex(x => x.id === fields[index - 1].id);
-                [nodes[a], nodes[b]] = [nodes[b], nodes[a]];
-                onChange({ ...graph, nodes });
-              }}
-            >
-              ↑
-            </button>
-          </div>
-        ))}
-      </aside>
+        </aside>
+      )}
       {node && f ? (
         <div className="wf-field-settings" key={node.id}>
           <h2>{node.title}</h2>

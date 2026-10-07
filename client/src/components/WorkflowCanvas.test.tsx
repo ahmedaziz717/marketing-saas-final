@@ -15,7 +15,11 @@ vi.mock("sonner", () => ({
 vi.mock("./AssetUploadDialog", () => ({ AssetUploadDialog: () => null }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    catalog: { overview: { useQuery: () => ({ data: { products: [] } }) } },
     workflows: {
+      assistInput: {
+        useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+      },
       listApps: {
         useQuery: () => ({
           data: [
@@ -170,4 +174,29 @@ it("offers built-in and custom Apps and configures executable built-ins", () => 
     "00000000-0000-4000-8000-000000000001"
   );
   expect(graph().nodes[0].config.builtinAppId).toBeUndefined();
+});
+
+it("adds and configures an App field directly on the workflow canvas", () => {
+  render(<Harness initial={{ nodes: [], edges: [] }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Fields" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+    target: { value: "theme" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Theme System choices/ }));
+  expect(graph().nodes[0].config.field?.kind).toBe("theme");
+  expect(screen.getByText("Field settings")).toBeTruthy();
+  expect(screen.queryByText("Open App form")).toBeNull();
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Required" })
+  );
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Theme" }),
+    { target: { value: "spotlight" } }
+  );
+  expect(graph().nodes[0].config.field).toMatchObject({
+    required: true,
+    defaultValue: "spotlight",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(graph().nodes[0].config.field?.defaultValue).toBe("");
 });
