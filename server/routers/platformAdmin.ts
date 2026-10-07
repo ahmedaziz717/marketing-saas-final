@@ -1,3 +1,4 @@
+import { sendAccountInvitation } from "../lib/accountInvitations";
 import { syncPublishedPricing } from "../lib/publishedPricing";
 import { videoReadiness } from "../lib/videoJobs";
 import { higgsfieldConfigured } from "../lib/higgsfield";
@@ -236,7 +237,7 @@ export const platformAdminRouter = router({
         now = Date.now(),
         token = randomBytes(32).toString("hex"),
         email = input.ownerEmail.toLowerCase().trim();
-      return db.transaction(async tx => {
+      const result = await db.transaction(async tx => {
         if (
           !(
             await tx
@@ -304,39 +305,74 @@ export const platformAdminRouter = router({
           invitePath: owner ? null : `/account-invite/${token}`,
         };
       });
+      const delivery = result.invitePath
+        ? await sendAccountInvitation(email, input.name, result.invitePath)
+        : { status: "not_needed" as const };
+      await audit(
+        db,
+        ctx.user.id,
+        "account.invitation_email",
+        delivery,
+        result.organizationId
+      );
+      return { ...result, delivery };
     }),
   renewInvite: adminProcedure
     .input(z.object({ organizationId: org }))
     .mutation(async ({ ctx, input }) => {
       const db = await libraryDatabase(),
         token = randomBytes(32).toString("hex");
-      return withOrganizationTransaction(db, input.organizationId, async tx => {
-        const [a] = await tx
-          .select()
-          .from(platformAccounts)
-          .where(eq(platformAccounts.organizationId, input.organizationId));
-        if (!a?.inviteHash)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No pending owner invitation",
-          });
-        await tx
-          .update(platformAccounts)
-          .set({
-            inviteHash: hash(token),
-            inviteExpiresAtMs: Date.now() + 7 * 86400000,
-            updatedAtMs: Date.now(),
-          })
-          .where(eq(platformAccounts.organizationId, input.organizationId));
-        await audit(
-          tx,
-          ctx.user.id,
-          "account.invite_renewed",
-          {},
-          input.organizationId
-        );
-        return { invitePath: `/account-invite/${token}` };
-      });
+      const result = await withOrganizationTransaction(
+        db,
+        input.organizationId,
+        async tx => {
+          const [a] = await tx
+            .select()
+            .from(platformAccounts)
+            .where(eq(platformAccounts.organizationId, input.organizationId));
+          if (!a?.inviteHash)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "No pending owner invitation",
+            });
+          await tx
+            .update(platformAccounts)
+            .set({
+              inviteHash: hash(token),
+              inviteExpiresAtMs: Date.now() + 7 * 86400000,
+              updatedAtMs: Date.now(),
+            })
+            .where(eq(platformAccounts.organizationId, input.organizationId));
+          await audit(
+            tx,
+            ctx.user.id,
+            "account.invite_renewed",
+            {},
+            input.organizationId
+          );
+          return {
+            invitePath: `/account-invite/${token}`,
+            email: a.ownerEmail,
+          };
+        }
+      );
+      const [workspace] = await db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, input.organizationId));
+      const delivery = await sendAccountInvitation(
+        result.email!,
+        workspace.name,
+        result.invitePath
+      );
+      await audit(
+        db,
+        ctx.user.id,
+        "account.invitation_email",
+        delivery,
+        input.organizationId
+      );
+      return { invitePath: result.invitePath, delivery };
     }),
   acceptAccount: protectedProcedure
     .input(z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }))

@@ -204,9 +204,12 @@ function Administration() {
       setNewAccount({ ...newAccount, name: "", ownerEmail: "" });
       toast.success(
         r.invitePath
-          ? "Account created. Copy the owner invitation below."
+          ? r.delivery.status === "sent"
+            ? "Account created. Invitation email sent."
+            : "Account created. Invitation email was not sent."
           : "Account created and linked to the existing owner."
       );
+      if (r.delivery.status === "failed") toast.error(r.delivery.reason);
       await refresh();
     },
     onError: failure,
@@ -238,7 +241,9 @@ function Administration() {
     renew = trpc.platformAdmin.renewInvite.useMutation({
       onSuccess: r => {
         setInvite(location.origin + r.invitePath);
-        toast.success("New invitation generated. Previous link is invalid.");
+        if (r.delivery.status === "sent")
+          toast.success("Invitation email sent. Previous link is invalid.");
+        else toast.error(r.delivery.reason);
       },
       onError: failure,
     });
@@ -919,7 +924,7 @@ function Administration() {
                         renew.mutate({ organizationId: selected! })
                       }
                     >
-                      Renew owner invitation
+                      Resend owner invitation email
                     </Button>
                   )}
                   <h3 className="mb-3 mt-8 text-lg font-semibold">
