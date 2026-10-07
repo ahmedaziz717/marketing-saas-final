@@ -1545,32 +1545,142 @@ export default function PlatformAdminPage() {
   );
 }
 export function AccountInvitePage() {
-  const { user } = useAuth();
   const [, params] = useRoute("/account-invite/:token");
-  const accept = trpc.platformAdmin.acceptAccount.useMutation({
-    onSuccess: r => {
-      if (user) rememberWorkspace(user.id, r.organizationId);
+  const [details, setDetails] = useState<{
+    email: string;
+    workspace: string;
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setDetails(null);
+    setError("");
+    fetch("/api/auth/account-invite/details", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: params?.token }),
+    })
+      .then(async response => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        return result;
+      })
+      .then(result => {
+        if (!cancelled) setDetails(result);
+      })
+      .catch(e => {
+        if (!cancelled) setError(e.message || "Unable to load invitation.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params?.token]);
+  async function activate(event: React.FormEvent) {
+    event.preventDefault();
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/account-invite/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: params?.token, password }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error || "Activation could not finish.");
+      setPassword("");
+      setConfirm("");
+      rememberWorkspace(result.userId, result.organizationId);
       window.location.assign("/app");
-    },
-    onError: e => toast.error(e.message),
-  });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <DashboardLayout>
-      <section className="surface mx-auto max-w-xl p-8">
+    <main className="flex min-h-screen items-center justify-center bg-background p-6">
+      <section className="surface w-full max-w-lg p-8">
+        <img
+          src="/website/evokeloop-wordmark.svg"
+          alt="EvokeLoop"
+          className="mb-8 h-10 w-auto"
+        />
         <h1 className="text-3xl font-semibold">Activate your account</h1>
-        <p className="my-4">
-          Sign in with the invited email address, then accept ownership of your
-          EvokeLoop account.
-        </p>
-        <Button
-          disabled={accept.isPending || !params?.token}
-          onClick={() =>
-            params?.token && accept.mutate({ token: params.token })
-          }
-        >
-          Accept account invitation
-        </Button>
+        {details ? (
+          <>
+            <p className="my-4 text-muted-foreground">
+              EvokeLoop invited you to{" "}
+              <strong className="text-foreground">{details.workspace}</strong>.
+              Create your password to enter your workspace.
+            </p>
+            <form onSubmit={activate} className="space-y-4">
+              <label className="block text-sm">
+                Invited email
+                <Input
+                  value={details.email}
+                  readOnly
+                  autoComplete="username"
+                  className="mt-2"
+                />
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Your invitation verifies this email. No separate signup or
+                verification email is needed.
+              </p>
+              <label className="block text-sm">
+                Password
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="mt-2"
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Use at least 12 characters. Already have an EvokeLoop login? Use
+                your existing password.
+              </p>
+              <label className="block text-sm">
+                Confirm password
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  value={confirm}
+                  onChange={e => setConfirm(e.target.value)}
+                  className="mt-2"
+                />
+              </label>
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+              <Button className="w-full" disabled={busy}>
+                {busy ? "Activating…" : "Activate & enter workspace"}
+              </Button>
+            </form>
+          </>
+        ) : (
+          <p role={error ? "alert" : "status"} className="mt-4">
+            {error || "Loading your invitation…"}
+          </p>
+        )}
       </section>
-    </DashboardLayout>
+    </main>
   );
 }

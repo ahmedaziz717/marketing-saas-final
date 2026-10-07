@@ -1,3 +1,4 @@
+import { registerAccountActivation } from "./accountActivation";
 import type { Express, RequestHandler, Request, Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
@@ -29,6 +30,7 @@ export function registerAuthRoutes(app: Express) {
       legacyHeaders: false,
       message: { error: "Too many attempts. Please try again in 15 minutes." },
     });
+  registerAccountActivation(app, limiter());
   // strict-origin hides token-bearing paths but preserves Origin on form POSTs.
   // no-referrer makes browsers send Origin: null, which our CSRF guard rejects.
   // Email scanners may GET links. Only a deliberate form POST redeems recovery.

@@ -28,7 +28,7 @@ export async function sendAccountInvitation(
         from,
         to: [email],
         subject: "Your EvokeLoop workspace invitation",
-        text: `You've been invited to manage ${name} on EvokeLoop.\n\nAccept your invitation:\n${url}\n\nSign up or sign in using ${email}. This invitation expires in 7 days.\n\nIf you weren't expecting this invitation, you can ignore it.`,
+        text: `You've been invited to manage ${name} on EvokeLoop.\n\nAccept your invitation:\n${url}\n\nOpen this invitation and create your password to activate your workspace for ${email}. No separate signup is needed. If you already have an EvokeLoop login, use your existing password. This invitation expires in 7 days.\n\nIf you weren't expecting this invitation, you can ignore it.`,
       }),
       signal: AbortSignal.timeout(10_000),
     });
