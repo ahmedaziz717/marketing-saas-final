@@ -243,7 +243,22 @@ export const workflowsRouter = router({
       )
       .orderBy(desc(creativeWorkflowRuns.createdAtMs))
       .limit(20);
-    return { ...workflow, runs: runs.map(publicWorkflowRun) };
+    const [published] = await db
+      .select({ version: workflowAppVersions.version })
+      .from(workflowAppVersions)
+      .where(
+        and(
+          eq(workflowAppVersions.organizationId, input.organizationId),
+          eq(workflowAppVersions.workflowId, input.id)
+        )
+      )
+      .orderBy(desc(workflowAppVersions.version))
+      .limit(1);
+    return {
+      ...workflow,
+      latestPublishedVersion: published?.version ?? null,
+      runs: runs.map(publicWorkflowRun),
+    };
   }),
   save: protectedProcedure
     .input(

@@ -521,6 +521,10 @@ it("publishes immutable App versions in each family and isolates their inputs", 
     name: "Reusable report",
     graph: textGraph(),
   });
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id }))
+      .latestPublishedVersion
+  ).toBeNull();
   const v1 = await owner.publishApp({
     organizationId: org,
     id: saved.id,
@@ -534,6 +538,14 @@ it("publishes immutable App versions in each family and isolates their inputs", 
     name: saved.name,
     graph: textGraph("New draft value"),
   });
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id }))
+      .latestPublishedVersion
+  ).toBe(1);
+  expect(
+    (await owner.getApp({ organizationId: org, id: v1.id })).graph.nodes[0]
+      .config.text
+  ).toBe("Published value");
   const v2 = await owner.publishApp({
     organizationId: org,
     id: saved.id,
@@ -715,24 +727,20 @@ it("keeps waits durable and lets a stopped waiting run end without downstream ca
   ).toBe("stopped");
 });
 it("runs read-only reports with exhausted AI credits and rejects another workspace's connection", async () => {
-  await state.db
-    .insert(platformAccounts)
-    .values({
-      organizationId: org,
-      enforceCredits: 1,
-      aiPaused: 1,
-      updatedAtMs: Date.now(),
-    });
-  await state.db
-    .insert(creditLedger)
-    .values({
-      id: randomUUID(),
-      organizationId: org,
-      period: new Date().toISOString().slice(0, 7),
-      amount: -10,
-      reason: "Existing usage",
-      createdAtMs: Date.now(),
-    });
+  await state.db.insert(platformAccounts).values({
+    organizationId: org,
+    enforceCredits: 1,
+    aiPaused: 1,
+    updatedAtMs: Date.now(),
+  });
+  await state.db.insert(creditLedger).values({
+    id: randomUUID(),
+    organizationId: org,
+    period: new Date().toISOString().slice(0, 7),
+    amount: -10,
+    reason: "Existing usage",
+    createdAtMs: Date.now(),
+  });
   const c = await connection();
   state.report.mockResolvedValue({
     summary: { spend: 40, impressions: 500, roas: null },

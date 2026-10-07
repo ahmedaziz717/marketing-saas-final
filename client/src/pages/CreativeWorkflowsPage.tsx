@@ -13,6 +13,7 @@ import {
   Archive,
   Play,
   AppWindow,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -455,6 +456,11 @@ function WorkflowEditor({
             onChange={e => setName(e.target.value)}
           />
           <span>
+            <span>
+              {detail.data?.latestPublishedVersion
+                ? `Workflow draft · App v${detail.data.latestPublishedVersion} published ·`
+                : "Workflow draft ·"}
+            </span>
             {saveError ? (
               <button
                 onClick={() => {
@@ -506,9 +512,40 @@ function WorkflowEditor({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setPublishOpen(true)}
+            disabled={save.isPending || publishApp.isPending}
+            onClick={async () => {
+              try {
+                await saveNow();
+                toast.success("Workflow draft saved");
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
           >
-            <AppWindow size={15} /> Publish as App
+            {save.isPending ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Save size={15} />
+            )}
+            {save.isPending ? "Saving…" : "Save workflow"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={save.isPending || publishApp.isPending}
+            onClick={async () => {
+              try {
+                await saveNow();
+                setPublishOpen(true);
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+          >
+            <AppWindow size={15} />{" "}
+            {detail.data?.latestPublishedVersion
+              ? "Publish new version"
+              : "Publish as App"}
           </Button>
           <Link href="/app/library" className="wf-library-link">
             Asset Library <ArrowRight size={14} />
@@ -524,7 +561,7 @@ function WorkflowEditor({
             ) : (
               <Play size={15} />
             )}{" "}
-            Run all
+            Run workflow
           </Button>
         </div>
       </header>
@@ -647,7 +684,11 @@ function WorkflowEditor({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Publish {name} as an App</DialogTitle>
+            <DialogTitle>
+              {detail.data?.latestPublishedVersion
+                ? `Publish a new version of ${name}`
+                : `Publish ${name} as an App`}
+            </DialogTitle>
             <DialogDescription>
               Your team can run a simple App or reuse this version as a step in
               another workflow. Future workflow edits are drafts until you
