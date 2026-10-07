@@ -36,6 +36,10 @@ import {
 } from "@shared/creativeWorkflow";
 import "@/styles/workflows.css";
 import {
+  addWorkflowAppResults,
+  workflowAppResultPlan,
+} from "@shared/workflowAppResults";
+import {
   businessWorkflowTemplates,
   businessWorkflowTemplate,
   workflowSections,
@@ -420,6 +424,7 @@ function WorkflowEditor({
         <Loader2 className="animate-spin" /> Opening workflow…
       </div>
     );
+  const appResults = workflowAppResultPlan(graph);
   const runs = detail.data?.runs ?? [],
     active = runs.find(r => ["queued", "running"].includes(r.status)),
     shown = runs.find(r => r.id === selectedRun) ?? runs[0];
@@ -658,10 +663,40 @@ function WorkflowEditor({
               placeholder="What does this App help your team do?"
             />
           </label>
+          <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm">
+            <p className="font-medium">What this App returns</p>
+            {appResults.error ? (
+              <p role="alert">{appResults.error}</p>
+            ) : (
+              <>
+                <ul className="list-disc pl-5">
+                  {appResults.sources.map(node => (
+                    <li key={node.id}>{node.title}</li>
+                  ))}
+                </ul>
+                <p className="text-muted-foreground">
+                  {appResults.needsOutput
+                    ? "We’ll add an App results step connected to these final steps when you publish. It tells the App which results to return."
+                    : "These steps are connected to your App’s Output steps."}
+                </p>
+                <p className="text-muted-foreground">
+                  Publishing an App does not run this workflow or use AI
+                  credits.
+                </p>
+              </>
+            )}
+          </div>
           <Button
-            disabled={publishApp.isPending || save.isPending}
+            disabled={
+              publishApp.isPending || save.isPending || !!appResults.error
+            }
             onClick={async () => {
               try {
+                const prepared = addWorkflowAppResults(graph);
+                if (prepared !== graph) {
+                  latest.current = { graph: prepared, name };
+                  setGraph(prepared);
+                }
                 await saveNow();
                 const app = await publishApp.mutateAsync({
                   organizationId,
@@ -677,7 +712,9 @@ function WorkflowEditor({
               }
             }}
           >
-            Publish App version
+            {appResults.needsOutput
+              ? "Add results & publish App"
+              : "Publish App version"}
           </Button>
         </DialogContent>
       </Dialog>

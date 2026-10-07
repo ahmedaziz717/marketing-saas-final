@@ -720,7 +720,8 @@
 .wf-inspector {
   position: absolute;
   top: 15px;
-  max-height: calc(100% - 30px);
+  /* Keep the bottom canvas controls clear, including on short screens. */
+  max-height: calc(100% - 90px);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 13px;
