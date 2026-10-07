@@ -139,7 +139,8 @@ export const workflowNodes: Record<
   },
   app: {
     name: "Run an App",
-    description: "Use a published App from any section, pinned to a version.",
+    description:
+      "Use a built-in tool or a published workspace App from any section.",
     group: "Apps",
     output: "any",
     inputs: [{ id: "context", name: "Content", type: "any", multiple: true }],
@@ -279,6 +280,7 @@ export const workflowNodeSchema = z.object({
   y: z.number().min(-10000).max(10000),
   config: z.object({
     appVersionId: z.string().uuid().optional(),
+    builtinAppId: z.string().max(80).optional(),
     connectionId: z.string().uuid().optional(),
     campaignId: z.string().regex(/^\d*$/).max(100).optional(),
     adSetId: z.string().regex(/^\d*$/).max(100).optional(),

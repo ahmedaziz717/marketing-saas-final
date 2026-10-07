@@ -5,7 +5,6 @@ import { Input } from "./ui/input";
 import { datePresets } from "@shared/reportDates";
 import { dateInZone, localScheduleToUtc } from "@shared/channels";
 import { workflowNodes, type WorkflowNode } from "@shared/creativeWorkflow";
-import { workflowSections } from "@shared/workflowPlatform";
 
 export function WorkflowBusinessSettings({
   node,
@@ -23,10 +22,6 @@ export function WorkflowBusinessSettings({
   );
   const [scheduleError, setScheduleError] = useState("");
   const connections = trpc.channels.connections.useQuery({ organizationId });
-  const apps = trpc.workflows.listApps.useQuery(
-    { organizationId },
-    { enabled: node.type === "app" }
-  );
   const objects = trpc.channels.adObjects.useQuery(
     {
       organizationId,
@@ -47,38 +42,6 @@ export function WorkflowBusinessSettings({
     config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
     <>
-      {node.type === "app" && (
-        <>
-          <label>
-            Published App
-            <select
-              value={config.appVersionId ?? ""}
-              onChange={e =>
-                onChange({ appVersionId: e.target.value || undefined })
-              }
-            >
-              <option value="">Choose an App and version</option>
-              {apps.data?.map(app => (
-                <option key={app.id} value={app.id}>
-                  {workflowSections[app.family].name} · {app.name} · v
-                  {app.version}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!apps.isLoading && !apps.data?.length && (
-            <p className="wf-setting-help">
-              Publish a workflow as an App to reuse it here. Apps from all four
-              sections are available.
-            </p>
-          )}
-          {apps.error && <p role="alert">{apps.error.message}</p>}
-          <p className="wf-setting-help">
-            This step keeps the selected version. Connect content to an App
-            input step inside that App.
-          </p>
-        </>
-      )}
       {meta.channel && (
         <>
           <label>

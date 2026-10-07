@@ -9,10 +9,30 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({ error: vi.fn(), run: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { error: api.error, success: vi.fn() } }));
+vi.mock("sonner", () => ({
+  toast: { error: api.error, success: vi.fn(), info: vi.fn() },
+}));
 vi.mock("./AssetUploadDialog", () => ({ AssetUploadDialog: () => null }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    workflows: {
+      listApps: {
+        useQuery: () => ({
+          data: [
+            {
+              id: "00000000-0000-4000-8000-000000000001",
+              name: "Custom review",
+              family: "create",
+              version: 1,
+            },
+          ],
+        }),
+      },
+    },
+    channels: {
+      connections: { useQuery: () => ({ data: { items: [] } }) },
+      adObjects: { useQuery: () => ({}) },
+    },
     models: {
       nodeQuote: { useQuery: () => ({ data: { credits: 40 } }) },
       catalog: { useQuery: () => ({ data: [] }) },
@@ -117,4 +137,37 @@ it("adds searchable steps and exposes compact optional creative direction", () =
     target: { value: "premium" },
   });
   expect(graph().nodes[0].config.direction?.mood).toBe("premium");
+});
+
+it("offers built-in and custom Apps and configures executable built-ins", () => {
+  render(
+    <Harness initial={{ nodes: [newWorkflowNode("app", "app")], edges: [] }} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Settings for Run an App" })
+  );
+  expect(screen.getByRole("option", { name: "Image creator" })).toBeTruthy();
+  expect(screen.getByRole("option", { name: /Custom review/ })).toBeTruthy();
+  expect(
+    (screen.getByRole("option", { name: /Creator video/ }) as HTMLOptionElement)
+      .disabled
+  ).toBe(true);
+  fireEvent.change(screen.getByLabelText("App"), {
+    target: { value: "builtin:image-creator" },
+  });
+  expect(graph().nodes[0].type).toBe("generate_image");
+  expect(graph().nodes[0].config.builtinAppId).toBe("image-creator");
+  expect(screen.getByLabelText("Aspect ratio")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Aspect ratio"), {
+    target: { value: "9:16" },
+  });
+  expect(graph().nodes[0].config.ratio).toBe("9:16");
+  fireEvent.change(screen.getByLabelText("App"), {
+    target: { value: "00000000-0000-4000-8000-000000000001" },
+  });
+  expect(graph().nodes[0].type).toBe("app");
+  expect(graph().nodes[0].config.appVersionId).toBe(
+    "00000000-0000-4000-8000-000000000001"
+  );
+  expect(graph().nodes[0].config.builtinAppId).toBeUndefined();
 });

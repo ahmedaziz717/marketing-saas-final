@@ -37,6 +37,8 @@ import {
   ArrowDownToLine,
 } from "lucide-react";
 import { Link } from "wouter";
+import { WorkflowAppPicker } from "./WorkflowAppPicker";
+import { selectWorkflowApp } from "@shared/workflowAppCatalog";
 import { WorkflowBusinessSettings } from "./WorkflowBusinessSettings";
 import { workflowSections, workflowValueText } from "@shared/workflowPlatform";
 import { toast } from "sonner";
@@ -825,6 +827,26 @@ export function WorkflowCanvas({
                   }
                 />
               </label>
+              {(selectedNode.type === "app" ||
+                selectedNode.config.builtinAppId) && (
+                <WorkflowAppPicker
+                  node={selectedNode}
+                  organizationId={organizationId}
+                  disabled={busy}
+                  onSelect={selection => {
+                    const result = selectWorkflowApp(
+                      graphRef.current,
+                      selectedNode.id,
+                      selection
+                    );
+                    change(result.graph);
+                    if (result.removed)
+                      toast.info(
+                        `${result.removed} incompatible connection(s) removed. You can undo this change.`
+                      );
+                  }}
+                />
+              )}
               {[
                 "app",
                 "app_input",
