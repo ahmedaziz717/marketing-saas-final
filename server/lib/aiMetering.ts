@@ -16,11 +16,7 @@ import {
   textActionForOperation,
   textActionRate,
 } from "../../shared/textActionEstimate";
-import {
-  estimatedActionCredits,
-  retailCredits,
-  rateCreditPolicy,
-} from "../../shared/aiCredits";
+import { estimatedActionCredits } from "../../shared/aiCredits";
 import {
   estimateCostMicros,
   estimateImageCostMicros,
@@ -31,6 +27,7 @@ export const aiScope = new AsyncLocalStorage<{
   organizationId: number;
   actorUserId: number;
   operation: string;
+  quotedCredits?: number;
 }>();
 export async function creditState(
   db: any,
@@ -100,6 +97,12 @@ export async function meteredCall<T>(
     id = randomUUID(),
     period = utcCreditMonth(),
     createdAtMs = Date.now();
+  if (scope?.quotedCredits != null && scope.quotedCredits !== credits)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "The credit price changed. Review a new quote before generating.",
+    });
   const start = async (tx: any) => {
     if (scope) {
       const state = await creditState(tx, scope.organizationId, period);
@@ -199,12 +202,9 @@ export async function meteredCall<T>(
     kind === "image"
       ? estimateImageCostMicros(rate, usage)
       : estimateCostMicros(rate, input, output, cached);
-  const finalCredits =
-    cost == null
-      ? credits
-      : rate.billingMode === "cost"
-        ? retailCredits(cost, rateCreditPolicy(rate))
-        : credits;
+  // The accepted action price is fixed. Provider usage affects our cost and
+  // margin, never a second customer deduction after the action completes.
+  const finalCredits = credits;
   const settle = async (tx: any) => {
     await tx
       .update(aiUsage)
@@ -224,19 +224,6 @@ export async function meteredCall<T>(
         finishedAtMs: Date.now(),
       })
       .where(eq(aiUsage.id, id));
-    if (scope && credits !== finalCredits)
-      await tx
-        .insert(creditLedger)
-        .values({
-          id: `settle:${id}`,
-          organizationId: scope.organizationId,
-          period,
-          amount: credits - finalCredits,
-          reason: "Settled against provider usage and saved markup",
-          actorUserId: scope.actorUserId,
-          createdAtMs: Date.now(),
-        })
-        .onConflictDoNothing();
   };
   if (scope)
     await withOrganizationTransaction(db, scope.organizationId, settle);

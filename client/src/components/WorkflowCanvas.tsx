@@ -1487,7 +1487,7 @@ function NodeCredits({
       className="ml-auto whitespace-nowrap text-[10px] text-violet-600 dark:text-violet-300"
       title={
         quote.error?.message ||
-        "Estimated credits. Final usage is settled after generation."
+        "Credits are fixed for each accepted step. A changed price stops the step for a new quote."
       }
     >
       {quote.data

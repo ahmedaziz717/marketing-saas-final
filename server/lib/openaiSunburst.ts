@@ -1,10 +1,11 @@
+import { prepareImageRequest } from "./imageRequest";
+import { providerRequestRate, assertAcceptedPrice } from "./providerQuote";
 import { meteredCall } from "./aiMetering";
-import { storagePut, storageClient, assetBucket } from "../storage";
+import { storagePut } from "../storage";
 import { libraryDatabase } from "./assetLibrary";
-import { imageModelQuote } from "./modelCatalog";
+import { imageModelQuote, resolveModel } from "./modelCatalog";
 import { imageProviderSize } from "../../shared/imageActionEstimate";
 import {
-  modelRequestBody,
   referenceCapacity,
   generationModel,
   DEFAULT_IMAGE_MODEL,
@@ -51,6 +52,13 @@ export function requireSunburstCredential() {
 }
 
 export async function generateSunburstImage(options: GenerateSunburstOptions) {
+  const resolvedModel = options.rateSnapshot
+    ? generationModel(options.modelId ?? DEFAULT_IMAGE_MODEL)!
+    : await resolveModel(await libraryDatabase(), options.modelId, "image");
+  const preparedRequest =
+    resolvedModel?.provider === "higgsfield"
+      ? await prepareImageRequest(resolvedModel, options)
+      : undefined;
   const quote = options.rateSnapshot
     ? {
         model: generationModel(options.modelId ?? DEFAULT_IMAGE_MODEL)!,
@@ -68,7 +76,8 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
                 options.modelOptions?.quality ?? options.quality ?? "medium",
             }
           : options.modelOptions,
-        options.outputSize
+        options.outputSize,
+        preparedRequest
       );
   if (
     !quote.model ||
@@ -79,7 +88,7 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
     throw new Error("The saved model price does not match this request.");
   const model = quote.model;
   if (model.provider === "higgsfield")
-    return generateHiggsfieldImage(options, quote);
+    return generateHiggsfieldImage(options, quote, preparedRequest!);
   const apiKey = requireSunburstCredential();
   const sources = options.originalImages ?? [];
   if (sources.length > 16)
@@ -194,32 +203,22 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
 
 async function generateHiggsfieldImage(
   options: GenerateSunburstOptions,
-  quote: Awaited<ReturnType<typeof imageModelQuote>>
+  quote: Awaited<ReturnType<typeof imageModelQuote>>,
+  request: Record<string, unknown>
 ) {
   const sources = options.originalImages ?? [];
   if (sources.length > referenceCapacity(quote.model))
     throw new Error(
       `${quote.model.name} supports ${referenceCapacity(quote.model)} reference images. Choose another model for this creative.`
     );
-  const urls: string[] = [];
-  for (const [index, source] of Array.from(sources.entries())) {
-    const stored = await storagePut(
-      `${options.storagePrefix}/reference-${index}.png`,
-      Buffer.from(source.b64Json, "base64"),
-      source.mimeType || "image/png"
-    );
-    const { data, error } = await storageClient()
-      .storage.from(assetBucket())
-      .createSignedUrl(stored.key, 86400);
-    if (error || !data?.signedUrl)
-      throw new Error("Could not prepare the reference image.");
-    urls.push(data.signedUrl);
-  }
-  const request = modelRequestBody(quote.model, {
-    prompt: options.prompt,
-    images: urls,
-    options: options.modelOptions ?? {},
-  });
+  const currentRate = await providerRequestRate(
+    quote.rate,
+    quote.model.providerModel,
+    request
+  );
+  assertAcceptedPrice(quote.rate, currentRate);
+  // Save account-specific cost, with the accepted retail policy unchanged.
+  quote.rate = currentRate;
   const bytes = await meteredCall(
     "higgsfield",
     quote.model.providerModel,
@@ -229,7 +228,7 @@ async function generateHiggsfieldImage(
       try {
         await context.record({
           idempotencyKey: context.id,
-          costBasis: "published_rate_estimate",
+          costBasis: "provider_account_estimate",
         });
         let result = await submitHiggsfield(
           quote.model.providerModel,
@@ -240,7 +239,7 @@ async function generateHiggsfieldImage(
         await context.record({
           providerRequestId: requestId,
           idempotencyKey: context.id,
-          costBasis: "published_rate_estimate",
+          costBasis: "provider_account_estimate",
         });
         const deadline = Date.now() + 8 * 60 * 1000;
         while (
@@ -269,7 +268,7 @@ async function generateHiggsfieldImage(
           value: output,
           usage: {
             providerRequestId: requestId,
-            costBasis: "published_rate_estimate",
+            costBasis: "provider_account_estimate",
           },
         };
       } catch (error) {

@@ -279,6 +279,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         organizationId: run.organizationId,
         actorUserId: run.actorUserId,
         operation: `workflow.${node.type}`,
+        quotedCredits: run.creditsByNode[current],
       },
       () => executeStep(db, run, node, text, imageKeys, input)
     );

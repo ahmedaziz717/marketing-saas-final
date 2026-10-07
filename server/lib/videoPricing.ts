@@ -1,3 +1,6 @@
+import { providerRequestRate } from "./providerQuote";
+import { prepareVideoRequest } from "./videoRequest";
+import { videoEndpoint } from "../../shared/videoCreation";
 import { and, eq } from "drizzle-orm";
 import { providerRates } from "../../drizzle/platformSchema";
 import type { ProviderRate } from "../../shared/platformAdmin";
@@ -66,6 +69,21 @@ export async function videoRate(
     "video",
     row?.config ?? defaultVideoRates.find(rate => rate.model === model)!
   );
+}
+/** The request returned here is persisted and sent unchanged by the worker. */
+export async function quotedVideoRequest(
+  db: LibraryDatabase | LibraryTransaction,
+  organizationId: number,
+  setup: VideoSetup,
+  refs: VideoReference[]
+) {
+  const request = await prepareVideoRequest(organizationId, setup, refs);
+  const rate = await providerRequestRate(
+    await videoRate(db, setup),
+    videoEndpoint(setup),
+    request
+  );
+  return { request, rate, quote: videoQuote(setup, refs, rate) };
 }
 export function videoSeconds(setup: VideoSetup, refs: VideoReference[]) {
   const source = !setup.sourceVideoKey
@@ -142,7 +160,10 @@ export function videoQuote(
     costMicros,
     durationSeconds: seconds.output,
     sourceSeconds: seconds.source,
-    videoTokens: rate.outputPerMillion == null ? null : videoTokens,
+    videoTokens:
+      rate.perRequestUsd != null || rate.outputPerMillion == null
+        ? null
+        : videoTokens,
     estimated: true as const,
   };
 }

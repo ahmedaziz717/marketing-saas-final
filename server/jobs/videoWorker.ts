@@ -1,13 +1,11 @@
-import { readLifestylePortrait } from "../lib/lifestylePeople";
+import { prepareVideoRequest } from "../lib/videoRequest";
+import { providerRequestRate } from "../lib/providerQuote";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, gte, isNotNull, desc } from "drizzle-orm";
-import { aiUsage, creditLedger } from "../../drizzle/platformSchema";
+import { aiUsage } from "../../drizzle/platformSchema";
 import { brandAssets, brandKits } from "../../drizzle/schema";
 import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
-import {
-  activeVideoStatuses,
-  videoRequestBody,
-} from "../../shared/videoCreation";
+import { activeVideoStatuses } from "../../shared/videoCreation";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
 import { studioRoles } from "../../shared/assetWorkflow";
@@ -175,7 +173,8 @@ async function recordProviderResult(
           costMicros: quote?.costMicros ?? null,
           usage: {
             providerRequestId: result.request_id,
-            costBasis: "published_rate_estimate",
+            costBasis:
+              usage?.rateSnapshot?.costBasis ?? "published_rate_estimate",
             source: "higgsfield",
             ...quote,
           },
@@ -275,49 +274,23 @@ async function saveOutput(db: LibraryDatabase, job: VideoJob) {
       await tx
         .update(aiUsage)
         .set({
-          credits:
-            usage.rateSnapshot.billingMode === "cost"
-              ? quote.credits
-              : usage.credits,
+          credits: job.credits,
           costMicros: quote.costMicros,
           usage: {
             ...usage.usage,
             ...quote,
             reservedCredits: job.credits,
             retailMicros:
-              (usage.rateSnapshot.billingMode === "cost"
-                ? quote.credits
-                : usage.credits) *
-              (usage.rateSnapshot.creditValueMicros ?? 10000),
-            credits:
-              usage.rateSnapshot.billingMode === "cost"
-                ? quote.credits
-                : usage.credits,
+              job.credits * (usage.rateSnapshot.creditValueMicros ?? 10000),
+            credits: job.credits,
             outputWidth: info.width,
             outputHeight: info.height,
             outputDurationSeconds: info.durationSeconds,
-            costBasis: "published_rate_estimate",
+            costBasis:
+              usage?.rateSnapshot?.costBasis ?? "published_rate_estimate",
           },
         })
         .where(eq(aiUsage.id, job.id));
-      if (
-        usage.rateSnapshot.billingMode === "cost" &&
-        quote.credits !== job.credits
-      ) {
-        await tx
-          .insert(creditLedger)
-          .values({
-            id: `settle:${job.id}`,
-            organizationId: job.organizationId,
-            actorUserId: job.actorUserId,
-            period: usage.period,
-            amount: job.credits - quote.credits,
-            reason: "Settled video dimensions, duration and saved markup",
-            createdAtMs: Date.now(),
-          })
-          .onConflictDoNothing();
-        job.credits = quote.credits;
-      }
     }
     await tx
       .update(videoJobs)
@@ -416,41 +389,53 @@ export async function processNextVideoJob(db: LibraryDatabase) {
         );
         return true;
       }
-      const signed = new Map<string, string>();
-      for (const reference of job.references) {
-        let storageKey = reference.storageKey;
-        if (reference.key.startsWith("person_library:")) {
-          const portrait = await readLifestylePortrait(
-            reference.key.slice("person_library:".length)
-          );
-          storageKey = `org/${job.organizationId}/video-references/${job.id}/${reference.fingerprint}.png`;
-          const uploaded = await storageClient()
-            .storage.from(assetBucket())
-            .upload(storageKey, Buffer.from(portrait.b64Json, "base64"), {
-              contentType: "image/png",
-              upsert: true,
-            });
-          if (uploaded.error) throw new Error("Portrait storage unavailable");
-        }
-        const { data, error } = await storageClient()
-          .storage.from(assetBucket())
-          .createSignedUrl(normalizeStorageKey(storageKey), 86400);
-        if (error || !data?.signedUrl)
-          throw new Error("Reference storage unavailable");
-        signed.set(reference.key, data.signedUrl);
+      const request =
+        job.requestBody ??
+        (await prepareVideoRequest(
+          job.organizationId,
+          job.setup,
+          job.references
+        ));
+      const [usage] = await db
+        .select()
+        .from(aiUsage)
+        .where(eq(aiUsage.id, job.id));
+      if (!usage?.rateSnapshot)
+        throw new Error("The saved credit quote is unavailable.");
+      // Includes legacy queued jobs. Recheck before paid submission; never silently
+      // increase the accepted charge if the account price/settings have changed.
+      try {
+        const currentRate = await providerRequestRate(
+          usage.rateSnapshot,
+          job.endpoint!,
+          request
+        );
+        const currentCredits = videoQuote(
+          job.setup,
+          job.references,
+          currentRate
+        ).credits;
+        if (currentCredits !== job.credits)
+          throw new Error("Credit price changed");
+        await db
+          .update(aiUsage)
+          .set({ rateSnapshot: currentRate })
+          .where(eq(aiUsage.id, job.id));
+      } catch {
+        await terminal(
+          db,
+          job,
+          "failed",
+          "The credit quote could not be confirmed. Request a new quote and try again. AI credits refunded."
+        );
+        return true;
       }
       // Persist the exact URLs and body before the first network submission.
       // Idempotent replays must not regenerate signed URLs or change URL ordering.
       await release(db, job, {
         status: "submitting",
-        requestBody: videoRequestBody(
-          job.setup,
-          job.references
-            .filter(ref => ref.key !== job!.setup.sourceVideoKey)
-            .map(ref => signed.get(ref.key)!),
-          signed.get(job.setup.sourceVideoKey ?? "")
-        ),
-        requestPreparedAtMs: Date.now(),
+        requestBody: request,
+        requestPreparedAtMs: job.requestPreparedAtMs ?? Date.now(),
         attempts: 0,
         nextPollAtMs: 0,
       });

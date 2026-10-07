@@ -126,7 +126,11 @@ export function videoProviderFailureMessage(result: HiggsfieldResult) {
     : "The video service reported a generation failure without a detailed reason. AI credits refunded.";
 }
 
-async function apiRequest(url: string, init: RequestInit = {}) {
+async function apiRequest(
+  url: string,
+  init: RequestInit = {},
+  estimate = false
+) {
   const key = credential();
   if (!key)
     throw new HiggsfieldError(
@@ -173,12 +177,48 @@ async function apiRequest(url: string, init: RequestInit = {}) {
   }
   if (response.status === 202 && url.endsWith("/cancel")) return null;
   try {
-    return resultSchema.parse(await response.json());
+    const json = await response.json();
+    return estimate ? estimateSchema.parse(json) : resultSchema.parse(json);
   } catch {
     throw new HiggsfieldError(
       0,
       true,
       "The video service returned an unreadable status. We will check again."
+    );
+  }
+}
+// Account-specific estimates include applicable provider discounts. Never use
+// provider credits as EL credits, or fall back to a catalog range on failure.
+const estimateSchema = z.object({
+  usd: z
+    .union([z.string().regex(/^\d+(?:\.\d+)?$/), z.number()])
+    .transform(Number)
+    .pipe(z.number().finite().nonnegative().max(100000)),
+});
+export async function estimateHiggsfield(
+  endpoint: string,
+  body: Record<string, unknown>
+): Promise<{ costMicros: number; quotedAtMs: number }> {
+  if (
+    !generationModels.some(
+      m => m.provider === "higgsfield" && m.providerModel === endpoint
+    )
+  )
+    throw new Error("Unsupported generation operation");
+  try {
+    const result = (await apiRequest(
+      `${API}/estimate/${endpoint}`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+      true
+    )) as z.infer<typeof estimateSchema>;
+    return { costMicros: Math.round(result.usd * 1e6), quotedAtMs: Date.now() };
+  } catch {
+    // Estimation does not submit generation and never creates a billable job.
+    throw new Error(
+      "A credit quote is unavailable for these settings. Check the required inputs or try again. No generation was submitted."
     );
   }
 }
@@ -198,10 +238,12 @@ export async function submitHiggsfield(
     method: "POST",
     body: JSON.stringify(body),
     headers: { "Idempotency-Key": id },
-  }))!;
+  }))! as HiggsfieldResult;
 }
 export async function pollHiggsfield(id: string, url: string) {
-  const result = (await apiRequest(requestUrl(url, id, "status")))!;
+  const result = (await apiRequest(
+    requestUrl(url, id, "status")
+  ))! as HiggsfieldResult;
   if (result.request_id !== id)
     throw new HiggsfieldError(
       0,

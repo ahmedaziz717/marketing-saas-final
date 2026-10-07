@@ -1,4 +1,9 @@
-import { imageBatchQuote } from "../lib/modelCatalog";
+import { prepareImageRequest } from "../lib/imageRequest";
+import {
+  imageBatchQuote,
+  imageModelQuote,
+  resolveModel,
+} from "../lib/modelCatalog";
 import { creativeImageOutputs } from "../../shared/creativeBuilder";
 import { referenceCapacity, generationModel } from "../../shared/modelCatalog";
 import type { ProviderRate } from "../../shared/platformAdmin";
@@ -447,7 +452,100 @@ export async function runBuilderJob(
   }
 }
 
+/** Price the real references and each output, without submitting generation. */
+export async function builderImageQuote(
+  db: Database,
+  organizationId: number,
+  setup: CreativeSetup,
+  resolved: Awaited<ReturnType<typeof loadInputs>>
+) {
+  const model = await resolveModel(db, setup.modelId, "image");
+  if (model.provider !== "higgsfield")
+    return imageBatchQuote(
+      db,
+      setup.modelId,
+      setup.modelOptions,
+      creativeImageOutputs(setup)
+    );
+  const common = await Promise.all(
+    (resolved.references ?? []).map(r => readGenerationSource(r.storageKey))
+  );
+  if (resolved.logo)
+    common.push(await readGenerationSource(resolved.logo.storageKey));
+  for (const person of selectedPeople(setup)) {
+    if (person.kind === "library")
+      common.push(await readLifestylePortrait(person.id));
+    else {
+      const asset = resolved.personAssets.find(a => a.id === person.assetId);
+      if (!asset) throw new Error("Selected person reference is unavailable");
+      common.push(await readGenerationSource(asset.storageKey));
+    }
+  }
+  const groups =
+    setup.promotionMode === "platform"
+      ? [[]]
+      : setup.productMode === "together"
+        ? [resolved.products]
+        : resolved.products.map(product => [product]);
+  const formats = setup.formatIds
+    .map(id => formatDetails(id)!)
+    .sort((a, b) => b.width * b.height - a.width * a.height);
+  const quotes = [];
+  for (const group of groups) {
+    const sources = [
+      ...(await Promise.all(
+        group.flatMap(p =>
+          p.image ? [readGenerationSource(p.image.storageKey)] : []
+        )
+      )),
+      ...common,
+    ];
+    for (const format of formats) {
+      const request = await prepareImageRequest(model, {
+        prompt: buildCreativePrompt({
+          setup,
+          brand: resolved.brand,
+          products: group,
+          formatId: format.id,
+          hasLogo: !!resolved.logo,
+          adaptMaster: false,
+        }),
+        originalImages: sources,
+        modelOptions: setup.modelOptions,
+        storagePrefix: `org-${organizationId}/image-quotes`,
+      });
+      quotes.push(
+        await imageModelQuote(db, model.id, setup.modelOptions, format, request)
+      );
+    }
+  }
+  if (!quotes.length)
+    throw new Error("Choose an image format and subject first.");
+  return {
+    model,
+    rate: quotes[0].rate,
+    quotes,
+    credits: quotes.reduce((sum, q) => sum + q.credits, 0),
+  };
+}
+
 export const creativeBuilderRouter = router({
+  quote: protectedProcedure
+    .input(organizationInput.extend({ setup: creativeSetupSchema }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editorRoles,
+      ]);
+      const db = (await getDb())!;
+      const resolved = await loadInputs(db, input.organizationId, input.setup);
+      const quote = await builderImageQuote(
+        db,
+        input.organizationId,
+        input.setup,
+        resolved
+      );
+      return { credits: quote.credits, routeId: quote.model.id };
+    }),
   people: protectedProcedure
     .input(organizationInput)
     .query(async ({ ctx, input }) => {
@@ -963,11 +1061,11 @@ export const creativeBuilderRouter = router({
           message: issues.join(" "),
         });
       const resolved = await loadInputs(db, input.organizationId, setup);
-      const generationQuote = await imageBatchQuote(
+      const generationQuote = await builderImageQuote(
         db,
-        setup.modelId,
-        setup.modelOptions,
-        creativeImageOutputs(setup)
+        input.organizationId,
+        setup,
+        resolved
       );
       const productReferences =
         setup.promotionMode === "platform"

@@ -45,6 +45,9 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: [] }) },
     },
     creativeBuilder: {
+      quote: {
+        useQuery: () => ({ data: { credits: 120 }, isFetching: false }),
+      },
       people: { useQuery: () => ({ data: [] }) },
       savePerson: { useMutation: () => ({ mutate: vi.fn() }) },
       options: { useQuery: () => ({ data: api.options, isLoading: false }) },
@@ -379,6 +382,15 @@ describe("Creative Builder controls", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Studio lamp/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Review & generate/ }));
     expect(screen.getByRole("dialog")).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Generate with AI",
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false)
+    );
     fireEvent.click(screen.getByRole("button", { name: "Generate with AI" }));
     await waitFor(() => expect(onGenerated).toHaveBeenCalledOnce());
     expect(api.generate.mutateAsync.mock.calls[0][0]).toMatchObject({

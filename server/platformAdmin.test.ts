@@ -137,7 +137,11 @@ it("reserves credits, blocks overspend, refunds failures, retains usage and snap
     estimatedCostMicros: 350,
   } as ProviderRate;
   await admin.saveRate(rate);
-  const scope = { organizationId, actorUserId: 2, operation: "workflow.assistant" };
+  const scope = {
+    organizationId,
+    actorUserId: 2,
+    operation: "workflow.assistant",
+  };
   const run = (f: any) =>
     aiScope.run(scope, () => meteredCall("test", "model", "text", f));
   const provider = vi.fn(async () => ({
@@ -250,7 +254,14 @@ it("prices image usage automatically within the requesting account and snapshots
   expect(saved.costMicros).toBe(38447);
   expect(saved.rateSnapshot.imageInputPerMillion).toBe(8);
   expect(saved.rateSnapshot.sourceUrl).toContain("gpt-image-2.5-sunburst");
-  expect((await creditState(state.db, organizationId)).remaining).toBe(92);
+  expect((await creditState(state.db, organizationId)).remaining).toBe(60);
+  expect(saved.credits).toBe(40);
+  expect(saved.usage.reservedCredits).toBe(40);
+  const ledger = await state.db
+    .select()
+    .from(creditLedger)
+    .where(eq(creditLedger.organizationId, organizationId));
+  expect(ledger.filter((r: any) => r.id.startsWith("settle:"))).toHaveLength(0);
 });
 it("backfills valid historical usage without repricing existing costs or changing credits, and audits once", async () => {
   const { organizationId } = await admin.createAccount({
@@ -415,19 +426,17 @@ it("paginates and filters large account directories without exposing invitation 
       }))
     )
     .returning();
-  await state.db
-    .insert(platformAccounts)
-    .values(
-      inserted.map((row: any, i: number) => ({
-        organizationId: row.id,
-        tierId: "trial",
-        aiPaused: i % 2,
-        enforceCredits: 1,
-        ownerEmail: `scale-${i}@test.com`,
-        notes: "",
-        updatedAtMs: Date.now(),
-      }))
-    );
+  await state.db.insert(platformAccounts).values(
+    inserted.map((row: any, i: number) => ({
+      organizationId: row.id,
+      tierId: "trial",
+      aiPaused: i % 2,
+      enforceCredits: 1,
+      ownerEmail: `scale-${i}@test.com`,
+      notes: "",
+      updatedAtMs: Date.now(),
+    }))
+  );
   const first = await admin.accounts({ search: "Scale fixture" });
   expect(first.total).toBe(61);
   expect(first.items).toHaveLength(50);
@@ -532,4 +541,68 @@ it("keeps the accepted markup on an in-flight request and applies new pricing on
       creditValueMicros: 10000,
     });
   }
+});
+
+it("keeps a fixed action charge when provider token usage exceeds the estimate", async () => {
+  const { organizationId } = await admin.createAccount({
+    name: "Fixed retail",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  const rate: ProviderRate = {
+    provider: "openai",
+    model: "gpt-5.5",
+    kind: "text",
+    credits: 5,
+    billingMode: "cost",
+    estimatedCostMicros: 25000,
+    markupPercent: 100,
+    creditValueMicros: 10000,
+    inputPerMillion: 5,
+    cachedInputPerMillion: 1,
+    outputPerMillion: 30,
+    perRequestUsd: null,
+    note: "Test accepted quote",
+  };
+  await aiScope.run(
+    {
+      organizationId,
+      actorUserId: 2,
+      operation: "fixed-test",
+      quotedCredits: 5,
+    },
+    () =>
+      meteredCall(
+        "openai",
+        "gpt-5.5",
+        "text",
+        async () => ({
+          value: "done",
+          usage: { input_tokens: 10000, output_tokens: 5000 },
+        }),
+        { rateSnapshot: rate }
+      )
+  );
+  const [saved] = await state.db
+    .select()
+    .from(aiUsage)
+    .where(eq(aiUsage.organizationId, organizationId));
+  expect(saved.costMicros).toBe(200000);
+  expect(saved.credits).toBe(5);
+  expect(saved.usage.retailMicros).toBe(50000);
+  expect((await creditState(state.db, organizationId)).remaining).toBe(95);
+  const call = vi.fn(async () => ({ value: "unexpected" }));
+  await expect(
+    aiScope.run(
+      {
+        organizationId,
+        actorUserId: 2,
+        operation: "fixed-test",
+        quotedCredits: 4,
+      },
+      () =>
+        meteredCall("openai", "gpt-5.5", "text", call, { rateSnapshot: rate })
+    )
+  ).rejects.toThrow("credit price changed");
+  expect(call).not.toHaveBeenCalled();
 });

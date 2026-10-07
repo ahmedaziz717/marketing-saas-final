@@ -185,6 +185,11 @@ export const modelsRouter = router({
               ? error.message
               : "Estimate unavailable for these settings.";
         }
+        if (definition.provider === "higgsfield" && actionEstimate)
+          actionEstimate = {
+            ...actionEstimate,
+            basis: "Published reference only — account discounts excluded",
+          };
         return { ...model, actionEstimate, estimateProblem };
       });
       return { policy, models, settings, rates };

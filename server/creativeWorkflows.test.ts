@@ -15,6 +15,25 @@ const state = vi.hoisted(() => ({
   metaApply: vi.fn(),
   metaVerify: vi.fn(),
 }));
+vi.mock("./lib/higgsfield", async original => ({
+  ...(await original<typeof import("./lib/higgsfield")>()),
+  estimateHiggsfield: async () => ({
+    costMicros: 400000,
+    quotedAtMs: Date.now(),
+  }),
+}));
+vi.mock("./storage", async original => ({
+  ...(await original<typeof import("./storage")>()),
+  storageClient: () => ({
+    storage: {
+      from: () => ({
+        createSignedUrl: async (key: string) => ({
+          data: { signedUrl: `https://storage.example.test/${key}` },
+        }),
+      }),
+    },
+  }),
+}));
 vi.mock("./db", () => ({
   getDb: async () => state.db,
   closeDb: async () => {},
@@ -25,6 +44,13 @@ vi.mock("./lib/creativeImages", () => ({
 vi.mock("./lib/openaiSunburst", () => ({
   generateSunburstImage: async (...args: any[]) => {
     const { meteredCall } = await import("./lib/aiMetering");
+    const { imageModelQuote } = await import("./lib/modelCatalog");
+    const quote = await imageModelQuote(
+      state.db,
+      args[0].modelId,
+      args[0].modelOptions,
+      args[0].outputSize
+    );
     return meteredCall(
       "openai",
       "gpt-image-2.5-sunburst",
@@ -32,7 +58,8 @@ vi.mock("./lib/openaiSunburst", () => ({
       async () => ({
         value: await state.image(...args),
         usage: { input_tokens: 100, output_tokens: 200 },
-      })
+      }),
+      { rateSnapshot: quote.rate }
     );
   },
 }));
@@ -341,7 +368,9 @@ it("executes a metered image pipeline, retains draft outputs, and deduplicates a
     [org, "succeeded", "workflow.generate_image"],
   ]);
   const ledger = await state.db.select().from(creditLedger);
-  expect(ledger.reduce((n: number, r: any) => n + r.amount, 0)).toBe(-41);
+  expect(ledger.reduce((n: number, r: any) => n + r.amount, 0)).toBe(
+    -quote.credits
+  );
 });
 it("runs one node with unchanged upstream outputs, but rejects stale upstream results", async () => {
   const { saved } = await queue(pipeline());
@@ -471,7 +500,7 @@ it("pins a durable video child job and reserves video credits only once", async 
   expect(child[0].status).toBe("queued");
   const usage = await state.db.select().from(aiUsage);
   expect(usage).toHaveLength(1);
-  expect(usage[0].credits).toBe(116);
+  expect(usage[0].credits).toBe(80);
   expect(
     (await owner.get({ organizationId: org, id: saved.id })).runs[0].steps.video
       .videoJobId

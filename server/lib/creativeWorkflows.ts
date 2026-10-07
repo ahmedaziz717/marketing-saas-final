@@ -1,3 +1,5 @@
+import { prepareImageRequest } from "./imageRequest";
+import { readGenerationSource } from "./creativeImages";
 import { resolveWorkflowInputs } from "./workflowInputs";
 import {
   generationModel,
@@ -31,9 +33,9 @@ import {
   type LibraryTransaction,
 } from "./assetLibrary";
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
-import { videoQuote, videoRate } from "./videoPricing";
+import { quotedVideoRequest } from "./videoPricing";
 import { REQUIRED_IMAGE_MODEL_ID, REQUIRED_TEXT_MODEL_ID } from "./models";
-import { imageModelQuote } from "./modelCatalog";
+import { imageModelQuote, resolveModel } from "./modelCatalog";
 import { workflowImageSize } from "../../shared/imageActionEstimate";
 import { effectiveRate } from "./creditPricing";
 import {
@@ -119,48 +121,66 @@ export async function workflowNodeCredits(
   organizationId?: number,
   input: WorkflowValue[] = []
 ) {
+  const imageKeys = input
+    .filter(
+      (v): v is Extract<WorkflowValue, { type: "image" | "video" }> => v.type === "image"
+    )
+    .map(v => v.key);
+  const text =
+    [
+      ...input
+        .filter(
+          (v): v is Extract<WorkflowValue, { type: "text" }> =>
+            v.type === "text"
+        )
+        .map(v => v.text),
+      node.config.text,
+    ]
+      .filter(Boolean)
+      .join("\n\n") || "Workflow generation";
   if (node.type === "generate_video") {
+    if (!organizationId)
+      throw new Error("Select a workspace before requesting a quote.");
     const source = input.find(v => v.type === "video");
     const key =
-      source && source.type === "video"
-        ? source.key
-        : node.config.sourceVideoKey;
-    const setup = workflowVideoSetup(node, "Workflow prompt", [], key);
-    const refs =
-      key && organizationId
-        ? await resolveVideoReferences(db, organizationId, {
-            ...defaultVideoSetup,
-            mode: "edit",
-            prompt: "Workflow source",
-            sourceVideoKey: key,
-          })
-        : [];
+      source?.type === "video" ? source.key : node.config.sourceVideoKey;
+    const setup = workflowVideoSetup(node, text, imageKeys, key);
     const model = generationModel(node.config.modelId || "");
-    if (!key && model && requiresVideo(model)) {
-      setup.sourceVideoKey = "asset:1";
-      refs.push({
-        key: "asset:1",
-        storageKey: "",
-        fingerprint: "",
-        name: "Estimated upstream video",
-        mimeType: "video/mp4",
-        durationSeconds: node.config.duration,
-        width: 1280,
-        height: 720,
-      });
-    }
-    return videoQuote(setup, refs, await videoRate(db, setup)).credits;
+    if (!key && model && requiresVideo(model))
+      throw new Error(
+        "Run the source video step first, then quote this step with its actual video input."
+      );
+    const refs = await resolveVideoReferences(db, organizationId, setup);
+    return (await quotedVideoRequest(db, organizationId, setup, refs)).quote
+      .credits;
   }
   if (!isGenerationNode(node.type)) return 0;
-  if (node.type === "generate_image")
+  if (node.type === "generate_image") {
+    const model = await resolveModel(db, node.config.modelId, "image");
+    let request: Record<string, unknown> | undefined;
+    if (model.provider === "higgsfield") {
+      if (!organizationId)
+        throw new Error("Select a workspace before requesting a quote.");
+      const refs = await workflowImageReferences(db, organizationId, imageKeys);
+      request = await prepareImageRequest(model, {
+        prompt: text,
+        originalImages: await Promise.all(
+          refs.map(ref => readGenerationSource(ref.storageKey))
+        ),
+        modelOptions: node.config.modelOptions,
+        storagePrefix: `org-${organizationId}/workflow-quotes`,
+      });
+    }
     return (
       await imageModelQuote(
         db,
-        node.config.modelId,
+        model.id,
         node.config.modelOptions,
-        workflowImageSize(node.config.ratio)
+        workflowImageSize(node.config.ratio),
+        request
       )
     ).credits;
+  }
   const kind = "text",
     model = REQUIRED_TEXT_MODEL_ID;
   return estimatedActionCredits(

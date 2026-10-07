@@ -15,6 +15,7 @@ import {
 const state = vi.hoisted(() => ({
   db: null as any,
   submit: vi.fn(),
+  estimate: vi.fn(),
   poll: vi.fn(),
   cancel: vi.fn(),
   download: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("./db", () => ({
 vi.mock("./lib/higgsfield", async original => ({
   ...(await original<typeof import("./lib/higgsfield")>()),
   submitHiggsfield: (...args: any[]) => state.submit(...args),
+  estimateHiggsfield: (...args: any[]) => state.estimate(...args),
   pollHiggsfield: (...args: any[]) => state.poll(...args),
   cancelHiggsfield: (...args: any[]) => state.cancel(...args),
   downloadVideo: (...args: any[]) => state.download(...args),
@@ -284,6 +286,11 @@ beforeEach(async () => {
     .update(products)
     .set({ status: "approved" })
     .where(eq(products.id, productId));
+  state.estimate.mockReset();
+  state.estimate.mockImplementation(async (endpoint: string) => ({
+    costMicros: endpoint.endsWith("video-edit") ? 2775000 : 2311200,
+    quotedAtMs: Date.now(),
+  }));
   state.submit.mockReset();
   state.poll.mockReset();
   state.cancel.mockReset();
@@ -722,7 +729,7 @@ describe("durable video generation", () => {
       });
     await tick();
     await tick();
-    expect(state.signed).toHaveBeenCalledTimes(1);
+    expect(state.signed).toHaveBeenCalledTimes(2);
     expect(state.submit).toHaveBeenCalledTimes(2);
     expect(state.submit.mock.calls[0]).toEqual(state.submit.mock.calls[1]);
     expect(state.submit.mock.calls[0][2]).toBe(job.id);
@@ -754,13 +761,60 @@ describe("durable video generation", () => {
       credits: 463,
       costMicros: 2311200,
     });
-    expect(usage.usage.costBasis).toBe("published_rate_estimate");
+    expect(usage.usage.costBasis).toBe("provider_account_estimate");
     expect(usage.outputTokens).toBeNull();
     expect(await tick()).toBe(false);
     expect(state.upload).toHaveBeenCalledTimes(1);
     const privateRow = (await state.db.select().from(videoJobs))[0];
     expect(privateRow.requestBody).toBeNull();
     expect(privateRow.outputUrl).toBeNull();
+  });
+  it("keeps the account quote when delivered dimensions would previously increase the price", async () => {
+    state.estimate.mockResolvedValue({
+      costMicros: 870000,
+      quotedAtMs: Date.now(),
+    });
+    const job = await queued({
+      ...setup(),
+      resolution: "480p",
+      aspectRatio: "1:1",
+    });
+    expect(job.credits).toBe(174);
+    await tick();
+    state.submit.mockResolvedValue({
+      ...accepted,
+      status: "completed",
+      video: { url: "https://cdn.example.test/large.mp4" },
+    });
+    await tick();
+    await tick();
+    const [usage] = await state.db.select().from(aiUsage);
+    expect(usage.credits).toBe(174);
+    expect(usage.costMicros).toBe(870000);
+    expect(usage.usage.outputWidth).toBe(1280);
+    const ledger = await state.db.select().from(creditLedger);
+    expect(ledger.map((r: any) => r.amount)).toEqual([-174]);
+    const [submittedEndpoint, submittedBody] = state.submit.mock.calls[0];
+    expect(state.estimate).toHaveBeenLastCalledWith(
+      submittedEndpoint,
+      submittedBody
+    );
+  });
+  it("refunds a changed or unavailable queued quote without a paid provider submission", async () => {
+    const job = await queued();
+    state.estimate.mockResolvedValue({
+      costMicros: 10000000,
+      quotedAtMs: Date.now(),
+    });
+    await tick();
+    expect(state.submit).not.toHaveBeenCalled();
+    expect(
+      (await owner.video.get({ organizationId: org, id: job.id })).status
+    ).toBe("failed");
+    const ledger = await state.db.select().from(creditLedger);
+    expect(ledger.reduce((sum: number, r: any) => sum + r.amount, 0)).toBe(0);
+    await tick();
+    expect(await state.db.select().from(creditLedger)).toHaveLength(2);
   });
   it("cancels an unsubmitted job and refunds once", async () => {
     const job = await queued();

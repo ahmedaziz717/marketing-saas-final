@@ -62,10 +62,10 @@ export function CreditBalance({ organizationId }: { organizationId: number }) {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Estimates appear before generation. Token-based actions settle
-                from actual usage; video and third-party image costs use
-                provider price estimates. Failed provider requests are refunded.
-                Monthly credits reset at the start of each month (UTC).
+                Credits appear before generation and the accepted action price
+                is fixed. There is no extra deduction after completion.
+                Confirmed provider failures are refunded. Monthly credits reset
+                at the start of each month (UTC).
               </p>
               {!state.enforced && (
                 <p className="text-xs text-muted-foreground">

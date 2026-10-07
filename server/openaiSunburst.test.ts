@@ -85,3 +85,43 @@ describe("direct GPT Image 2.5 Sunburst client", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+it("checks the final Higgsfield image request before any paid submission", async () => {
+  vi.stubEnv("HF_API_KEY", "test-id:test-secret");
+  const model = generationModel("higgsfield:recraft/v4.1/text-to-image")!;
+  const request = vi.fn(
+    async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ usd: "0.9" }))
+  );
+  vi.stubGlobal("fetch", request);
+  try {
+    await expect(
+      generateSunburstImage({
+        modelId: model.id,
+        rateSnapshot: {
+          ...defaultModelRate(model),
+          perRequestUsd: 0.2,
+          markupPercent: 100,
+          creditValueMicros: 10000,
+        },
+        modelOptions: { aspect_ratio: "9:16" },
+        prompt: "The actual creative prompt",
+        outputSize: { width: 1080, height: 1920, background: "#ffffff" },
+        storagePrefix: "org-1/creatives/7",
+      })
+    ).rejects.toThrow("credit price changed");
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0]).toBe(
+      "https://api.higgsfield.ai/estimate/recraft/v4.1/text-to-image"
+    );
+    const body = JSON.parse(String((request.mock.calls[0] as any)[1].body));
+    expect(body).toMatchObject({
+      prompt: "The actual creative prompt",
+      aspect_ratio: "9:16",
+    });
+    expect(mocked.put).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  }
+});

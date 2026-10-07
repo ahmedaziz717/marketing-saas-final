@@ -27,7 +27,7 @@ import {
   finishVideoFailure,
   validateVideoPeople,
 } from "../lib/videoJobs";
-import { videoQuote, videoRate } from "../lib/videoPricing";
+import { quotedVideoRequest } from "../lib/videoPricing";
 import { listVideoCatalogImages } from "../lib/videoCatalog";
 import { draftVideoPrompt } from "../lib/videoPrompt";
 import { categorizeGenerationError } from "../lib/generation";
@@ -182,9 +182,13 @@ export const videoRouter = router({
           db,
           input.organizationId,
           input.setup
-        ),
-        rate = await videoRate(db, input.setup);
-      const quote = videoQuote(input.setup, refs, rate);
+        );
+      const { quote } = await quotedVideoRequest(
+        db,
+        input.organizationId,
+        input.setup,
+        refs
+      );
       return { credits: quote.credits, durationSeconds: quote.durationSeconds };
     }),
   generate: protectedProcedure
@@ -212,6 +216,12 @@ export const videoRouter = router({
         db,
         input.organizationId,
         initial.setup
+      );
+      const { request, rate, quote } = await quotedVideoRequest(
+        db,
+        input.organizationId,
+        initial.setup,
+        refs
       );
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const job = await getVideoJob(tx, input.organizationId, input.id);
@@ -251,8 +261,6 @@ export const videoRouter = router({
               "This workspace already has three video requests in progress. Wait for one to finish.",
           });
         await validateVideoReferences(tx, { ...job, references: refs });
-        const rate = await videoRate(tx, job.setup),
-          quote = videoQuote(job.setup, refs, rate);
         if (quote.credits !== input.quotedCredits)
           throw new TRPCError({
             code: "CONFLICT",
@@ -301,6 +309,8 @@ export const videoRouter = router({
             status: "queued",
             actorUserId: ctx.user.id,
             endpoint: videoEndpoint(job.setup),
+            requestBody: request,
+            requestPreparedAtMs: now,
             references: refs,
             credits: quote.credits,
             revision: job.revision + 1,
@@ -338,7 +348,11 @@ export const videoRouter = router({
               code: "PRECONDITION_FAILED",
               message: "This request can no longer be canceled.",
             });
-          if (job.status === "queued" && !job.leaseOwner && !job.requestBody)
+          if (
+            job.status === "queued" &&
+            !job.leaseOwner &&
+            !job.providerRequestId
+          )
             await finishVideoFailure(
               tx,
               job,

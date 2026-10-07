@@ -45,6 +45,11 @@ export const rateInput = z.object({
   pricingCheckedAt: z.number().optional(),
   pricingVerifiedAt: z.number().optional(),
   pricingError: z.string().optional(),
+  costBasis: z
+    .enum(["provider_account_estimate", "published_rate_estimate"])
+    .optional(),
+  quotedAtMs: z.number().int().nonnegative().optional(),
+  requestHash: z.string().max(64).optional(),
   pricingVersion: z.string().max(100).optional(),
   longContextThreshold: z.number().int().positive().nullable().optional(),
   longContextInputMultiplier: z.number().positive().max(100).optional(),

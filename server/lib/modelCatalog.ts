@@ -1,3 +1,4 @@
+import { providerRequestRate } from "./providerQuote";
 import { videoQuote } from "./videoPricing";
 import {
   defaultVideoSetup,
@@ -12,6 +13,7 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
   modelDefaults,
+  modelRequestBody,
   modelOptionsProblem,
   modelVideoMode,
   requiresVideo,
@@ -164,7 +166,9 @@ export async function modelRate(
     throw new Error("This model requires verified pricing before generation.");
   const problem = modelOptionsProblem(model, options);
   if (problem) throw new Error(problem);
-  return configuredModelRate(model, rate, options);
+  return model.provider === "higgsfield"
+    ? rate
+    : configuredModelRate(model, rate, options);
 }
 export function configuredModelRate(
   model: ModelDefinition,
@@ -222,11 +226,12 @@ export async function imageModelQuote(
   db: Database,
   id?: string,
   options: ModelOptions = {},
-  outputSize?: ImageOutputSize
+  outputSize?: ImageOutputSize,
+  request?: Record<string, unknown>
 ) {
   const model = await resolveModel(db, id, "image");
   let rate = await modelRate(db, model, options);
-  if (outputSize)
+  if (outputSize && model.provider === "openai")
     rate = configuredModelRate(
       model,
       rate,
@@ -237,6 +242,17 @@ export async function imageModelQuote(
         outputSize.height
       )
     );
+  if (model.provider === "higgsfield")
+    rate = await providerRequestRate(
+      rate,
+      model.providerModel,
+      request ??
+        modelRequestBody(model, {
+          prompt: "Image generation",
+          images: [],
+          options,
+        })
+    );
   return { model, rate, credits: estimatedActionCredits(rate) };
 }
 export async function imageBatchQuote(
@@ -245,16 +261,13 @@ export async function imageBatchQuote(
   options: ModelOptions = {},
   outputs: ImageOutputSize[]
 ) {
-  const base = await imageModelQuote(db, id, options);
-  const quotes = outputs.map(output => {
-    const rate = configuredModelRate(
-      base.model,
-      base.rate,
-      options,
-      imageProviderSize(base.model.providerModel, output.width, output.height)
-    );
-    return { rate, credits: estimatedActionCredits(rate) };
-  });
+  const quotes = [];
+  // Quote each provider canvas separately; do not reuse a square quote for a
+  // landscape/portrait output. Model-specific request options are preserved.
+  for (const output of outputs)
+    quotes.push(await imageModelQuote(db, id, options, output));
+  const base = quotes[0];
+  if (!base) throw new Error("Choose at least one image output.");
   return {
     model: base.model,
     rate: base.rate,
@@ -262,6 +275,7 @@ export async function imageBatchQuote(
     credits: quotes.reduce((sum, quote) => sum + quote.credits, 0),
   };
 }
+
 export async function syncOpenAIModelAvailability(db: Database) {
   if (!ENV.openAiApiKey)
     throw new Error("OpenAI credentials are not configured.");
@@ -490,7 +504,10 @@ export async function publicModelCatalog(db: Database) {
           markupPercent: base.markupPercent ?? policy.markupPercent,
           creditValueMicros: policy.creditValueMicros,
         } satisfies ProviderRate;
-        credits = defaultModelActionQuote(model, rate).credits;
+        // Account discounts and request-dependent costs require a real quote.
+        // Never advertise public list-price credits as this customer's price.
+        if (model.provider !== "higgsfield")
+          credits = defaultModelActionQuote(model, rate).credits;
       } catch {
         reason ||= "Pricing verification required";
       }

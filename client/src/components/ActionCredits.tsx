@@ -17,7 +17,7 @@ export function ActionCredits({
   return (
     <span
       className="whitespace-nowrap text-[11px] font-normal opacity-75"
-      title="Estimated credits for this AI request. Final credits use the provider's reported token usage."
+      title="Credits for this AI request are fixed when it starts. No additional charge after completion."
     >
       {balance.data
         ? `≈ ${((balance.data.textEstimates?.[textActionForOperation(operation)] ?? balance.data.textEstimate) * requests).toLocaleString()} credits`

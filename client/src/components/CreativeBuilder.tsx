@@ -111,15 +111,14 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   );
   const logo = logos.find(asset => asset.id === setup.logoAssetId);
   const count = outputCount(setup);
-  const creditQuote = trpc.models.imageQuote.useQuery(
-    {
-      organizationId: organizationId!,
-      modelId: setup.modelId,
-      options: setup.modelOptions,
-      count: Math.max(1, count),
-      outputs: count > 0 ? creativeImageOutputs(setup) : undefined,
-    },
-    { enabled: !!organizationId && count > 0, retry: false }
+  const [quoteSetup, setQuoteSetup] = useState(setup);
+  useEffect(() => {
+    const timer = setTimeout(() => setQuoteSetup(setup), 600);
+    return () => clearTimeout(timer);
+  }, [setup]);
+  const creditQuote = trpc.creativeBuilder.quote.useQuery(
+    { organizationId: organizationId!, setup: quoteSetup },
+    { enabled: !!organizationId && count > 0, retry: false, staleTime: 30000 }
   );
   const issues = generationSetupIssues(setup);
   if (
@@ -1578,16 +1577,18 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 : "Calculating credits…"}
           </p>
           <p className="text-xs text-muted-foreground">
-            Image credits reflect your model, quality, and selected sizes.
-            OpenAI estimates assume 1,000 prompt tokens before reference-image
-            input; final credits follow actual usage. Other providers use
-            published cost estimates.
+            Image credits reflect your model, quality, and selected sizes. The
+            accepted credits are fixed for each image. If a queued action needs
+            a different price, it stops before generation for a new quote.
+            Confirmed provider failures are refunded.
           </p>
           <Button
             disabled={
               busy ||
               !!issues.length ||
               !creditQuote.data ||
+              quoteSetup !== setup ||
+              creditQuote.isFetching ||
               creditQuote.isFetching
             }
             onClick={generateSet}

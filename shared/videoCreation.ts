@@ -235,7 +235,7 @@ export function videoEndpoint(setup: VideoSetup) {
       ? "video-edit"
       : setup.mode === "extend"
         ? "video-extend"
-        : setup.imageKeys.length
+        : setup.imageKeys.length || (setup.people ?? []).length
           ? "reference-to-video"
           : "text-to-video";
   return `bytedance/seedance-2.5/${task}`;

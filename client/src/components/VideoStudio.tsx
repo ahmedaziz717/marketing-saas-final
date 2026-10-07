@@ -925,7 +925,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   <p className="text-xs leading-5 text-muted-foreground">
                     {dirty ? "Unsaved changes. " : ""}
                     {problem ??
-                      "Estimated credits are reserved before generation and adjusted for the finished output. Confirmed provider failures are refunded."}
+                      "Your accepted credit price is fixed. There is no extra deduction after generation. Confirmed provider failures are refunded."}
                   </p>
                 </>
               ) : (

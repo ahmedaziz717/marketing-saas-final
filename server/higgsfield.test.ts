@@ -163,3 +163,88 @@ it("tracks a provider request on the documented API without forwarding credentia
     expect(() => requestUrl(url, id, "status")).toThrow();
   expect(request).toHaveBeenCalledTimes(1);
 });
+
+it("prices the exact request through the authenticated estimate endpoint, not the provider credit count", async () => {
+  const { estimateHiggsfield } = await import("./lib/higgsfield");
+  const { providerRequestRate } = await import("./lib/providerQuote");
+  const { estimatedActionCredits } = await import("../shared/aiCredits");
+  const endpoint = "bytedance/seedance-2.5/reference-to-video";
+  const body = {
+    prompt: "Product closeup",
+    duration: 7,
+    resolution: "720p",
+    generate_audio: false,
+    image_urls: [
+      "https://stored.example/a.png",
+      "https://stored.example/b.png",
+    ],
+  };
+  request.mockResolvedValueOnce(
+    new Response(JSON.stringify({ credits: "999.000", usd: "0.423" }))
+  );
+  const base = {
+    provider: "higgsfield",
+    model: endpoint,
+    kind: "video" as const,
+    billingMode: "cost" as const,
+    credits: 0,
+    inputPerMillion: null,
+    cachedInputPerMillion: null,
+    outputPerMillion: 999,
+    perRequestUsd: null,
+    markupPercent: 100,
+    creditValueMicros: 10000,
+    note: "Test",
+  };
+  const rate = await providerRequestRate(base, endpoint, body);
+  expect(rate.estimatedCostMicros).toBe(423000);
+  expect(estimatedActionCredits(rate)).toBe(85);
+  expect(rate.costBasis).toBe("provider_account_estimate");
+  const [url, options] = request.mock.calls[0];
+  expect(url).toBe(`https://api.higgsfield.ai/estimate/${endpoint}`);
+  expect(options.headers.Authorization).toBe("Key test-id:test-secret");
+  expect(JSON.parse(options.body)).toEqual(body);
+  expect(options.redirect).toBe("error");
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ usd: "1.372" })));
+  expect(
+    (
+      await estimateHiggsfield(endpoint, {
+        ...body,
+        duration: 12,
+        generate_audio: true,
+      })
+    ).costMicros
+  ).toBe(1372000);
+  expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({
+    duration: 12,
+    generate_audio: true,
+  });
+});
+
+it.each([
+  { credits: "100" },
+  { usd: "garbage" },
+  { usd: -1 },
+  { usd: "Infinity" },
+  { usd: null },
+])(
+  "rejects malformed account estimates without a catalog-price fallback: %j",
+  async response => {
+    const { estimateHiggsfield } = await import("./lib/higgsfield");
+    request.mockResolvedValue(new Response(JSON.stringify(response)));
+    await expect(
+      estimateHiggsfield("bytedance/seedance-2.5/text-to-video", {
+        prompt: "test",
+      })
+    ).rejects.toThrow("No generation was submitted");
+    expect(request).toHaveBeenCalledTimes(1);
+  }
+);
+
+it("does not send credentials to an unsupported estimate route", async () => {
+  const { estimateHiggsfield } = await import("./lib/higgsfield");
+  await expect(
+    estimateHiggsfield("https://outside.example/estimate", {})
+  ).rejects.toThrow("Unsupported");
+  expect(request).not.toHaveBeenCalled();
+});
