@@ -13,6 +13,10 @@ import {
 import { withOrganizationTransaction } from "./activity";
 import { effectiveRate } from "./creditPricing";
 import {
+  textActionForOperation,
+  textActionRate,
+} from "../../shared/textActionEstimate";
+import {
   estimatedActionCredits,
   retailCredits,
   rateCreditPolicy,
@@ -86,8 +90,12 @@ export async function meteredCall<T>(
     return (await call({ id: randomUUID(), record: async () => {} })).value;
   const db = await getDb();
   if (!db) throw new Error("AI usage accounting is unavailable. Please retry.");
+  const baseRate =
+    options?.rateSnapshot ?? (await effectiveRate(db, provider, model, kind));
   const rate =
-      options?.rateSnapshot ?? (await effectiveRate(db, provider, model, kind)),
+      kind === "text" && !options?.rateSnapshot
+        ? textActionRate(baseRate, textActionForOperation(scope?.operation))
+        : baseRate,
     credits = estimatedActionCredits(rate),
     id = randomUUID(),
     period = utcCreditMonth(),

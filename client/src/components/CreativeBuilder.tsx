@@ -1196,7 +1196,11 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Refresh copy <ActionCredits organizationId={organizationId} />
+                  Refresh copy{" "}
+                  <ActionCredits
+                    organizationId={organizationId}
+                    operation="creativeBuilder.refreshCopy"
+                  />
                 </Button>
               </div>
             </div>

@@ -499,7 +499,10 @@ export function PublishingCalendar({
             >
               <Sparkles className="mr-2 h-4 w-4" />
               Draft this week's captions{" "}
-              <ActionCredits organizationId={organizationId} />
+              <ActionCredits
+                organizationId={organizationId}
+                operation="channels.draftCaptions"
+              />
             </Button>
           )}
         </div>

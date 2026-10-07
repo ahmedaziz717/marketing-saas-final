@@ -41,6 +41,10 @@ import {
   validateWorkflowConnections,
 } from "./workflowApps";
 import { estimatedActionCredits } from "../../shared/aiCredits";
+import {
+  textActionForOperation,
+  textActionRate,
+} from "../../shared/textActionEstimate";
 
 export type CreativeWorkflowRun = typeof creativeWorkflowRuns.$inferSelect;
 export function publicWorkflowRun(run: CreativeWorkflowRun) {
@@ -159,7 +163,12 @@ export async function workflowNodeCredits(
     ).credits;
   const kind = "text",
     model = REQUIRED_TEXT_MODEL_ID;
-  return estimatedActionCredits(await effectiveRate(db, "openai", model, kind));
+  return estimatedActionCredits(
+    textActionRate(
+      await effectiveRate(db, "openai", model, kind),
+      textActionForOperation(`workflow.${node.type}`)
+    )
+  );
 }
 export async function workflowImageReferences(
   db: LibraryDatabase,

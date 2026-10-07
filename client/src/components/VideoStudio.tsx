@@ -689,7 +689,10 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       : setup.prompt
                         ? "Regenerate from images"
                         : "Generate prompt from images"}{" "}
-                    <ActionCredits organizationId={organizationId} />
+                    <ActionCredits
+                      organizationId={organizationId}
+                      operation="video.draftPrompt"
+                    />
                   </Button>
                   {undoPrompt !== null && (
                     <button

@@ -69,7 +69,10 @@ export function AdCopyAssistant({
             : source === key && options.length
               ? "Regenerate all 5 sets"
               : "Generate 5 copy sets"}{" "}
-        <ActionCredits organizationId={organizationId} />
+        <ActionCredits
+          organizationId={organizationId}
+          operation="channels.draftAssetCopy"
+        />
       </Button>
       <p className="text-xs text-muted-foreground">
         Uses the actual selected images and saved business/brand context. Review
@@ -97,7 +100,10 @@ export function AdCopyAssistant({
                 onClick={() => generate.generate({ index: i, field: "set" })}
               >
                 Regenerate option {i + 1}{" "}
-                <ActionCredits organizationId={organizationId} />
+                <ActionCredits
+                  organizationId={organizationId}
+                  operation="channels.draftAssetCopy"
+                />
               </Button>
             </div>
           </div>

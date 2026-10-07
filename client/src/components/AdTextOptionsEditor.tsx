@@ -102,7 +102,10 @@ export function AdTextOptionsEditor({
             : hasCopy
               ? "Regenerate all 5 sets"
               : "Generate 5 copy sets"}{" "}
-          <ActionCredits organizationId={organizationId} />
+          <ActionCredits
+            organizationId={organizationId}
+            operation="channels.draftAssetCopy"
+          />
         </Button>
       </div>
       <details className="text-sm">
@@ -214,7 +217,10 @@ export function AdTextOptionsEditor({
                               }
                             >
                               Regenerate full set {index + 1} (all 3 fields){" "}
-                              <ActionCredits organizationId={organizationId} />
+                              <ActionCredits
+                                organizationId={organizationId}
+                                operation="channels.draftAssetCopy"
+                              />
                             </DropdownMenuItem>
                             {index > 0 && (
                               <DropdownMenuItem

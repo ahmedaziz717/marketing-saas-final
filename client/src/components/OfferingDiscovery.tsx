@@ -50,7 +50,10 @@ export function OfferingDiscovery({
         onClick={() => discover.mutate({ organizationId, website: url })}
       >
         {discover.isPending ? "Reading website…" : "Find offerings"}{" "}
-        <ActionCredits organizationId={organizationId} />
+        <ActionCredits
+          organizationId={organizationId}
+          operation="catalogSources.discoverOfferings"
+        />
       </Button>
       {discover.isSuccess && !drafts.length && (
         <p className="text-sm">

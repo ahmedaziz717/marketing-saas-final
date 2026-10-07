@@ -308,7 +308,7 @@ it("isolates workspaces and creator roles, including referenced assets", async (
 });
 it("executes a metered image pipeline, retains draft outputs, and deduplicates a run", async () => {
   const { saved, run, input, quote } = await queue(pipeline());
-  expect(quote.credits).toBe(15); // 10 text credits + 5 for the selected Sunburst canvas.
+  expect(quote.credits).toBe(7); // 2 short-response credits + 5 for the selected Sunburst canvas.
   expect((await owner.run(input)).id).toBe(run.id);
   await finish();
   const result = await owner.get({ organizationId: org, id: saved.id });
@@ -330,6 +330,10 @@ it("executes a metered image pipeline, retains draft outputs, and deduplicates a
   expect(asset.status).toBe("pending");
   expect(asset.metadata.generatedImage).toBe(true);
   const usage = await state.db.select().from(aiUsage);
+  expect(
+    usage.find((u: any) => u.operation === "workflow.assistant").usage
+      .reservedCredits
+  ).toBe(2);
   expect(
     usage.map((u: any) => [u.organizationId, u.status, u.operation])
   ).toEqual([

@@ -71,7 +71,10 @@ export function BrandWebsiteScanner({
             <ScanSearch className="mr-2 h-4 w-4" />
           )}
           {scan.isPending ? "Scanning website…" : "Scan website"}{" "}
-          <ActionCredits organizationId={organizationId} />
+          <ActionCredits
+            organizationId={organizationId}
+            operation="brand.scanWebsite"
+          />
         </Button>
         <Button
           type="button"

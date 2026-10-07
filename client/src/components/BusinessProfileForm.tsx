@@ -118,7 +118,10 @@ export function BusinessProfileForm({
           {suggest.isPending
             ? "Reading website…"
             : "Suggest answers from website"}{" "}
-          <ActionCredits organizationId={organizationId} />
+          <ActionCredits
+            organizationId={organizationId}
+            operation="brand.suggestProfile"
+          />
         </Button>
         {(
           [

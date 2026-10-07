@@ -41,6 +41,11 @@ import {
   imageOutputSizeSchema,
 } from "../../shared/imageActionEstimate";
 import { videoActionAssumptionsSchema } from "../../shared/videoActionEstimate";
+import {
+  textActionBudgets,
+  textActionRate,
+  type TextAction,
+} from "../../shared/textActionEstimate";
 const scope = z.object({ organizationId: z.number().int().positive() });
 async function authorized(userId: number, organizationId: number) {
   await requireOrganizationRole(userId, organizationId, [
@@ -82,7 +87,15 @@ export const modelsRouter = router({
       enforced: !!state.account?.enforceCredits,
       paused: !!state.account?.aiPaused,
       creditValueMicros: policy.creditValueMicros,
-      textEstimate: estimatedActionCredits(textRate),
+      textEstimate: estimatedActionCredits(
+        textActionRate(textRate, "standard")
+      ),
+      textEstimates: Object.fromEntries(
+        (Object.keys(textActionBudgets) as TextAction[]).map(action => [
+          action,
+          estimatedActionCredits(textActionRate(textRate, action)),
+        ])
+      ) as Record<TextAction, number>,
     };
   }),
   packages: protectedProcedure.input(scope).query(async ({ ctx, input }) => {

@@ -137,7 +137,7 @@ it("reserves credits, blocks overspend, refunds failures, retains usage and snap
     estimatedCostMicros: 350,
   } as ProviderRate;
   await admin.saveRate(rate);
-  const scope = { organizationId, actorUserId: 2, operation: "test" };
+  const scope = { organizationId, actorUserId: 2, operation: "workflow.assistant" };
   const run = (f: any) =>
     aiScope.run(scope, () => meteredCall("test", "model", "text", f));
   const provider = vi.fn(async () => ({
