@@ -1098,11 +1098,11 @@ function Administration() {
             </span>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Product video generation uses the Higgsfield API. Add the complete
-            API credential as <code>HF_API_KEY</code> to both the web service
-            and background worker, then redeploy both. API billing is separate
-            from a Higgsfield website subscription. Creator video generation
-            will use Creatify in a later release.
+            Product and Creator video generation use the Higgsfield API. Add the
+            complete API credential as <code>HF_API_KEY</code> to both the web
+            service and background worker, then redeploy both. API billing is
+            separate from a Higgsfield website subscription. A specialized
+            Creatify integration is planned for a later release.
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
             <span>

@@ -25,7 +25,6 @@ import {
   validateVideoReferences,
   videoReadiness,
   finishVideoFailure,
-  requireProductVideo,
   validateVideoPeople,
 } from "../lib/videoJobs";
 import { videoQuote, videoRate } from "../lib/videoPricing";
@@ -177,7 +176,7 @@ export const videoRouter = router({
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...studioRoles,
       ]);
-      requireProductVideo(input.setup);
+
       const db = await libraryDatabase(),
         refs = await resolveVideoReferences(
           db,
@@ -201,7 +200,7 @@ export const videoRouter = router({
       ]);
       const db = await libraryDatabase();
       const initial = await getVideoJob(db, input.organizationId, input.id);
-      requireProductVideo(initial.setup);
+
       if (initial.status !== "draft") return publicVideoJob(initial);
       if (!(await videoReadiness(db)).ready)
         throw new TRPCError({
@@ -216,7 +215,7 @@ export const videoRouter = router({
       );
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const job = await getVideoJob(tx, input.organizationId, input.id);
-        requireProductVideo(job.setup);
+
         if (job.status !== "draft") return publicVideoJob(job);
         if (
           job.revision !== input.revision ||

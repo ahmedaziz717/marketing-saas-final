@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readLifestylePortrait } from "./lifestylePeople";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { brandAssets, creativeVariants } from "../../drizzle/schema";
@@ -7,7 +9,6 @@ import { parseAssetKey } from "../../shared/assetLibrary";
 import {
   videoSetupProblem,
   defaultVideoSetup,
-  ugcGenerationMessage,
   type VideoReference,
   type VideoSetup,
 } from "../../shared/videoCreation";
@@ -43,21 +44,13 @@ export function publicVideoJob(job: VideoJob) {
     updatedAtMs: job.updatedAtMs,
   };
 }
-export function requireProductVideo(setup: VideoSetup) {
-  if (setup.category === "ugc")
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: ugcGenerationMessage,
-    });
-}
-
 /** Saved portraits must be approved references owned by this workspace. */
 export async function validateVideoPeople(
   db: LibraryDatabase | LibraryTransaction,
   organizationId: number,
   setup: VideoSetup
 ) {
-  const ids = setup.people.flatMap(person =>
+  const ids = (setup.people ?? []).flatMap(person =>
     person.kind === "asset" ? [person.assetId] : []
   );
   const rows = ids.length
@@ -74,7 +67,7 @@ export async function validateVideoPeople(
         )
     : [];
   const identities = new Set<string>();
-  for (const person of setup.people) {
+  for (const person of setup.people ?? []) {
     let identity = personReferenceKey(person);
     if (person.kind === "asset") {
       const asset = rows.find(row => row.id === person.assetId);
@@ -137,11 +130,16 @@ export async function resolveVideoReferences(
   organizationId: number,
   setup: VideoSetup
 ) {
+  setup = { ...defaultVideoSetup, ...setup };
   const problem = videoSetupProblem(setup);
   if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+  await validateVideoPeople(db, organizationId, setup);
   const refs: VideoReference[] = [];
   const keys = [
     ...setup.imageKeys,
+    ...setup.people.flatMap(person =>
+      person.kind === "asset" ? [`asset:${person.assetId}`] : []
+    ),
     ...(setup.sourceVideoKey ? [setup.sourceVideoKey] : []),
   ];
   for (const key of keys) {
@@ -252,13 +250,44 @@ export async function resolveVideoReferences(
       ...timing,
     });
   }
-  return refs;
+  for (const person of setup.people ?? []) {
+    if (person.kind !== "library") continue;
+    const portrait = await readLifestylePortrait(person.id);
+    refs.push({
+      key: `person_library:${person.id}`,
+      storageKey: `person_library:${person.id}`,
+      name: "Selected person portrait",
+      mimeType: "image/png",
+      fingerprint: createHash("sha256").update(portrait.b64Json).digest("hex"),
+    });
+  }
+  const ordered = [
+    ...setup.imageKeys,
+    ...setup.people.map(person =>
+      person.kind === "library"
+        ? `person_library:${person.id}`
+        : `asset:${person.assetId}`
+    ),
+    ...(setup.sourceVideoKey ? [setup.sourceVideoKey] : []),
+  ];
+  return ordered.map(key => refs.find(ref => ref.key === key)!);
 }
 export async function validateVideoReferences(
   db: LibraryDatabase | LibraryTransaction,
   job: Pick<VideoJob, "organizationId" | "references">
 ) {
   for (const ref of job.references) {
+    if (ref.key.startsWith("person_library:")) {
+      const portrait = await readLifestylePortrait(
+        ref.key.slice("person_library:".length)
+      );
+      if (
+        createHash("sha256").update(portrait.b64Json).digest("hex") !==
+        ref.fingerprint
+      )
+        throw new Error("A selected portrait changed. Prepare a new draft.");
+      continue;
+    }
     if (ref.key.startsWith("product_image:")) {
       const current = await readVideoCatalogImage(
         db,

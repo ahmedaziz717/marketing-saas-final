@@ -52,8 +52,7 @@ const creationChoices = [
     title: "Creator video",
     icon: Users,
     description:
-      "Choose an AI presenter or model and prepare your video. Generation is coming next.",
-    badge: "Drafts only",
+      "Choose people from the model library and generate a video from your references and creative direction.",
   },
   {
     path: "ads",
@@ -225,13 +224,7 @@ function Studio() {
                   <div className="studio-app-body">
                     <div className="studio-app-title">
                       <h3>{title}</h3>
-                      {"badge" in choice ? (
-                        <span className="workspace-planned">
-                          {choice.badge}
-                        </span>
-                      ) : (
-                        allowed && <ArrowRight size={17} aria-hidden="true" />
-                      )}
+                      {allowed && <ArrowRight size={17} aria-hidden="true" />}
                     </div>
                     <p>{description}</p>
                     {!allowed && (

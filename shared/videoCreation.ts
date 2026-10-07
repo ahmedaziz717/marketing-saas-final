@@ -21,9 +21,6 @@ import {
   type CreativeThemeId,
 } from "./creativeThemes";
 
-export const ugcGenerationMessage =
-  "Creator video generation is coming next. You can choose models and save your video setup now.";
-
 export const videoModes = [
   {
     id: "create",
@@ -125,14 +122,15 @@ export const videoSetupSchema = z
     campaignPlanId: z.number().int().positive().optional(),
   })
   .superRefine((setup, ctx) => {
-    if (setup.category === "product" && setup.people.length)
+    if (setup.category === "product" && (setup.people ?? []).length)
       ctx.addIssue({
         code: "custom",
         path: ["people"],
         message: "Model selection is available for creator videos.",
       });
     if (
-      new Set(setup.people.map(personReferenceKey)).size !== setup.people.length
+      new Set(setup.people.map(personReferenceKey)).size !==
+      (setup.people ?? []).length
     )
       ctx.addIssue({
         code: "custom",
@@ -165,7 +163,9 @@ export function videoSetupProblem(setup: VideoSetup): string | null {
     try {
       modelRequestBody(model, {
         prompt: videoPrompt(setup),
-        images: setup.imageKeys.map(() => "https://reference.invalid/image"),
+        images: [...setup.imageKeys, ...(setup.people ?? [])].map(
+          () => "https://reference.invalid/image"
+        ),
         video: setup.sourceVideoKey
           ? "https://reference.invalid/video"
           : undefined,
@@ -182,9 +182,12 @@ export function videoSetupProblem(setup: VideoSetup): string | null {
     return "Choose a source video first.";
   if (
     setup.mode === "motion" &&
-    (!setup.imageKeys.length || setup.imageKeys.length > 8)
+    ((!setup.imageKeys.length && !(setup.people ?? []).length) ||
+      setup.imageKeys.length + (setup.people ?? []).length > 8)
   )
     return "Motion control needs 1–8 reference images.";
+  if (setup.imageKeys.length + (setup.people ?? []).length > 9)
+    return "Use up to 9 total images, including selected people.";
   if (!setup.prompt && setup.mode !== "motion")
     return "Describe the video you want to create.";
   return null;
@@ -240,11 +243,16 @@ export function videoEndpoint(setup: VideoSetup) {
 
 /** Older saved jobs keep their exact prompt unless creative direction was selected. */
 export function videoPrompt(setup: VideoSetup) {
-  if (!setup.direction) return setup.prompt;
+  const identity = (setup.people ?? []).length
+    ? `The LAST ${(setup.people ?? []).length} reference images are the selected people, in order. Include these people and preserve their distinct appearance throughout the video. These portraits specify identity, not product endorsements or testimonials. Adapt poses, clothing and lighting to the scene. Keep children and teens age-appropriate, with ordinary clothing and activities and no adult themes.`
+    : "";
+  if (!setup.direction)
+    return [setup.prompt, identity].filter(Boolean).join("\n\n");
   const direction = setup.direction,
     theme = getCreativeTheme(direction.theme);
   return [
     setup.prompt,
+    identity,
     `Creative theme — ${theme.name}: ${direction.themePrompt || theme.direction}`,
     `Mood — ${getCreativeMood(direction.mood).name}: ${getCreativeMood(direction.mood).direction}`,
     `Art style — ${getCreativeArtStyle(direction.artStyle).name}: ${getCreativeArtStyle(direction.artStyle).direction}`,

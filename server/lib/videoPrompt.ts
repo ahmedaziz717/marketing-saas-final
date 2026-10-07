@@ -1,3 +1,4 @@
+import { readLifestylePortrait } from "./lifestylePeople";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -58,7 +59,11 @@ export async function draftVideoPrompt(
   ];
   for (let index = 0; index < references.length; index++) {
     const reference = references[index];
-    const source = await readGenerationSource(reference.storageKey);
+    const source = reference.key.startsWith("person_library:")
+      ? await readLifestylePortrait(
+          reference.key.slice("person_library:".length)
+        )
+      : await readGenerationSource(reference.storageKey);
     const facts = reference.key.startsWith("product_image:")
       ? (await readVideoCatalogImage(db, organizationId, reference.key)).facts
       : { name: reference.name };

@@ -39,7 +39,6 @@ import {
   defaultVideoSetup,
   defaultVideoDirection,
   type VideoImageChoice,
-  ugcGenerationMessage,
   videoModes,
   videoModelOptions,
   videoRatios,
@@ -179,12 +178,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const quote = trpc.video.quote.useQuery(
     { ...scope, setup: quoteSetup },
     {
-      enabled:
-        !!organizationId &&
-        !isUgc &&
-        quoteSetup.category !== "ugc" &&
-        !locked &&
-        !videoSetupProblem(quoteSetup),
+      enabled: !!organizationId && !locked && !videoSetupProblem(quoteSetup),
       retry: false,
       refetchOnWindowFocus: false,
     }
@@ -315,7 +309,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     navigate(href(id, ugc));
   }
   async function persist(shouldGenerate: boolean) {
-    if (busy || (shouldGenerate && isUgc)) return false;
+    if (busy) return false;
     if (!setup.title.trim()) {
       setError("Give your video a name before saving.");
       return false;
@@ -449,28 +443,15 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
         ))}
       </nav>
       <>
-        {isUgc ? (
+        {(options.error || (!options.isLoading && !options.data?.ready)) && (
           <div
             role="status"
-            className="mb-6 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-950"
+            className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
           >
-            <p className="font-medium">Prepare your creator video</p>
-            <p>
-              {ugcGenerationMessage} Your settings and selected models stay with
-              the draft.
-            </p>
+            {options.error
+              ? "Video service readiness could not be checked. Please refresh before generating."
+              : options.data?.reason}
           </div>
-        ) : (
-          (options.error || (!options.isLoading && !options.data?.ready)) && (
-            <div
-              role="status"
-              className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
-            >
-              {options.error
-                ? "Video service readiness could not be checked. Please refresh before generating."
-                : options.data?.reason}
-            </div>
-          )
         )}
         {detail.error && (
           <p role="alert" className="mb-5 rounded-xl border p-4 text-sm">
@@ -892,8 +873,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
               )}
             </fieldset>
             <div className="space-y-3 border-t bg-muted/10 p-5 sm:px-6">
-              {(error ||
-                (!isUgc && !locked && quoteCurrent && quote.error)) && (
+              {(error || (!locked && quoteCurrent && quote.error)) && (
                 <p role="alert" className="text-sm text-destructive">
                   {error || quote.error?.message}
                 </p>
@@ -917,7 +897,6 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       className="min-w-0 flex-1"
                       disabled={
                         busy ||
-                        isUgc ||
                         !options.data?.ready ||
                         !!problem ||
                         !setup.title.trim() ||
@@ -934,19 +913,16 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       ) : (
                         <Sparkles size={16} className="mr-2" />
                       )}
-                      {isUgc ? "Generation coming soon" : "Generate"}
-                      {!isUgc &&
-                        (quoteCurrent && quote.data && !problem
-                          ? ` · ≈ ${quote.data.credits.toLocaleString()} credits`
-                          : " video")}
+                      {"Generate"}
+                      {quoteCurrent && quote.data && !problem
+                        ? ` · ≈ ${quote.data.credits.toLocaleString()} credits`
+                        : " video"}
                     </Button>
                   </div>
                   <p className="text-xs leading-5 text-muted-foreground">
                     {dirty ? "Unsaved changes. " : ""}
-                    {isUgc
-                      ? "Saving a creator video setup uses no AI credits."
-                      : (problem ??
-                        "Estimated credits are reserved before generation and adjusted for the finished output. Confirmed provider failures are refunded.")}
+                    {problem ??
+                      "Estimated credits are reserved before generation and adjusted for the finished output. Confirmed provider failures are refunded."}
                   </p>
                 </>
               ) : (
@@ -1038,9 +1014,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   <p className="mt-3 max-w-xs text-sm leading-6 text-slate-300">
                     {active
                       ? "You can leave this page. Your clip will appear here and in your drafts when it is ready."
-                      : isUgc
-                        ? "Save your references, models, and creative direction now. Video generation will be available here when connected."
-                        : "Your generated video will appear here, ready to preview and send for review."}
+                      : "Your generated video will appear here, ready to preview and send for review."}
                   </p>
                 </div>
               )}

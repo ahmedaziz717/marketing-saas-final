@@ -487,7 +487,7 @@ describe("durable video generation", () => {
       }).success
     ).toBe(false);
   });
-  it("keeps UGC settings and selected models when saving and reopening, without generating or charging", async () => {
+  it("keeps Creator selections, quotes generation and sends portrait references after product images", async () => {
     const settings = {
       ...setup(),
       category: "ugc" as const,
@@ -516,21 +516,33 @@ describe("durable video generation", () => {
       revision: 2,
       setup: { category: "ugc", people: [settings.people[0]] },
     });
-    await expect(
-      owner.video.quote({ organizationId: org, setup: settings })
-    ).rejects.toThrow("Creator video generation is coming next");
-    await expect(
-      owner.video.generate({
-        organizationId: org,
-        id: draft.id,
-        revision: updated.revision,
-        quotedCredits: 0,
-      })
-    ).rejects.toThrow("Creator video generation is coming next");
     expect(await state.db.select().from(aiUsage)).toHaveLength(0);
-    expect(await state.db.select().from(creditLedger)).toHaveLength(0);
-    expect(state.submit).not.toHaveBeenCalled();
-    expect(await tick()).toBe(false);
+    const quote = await owner.video.quote({
+      organizationId: org,
+      setup: updated.setup,
+    });
+    await owner.video.generate({
+      organizationId: org,
+      id: draft.id,
+      revision: updated.revision,
+      quotedCredits: quote.credits,
+    });
+    await tick();
+    const [job] = await state.db
+      .select()
+      .from(videoJobs)
+      .where(eq(videoJobs.id, draft.id));
+    expect(job.requestBody.image_urls).toHaveLength(2);
+    expect(job.requestBody.prompt).toContain("LAST 1 reference images");
+    expect(job.references[1].key).toBe("person_library:female-black-0");
+    expect(state.upload).toHaveBeenCalled();
+    state.submit.mockResolvedValue(accepted);
+    await tick();
+    expect(state.submit).toHaveBeenCalledTimes(1);
+    expect(
+      (await owner.video.get({ organizationId: org, id: draft.id })).status
+    ).toBe("generating");
+    expect(await state.db.select().from(aiUsage)).toHaveLength(1);
   });
   it("validates UGC model identities, approvals and tenant ownership", async () => {
     const settings = { ...setup(), category: "ugc" as const };
@@ -623,16 +635,6 @@ describe("durable video generation", () => {
         people: [{ kind: "library", id: "female-black-0" }],
       }).success
     ).toBe(false);
-    await state.db
-      .update(videoJobs)
-      .set({ status: "queued", setup: { ...setup(), category: "ugc" } })
-      .where(eq(videoJobs.id, draft.id));
-    await tick();
-    expect(
-      (await owner.video.get({ organizationId: org, id: draft.id })).status
-    ).toBe("failed");
-    expect(state.submit).not.toHaveBeenCalled();
-    expect(state.signed).not.toHaveBeenCalled();
   });
   it("saves incomplete drafts without billing and enforces workspace/role boundaries", async () => {
     const draft = await owner.video.save({

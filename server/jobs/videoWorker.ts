@@ -1,3 +1,4 @@
+import { readLifestylePortrait } from "../lib/lifestylePeople";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { aiUsage, creditLedger } from "../../drizzle/platformSchema";
@@ -6,7 +7,6 @@ import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
 import {
   activeVideoStatuses,
   videoRequestBody,
-  ugcGenerationMessage,
 } from "../../shared/videoCreation";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { requireOrganizationRole } from "../lib/access";
@@ -17,6 +17,7 @@ import {
   finishVideoFailure,
   getVideoJob,
   validateVideoReferences,
+  validateVideoPeople,
   type VideoJob,
 } from "../lib/videoJobs";
 import { videoQuote } from "../lib/videoPricing";
@@ -331,17 +332,6 @@ export async function processNextVideoJob(db: LibraryDatabase) {
   });
   if (!job) return false;
   try {
-    // UGC belongs to the future Creatify integration, never this provider.
-    if (job.setup.category === "ugc") {
-      if (!job.providerRequestId && !job.requestBody)
-        await terminal(db, job, "failed", ugcGenerationMessage);
-      else
-        await release(db, job, {
-          status: "attention",
-          error: ugcGenerationMessage,
-        });
-      return true;
-    }
     if (job.status === "saving") {
       await saveOutput(db, job);
       return true;
@@ -366,6 +356,10 @@ export async function processNextVideoJob(db: LibraryDatabase) {
         ]);
         if ((await creditState(db, job.organizationId)).account?.aiPaused)
           throw new Error("AI generation is paused.");
+        await validateVideoPeople(db, job.organizationId, {
+          ...job.setup,
+          people: job.setup.people ?? [],
+        });
         await validateVideoReferences(db, job);
       } catch {
         await terminal(
@@ -378,9 +372,23 @@ export async function processNextVideoJob(db: LibraryDatabase) {
       }
       const signed = new Map<string, string>();
       for (const reference of job.references) {
+        let storageKey = reference.storageKey;
+        if (reference.key.startsWith("person_library:")) {
+          const portrait = await readLifestylePortrait(
+            reference.key.slice("person_library:".length)
+          );
+          storageKey = `org/${job.organizationId}/video-references/${job.id}/${reference.fingerprint}.png`;
+          const uploaded = await storageClient()
+            .storage.from(assetBucket())
+            .upload(storageKey, Buffer.from(portrait.b64Json, "base64"), {
+              contentType: "image/png",
+              upsert: true,
+            });
+          if (uploaded.error) throw new Error("Portrait storage unavailable");
+        }
         const { data, error } = await storageClient()
           .storage.from(assetBucket())
-          .createSignedUrl(normalizeStorageKey(reference.storageKey), 86400);
+          .createSignedUrl(normalizeStorageKey(storageKey), 86400);
         if (error || !data?.signedUrl)
           throw new Error("Reference storage unavailable");
         signed.set(reference.key, data.signedUrl);
@@ -391,7 +399,9 @@ export async function processNextVideoJob(db: LibraryDatabase) {
         status: "submitting",
         requestBody: videoRequestBody(
           job.setup,
-          job.setup.imageKeys.map(key => signed.get(key)!),
+          job.references
+            .filter(ref => ref.key !== job!.setup.sourceVideoKey)
+            .map(ref => signed.get(ref.key)!),
           signed.get(job.setup.sourceVideoKey ?? "")
         ),
         requestPreparedAtMs: Date.now(),
@@ -408,6 +418,10 @@ export async function processNextVideoJob(db: LibraryDatabase) {
           ]);
           if ((await creditState(db, job.organizationId)).account?.aiPaused)
             throw new Error("AI paused");
+          await validateVideoPeople(db, job.organizationId, {
+            ...job.setup,
+            people: job.setup.people ?? [],
+          });
           await validateVideoReferences(db, job);
         } catch {
           await terminal(
