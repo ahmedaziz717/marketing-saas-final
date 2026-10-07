@@ -20,6 +20,17 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
+it("distinguishes provider balance failures from customer credit balances", () => {
+  const message = videoProviderFailureMessage({
+    request_id: id,
+    status: "failed",
+    error:
+      "Your credit balance is too low to complete this request. Please top up your balance and try again.",
+  });
+  expect(message).toContain("provider's API balance");
+  expect(message).toContain("administrator");
+  expect(message).toContain("EvokeLoop AI credits have been refunded");
+});
 it("retains the documented failure reason while redacting signed references and credentials", async () => {
   request.mockResolvedValue(
     new Response(

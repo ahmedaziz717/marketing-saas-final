@@ -99,6 +99,12 @@ export function videoProviderFailureMessage(result: HiggsfieldResult) {
     return "The video service declined this content. Review your prompt and references. AI credits refunded.";
   if (result.status === "canceled")
     return "The video service confirmed cancellation. AI credits refunded.";
+  if (
+    /(?:credit|api|account) balance.{0,80}(?:too low|insufficient|exhausted)|insufficient (?:credits?|balance)|not enough credits/i.test(
+      result.error ?? ""
+    )
+  )
+    return "The video provider's API balance is too low. An EvokeLoop administrator needs to top up the provider account. Your EvokeLoop AI credits have been refunded.";
   const reason = (result.error ?? "")
     .replace(/https?:\/\/\S+/gi, "[reference URL]")
     .replace(/\b(?:Bearer|Key)\s+\S+/gi, "[credentials removed]")
