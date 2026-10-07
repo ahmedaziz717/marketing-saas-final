@@ -1459,3 +1459,170 @@
     flex-wrap: wrap;
   }
 }
+
+/* Versioned App forms share the same controls in the editor and runner. */
+.wf-editor-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.wf-editor-tabs button {
+  padding: 8px 18px;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+}
+.wf-editor-tabs button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--foreground);
+  font-weight: 600;
+}
+.wf-form-editor {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 760px);
+  gap: 28px;
+  padding: 28px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+.wf-form-editor aside,
+.wf-field-settings,
+.wf-form-preview {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  align-self: start;
+}
+.wf-form-editor h2,
+.wf-form-preview h2 {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.wf-form-editor p,
+.wf-form-preview > p,
+.wf-field-help {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 14px;
+}
+.wf-form-editor label,
+.wf-form-field > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin: 14px 0 6px;
+}
+.wf-form-editor input:not([type="checkbox"]),
+.wf-form-editor select,
+.wf-form-editor textarea,
+.wf-input-control input:not([type="checkbox"]),
+.wf-input-control select,
+.wf-input-control textarea {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 6px;
+}
+.wf-form-editor input[type="checkbox"],
+.wf-input-control input[type="checkbox"] {
+  width: auto;
+  display: inline-block;
+  margin-right: 8px;
+}
+.wf-field-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.wf-field-row > button:first-child {
+  flex: 1;
+  text-align: left;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.wf-field-row small {
+  display: block;
+  color: var(--muted-foreground);
+}
+.wf-field-row .is-selected {
+  background: var(--accent);
+}
+.wf-form-editor details {
+  margin: 18px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.wf-form-editor summary {
+  cursor: pointer;
+}
+.wf-choice-list {
+  max-height: 270px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.wf-choice-list label {
+  font-weight: 400;
+  margin: 8px 0;
+}
+.wf-custom-choices > div {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+}
+.wf-field-settings button,
+.wf-form-editor aside > button {
+  margin: 8px 8px 4px 0;
+}
+.wf-field-settings h3 {
+  font-weight: 600;
+  margin-top: 24px;
+}
+.wf-input-control small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.wf-copy-proposal {
+  padding: 12px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.wf-form-preview {
+  width: min(760px, calc(100% - 48px));
+  margin: 24px auto;
+  overflow: auto;
+  max-height: calc(100vh - 240px);
+}
+.wf-form-field {
+  margin-bottom: 22px;
+}
+.wf-field-warning {
+  border-left: 3px solid #e9a23b;
+  padding-left: 12px;
+}
+@media (max-width: 800px) {
+  .wf-form-editor {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .wf-form-editor aside {
+    width: 100%;
+  }
+  .wf-editor-tabs {
+    padding: 8px;
+  }
+}

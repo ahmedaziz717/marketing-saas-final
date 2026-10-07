@@ -1,3 +1,14 @@
+import { workflowImageReferences } from "../lib/creativeWorkflows";
+import { readGenerationSource } from "../lib/creativeImages";
+import {
+  appFieldSchema,
+  choiceSchema,
+  fieldChoices,
+  fieldValueProblem,
+  isChoiceField,
+} from "../../shared/workflowInputs";
+import { marketingJson } from "../lib/marketingDrafts";
+import { brandKits, products } from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -36,6 +47,7 @@ const runInput = reference.extend({
       z.object({
         id: z.string().max(80),
         text: z.string().max(10000).optional(),
+        value: z.string().max(10000).optional(),
         imageKey: z
           .string()
           .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
@@ -71,6 +83,11 @@ async function runnable(
         code: "BAD_REQUEST",
         message: "Only declared App inputs can be changed.",
       });
+    if (node.config.field) {
+      if (!node.config.field.locked && field.value !== undefined)
+        node.config.fieldValue = field.value;
+      continue;
+    }
     if (node.type === "image" && field.imageKey)
       node.config.imageKey = field.imageKey;
     else if (
@@ -82,6 +99,93 @@ async function runnable(
   return { ...workflow, graph, revision: input.revision };
 }
 export const workflowsRouter = router({
+  assistInput: protectedProcedure
+    .input(
+      scope.extend({
+        field: appFieldSchema,
+        title: z.string().max(100),
+        direction: z.string().max(3000),
+        context: z.string().max(16000).default(""),
+        count: z.number().int().min(1).max(20).default(5),
+        mode: z.enum(["choices", "copy"]),
+        productIds: z.array(z.number().int().positive()).max(40).default([]),
+        imageKeys: z
+          .array(
+            z.string().regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
+          )
+          .max(40)
+          .default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...workflowRoles,
+      ]);
+      const db = await libraryDatabase();
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      const catalog = input.productIds.length
+        ? await db
+            .select({
+              name: products.name,
+              description: products.description,
+              specifications: products.specifications,
+              serviceDetails: products.serviceDetails,
+            })
+            .from(products)
+            .where(
+              and(
+                eq(products.organizationId, input.organizationId),
+                inArray(products.id, input.productIds)
+              )
+            )
+        : [];
+      const references = await workflowImageReferences(
+        db,
+        input.organizationId,
+        input.imageKeys.slice(0, 4)
+      );
+      const images = await Promise.all(
+        references.map(async r => {
+          const source = await readGenerationSource(r.storageKey);
+          return `data:${source.mimeType};base64,${source.b64Json}`;
+        })
+      );
+      const context = {
+        catalog,
+        field: input.title,
+        kind: input.field.kind,
+        direction: input.direction,
+        instructions: input.field.aiInstructions,
+        context: input.context,
+        brand: brand
+          ? {
+              voice: brand.voice,
+              business: brand.businessProfile,
+              restrictions: brand.prohibitedContent,
+            }
+          : null,
+      };
+      return marketingJson(
+        input.mode === "choices"
+          ? `Generate exactly ${input.count} distinct creative choices. Return {options:[{id,label,direction}]}. Each direction must be useful generation instructions, not just a name. IDs must be distinct.`
+          : `Write exactly ${input.count} distinct alternatives for the requested copy field. Return {options:[{id,label,direction}]}. Put the complete proposed copy in direction, with a short label. Preserve verified facts. Proposals are for review; do not claim performance improvements without evidence.`,
+        context,
+        z.object({
+          options: z
+            .array(choiceSchema)
+            .length(input.count)
+            .refine(
+              o => new Set(o.map(x => x.id)).size === o.length,
+              "Return unique choice IDs."
+            ),
+        }),
+        images
+      );
+    }),
   reviewStep: reviewWorkflowStepProcedure,
   listApps: protectedProcedure
     .input(scope.extend({ family: z.enum(workflowFamilies).optional() }))
@@ -153,6 +257,40 @@ export const workflowsRouter = router({
             code: "BAD_REQUEST",
             message: "App result steps are managed by the workflow runner.",
           });
+        for (const n of workflow.graph.nodes) {
+          const f = n.config.field;
+          if (!f) continue;
+          let problem: string | null = null;
+          if (n.type !== "app_input")
+            problem = "Only App input steps can define form fields.";
+          else if (!workflow.graph.edges.some(e => e.source === n.id))
+            problem = "Connect this field to a workflow step.";
+          else if (isChoiceField(f) && !fieldChoices(f).length)
+            problem = "Include at least one choice.";
+          else if (
+            new Set(fieldChoices(f).map(o => o.id)).size !==
+            fieldChoices(f).length
+          )
+            problem = "Choice identifiers must be unique.";
+          else if (
+            f.visibleWhen &&
+            !workflow.graph.nodes.some(
+              p =>
+                p.id === f.visibleWhen!.fieldId &&
+                p.id !== n.id &&
+                p.config.field &&
+                !p.config.field.visibleWhen
+            )
+          )
+            problem = "Visibility must depend on an unconditional App field.";
+          else if (f.locked || f.defaultValue)
+            problem = fieldValueProblem(f, f.defaultValue);
+          if (problem)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `${n.title}: ${problem}`,
+            });
+        }
         await resolveWorkflowApps(tx, input.organizationId, workflow.graph);
         const [latest] = await tx
           .select()
@@ -176,7 +314,28 @@ export const workflowsRouter = router({
             family: workflow.family,
             name: workflow.name,
             description: input.description,
-            graph: workflow.graph,
+            graph: {
+              ...workflow.graph,
+              nodes: workflow.graph.nodes.map(n =>
+                n.config.field
+                  ? {
+                      ...n,
+                      config: {
+                        ...n.config,
+                        fieldValue: undefined,
+                        field: {
+                          ...n.config.field,
+                          source:
+                            n.config.field.source === "system"
+                              ? ("curated" as const)
+                              : n.config.field.source,
+                          options: fieldChoices(n.config.field),
+                        },
+                      },
+                    }
+                  : n
+              ),
+            },
             actorUserId: ctx.user.id,
             createdAtMs: Date.now(),
           })

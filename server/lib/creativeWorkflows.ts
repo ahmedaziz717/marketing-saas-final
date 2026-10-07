@@ -1,3 +1,4 @@
+import { resolveWorkflowInputs } from "./workflowInputs";
 import {
   generationModel,
   modelVideoMode,
@@ -203,6 +204,7 @@ export async function prepareWorkflowRun(
   target?: string
 ) {
   graph = await resolveWorkflowApps(db, organizationId, graph);
+  graph = await resolveWorkflowInputs(db, organizationId, graph);
   if (target && !graph.nodes.some(n => n.id === target))
     throw new TRPCError({
       code: "BAD_REQUEST",

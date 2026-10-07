@@ -869,6 +869,13 @@ export function WorkflowCanvas({
                   onChange={config}
                 />
               )}
+              {selectedNode.config.field && (
+                <p>
+                  App field: {selectedNode.title}. Open{" "}
+                  <strong>App form</strong> to configure its choices, default
+                  and AI assistance.
+                </p>
+              )}
               {selectedNode.type === "image" ? (
                 <Button
                   variant="outline"
@@ -885,7 +892,8 @@ export function WorkflowCanvas({
                   "generate_video",
                   "app_input",
                   "optimize_copy",
-                ].includes(selectedNode.type) && (
+                ].includes(selectedNode.type) &&
+                !selectedNode.config.field && (
                   <label>
                     {selectedNode.type === "combine"
                       ? "Additional text (optional)"

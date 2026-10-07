@@ -112,6 +112,22 @@ export async function resolveWorkflowApps(
       ...nested.nodes.map(n => ({
         ...n,
         id: mapped.get(n.id)!,
+        config: {
+          ...n.config,
+          field: n.config.field
+            ? {
+                ...n.config.field,
+                visibleWhen: n.config.field.visibleWhen
+                  ? {
+                      ...n.config.field.visibleWhen,
+                      fieldId:
+                        mapped.get(n.config.field.visibleWhen.fieldId) ??
+                        n.config.field.visibleWhen.fieldId,
+                    }
+                  : undefined,
+              }
+            : undefined,
+        },
         type: n.type === "output" ? ("app_output" as const) : n.type,
         x: call.x + n.x,
         y: call.y + n.y + 400,

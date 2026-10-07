@@ -847,3 +847,134 @@ it("requires an explicit activation confirmation and cannot activate the same re
     (await owner.get({ organizationId: org, id: saved.id })).runs[0].status
   ).toBe("completed");
 });
+
+it("validates typed App choices, preserves locked defaults and snapshots system choices", async () => {
+  const { appFieldSchema, systemInputChoices } = await import(
+    "../shared/workflowInputs"
+  );
+  const graph = textGraph("");
+  graph.nodes[0].type = "app_input";
+  graph.nodes[0].title = "Theme";
+  const theme = systemInputChoices("theme")[0];
+  graph.nodes[0].config.field = appFieldSchema.parse({
+    kind: "theme",
+    required: true,
+    defaultValue: theme.id,
+    locked: true,
+  });
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Typed form",
+    graph,
+  });
+  const app = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  expect(app.graph.nodes[0].config.field?.source).toBe("curated");
+  expect(app.graph.nodes[0].config.field?.options.length).toBeGreaterThan(10);
+  const input = {
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    appVersionId: app.id,
+    inputs: [{ id: graph.nodes[0].id, value: "forged-option" }],
+  };
+  const quote = await owner.quote(input);
+  await owner.run({
+    ...input,
+    requestId: randomUUID(),
+    quotedCredits: quote.credits,
+  });
+  await finish();
+  const run = (await owner.get({ organizationId: org, id: saved.id })).runs[0];
+  expect(run.steps.output.outputs?.[0]).toEqual({
+    type: "text",
+    text: `Theme: ${theme.label}: ${theme.direction}`,
+  });
+  graph.nodes[0].config.field.locked = false;
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: "Typed form",
+    graph,
+  });
+  const v2 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 2,
+  });
+  await expect(
+    owner.quote({ ...input, revision: 2, appVersionId: v2.id })
+  ).rejects.toThrow(/available option/);
+  expect(
+    (await owner.getApp({ organizationId: org, id: app.id })).graph.nodes[0]
+      .config.field?.locked
+  ).toBe(true);
+});
+
+it("requires declared fields at run time but permits incomplete drafts", async () => {
+  const { appFieldSchema } = await import("../shared/workflowInputs");
+  const graph = textGraph("");
+  graph.nodes[0].type = "app_input";
+  graph.nodes[0].config.field = appFieldSchema.parse({
+    kind: "headline",
+    required: true,
+  });
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Required form",
+    graph,
+  });
+  await expect(
+    owner.quote({ organizationId: org, id: saved.id, revision: 1 })
+  ).rejects.toThrow(/required/);
+  const app = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  await expect(
+    owner.quote({
+      organizationId: org,
+      id: saved.id,
+      revision: 1,
+      appVersionId: app.id,
+      inputs: [{ id: graph.nodes[0].id, value: "A new headline" }],
+    })
+  ).resolves.toMatchObject({ credits: 0 });
+});
+
+it("rejects foreign catalog inputs and validates conditional fields", async () => {
+  const { appFieldSchema } = await import("../shared/workflowInputs");
+  const graph = textGraph("");
+  graph.nodes[0].type = "app_input";
+  graph.nodes[0].config.field = appFieldSchema.parse({
+    kind: "product",
+    defaultValue: "999999999",
+  });
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Catalog form",
+    graph,
+  });
+  await expect(
+    owner.quote({ organizationId: org, id: saved.id, revision: 1 })
+  ).rejects.toThrow(/unavailable in this workspace/);
+  graph.nodes[0].config.field = appFieldSchema.parse({
+    kind: "headline",
+    visibleWhen: { fieldId: "missing", equals: "yes" },
+  });
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: "Catalog form",
+    graph,
+  });
+  await expect(
+    owner.publishApp({ organizationId: org, id: saved.id, revision: 2 })
+  ).rejects.toThrow(/Visibility/);
+});

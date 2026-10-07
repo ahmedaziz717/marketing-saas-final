@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appFieldSchema } from "./workflowInputs";
 import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
 export const workflowFamilies = [
   "create",
@@ -279,6 +280,8 @@ export const workflowNodeSchema = z.object({
   x: z.number().min(-10000).max(10000),
   y: z.number().min(-10000).max(10000),
   config: z.object({
+    field: appFieldSchema.optional(),
+    fieldValue: z.string().max(10000).optional(),
     appVersionId: z.string().uuid().optional(),
     builtinAppId: z.string().max(80).optional(),
     connectionId: z.string().uuid().optional(),

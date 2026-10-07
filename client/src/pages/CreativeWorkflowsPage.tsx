@@ -1,3 +1,4 @@
+import { WorkflowFormEditor } from "@/components/WorkflowFormEditor";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -314,6 +315,9 @@ function WorkflowEditor({
     [appDescription, setAppDescription] = useState("");
   const publishApp = trpc.workflows.publishApp.useMutation();
   const connections = trpc.channels.connections.useQuery({ organizationId });
+  const [editorView, setEditorView] = useState<"workflow" | "form" | "preview">(
+    "workflow"
+  );
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [review, setReview] = useState<{
     target?: string;
@@ -570,21 +574,47 @@ function WorkflowEditor({
           {saveError}
         </div>
       )}
-      <WorkflowCanvas
-        graph={graph}
-        family={family}
-        connectedChannels={
-          connections.data?.items
-            .filter(c => c.status === "connected")
-            .map(c => c.channel) ?? []
-        }
-        onChange={setGraph}
-        organizationId={organizationId}
-        role={role}
-        run={shown}
-        onRunNode={startReview}
-        busy={!!active || quote.isPending || run.isPending}
-      />
+      <nav className="wf-editor-tabs" aria-label="Workflow editor views">
+        {(
+          [
+            ["workflow", "Workflow"],
+            ["form", "App form"],
+            ["preview", "Preview"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            aria-pressed={editorView === key}
+            onClick={() => setEditorView(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      {editorView !== "workflow" ? (
+        <WorkflowFormEditor
+          graph={graph}
+          onChange={setGraph}
+          organizationId={organizationId}
+          preview={editorView === "preview"}
+        />
+      ) : (
+        <WorkflowCanvas
+          graph={graph}
+          family={family}
+          connectedChannels={
+            connections.data?.items
+              .filter(c => c.status === "connected")
+              .map(c => c.channel) ?? []
+          }
+          onChange={setGraph}
+          organizationId={organizationId}
+          role={role}
+          run={shown}
+          onRunNode={startReview}
+          busy={!!active || quote.isPending || run.isPending}
+        />
+      )}
       <footer className="wf-runbar">
         <div className="flex items-center gap-2">
           <span className={`wf-status-dot ${active ? "is-running" : ""}`} />

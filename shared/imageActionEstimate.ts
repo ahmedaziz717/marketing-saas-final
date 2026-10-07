@@ -40,6 +40,7 @@ export type ImageOutputSize = z.infer<typeof imageOutputSizeSchema>;
 export function workflowImageSize(ratio: string): ImageOutputSize {
   const sizes: Record<string, ImageOutputSize> = {
     "1:1": { width: 1080, height: 1080 },
+    "1.91:1": { width: 1200, height: 628 },
     "4:5": { width: 1080, height: 1350 },
     "9:16": { width: 1080, height: 1920 },
     "16:9": { width: 1920, height: 1080 },
