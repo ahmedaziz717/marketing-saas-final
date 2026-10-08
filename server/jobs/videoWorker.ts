@@ -1,5 +1,6 @@
 import { prepareVideoRequest } from "../lib/videoRequest";
 import { providerRequestRate } from "../lib/providerQuote";
+import { videoPricingContext } from "../lib/seedancePricing";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, gte, isNotNull, desc } from "drizzle-orm";
 import { aiUsage } from "../../drizzle/platformSchema";
@@ -408,7 +409,8 @@ export async function processNextVideoJob(db: LibraryDatabase) {
         const currentRate = await providerRequestRate(
           usage.rateSnapshot,
           job.endpoint!,
-          request
+          request,
+          videoPricingContext(job.setup, job.references)
         );
         const currentCredits = videoQuote(
           job.setup,

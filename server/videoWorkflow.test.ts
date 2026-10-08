@@ -86,7 +86,12 @@ import {
   videoWorkerHeartbeat,
   refreshFailedVideoDiagnostic,
 } from "./jobs/videoWorker";
-import { HiggsfieldError, requestUrl } from "./lib/higgsfield";
+import {
+  HiggsfieldError,
+  HiggsfieldQuoteUnavailableError,
+  requestUrl,
+} from "./lib/higgsfield";
+import { generationModel } from "../shared/modelCatalog";
 import { mp4Info } from "./lib/videoMedia";
 import { defaultVideoRates, videoQuote } from "./lib/videoPricing";
 import { aiScope } from "./lib/aiMetering";
@@ -346,6 +351,38 @@ const accepted = {
 };
 
 describe("durable video generation", () => {
+  it("locks a descriptive token estimate through submission and measured-cost reconciliation", async () => {
+    const model = generationModel(
+      "higgsfield:bytedance/seedance-2.5/reference-to-video"
+    )!;
+    state.estimate.mockRejectedValue(
+      new HiggsfieldQuoteUnavailableError(model.pricingNote)
+    );
+    const job = await queued({
+      ...setup(),
+      modelId: model.id,
+      resolution: "480p",
+      aspectRatio: "1:1",
+      duration: 5,
+    });
+    expect(job.credits).toBe(206);
+    await tick();
+    state.submit.mockResolvedValue({
+      ...accepted,
+      status: "completed",
+      video: { url: "https://cdn.example.test/clip.mp4" },
+    });
+    await tick();
+    await tick();
+    const [usage] = await state.db.select().from(aiUsage);
+    expect(usage.credits).toBe(206);
+    expect(usage.costMicros).toBeGreaterThan(1027200);
+    expect(usage.usage.costBasis).toBe("published_rate_estimate");
+    expect(
+      (await state.db.select().from(creditLedger)).map((r: any) => r.amount)
+    ).toEqual([-206]);
+    expect(state.submit).toHaveBeenCalledTimes(1);
+  });
   it("combines approved catalog and asset images in order, and rejects foreign or withdrawn catalog references", async () => {
     const settings = {
       ...setup(),

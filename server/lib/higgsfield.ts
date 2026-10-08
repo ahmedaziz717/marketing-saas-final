@@ -25,7 +25,7 @@ export class HiggsfieldError extends Error {
   }
 }
 export class HiggsfieldQuoteUnavailableError extends Error {
-  constructor() {
+  constructor(public pricingDescription?: string) {
     super(
       "An upfront credit price is not available for this model. Choose another model or ask your administrator to review its pricing. No generation was submitted."
     );
@@ -189,13 +189,18 @@ async function apiRequest(
       // Some live endpoints return only undiscounted prose, despite the USD
       // response documented for estimation. This is not a numeric account quote.
       if (json?.type === "description" && json?.usd == null) {
-        console.warn(
+        console.info(
           JSON.stringify({
-            event: "generation.quote.unpriced_model",
+            event: "generation.quote.description",
             endpoint: new URL(url).pathname.replace(/^\/estimate\//, ""),
           })
         );
-        throw new HiggsfieldQuoteUnavailableError();
+        throw new HiggsfieldQuoteUnavailableError(
+          typeof json.pricing_description === "string" &&
+          json.pricing_description.length <= 10000
+            ? json.pricing_description
+            : undefined
+        );
       }
       const parsed = estimateSchema.safeParse(json);
       if (!parsed.success) {

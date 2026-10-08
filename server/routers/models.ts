@@ -41,6 +41,7 @@ import {
   imageOutputSizeSchema,
 } from "../../shared/imageActionEstimate";
 import { videoActionAssumptionsSchema } from "../../shared/videoActionEstimate";
+import { providerDiscount } from "../lib/seedancePricing";
 import {
   textActionBudgets,
   textActionRate,
@@ -179,17 +180,34 @@ export const modelsRouter = router({
             input?.imageEstimate,
             input?.videoEstimate
           );
+          if (
+            definition.provider === "higgsfield" &&
+            actionEstimate.costMicros != null
+          ) {
+            const discount = providerDiscount(base);
+            const costMicros = Math.round(
+              actionEstimate.costMicros * (1 - discount / 100)
+            );
+            actionEstimate = {
+              ...actionEstimate,
+              costMicros,
+              credits: Math.ceil(
+                (costMicros *
+                  (1 + (base.markupPercent ?? policy.markupPercent) / 100)) /
+                  policy.creditValueMicros
+              ),
+              basis: discount
+                ? `Reference estimate · verified ${discount}% account discount`
+                : "Reference estimate · account discount not configured",
+            };
+          }
         } catch (error) {
+          actionEstimate = null;
           estimateProblem =
             error instanceof Error
               ? error.message
               : "Estimate unavailable for these settings.";
         }
-        if (definition.provider === "higgsfield" && actionEstimate)
-          actionEstimate = {
-            ...actionEstimate,
-            basis: "Published reference only — account discounts excluded",
-          };
         return { ...model, actionEstimate, estimateProblem };
       });
       return { policy, models, settings, rates };
@@ -254,9 +272,34 @@ export const modelsRouter = router({
         estimatedCostUsd: z.number().min(0).max(1000).nullable(),
         perRequestUsd: z.number().min(0).max(1000).nullable(),
         perSecondUsd: z.number().min(0).max(1000).nullable(),
+        providerDiscountPercent: z
+          .number()
+          .min(0)
+          .max(99.99)
+          .nullable()
+          .optional(),
+        providerDiscountEvidence: z.string().trim().max(500).optional(),
+        providerDiscountValidUntil: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.providerDiscountPercent) {
+        if (
+          !input.providerDiscountEvidence ||
+          !input.providerDiscountValidUntil ||
+          input.providerDiscountValidUntil <= Date.now()
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Record the account discount source and a future review date.",
+          });
+      }
       if (!compatibleRoutes(input.id).includes(input.routeId))
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -316,6 +359,16 @@ export const modelsRouter = router({
                   : Math.round(input.estimatedCostUsd * 1e6),
               perRequestUsd: input.perRequestUsd,
               perSecondUsd: input.perSecondUsd,
+              ...(input.providerDiscountPercent !== undefined
+                ? {
+                    providerDiscountPercent: input.providerDiscountPercent,
+                    providerDiscountEvidence:
+                      input.providerDiscountEvidence ?? "",
+                    providerDiscountValidUntil:
+                      input.providerDiscountValidUntil ?? null,
+                    providerDiscountVerifiedAt: Date.now(),
+                  }
+                : {}),
             },
             updatedAtMs: Date.now(),
           })

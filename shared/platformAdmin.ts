@@ -8,6 +8,27 @@ export const tierInput = z.object({
 export const rateInput = z.object({
   billingMode: z.enum(["fixed", "cost"]).optional(),
   markupPercent: z.number().min(0).max(1000).nullable().optional(),
+  providerDiscountPercent: z.number().min(0).max(99.99).nullable().optional(),
+  providerDiscountEvidence: z.string().max(500).optional(),
+  providerDiscountVerifiedAt: z.number().int().nonnegative().optional(),
+  providerDiscountValidUntil: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
+  pricingCalculation: z
+    .object({
+      listCostMicros: z.number().int().nonnegative(),
+      tokens: z.number().int().nonnegative(),
+      width: z.number().positive(),
+      height: z.number().positive(),
+      outputSeconds: z.number().positive(),
+      sourceSeconds: z.number().nonnegative(),
+      discount: z.number().nonnegative(),
+      perThousand: z.number().positive(),
+    })
+    .optional(),
   creditValueMicros: z.number().int().positive().optional(),
   estimatedCostMicros: z
     .number()

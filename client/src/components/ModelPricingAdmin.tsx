@@ -105,6 +105,9 @@ export function ModelPricingAdmin() {
     estimate: "",
     request: "",
     second: "",
+    discount: "",
+    discountEvidence: "",
+    discountUntil: "",
   });
   const refresh = () => {
     void utils.models.invalidate();
@@ -164,6 +167,14 @@ export function ModelPricingAdmin() {
           : String(rate.estimatedCostMicros / 1e6),
       request: rate?.perRequestUsd == null ? "" : String(rate.perRequestUsd),
       second: rate?.perSecondUsd == null ? "" : String(rate.perSecondUsd),
+      discount:
+        rate?.providerDiscountPercent == null
+          ? ""
+          : String(rate.providerDiscountPercent),
+      discountEvidence: rate?.providerDiscountEvidence ?? "",
+      discountUntil: rate?.providerDiscountValidUntil
+        ? new Date(rate.providerDiscountValidUntil).toISOString().slice(0, 10)
+        : "",
     });
     setEdit(id);
   }
@@ -860,8 +871,10 @@ export function ModelPricingAdmin() {
       </section>
       <p className="text-xs text-muted-foreground">
         OpenAI rates are checked against official pricing daily; actual tokens
-        are recorded per request. Higgsfield estimates use verified public list
-        prices, excluding promotions and contract discounts. Review your
+        are recorded per request. Higgsfield checks its estimate API for every
+        generation. Numeric account quotes take priority; supported token models
+        use the API’s current formula and a verified account discount, if
+        configured. This comparison table uses reference rates. Review your
         provider bill before treating estimates as final costs. Routing changes
         affect new actions only.
       </p>
@@ -887,6 +900,12 @@ export function ModelPricingAdmin() {
                   perRequestUsd:
                     form.request === "" ? null : Number(form.request),
                   perSecondUsd: form.second === "" ? null : Number(form.second),
+                  providerDiscountPercent:
+                    form.discount === "" ? null : Number(form.discount),
+                  providerDiscountEvidence: form.discountEvidence,
+                  providerDiscountValidUntil: form.discountUntil
+                    ? Date.parse(`${form.discountUntil}T23:59:59Z`)
+                    : null,
                 });
             }}
           >
@@ -921,6 +940,16 @@ export function ModelPricingAdmin() {
                       rate?.perSecondUsd == null
                         ? ""
                         : String(rate.perSecondUsd),
+                    discount:
+                      rate?.providerDiscountPercent == null
+                        ? ""
+                        : String(rate.providerDiscountPercent),
+                    discountEvidence: rate?.providerDiscountEvidence ?? "",
+                    discountUntil: rate?.providerDiscountValidUntil
+                      ? new Date(rate.providerDiscountValidUntil)
+                          .toISOString()
+                          .slice(0, 10)
+                      : "",
                   });
                 }}
               >
@@ -953,6 +982,53 @@ export function ModelPricingAdmin() {
                   />
                 </label>
               ))}
+            {generationModel(form.routeId)?.provider === "higgsfield" && (
+              <fieldset className="space-y-3 rounded-lg border p-3">
+                <legend className="px-1 text-sm font-medium">
+                  Verified account discount
+                </legend>
+                <p className="text-xs text-muted-foreground">
+                  Applies to formula estimates only. Numeric account quotes
+                  already include provider pricing and are never discounted
+                  twice. Verify this endpoint’s discount in your provider
+                  account; advertised maximum discounts may not apply.
+                </p>
+                <label className="block space-y-1 text-sm">
+                  <span>Provider discount (%)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99.99}
+                    step="any"
+                    value={form.discount}
+                    onChange={e =>
+                      setForm({ ...form, discount: e.target.value })
+                    }
+                    placeholder="No verified discount"
+                  />
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span>Verification source</span>
+                  <Input
+                    value={form.discountEvidence}
+                    onChange={e =>
+                      setForm({ ...form, discountEvidence: e.target.value })
+                    }
+                    placeholder="Account pricing page or contract reference"
+                  />
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span>Review discount by (UTC)</span>
+                  <Input
+                    type="date"
+                    value={form.discountUntil}
+                    onChange={e =>
+                      setForm({ ...form, discountUntil: e.target.value })
+                    }
+                  />
+                </label>
+              </fieldset>
+            )}
             <p className="text-xs text-muted-foreground">
               Per-request cost takes precedence over per-second pricing. The
               image credit estimate is calculated from the model’s token rates,

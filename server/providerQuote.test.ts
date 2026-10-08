@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 const estimate = vi.hoisted(() => vi.fn());
-vi.mock("./lib/higgsfield", () => ({
+vi.mock("./lib/higgsfield", async original => ({
+  ...(await original<typeof import("./lib/higgsfield")>()),
   estimateHiggsfield: estimate,
   higgsfieldConfigured: () => true,
 }));
@@ -9,7 +10,39 @@ import { defaultModelRate } from "./lib/modelCatalog";
 import { generationModel, modelRequestBody } from "../shared/modelCatalog";
 import { estimatedActionCredits } from "../shared/aiCredits";
 import { rateInput } from "../shared/platformAdmin";
+import { HiggsfieldQuoteUnavailableError } from "./lib/higgsfield";
 afterEach(() => vi.clearAllMocks());
+
+it("uses the current formula only for an explicit descriptive response and never double discounts a numeric quote", async () => {
+  const m = generationModel("higgsfield:bytedance/seedance-2.5/text-to-video")!;
+  const base = {
+    ...defaultModelRate(m),
+    markupPercent: 100,
+    creditValueMicros: 10000,
+  };
+  const body = { duration: 5, resolution: "480p", aspect_ratio: "1:1" };
+  estimate.mockRejectedValueOnce(
+    new HiggsfieldQuoteUnavailableError(m.pricingNote)
+  );
+  const quote = rateInput.parse(
+    await providerRequestRate(base, m.providerModel, body)
+  );
+  expect(quote.costBasis).toBe("published_rate_estimate");
+  expect(quote.pricingCalculation).toMatchObject({ width: 640, tokens: 48000 });
+  expect(estimatedActionCredits(quote)).toBe(206);
+  estimate.mockResolvedValueOnce({ costMicros: 870000, quotedAtMs: 123 });
+  const numeric = await providerRequestRate(
+    { ...quote, providerDiscountPercent: 50 },
+    m.providerModel,
+    body
+  );
+  expect(estimatedActionCredits(numeric)).toBe(174);
+  expect(numeric.pricingCalculation).toBeUndefined();
+  estimate.mockRejectedValueOnce(new Error("Provider offline"));
+  await expect(
+    providerRequestRate(base, m.providerModel, body)
+  ).rejects.toThrow("Provider offline");
+});
 
 it.each([
   [

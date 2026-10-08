@@ -1,4 +1,5 @@
 import { providerRequestRate } from "./providerQuote";
+import { seedanceCanvas, videoPricingContext } from "./seedancePricing";
 import { prepareVideoRequest } from "./videoRequest";
 import { videoEndpoint } from "../../shared/videoCreation";
 import { and, eq } from "drizzle-orm";
@@ -81,7 +82,8 @@ export async function quotedVideoRequest(
   const rate = await providerRequestRate(
     await videoRate(db, setup),
     videoEndpoint(setup),
-    request
+    request,
+    videoPricingContext(setup, refs)
   );
   return { request, rate, quote: videoQuote(setup, refs, rate) };
 }
@@ -127,31 +129,46 @@ export function videoQuote(
       ? sourceVideo.width / sourceVideo.height
       : ratio;
   // Quotes use nominal dimensions; final estimates use the measured MP4 dimensions.
+  const nominal = seedanceCanvas(
+    videoEndpoint(setup),
+    setup.resolution,
+    setup.mode === "create" ? setup.aspectRatio : "16:9"
+  );
+  const useNominal = !sourceVideo || setup.mode === "create";
   const width =
     measured?.width ??
+    (useNominal ? nominal?.[0] : undefined) ??
     (outputRatio >= 1 ? Math.round(short * outputRatio) : short);
   const height =
     measured?.height ??
+    (useNominal ? nominal?.[1] : undefined) ??
     (outputRatio >= 1 ? short : Math.round(short / outputRatio));
   const totalSeconds =
     seconds.source + (measured?.durationSeconds ?? seconds.output);
   const videoTokens = Math.ceil((width * height * totalSeconds * 24) / 1024);
   const costMicros =
-    rate.perRequestUsd != null
-      ? Math.round(rate.perRequestUsd * 1e6)
-      : rate.perSecondUsd != null
-        ? Math.round(
-            Math.ceil(measured?.durationSeconds ?? seconds.output) *
-              rate.perSecondUsd *
-              1e6
-          )
-        : rate.outputPerMillion == null
-          ? null
-          : Math.round(
-              videoTokens *
-                rate.outputPerMillion *
-                (seconds.source ? (rate.videoInputMultiplier ?? 0.6) : 1)
-            );
+    rate.pricingCalculation && measured
+      ? Math.round(
+          videoTokens *
+            rate.pricingCalculation.perThousand *
+            1000 *
+            (1 - rate.pricingCalculation.discount / 100)
+        )
+      : rate.perRequestUsd != null
+        ? Math.round(rate.perRequestUsd * 1e6)
+        : rate.perSecondUsd != null
+          ? Math.round(
+              Math.ceil(measured?.durationSeconds ?? seconds.output) *
+                rate.perSecondUsd *
+                1e6
+            )
+          : rate.outputPerMillion == null
+            ? null
+            : Math.round(
+                videoTokens *
+                  rate.outputPerMillion *
+                  (seconds.source ? (rate.videoInputMultiplier ?? 0.6) : 1)
+              );
   return {
     credits:
       rate.billingMode === "cost" && costMicros != null
@@ -161,7 +178,8 @@ export function videoQuote(
     durationSeconds: seconds.output,
     sourceSeconds: seconds.source,
     videoTokens:
-      rate.perRequestUsd != null || rate.outputPerMillion == null
+      !rate.pricingCalculation &&
+      (rate.perRequestUsd != null || rate.outputPerMillion == null)
         ? null
         : videoTokens,
     estimated: true as const,
