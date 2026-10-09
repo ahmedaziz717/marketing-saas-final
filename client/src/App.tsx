@@ -9,6 +9,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProductOverviewPage from "./pages/ProductOverviewPage";
 import PlannedFeaturePage from "./pages/PlannedFeaturePage";
+import StageAppsPage from "./pages/StageAppsPage";
 import CreativeWorkflowsPage from "./pages/CreativeWorkflowsPage";
 import { PRODUCT_FEATURES } from "@shared/frameProduct";
 import PlatformWebsitePage from "./pages/PlatformWebsitePage";
@@ -35,6 +36,17 @@ function SettingsRedirect({ to }: { to: string }) {
   return <Redirect to={`${to}${query.size ? `?${query}` : ""}`} replace />;
 }
 
+function OptimizeRedirect() {
+  const query = new URLSearchParams(useSearch());
+  return (
+    <SettingsRedirect
+      to={
+        query.has("workflow") ? "/app/optimize/workflows" : "/app/optimize/apps"
+      }
+    />
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -59,7 +71,9 @@ function Router() {
       <Route path="/app/plans" component={BriefsPage} />
       <Route path="/app/briefs" component={BriefsPage} />
       <Route path="/app/roadmap" component={ProductOverviewPage} />
-      <Route path="/app/creatives" component={CreativesPage} />
+      <Route path="/app/creatives">
+        <StageAppsPage />
+      </Route>
       <Route path="/app/creatives/overview" component={CreativesPage} />
       <Route path="/app/creatives/workflows">
         <CreativeWorkflowsPage />
@@ -73,6 +87,11 @@ function Router() {
           />
         )
       )}
+      {(["activate", "measure", "optimize"] as const).map(family => (
+        <Route key={family} path={`/app/${family}/apps`}>
+          <StageAppsPage family={family} />
+        </Route>
+      ))}
       <Route path="/app/activate/workflows">
         <CreativeWorkflowsPage family="activate" />
       </Route>
@@ -86,7 +105,7 @@ function Router() {
         <CreativeWorkflowsPage family="optimize" />
       </Route>
       <Route path="/app/optimize">
-        <CreativeWorkflowsPage family="optimize" />
+        <OptimizeRedirect />
       </Route>
       {PRODUCT_FEATURES.filter(
         feature => feature.availability === "planned"

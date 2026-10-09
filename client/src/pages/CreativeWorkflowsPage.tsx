@@ -1,6 +1,6 @@
 import { WorkflowFormEditor } from "@/components/WorkflowFormEditor";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
   ArrowRight,
@@ -47,7 +47,7 @@ import {
   workflowSections,
 } from "@shared/workflowPlatform";
 import type { WorkflowFamily } from "@shared/creativeWorkflow";
-import { WorkflowApps, WorkflowAppRunner } from "@/components/WorkflowApps";
+import { StageToolNavigation } from "@/components/StageToolNavigation";
 import { WorkflowRunReview } from "@/components/WorkflowRunReview";
 
 export default function CreativeWorkflowsPage({
@@ -79,12 +79,9 @@ function WorkflowWorkspace({ family }: { family: WorkflowFamily }) {
     );
   if (appId)
     return (
-      <WorkflowAppRunner
-        key={`${organizationId}:${appId}`}
-        organizationId={organizationId}
-        id={appId}
-        role={membership!.role}
-        onBack={() => navigate(section.path)}
+      <Redirect
+        to={`${section.appsPath}?${new URLSearchParams(search)}`}
+        replace
       />
     );
   return id ? (
@@ -144,7 +141,7 @@ function WorkflowLibrary({
       <div className="wf-library-heading">
         <div>
           <span className="wf-eyebrow">
-            {section.name.toUpperCase()} / WORKFLOWS & APPS
+            {section.name.toUpperCase()} / WORKFLOWS
           </span>
           <h1>{section.heading}</h1>
           <p>{section.description}</p>
@@ -153,6 +150,7 @@ function WorkflowLibrary({
           <Plus size={17} /> New workflow
         </Button>
       </div>
+      <StageToolNavigation family={family} view="workflows" />
       <section aria-labelledby="wf-template-heading">
         <div className="wf-section-title">
           <h2 id="wf-template-heading">Start with a workflow</h2>
@@ -192,7 +190,6 @@ function WorkflowLibrary({
           ))}
         </div>
       </section>
-      <WorkflowApps organizationId={organizationId} family={family} />
       <section>
         <div className="wf-section-title">
           <h2>
@@ -777,7 +774,7 @@ function WorkflowEditor({
                 });
                 setPublishOpen(false);
                 toast.success(`App version ${app.version} published`);
-                navigate(`${workflowSections[family].path}?app=${app.id}`);
+                navigate(`${workflowSections[family].appsPath}?app=${app.id}`);
               } catch (e) {
                 toast.error((e as Error).message);
               }

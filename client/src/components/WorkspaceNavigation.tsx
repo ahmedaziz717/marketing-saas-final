@@ -51,12 +51,9 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     aliases: ["/app/plans", "/app/briefs"],
     children: [
       { label: "Apps", path: "/app/creatives", exact: true },
+      { label: "Workflows", path: "/app/creatives/workflows" },
       { label: "Drafts", path: "/app/creatives/drafts" },
       { label: "Campaign plans", path: "/app/plans" },
-      {
-        label: "Workflows & Apps",
-        path: "/app/creatives/workflows",
-      },
     ],
   },
   {
@@ -66,15 +63,13 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Activate",
     aliases: ["/app/social", "/app/publishing", "/app/activate", "/app/email"],
     children: [
+      { label: "Apps", path: "/app/activate/apps" },
+      { label: "Workflows", path: "/app/activate/workflows" },
       { label: "Advertising", path: "/app/advertising", exact: true },
       { label: "Meta Ads", path: "/app/advertising/meta" },
       { label: "Social publishing", path: "/app/social", exact: true },
       { label: "Facebook", path: "/app/social/facebook" },
       { label: "Calendar", path: "/app/publishing" },
-      {
-        label: "Workflows & Apps",
-        path: "/app/activate/workflows",
-      },
     ],
   },
   {
@@ -84,8 +79,9 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Measure",
     aliases: ["/app/attribution", "/app/incrementality", "/app/measure"],
     children: [
+      { label: "Apps", path: "/app/measure/apps" },
+      { label: "Workflows", path: "/app/measure/workflows" },
       { label: "Overview", path: "/app/analytics", analyticsView: "overview" },
-      { label: "Workflows & Apps", path: "/app/measure/workflows" },
       {
         label: "Advertising",
         path: "/app/analytics/advertising",
@@ -103,7 +99,10 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     label: "Optimize",
     path: "/app/optimize",
     group: "Optimize",
-    children: [{ label: "Workflows & Apps", path: "/app/optimize/workflows" }],
+    children: [
+      { label: "Apps", path: "/app/optimize/apps" },
+      { label: "Workflows", path: "/app/optimize/workflows" },
+    ],
   },
   {
     icon: FolderOpen,

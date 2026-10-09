@@ -12,6 +12,7 @@ export const workflowSections: Record<
   {
     name: string;
     path: string;
+    appsPath: string;
     color: string;
     heading: string;
     description: string;
@@ -19,6 +20,7 @@ export const workflowSections: Record<
 > = {
   create: {
     name: "Create",
+    appsPath: "/app/creatives",
     path: "/app/creatives/workflows",
     color: "violet",
     heading: "Turn ideas into repeatable creative work.",
@@ -27,6 +29,7 @@ export const workflowSections: Record<
   },
   activate: {
     name: "Activate",
+    appsPath: "/app/activate/apps",
     path: "/app/activate/workflows",
     color: "blue",
     heading: "Give your content a path to its audience.",
@@ -35,6 +38,7 @@ export const workflowSections: Record<
   },
   measure: {
     name: "Measure",
+    appsPath: "/app/measure/apps",
     path: "/app/measure/workflows",
     color: "teal",
     heading: "Build a clear picture of performance.",
@@ -43,6 +47,7 @@ export const workflowSections: Record<
   },
   optimize: {
     name: "Optimize",
+    appsPath: "/app/optimize/apps",
     path: "/app/optimize/workflows",
     color: "amber",
     heading: "Turn evidence into your next decision.",

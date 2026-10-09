@@ -58,7 +58,9 @@ export function WorkflowApps({
                   `${workflowSections[app.family].name} App · ${app.graph.nodes.length} steps`}
               </p>
               <div>
-                <Link href={`${workflowSections[family].path}?app=${app.id}`}>
+                <Link
+                  href={`${workflowSections[family].appsPath}?app=${app.id}`}
+                >
                   Open App <ArrowRight size={14} />
                 </Link>
                 <Link
@@ -77,6 +79,12 @@ export function WorkflowApps({
             Publish a workflow as an App to give your team a simple way to run
             it and reuse it in other workflows.
           </p>
+          <Link
+            href={workflowSections[family].path}
+            className="text-primary underline"
+          >
+            Explore {workflowSections[family].name} workflows
+          </Link>
         </div>
       )}
     </section>
@@ -160,7 +168,7 @@ export function WorkflowAppRunner({
   return (
     <div className="wf-app-runner" data-family={item.family}>
       <Button variant="ghost" onClick={onBack}>
-        ← {section.name} workflows
+        ← {section.name} Apps
       </Button>
       <header>
         <span className="wf-eyebrow">

@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
+import { workflowSections } from "@shared/workflowPlatform";
 import { SidebarProvider, useSidebar } from "./ui/sidebar";
 import {
   WorkspaceNavigation,
@@ -65,6 +66,26 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+it.each(Object.values(workflowSections))(
+  "separates $name Apps from Workflows and highlights the selected destination",
+  section => {
+    const router = setup(section.appsPath);
+    fireEvent.click(screen.getByRole("button", { name: section.name }));
+    expect(
+      screen.getByRole("link", { name: "Apps" }).getAttribute("aria-current")
+    ).toBe("page");
+    const workflow = screen.getByRole("link", {
+      name: "Workflows",
+    });
+    expect(workflow.getAttribute("aria-current")).toBeNull();
+    fireEvent.click(workflow);
+    expect(router.history.at(-1)).toBe(section.path);
+    expect(workspacePageLabel(section.path)).toBe(
+      `${section.name} / Workflows`
+    );
+    expect(workspacePageLabel(section.appsPath)).toBe(`${section.name} / Apps`);
+  }
+);
 it("starts with every submenu closed, including the current section", () => {
   setup();
   expect(

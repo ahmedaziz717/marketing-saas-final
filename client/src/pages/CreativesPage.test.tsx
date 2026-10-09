@@ -51,6 +51,7 @@ vi.mock("@/components/PublicationComposer", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    workflows: { listApps: { useQuery: () => ({ data: [] }) } },
     useUtils: () => ({
       assetLibrary: {
         list: { invalidate: vi.fn() },
@@ -193,7 +194,7 @@ it("offers six working apps, honest roadmap labels, and shared campaign context"
   expect(
     screen.getByRole("link", { name: "Creator video" }).getAttribute("href")
   ).toBe("/app/creatives/video?plan=7&type=ugc");
-  expect(screen.getByText("Drafts only")).toBeTruthy();
+  expect(screen.queryByText("Drafts only")).toBeNull();
   expect(
     screen.getByRole("link", { name: "Campaign planner" }).getAttribute("href")
   ).toBe("/app/plans");
