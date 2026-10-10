@@ -1,3 +1,224 @@
-import { WorkspaceGate } from "@/components/WorkspaceGate"; import { PageHeader } from "@/components/PageHeader"; import { StatusPill } from "@/components/StatusPill"; import { Button } from "@/components/ui/button"; import { useWorkspace } from "@/hooks/useWorkspace"; import { trpc } from "@/lib/trpc"; import { ArrowRight, BookOpenText, Boxes, CheckCircle2, Images, ShieldCheck } from "lucide-react"; import { useLocation } from "wouter";
-function Dashboard(){const{organizationId,organization}=useWorkspace();const[,setLocation]=useLocation();const brand=trpc.brand.get.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const assets=trpc.brand.assets.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const briefs=trpc.briefs.list.useQuery({organizationId:organizationId!},{enabled:!!organizationId});const approvedAssets=assets.data?.filter(a=>a.status==="approved").length??0;const approvedBriefs=briefs.data?.filter(b=>b.status==="approved").length??0;const steps=[{label:"Activate brand kit",complete:brand.data?.status==="active",action:()=>setLocation("/app/brand")},{label:"Approve brand assets",complete:approvedAssets>0,action:()=>setLocation("/app/brand")},{label:"Approve a campaign brief",complete:approvedBriefs>0,action:()=>setLocation("/app/briefs")},{label:"Generate a creative set",complete:false,action:()=>setLocation("/app/creatives")}];return <><PageHeader eyebrow="Creative control center" title="Good work starts with a clear frame." description={`${organization?.name??"Your workspace"} has one governed path from source material to published Meta creative.`} action={<Button onClick={()=>setLocation("/app/briefs")} className="rounded-full">New campaign brief<ArrowRight className="ml-2 h-4 w-4"/></Button>}/><div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><section className="surface p-6 md:p-8"><div className="flex items-start justify-between"><div><p className="eyebrow">Launch readiness</p><h2 className="mt-3 text-2xl font-semibold">Your first creative set</h2></div><div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><ShieldCheck className="h-6 w-6"/></div></div><div className="mt-8 grid gap-3">{steps.map((step,index)=><button key={step.label} onClick={step.action} className="flex w-full items-center gap-4 rounded-2xl border hairline bg-background/60 p-4 text-left hover:border-primary/30 hover:bg-primary/[.03]"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${step.complete?"bg-emerald-100 text-emerald-700":"bg-muted text-muted-foreground"}`}>{step.complete?<CheckCircle2 className="h-4 w-4"/>:index+1}</span><span className="flex-1 font-medium">{step.label}</span>{step.complete?<StatusPill status="completed"/>:<ArrowRight className="h-4 w-4 text-muted-foreground"/>}</button>)}</div></section><aside className="space-y-5"><div className="surface p-6"><p className="eyebrow">Workspace health</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-muted/70 p-4"><Boxes className="h-4 w-4 text-primary"/><p className="mt-5 text-3xl font-semibold">{approvedAssets}</p><p className="mt-1 text-xs text-muted-foreground">Approved assets</p></div><div className="rounded-2xl bg-muted/70 p-4"><BookOpenText className="h-4 w-4 text-primary"/><p className="mt-5 text-3xl font-semibold">{approvedBriefs}</p><p className="mt-1 text-xs text-muted-foreground">Approved briefs</p></div></div></div><div className="surface overflow-hidden bg-[#211d28] p-6 text-white"><Images className="h-5 w-5 text-violet-300"/><h3 className="mt-8 font-editorial text-3xl leading-none">Only approved inputs enter the model.</h3><p className="mt-4 text-sm leading-6 text-white/55">Frame re-checks brief and asset status on the server before every generation request.</p></div></aside></div></>}
-export default function WorkspaceApp(){return <WorkspaceGate><Dashboard/></WorkspaceGate>}
+import { Link } from "wouter";
+import {
+  ArrowRight,
+  BarChart3,
+  BookOpenText,
+  CalendarDays,
+  Clapperboard,
+  FolderOpen,
+  Image,
+  Link2,
+  MessageSquare,
+  Palette,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  WandSparkles,
+} from "lucide-react";
+import { WorkspaceGate } from "@/components/WorkspaceGate";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { studioContentHref } from "@shared/contentWorkflow";
+
+const stages = [
+  {
+    label: "Create",
+    icon: Sparkles,
+    description: "Turn an idea into content.",
+    href: "/app/creatives",
+  },
+  {
+    label: "Activate",
+    icon: Send,
+    description: "Put approved work into motion.",
+    href: "/app/publishing",
+  },
+  {
+    label: "Measure",
+    icon: BarChart3,
+    description: "See how your campaigns perform.",
+    href: "/app/analytics",
+  },
+  {
+    label: "Optimize",
+    icon: WandSparkles,
+    description: "Learn, test, and improve.",
+    href: "/app/optimize",
+    planned: true,
+  },
+];
+function Dashboard() {
+  const { organization } = useWorkspace();
+  return (
+    <>
+      <PageHeader
+        eyebrow={organization?.name || "Your workspace"}
+        title="What will you make next?"
+        description="Your brand, creative work, and campaigns. All connected."
+        action={
+          <Button asChild>
+            <Link href="/app/creatives">
+              <Sparkles size={16} />
+              Explore apps
+            </Link>
+          </Button>
+        }
+      />
+      <section className="workspace-home-start" aria-labelledby="start-heading">
+        <div className="workspace-home-intro">
+          <span className="workspace-home-icon">
+            <Sparkles size={25} />
+          </span>
+          <h2 id="start-heading">
+            Start with an idea.
+            <br />
+            <span>Make it your own.</span>
+          </h2>
+          <p>
+            Create something new or bring your next campaign together. Your
+            drafts are ready whenever you are.
+          </p>
+          <Link href="/app/creatives/drafts" className="workspace-draft-link">
+            <FolderOpen size={17} />
+            Continue a draft
+            <ArrowRight size={16} />
+          </Link>
+        </div>
+        <div className="workspace-quick-apps">
+          {[
+            {
+              title: "Create an image",
+              detail: "Products, services, and ideas",
+              icon: Image,
+              href: "/app/creatives/images",
+              color: "images",
+            },
+            {
+              title: "Create a video",
+              detail: "Product stories and motion",
+              icon: Clapperboard,
+              href: "/app/creatives/video",
+              color: "video",
+            },
+            {
+              title: "Compose a post",
+              detail: "Content for your social channels",
+              icon: MessageSquare,
+              href: studioContentHref("facebook"),
+              color: "social",
+            },
+            {
+              title: "Plan a campaign",
+              detail: "A goal, an audience, a direction",
+              icon: BookOpenText,
+              href: "/app/plans",
+              color: "plans",
+            },
+          ].map(({ title, detail, icon: Icon, href, color }) => (
+            <Link
+              key={href}
+              href={href}
+              className="workspace-quick-app"
+              data-app={color}
+            >
+              <span>
+                <Icon size={22} />
+              </span>
+              <div>
+                <h3>{title}</h3>
+                <p>{detail}</p>
+              </div>
+              <ArrowRight size={16} />
+            </Link>
+          ))}
+        </div>
+      </section>
+      <section
+        className="workspace-home-section"
+        aria-labelledby="loop-heading"
+      >
+        <div className="studio-section-heading">
+          <div>
+            <h2 id="loop-heading">Your marketing loop</h2>
+            <p>Move between stages without losing the context.</p>
+          </div>
+        </div>
+        <div className="workspace-loop-grid">
+          {stages.map(
+            ({ label, icon: Icon, description, href, planned }, index) => (
+              <Link
+                key={label}
+                href={href}
+                data-workflow={label}
+                className="workspace-loop-card"
+              >
+                <div className="workspace-loop-top">
+                  <Icon size={22} />
+                  <span>{planned ? "Planned" : `0${index + 1}`}</span>
+                </div>
+                <h3>{label}</h3>
+                <p>{description}</p>
+                <ArrowRight size={16} className="workspace-loop-arrow" />
+              </Link>
+            )
+          )}
+        </div>
+      </section>
+      <section
+        className="workspace-home-section"
+        aria-labelledby="organize-heading"
+      >
+        <div className="studio-section-heading">
+          <div>
+            <h2 id="organize-heading">Keep things moving</h2>
+          </div>
+        </div>
+        <div className="workspace-shortcut-grid">
+          {[
+            {
+              title: "Review your assets",
+              detail: "Check submissions and approve versions.",
+              icon: ShieldCheck,
+              href: "/app/library?view=needs_review",
+            },
+            {
+              title: "Open the calendar",
+              detail: "Plan, approve, and schedule delivery.",
+              icon: CalendarDays,
+              href: "/app/publishing",
+            },
+            {
+              title: "Make it on-brand",
+              detail: "Keep your logo, colors, and voice together.",
+              icon: Palette,
+              href: "/app/brand?tab=brand",
+            },
+            {
+              title: "Connect your channels",
+              detail: "Manage your accounts and integrations.",
+              icon: Link2,
+              href: "/app/settings/integrations",
+            },
+          ].map(({ title, detail, icon: Icon, href }) => (
+            <Link key={href} href={href} className="workspace-shortcut">
+              <Icon size={20} />
+              <div>
+                <h3>{title}</h3>
+                <p>{detail}</p>
+              </div>
+              <ArrowRight size={15} />
+            </Link>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+export default function WorkspaceApp() {
+  return (
+    <WorkspaceGate>
+      <Dashboard />
+    </WorkspaceGate>
+  );
+}

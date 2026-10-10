@@ -1,0 +1,69 @@
+# Channel navigation and analytics sections
+
+This UI-only change builds on the Facebook-first staging release. There are no
+schema, credential, publishing-policy, provider-call or advertising-budget changes.
+
+## Navigation (workspace refresh, October 2026)
+
+- Default desktop state is an 80px rail with text below each icon. Expanding it
+  is an explicit action (logo hover/focus reveals “Expand sidebar”, or Ctrl/Cmd+B).
+  The 240px expanded state is remembered on this browser; mobile uses a drawer.
+- Primary destinations are Home, Create, Activate, Measure, Optimize, Library,
+  Brand, and Settings. Platform administration remains an independent shell.
+- Brand opens directly from its own sidebar icon at `/app/brand`. It combines
+  the editable workspace name, logo uploads, business profile, and brand identity.
+  `/app/settings/company` redirects to Brand, preserving the selected tab.
+- Settings opens directly to Team & access, with one shared administrative
+  navigation. Catalog & offerings contains its own Sources tab for website scans,
+  stores, and CSV imports; Import sources is no longer a separate destination.
+  Legacy catalog and import URLs redirect to Settings, preserving queries.
+- Workspace rename is limited to owners/admins and recorded atomically in the
+  activity log. It changes the display name, not workspace identity or memberships.
+  Logo uploads use the existing pending-approval workflow in Library.
+- A compact group opens a single anchored flyout. It does not expand the rail or
+  navigate. Expanded groups use one disclosure at a time. Groups start closed,
+  close on selection, and are never reopened by route changes or old preferences.
+- Escape closes the flyout/disclosure and restores focus. Buttons expose
+  aria-expanded and links expose aria-current. Selecting a destination closes
+  the mobile drawer.
+- Create contains Apps, Drafts, Campaign plans, and planned creative workflows.
+  Activate contains channel management, Calendar, and planned automations.
+  Measure retains distinct Overview, Advertising, and Social reports.
+- The header keeps account switching visible in compact mode. An icon-only
+  sun/moon toggle sits at the bottom of the sidebar, above the account button,
+  with the same alignment in compact and expanded modes. It follows the system
+  appearance by default; clicking switches directly between light and dark and
+  saves that choice per browser, synchronized across tabs. There is no visible
+  System option. Public marketing pages stay light.
+- Planned destinations open explicitly labeled roadmap pages, never operational
+  editors. Existing source, library, publishing, settings, and historical links
+  continue to work.
+
+## Channel pages
+
+Facebook and Meta Ads no longer repeat channel tabs or connection-management
+cards. Account selectors still select among existing connections. Empty states
+explain that accounts are managed in Settings / Integrations with a simple link;
+no connection mutation is performed from these pages. Integration cards and
+OAuth flows in Settings are unchanged. The historical legacy request screen is
+not redesigned in this patch.
+
+## Analytics
+
+/app/analytics is Overview; /app/analytics/advertising and /app/analytics/social
+are scoped views. Old ?tab=advertising and ?tab=social links continue to work.
+Dates, channel, account and comparison are URL-backed; changing sections keeps
+applied dates and comparison and clears incompatible account/channel filters.
+Each scoped view only offers and requests the corresponding account types.
+Provider reporting, missing-metric treatment and attribution are unchanged.
+
+## Verification
+
+New component tests cover collapse, direct links, permissions-neutral planned
+items, mobile closure, ten-channel lists and unavailable local storage. Analytics
+tests cover scopes, URL restoration and date/channel/account filters. The Chrome
+channel fixture now renders the actual dashboard sidebar and pages, including
+connected and empty channel states, Analytics subsections, mobile navigation and
+a ten-channel stress case. Fixtures use synthetic data, not a production session.
+
+Navigation semantics reference: https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation/

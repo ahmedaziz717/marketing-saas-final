@@ -1,0 +1,232 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import {
+  aiUsage,
+  creditLedger,
+  platformAccounts,
+  platformTiers,
+  providerRates,
+} from "../../drizzle/platformSchema";
+import { withOrganizationTransaction } from "./activity";
+import { effectiveRate } from "./creditPricing";
+import {
+  textActionForOperation,
+  textActionRate,
+} from "../../shared/textActionEstimate";
+import { estimatedActionCredits } from "../../shared/aiCredits";
+import {
+  estimateCostMicros,
+  estimateImageCostMicros,
+  utcCreditMonth,
+  type ProviderRate,
+} from "../../shared/platformAdmin";
+export const aiScope = new AsyncLocalStorage<{
+  organizationId: number;
+  actorUserId: number;
+  operation: string;
+  quotedCredits?: number;
+}>();
+export async function creditState(
+  db: any,
+  organizationId: number,
+  period = utcCreditMonth()
+) {
+  const [account] = await db
+    .select()
+    .from(platformAccounts)
+    .where(eq(platformAccounts.organizationId, organizationId));
+  const [tier] = account?.tierId
+    ? await db
+        .select()
+        .from(platformTiers)
+        .where(eq(platformTiers.id, account.tierId))
+    : [];
+  const [balance] = await db
+    .select({
+      value: sql<number>`coalesce(sum(${creditLedger.amount}),0)`.mapWith(
+        Number
+      ),
+    })
+    .from(creditLedger)
+    .where(
+      and(
+        eq(creditLedger.organizationId, organizationId),
+        eq(creditLedger.period, period)
+      )
+    );
+  return {
+    account,
+    tier,
+    period,
+    allowance: tier?.monthlyCredits ?? 0,
+    adjustments: balance?.value ?? 0,
+    remaining: (tier?.monthlyCredits ?? 0) + (balance?.value ?? 0),
+  };
+}
+function token(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
+}
+export async function meteredCall<T>(
+  provider: string,
+  model: string,
+  kind: "text" | "image" | "other",
+  call: (context: {
+    id: string;
+    record: (metadata: Record<string, unknown>) => Promise<void>;
+  }) => Promise<{ value: T; usage?: Record<string, unknown> }>,
+  options?: { rateSnapshot?: ProviderRate }
+): Promise<T> {
+  const scope = aiScope.getStore();
+  // Unit tests without a request context do not access production persistence.
+  if (process.env.NODE_ENV === "test" && !scope)
+    return (await call({ id: randomUUID(), record: async () => {} })).value;
+  const db = await getDb();
+  if (!db) throw new Error("AI usage accounting is unavailable. Please retry.");
+  const baseRate =
+    options?.rateSnapshot ?? (await effectiveRate(db, provider, model, kind));
+  const rate =
+      kind === "text" && !options?.rateSnapshot
+        ? textActionRate(baseRate, textActionForOperation(scope?.operation))
+        : baseRate,
+    credits = estimatedActionCredits(rate),
+    id = randomUUID(),
+    period = utcCreditMonth(),
+    createdAtMs = Date.now();
+  if (scope?.quotedCredits != null && scope.quotedCredits !== credits)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "The credit price changed. Review a new quote before generating.",
+    });
+  const start = async (tx: any) => {
+    if (scope) {
+      const state = await creditState(tx, scope.organizationId, period);
+      if (state.account?.aiPaused)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "AI generation is paused for this account. Contact your administrator.",
+        });
+      if (state.account?.enforceCredits && state.remaining < credits)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Insufficient AI credits. This request needs ${credits} credits; ${Math.max(0, state.remaining)} remain.`,
+        });
+      await tx.insert(creditLedger).values({
+        id,
+        organizationId: scope.organizationId,
+        period,
+        amount: -credits,
+        reason: `Reserved: ${kind} generation`,
+        actorUserId: scope.actorUserId,
+        createdAtMs,
+      });
+    }
+    await tx.insert(aiUsage).values({
+      id,
+      organizationId: scope?.organizationId ?? null,
+      actorUserId: scope?.actorUserId ?? null,
+      operation: scope?.operation ?? "unattributed",
+      provider,
+      model,
+      kind,
+      status: "pending",
+      credits,
+      period,
+      createdAtMs,
+      rateSnapshot: rate ?? null,
+    });
+  };
+  if (scope) await withOrganizationTransaction(db, scope.organizationId, start);
+  else await db.transaction(start);
+  let result: Awaited<ReturnType<typeof call>>;
+  try {
+    result = await call({
+      id,
+      record: async metadata => {
+        await db
+          .update(aiUsage)
+          .set({ usage: metadata })
+          .where(eq(aiUsage.id, id));
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "keepReservation" in error &&
+      error.keepReservation
+    ) {
+      await db
+        .update(aiUsage)
+        .set({ status: "attention", finishedAtMs: Date.now() })
+        .where(eq(aiUsage.id, id));
+      throw error;
+    }
+    const failed = async (tx: any) => {
+      await tx
+        .update(aiUsage)
+        .set({ status: "failed", finishedAtMs: Date.now() })
+        .where(eq(aiUsage.id, id));
+      if (scope)
+        await tx
+          .insert(creditLedger)
+          .values({
+            id: `refund:${id}`,
+            organizationId: scope.organizationId,
+            period,
+            amount: credits,
+            reason: "Automatic credit refund: provider request failed",
+            actorUserId: scope.actorUserId,
+            createdAtMs: Date.now(),
+          })
+          .onConflictDoNothing();
+    };
+    if (scope)
+      await withOrganizationTransaction(db, scope.organizationId, failed);
+    else await db.transaction(failed);
+    throw error;
+  }
+  const usage = result.usage ?? {},
+    input = token(usage.prompt_tokens ?? usage.input_tokens),
+    output = token(usage.completion_tokens ?? usage.output_tokens);
+  const detail = (usage.prompt_tokens_details ?? usage.input_tokens_details) as
+    | Record<string, unknown>
+    | undefined;
+  const cached = Math.min(input ?? 0, token(detail?.cached_tokens) ?? 0);
+  const cost =
+    kind === "image"
+      ? estimateImageCostMicros(rate, usage)
+      : estimateCostMicros(rate, input, output, cached);
+  // The accepted action price is fixed. Provider usage affects our cost and
+  // margin, never a second customer deduction after the action completes.
+  const finalCredits = credits;
+  const settle = async (tx: any) => {
+    await tx
+      .update(aiUsage)
+      .set({
+        status: "succeeded",
+        usage: {
+          ...usage,
+          reservedCredits: credits,
+          pricingStatus: cost == null ? "awaiting_cost" : "calculated",
+          retailMicros: finalCredits * (rate.creditValueMicros ?? 10000),
+        },
+        credits: finalCredits,
+        inputTokens: input,
+        outputTokens: output,
+        cachedTokens: cached,
+        costMicros: cost,
+        finishedAtMs: Date.now(),
+      })
+      .where(eq(aiUsage.id, id));
+  };
+  if (scope)
+    await withOrganizationTransaction(db, scope.organizationId, settle);
+  else await db.transaction(settle);
+  return result.value;
+}

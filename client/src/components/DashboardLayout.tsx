@@ -1,54 +1,294 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { useTheme } from "@/contexts/ThemeContext";
+import { rememberWorkspace } from "@/lib/workspaceSelection";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { CreditBalance } from "./CreditBalance";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { EvokeLoopLogo } from "@shared/brand";
+import {
+  ArrowUpRight,
+  Building2,
+  ChevronDown,
+  CircleHelp,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { startLogin } from "@/const";
-import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BookOpenText, Boxes, Images, LayoutDashboard, LogOut, PackageSearch, PanelLeft, Send, Settings } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { CSSProperties, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import {
+  WorkspaceNavigation,
+  workspacePageLabel,
+  workspaceSection,
+} from "./WorkspaceNavigation";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { AppearanceToggle } from "./AppearanceToggle";
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Home", path: "/app" },
-  { icon: BookOpenText, label: "Briefs", path: "/app/briefs" },
-  { icon: Images, label: "Creatives", path: "/app/creatives" },
-  { icon: Send, label: "Publish", path: "/app/publishing" },
-  { icon: Boxes, label: "Brand", path: "/app/brand" },
-  { icon: PackageSearch, label: "Catalog", path: "/app/catalog" },
-  { icon: Activity, label: "Activity", path: "/app/activity" },
-  { icon: Settings, label: "Settings", path: "/app/settings" },
-];
-const SIDEBAR_WIDTH_KEY = "frame-sidebar-width";
-const DEFAULT_WIDTH = 248;
-const MIN_WIDTH = 210;
-const MAX_WIDTH = 360;
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem(SIDEBAR_WIDTH_KEY)) || DEFAULT_WIDTH);
+export const SIDEBAR_PREFERENCE_KEY = "evokeloop-sidebar-expanded";
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [location] = useLocation();
   const { loading, user } = useAuth();
-  useEffect(() => localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)), [sidebarWidth]);
+  const { resolvedTheme } = useTheme();
+  const changeOpen = (value: boolean) => {
+    setOpen(value);
+    try {
+      localStorage.setItem(SIDEBAR_PREFERENCE_KEY, String(value));
+    } catch {
+      /* Storage is optional. */
+    }
+  };
   if (loading) return <DashboardLayoutSkeleton />;
-  if (!user) return <div className="grid min-h-screen place-items-center p-6"><div className="surface max-w-md p-8 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary font-editorial text-2xl text-primary-foreground">F</div><h1 className="mt-6 font-editorial text-5xl">Sign in to Frame</h1><p className="mt-4 text-sm leading-6 text-muted-foreground">Keep creative work, approvals, and publishing actions inside one controlled workspace.</p><Button onClick={() => startLogin()} size="lg" className="mt-7 w-full rounded-full">Continue securely</Button></div></div>;
-  return <SidebarProvider style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}><DashboardLayoutContent setSidebarWidth={setSidebarWidth}>{children}</DashboardLayoutContent></SidebarProvider>;
+  if (!user)
+    return (
+      <div className="grid min-h-screen place-items-center p-6">
+        <div className="surface max-w-md p-8 text-center">
+          <EvokeLoopLogo
+            reversed={resolvedTheme === "dark"}
+            className="mx-auto"
+          />
+          <h1 className="mt-6 text-3xl font-semibold">Sign in to EvokeLoop</h1>
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">
+            Your ideas, content, and campaigns in one workspace.
+          </p>
+          <Button
+            onClick={() => startLogin()}
+            size="lg"
+            className="mt-7 w-full"
+          >
+            Continue
+          </Button>
+        </div>
+      </div>
+    );
+  return (
+    <SidebarProvider
+      open={open}
+      onOpenChange={changeOpen}
+      className="evoke-shell"
+      data-workflow={workspaceSection(location)}
+      style={
+        {
+          "--sidebar-width": "240px",
+          "--sidebar-width-icon": "80px",
+        } as CSSProperties
+      }
+    >
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </SidebarProvider>
+  );
 }
-
-function DashboardLayoutContent({ children, setSidebarWidth }: { children: React.ReactNode; setSidebarWidth: (width: number) => void }) {
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
-  const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
-  const isMobile = useIsMobile();
-  useEffect(() => { if (isCollapsed) setIsResizing(false); }, [isCollapsed]);
-  useEffect(() => {
-    const move = (event: MouseEvent) => { if (!isResizing) return; const left = sidebarRef.current?.getBoundingClientRect().left ?? 0; const width = event.clientX - left; if (width >= MIN_WIDTH && width <= MAX_WIDTH) setSidebarWidth(width); };
-    const up = () => setIsResizing(false);
-    if (isResizing) { document.addEventListener("mousemove", move); document.addEventListener("mouseup", up); document.body.style.cursor = "col-resize"; }
-    return () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); document.body.style.cursor = ""; };
-  }, [isResizing, setSidebarWidth]);
-  return <><div className="relative" ref={sidebarRef}><Sidebar collapsible="icon" className="border-r border-sidebar-border/70 bg-sidebar" disableTransition={isResizing}><SidebarHeader className="h-20 justify-center border-b border-sidebar-border/70"><div className="flex w-full items-center gap-3 px-2"><button onClick={toggleSidebar} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" aria-label="Toggle navigation"><PanelLeft className="h-4 w-4 text-muted-foreground" /></button>{!isCollapsed && <div className="flex min-w-0 items-center gap-2"><div className="grid h-7 w-7 place-items-center rounded-lg bg-primary font-editorial text-lg text-primary-foreground">F</div><span className="truncate font-semibold tracking-tight">Frame</span></div>}</div></SidebarHeader><SidebarContent className="gap-0 pt-4"><div className="px-4 pb-2 text-[10px] font-semibold uppercase tracking-[.18em] text-muted-foreground group-data-[collapsible=icon]:hidden">Workspace</div><SidebarMenu className="gap-1 px-2 py-1">{menuItems.map(item => { const isActive = location === item.path; return <SidebarMenuItem key={item.path}><SidebarMenuButton isActive={isActive} onClick={() => setLocation(item.path)} tooltip={item.label} className="h-10 rounded-xl font-medium data-[active=true]:bg-primary/10 data-[active=true]:text-primary"><item.icon className="h-4 w-4"/><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>; })}</SidebarMenu></SidebarContent><SidebarFooter className="p-3"><DropdownMenu><DropdownMenuTrigger asChild><button className="flex w-full items-center gap-3 rounded-xl p-1 text-left hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring"><Avatar className="h-9 w-9 shrink-0 border"><AvatarFallback className="text-xs font-medium">{user?.name?.charAt(0).toUpperCase() ?? "U"}</AvatarFallback></Avatar><div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium leading-none">{user?.name || "Member"}</p><p className="mt-1.5 truncate text-xs text-muted-foreground">{user?.email || ""}</p></div></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive"><LogOut className="mr-2 h-4 w-4"/>Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu></SidebarFooter></Sidebar><div className={`absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/20 ${isCollapsed ? "hidden" : ""}`} onMouseDown={() => setIsResizing(true)} /></div><SidebarInset>{isMobile && <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/90 px-2 backdrop-blur"><SidebarTrigger className="h-9 w-9 rounded-lg"/><span className="font-medium">{activeMenuItem?.label ?? "Frame"}</span></div>}<main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main></SidebarInset></>;
+  const { workspaces = [], organizationId, organization } = useWorkspace();
+  const { resolvedTheme } = useTheme();
+  const [location] = useLocation();
+  const search = useSearch();
+  const { state, toggleSidebar, isMobile } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
+  const toggleLabel = collapsed
+    ? "Expand sidebar"
+    : isMobile
+      ? "Close navigation"
+      : "Collapse sidebar";
+  return (
+    <>
+      <Sidebar
+        collapsible="icon"
+        className="workspace-sidebar border-r border-sidebar-border bg-sidebar"
+      >
+        <SidebarHeader className="workspace-sidebar-header">
+          {!collapsed && (
+            <Link
+              href="/app"
+              aria-label="EvokeLoop workspace"
+              className="workspace-wordmark"
+            >
+              <EvokeLoopLogo reversed={resolvedTheme === "dark"} />
+            </Link>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={toggleSidebar}
+                className={`workspace-brand-button ${collapsed ? "compact" : ""}`}
+                aria-label={toggleLabel}
+              >
+                {collapsed ? (
+                  <>
+                    <EvokeLoopLogo symbol className="workspace-brand-symbol" />
+                    <PanelLeftOpen
+                      className="workspace-expand-icon"
+                      size={20}
+                    />
+                  </>
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{toggleLabel}</TooltipContent>
+          </Tooltip>
+        </SidebarHeader>
+        <SidebarContent className="workspace-sidebar-content">
+          <WorkspaceNavigation />
+        </SidebarContent>
+        <SidebarFooter className="workspace-sidebar-footer">
+          <div className="workspace-sidebar-appearance">
+            <AppearanceToggle />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="workspace-profile"
+                aria-label="Your account"
+                data-compact={collapsed}
+              >
+                <Avatar className="h-8 w-8 shrink-0 border">
+                  <AvatarFallback className="text-xs font-semibold">
+                    {user?.name?.charAt(0).toUpperCase() ??
+                      user?.email?.charAt(0).toUpperCase() ??
+                      "U"}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {user?.name || "Your account"}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {user?.email}
+                      </span>
+                    </span>
+                    <ChevronDown size={14} />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side={collapsed ? "right" : "top"}
+              align="end"
+              className="w-60 rounded-xl"
+            >
+              <DropdownMenuLabel className="truncate">
+                {user?.email || "Your account"}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/app/settings">Workspace settings</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href="/product">
+                  Explore EvokeLoop <ArrowUpRight size={14} />
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-destructive">
+                <LogOut size={16} />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset className="min-w-0">
+        <header className="evoke-toolbar">
+          <div className="workspace-toolbar-leading">
+            {isMobile && (
+              <SidebarTrigger
+                aria-label="Open navigation"
+                className="h-9 w-9 shrink-0 rounded-xl"
+              />
+            )}
+            <div className="workspace-account-switcher">
+              <Building2 size={16} aria-hidden="true" />
+              {workspaces.length > 1 ? (
+                <select
+                  aria-label="Switch account"
+                  value={organizationId ?? ""}
+                  onChange={event => {
+                    if (user) {
+                      rememberWorkspace(user.id, Number(event.target.value));
+                      window.location.assign("/app");
+                    }
+                  }}
+                >
+                  {workspaces.map(workspace => (
+                    <option
+                      key={workspace.organization.id}
+                      value={workspace.organization.id}
+                    >
+                      {workspace.organization.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span>{organization?.name || "Workspace"}</span>
+              )}
+            </div>
+            <span className="workspace-toolbar-divider" aria-hidden="true" />
+            <div className="evoke-toolbar-path">
+              <span className="workflow-current-dot" aria-hidden="true" />
+              <span>{workspacePageLabel(location, search)}</span>
+            </div>
+          </div>
+          <div className="evoke-toolbar-actions">
+            {organizationId && (
+              <CreditBalance organizationId={organizationId} />
+            )}
+            <a
+              href="/contact"
+              aria-label="Help"
+              title="Help"
+              className="workspace-help"
+            >
+              <CircleHelp size={18} />
+            </a>
+          </div>
+        </header>
+        <div
+          id="workspace-content"
+          className="mx-auto w-full max-w-[1600px] flex-1 p-4 md:p-7 lg:p-8"
+        >
+          {children}
+        </div>
+      </SidebarInset>
+    </>
+  );
 }
