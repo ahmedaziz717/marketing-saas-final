@@ -3,7 +3,10 @@ import {
   schedulingGuide,
   WorkflowSchedulingGuide,
 } from "./WorkflowSchedulingGuide";
-import { performanceField } from "@shared/workflowPerformanceInputs";
+import {
+  performanceField,
+  workflowDraftSignature as editorSignature,
+} from "@shared/workflowPerformanceInputs";
 import { WorkflowFormEditor } from "./WorkflowFormEditor";
 import {
   appFieldSchema,
@@ -85,7 +88,6 @@ import {
   newWorkflowNode,
   workflowGraphProblem,
   workflowNodes,
-  workflowSignature,
   type WorkflowGraph,
   type WorkflowNode,
   type WorkflowNodeType,
@@ -143,27 +145,6 @@ const pathBetween = (
 ) =>
   `M${a.x},${a.y} C${a.x + Math.max(70, Math.abs(b.x - a.x) * 0.45)},${a.y} ${b.x - Math.max(70, Math.abs(b.x - a.x) * 0.45)},${b.y} ${b.x},${b.y}`;
 type Run = { graph: WorkflowGraph; steps: WorkflowSteps; status: string };
-// Run-time account/date selections belong to the run, not to changes in the draft.
-function editorSignature(graph: WorkflowGraph, id: string) {
-  return workflowSignature(
-    {
-      ...graph,
-      nodes: graph.nodes.map(n =>
-        n.config.field?.kind === "performance_data"
-          ? {
-              ...n,
-              config: {
-                ...n.config,
-                performanceRequest: undefined,
-                fieldValue: undefined,
-              },
-            }
-          : n
-      ),
-    },
-    id
-  );
-}
 export function WorkflowCanvas({
   graph,
   onChange,
@@ -586,7 +567,7 @@ export function WorkflowCanvas({
                     : meta.name}
                   {step && (
                     <span className={`wf-step-state ${step.status}`}>
-                      {stale ? (
+                      {stale && !!step.outputs?.length ? (
                         "Previous result"
                       ) : ["running", "waiting"].includes(step.status) ? (
                         <>
