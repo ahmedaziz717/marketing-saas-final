@@ -326,7 +326,7 @@ export async function analyzeHistory(
     eq(optimizationRecords.organizationId, organizationId),
     eq(optimizationRecords.connectionId, connectionId)
   );
-  const [insights, objects, classifications, syncs] = await Promise.all([
+  const [insights, objects, syncs] = await Promise.all([
     db
       .select()
       .from(optimizationRecords)
@@ -351,17 +351,6 @@ export async function analyzeHistory(
       .limit(20001),
     db
       .select()
-      .from(optimizationClassifications)
-      .where(
-        and(
-          eq(optimizationClassifications.organizationId, organizationId),
-          eq(optimizationClassifications.connectionId, connectionId)
-        )
-      )
-      .orderBy(desc(optimizationClassifications.revision))
-      .limit(100001),
-    db
-      .select()
       .from(optimizationSyncs)
       .where(
         and(
@@ -370,6 +359,21 @@ export async function analyzeHistory(
         )
       ),
   ]);
+  const relevantIds = Array.from(new Set(insights.map(r => r.remoteId)));
+  const classifications = relevantIds.length
+    ? await db
+        .select()
+        .from(optimizationClassifications)
+        .where(
+          and(
+            eq(optimizationClassifications.organizationId, organizationId),
+            eq(optimizationClassifications.connectionId, connectionId),
+            inArray(optimizationClassifications.adId, relevantIds)
+          )
+        )
+        .orderBy(desc(optimizationClassifications.revision))
+        .limit(100001)
+    : [];
   const byAd = new Map<string, Classification[]>();
   for (const row of classifications) {
     const a = byAd.get(row.adId) ?? [];
@@ -514,6 +518,76 @@ export function evidenceCsv(
   ].join("\r\n");
 }
 
+async function saveImportedBatch(
+  db: LibraryDatabase,
+  organizationId: number,
+  connectionId: string,
+  pending: Array<{
+    adId: string;
+    assertion: Assertion;
+    source: "rule" | "import";
+  }>
+) {
+  if (!pending.length) return;
+  await withOrganizationTransaction(db, organizationId, async tx => {
+    const ids = Array.from(new Set(pending.map(p => p.adId)));
+    const prior = await tx
+      .select()
+      .from(optimizationClassifications)
+      .where(
+        and(
+          eq(optimizationClassifications.organizationId, organizationId),
+          eq(optimizationClassifications.connectionId, connectionId),
+          inArray(optimizationClassifications.adId, ids)
+        )
+      )
+      .orderBy(desc(optimizationClassifications.revision));
+    const latest = new Map<
+      string,
+      typeof optimizationClassifications.$inferSelect
+    >();
+    const key = (adId: string, dimension: string, source: string) =>
+      `${adId}:${dimension}:${source}`;
+    for (const row of prior)
+      if (!latest.has(key(row.adId, row.dimension, row.source)))
+        latest.set(key(row.adId, row.dimension, row.source), row);
+    const values: Array<typeof optimizationClassifications.$inferInsert> = [];
+    for (const item of pending) {
+      const parsed = assertionSchema.parse(item.assertion);
+      parsed.labels = parsed.labels.map(l => ({
+        ...l,
+        id: canonicalLabel(parsed.dimension, l.id),
+      }));
+      const previous = latest.get(
+        key(item.adId, parsed.dimension, item.source)
+      );
+      // Unknown is the default, not thousands of fabricated observations. Write a tombstone if prior evidence disappeared.
+      if (!parsed.labels.length && !previous) continue;
+      const fingerprint = stableHash({ parsed, version: TAXONOMY_VERSION });
+      if (previous?.fingerprint === fingerprint) continue;
+      const revision = (previous?.revision ?? 0) + 1;
+      values.push({
+        id: randomUUID(),
+        organizationId,
+        connectionId,
+        adId: item.adId,
+        dimension: parsed.dimension,
+        source: item.source,
+        revision,
+        fingerprint,
+        assertion: {
+          ...parsed,
+          source: item.source,
+          version: TAXONOMY_VERSION,
+          observedAtMs: Date.now(),
+          revision,
+        },
+      });
+    }
+    if (values.length)
+      await tx.insert(optimizationClassifications).values(values);
+  });
+}
 export async function classifyHistoryBatch(
   db: LibraryDatabase,
   organizationId: number,
@@ -556,6 +630,26 @@ export async function classifyHistoryBatch(
           )
         )
     : [];
+  const pending: Array<{
+    adId: string;
+    assertion: Assertion;
+    source: "rule" | "import";
+  }> = [];
+  const published = page.length
+    ? await db
+        .select()
+        .from(publications)
+        .where(
+          and(
+            eq(publications.organizationId, organizationId),
+            eq(publications.connectionId, connectionId),
+            inArray(
+              publications.externalId,
+              page.map(a => a.remoteId)
+            )
+          )
+        )
+    : [];
   for (const ad of page) {
     for (const assertion of classifyImported(
       ad.data,
@@ -565,25 +659,8 @@ export async function classifyHistoryBatch(
       related.find(r => r.kind === "adset" && r.remoteId === ad.data.adset_id)
         ?.data
     ))
-      await saveClassification(
-        db,
-        organizationId,
-        connectionId,
-        ad.remoteId,
-        assertion,
-        "rule"
-      );
-    const [publication] = await db
-      .select()
-      .from(publications)
-      .where(
-        and(
-          eq(publications.organizationId, organizationId),
-          eq(publications.connectionId, connectionId),
-          eq(publications.externalId, ad.remoteId)
-        )
-      )
-      .limit(1);
+      pending.push({ adId: ad.remoteId, assertion, source: "rule" });
+    const publication = published.find(p => p.externalId === ad.remoteId);
     if (publication?.assetKey) {
       const [kind, id] = publication.assetKey.split(":");
       let authored: Record<string, any> | undefined,
@@ -651,12 +728,10 @@ export async function classifyHistoryBatch(
       }
       for (const [dimension, value] of Object.entries(metadata))
         if (value)
-          await saveClassification(
-            db,
-            organizationId,
-            connectionId,
-            ad.remoteId,
-            {
+          pending.push({
+            adId: ad.remoteId,
+            source: "import",
+            assertion: {
               dimension: dimension as Dimension,
               labels: [
                 {
@@ -667,10 +742,10 @@ export async function classifyHistoryBatch(
                 },
               ],
             },
-            "import"
-          );
+          });
     }
   }
+  await saveImportedBatch(db, organizationId, connectionId, pending);
   return {
     processed: page.length,
     next: ads.length > 20 ? page.at(-1)!.remoteId : null,

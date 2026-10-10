@@ -387,6 +387,10 @@ export async function processHistoryPage(
               lte(optimizationRecords.date, task.range!.until)
             )
           );
+      const records = new Map<
+        string,
+        typeof optimizationRecords.$inferInsert
+      >();
       for (const data of rows) {
         const id = String(task.kind === "insight" ? data.ad_id : data.id);
         if (!/^\d+$/.test(id.replace(/^act_/, "")))
@@ -438,25 +442,31 @@ export async function processHistoryPage(
           placement: data.platform_position,
           hour: data.hourly_stats_aggregated_by_advertiser_time_zone,
         });
+        records.set(key, {
+          id: key,
+          organizationId: job.organizationId,
+          connectionId: job.connectionId,
+          kind: task.kind,
+          remoteId: id,
+          date,
+          grain: task.grain ?? "snapshot",
+          data,
+          provenance,
+          updatedAtMs: fetchedAtMs,
+        });
+      }
+      if (records.size)
         await tx
           .insert(optimizationRecords)
-          .values({
-            id: key,
-            organizationId: job.organizationId,
-            connectionId: job.connectionId,
-            kind: task.kind,
-            remoteId: id,
-            date,
-            grain: task.grain ?? "snapshot",
-            data,
-            provenance,
-            updatedAtMs: fetchedAtMs,
-          })
+          .values(Array.from(records.values()))
           .onConflictDoUpdate({
             target: optimizationRecords.id,
-            set: { data, provenance, updatedAtMs: fetchedAtMs },
+            set: {
+              data: sql`excluded.data`,
+              provenance: sql`excluded.provenance`,
+              updatedAtMs: fetchedAtMs,
+            },
           });
-      }
       const checkpoint: SyncCheckpoint = {
         ...job.checkpoint,
         task: job.checkpoint.task + (after ? 0 : 1),

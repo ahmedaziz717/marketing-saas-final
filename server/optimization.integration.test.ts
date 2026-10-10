@@ -22,10 +22,14 @@ import { channelConnections } from "../drizzle/channelSchema";
 import {
   optimizationRecords,
   optimizationSyncs,
+  optimizationClassifications,
 } from "../drizzle/optimizationSchema";
 import { encryptToken } from "./lib/secureToken";
 import { queueHistory, processHistoryPage } from "./lib/optimizationIngestion";
-import { saveClassification } from "./lib/optimizationAnalysis";
+import {
+  saveClassification,
+  classifyHistoryBatch,
+} from "./lib/optimizationAnalysis";
 import { optimizationRouter } from "./routers/optimization";
 import { ChannelGraphError } from "./lib/channelGraph";
 let engine: PGlite, org: number, uid: number, other: number;
@@ -203,6 +207,24 @@ it("creates immutable human revisions without cross-tenant object access", async
   ).rejects.toThrow(/workspace/);
 });
 
+it("batches imported classifications idempotently without fabricating unknown observations or replacing human edits", async () => {
+  await classifyHistoryBatch(state.db, org, cid);
+  const first = await state.db.select().from(optimizationClassifications);
+  expect(
+    first.some((r: any) => r.source === "rule" && r.dimension === "channel")
+  ).toBe(true);
+  expect(
+    first.filter(
+      (r: any) => r.source === "rule" && r.assertion.labels.length === 0
+    )
+  ).toHaveLength(0);
+  const humans = first.filter((r: any) => r.source === "human");
+  await classifyHistoryBatch(state.db, org, cid);
+  const second = await state.db.select().from(optimizationClassifications);
+  expect(second).toHaveLength(first.length);
+  expect(second.filter((r: any) => r.source === "human")).toEqual(humans);
+});
+
 it("pins nested workflow versions, rejects cycles and tenant crossing, and enforces mapped types", async () => {
   const { creativeWorkflows, workflowAppVersions } = await import(
     "../drizzle/workflowSchema"
@@ -221,31 +243,27 @@ it("pins nested workflow versions, rejects cycles and tenant crossing, and enfor
     nodes: [input, out],
     edges: [{ id: "edge", source: "input", target: "output", port: "result" }],
   };
-  await state.db
-    .insert(creativeWorkflows)
-    .values({
-      id: workflowId,
-      organizationId: org,
-      actorUserId: uid,
-      name: "Typed child",
-      graph,
-      createdAtMs: 1,
-      updatedAtMs: 1,
-    });
-  await state.db
-    .insert(workflowAppVersions)
-    .values({
-      id: appId,
-      workflowId,
-      organizationId: org,
-      actorUserId: uid,
-      name: "Typed child",
-      family: "optimize",
-      graph,
-      version: 1,
-      workflowRevision: 1,
-      createdAtMs: 1,
-    });
+  await state.db.insert(creativeWorkflows).values({
+    id: workflowId,
+    organizationId: org,
+    actorUserId: uid,
+    name: "Typed child",
+    graph,
+    createdAtMs: 1,
+    updatedAtMs: 1,
+  });
+  await state.db.insert(workflowAppVersions).values({
+    id: appId,
+    workflowId,
+    organizationId: org,
+    actorUserId: uid,
+    name: "Typed child",
+    family: "optimize",
+    graph,
+    version: 1,
+    workflowRevision: 1,
+    createdAtMs: 1,
+  });
   const source = newWorkflowNode("app_input", "source"),
     call = newWorkflowNode("run_workflow", "call");
   call.config.appVersionId = appId;
@@ -329,49 +347,43 @@ it("deduplicates trigger events and pauses before every automated paid action", 
     nodes: [writer, out],
     edges: [{ id: "edge", source: "writer", target: "output", port: "result" }],
   };
-  await state.db
-    .insert(creativeWorkflows)
-    .values({
-      id: workflowId,
-      organizationId: org,
-      actorUserId: uid,
-      name: "Automation safety",
-      graph,
-      createdAtMs: 1,
-      updatedAtMs: 1,
-    });
-  await state.db
-    .insert(workflowAppVersions)
-    .values({
-      id: appId,
-      workflowId,
-      organizationId: org,
-      actorUserId: uid,
-      name: "Automation safety",
-      family: "optimize",
-      graph,
-      version: 1,
-      workflowRevision: 1,
-      createdAtMs: 1,
-    });
-  await state.db
-    .insert(workflowTriggers)
-    .values({
-      id: triggerId,
-      organizationId: org,
-      actorUserId: uid,
-      appVersionId: appId,
-      enabled: 1,
-      config: {
-        kind: "event",
-        weekday: 1,
-        hour: 9,
-        timezone: "UTC",
-        event: "manual_event",
-      },
-      createdAtMs: 1,
-      updatedAtMs: 1,
-    });
+  await state.db.insert(creativeWorkflows).values({
+    id: workflowId,
+    organizationId: org,
+    actorUserId: uid,
+    name: "Automation safety",
+    graph,
+    createdAtMs: 1,
+    updatedAtMs: 1,
+  });
+  await state.db.insert(workflowAppVersions).values({
+    id: appId,
+    workflowId,
+    organizationId: org,
+    actorUserId: uid,
+    name: "Automation safety",
+    family: "optimize",
+    graph,
+    version: 1,
+    workflowRevision: 1,
+    createdAtMs: 1,
+  });
+  await state.db.insert(workflowTriggers).values({
+    id: triggerId,
+    organizationId: org,
+    actorUserId: uid,
+    appVersionId: appId,
+    enabled: 1,
+    config: {
+      kind: "event",
+      weekday: 1,
+      hour: 9,
+      timezone: "UTC",
+      event: "manual_event",
+    },
+    createdAtMs: 1,
+    updatedAtMs: 1,
+  });
   const id = await fireWorkflowTrigger(state.db, triggerId, "same-event");
   expect(id).toBeTruthy();
   expect(await fireWorkflowTrigger(state.db, triggerId, "same-event")).toBe(id);
