@@ -36,7 +36,7 @@ export const inputKinds = [
   "number",
 ] as const;
 export const inputLabels: Record<(typeof inputKinds)[number], string> = {
-  performance_data: "Performance data",
+  performance_data: "Account & date range",
   text: "Text / instructions",
   headline: "Headline",
   subheadline: "Subheadline",

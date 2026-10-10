@@ -81,3 +81,24 @@ CDF identity). API tests cover requested conversion fields, impression date,
 conversion reconciliation, omitted vs zero values, unsupported fields and
 non-fallback failures. Integration tests run the real quote/run/worker path
 without paid generation and confirm the paused historical import is untouched.
+
+## Building and inspecting the workflow
+
+Use Optimize → Workflows → **Meta scheduling analysis**, or assemble the same public nodes:
+
+| Step                                       | Add from          | User-controlled settings                                                       | Output                                                         |
+| ------------------------------------------ | ----------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| Account & date range                       | Fields            | Connected account and dates at run time; optional saved/locked defaults        | Typed account/date request                                     |
+| Fetch live Meta performance                | Steps → Meta Ads  | Daily only or daily + hourly                                                   | Fresh account-level evidence, timezone, currency and coverage  |
+| Optimization engine → Scheduling optimizer | Steps → Engines   | Weekdays, hours or both; test probability; observed dates required per weekday | Separate model probabilities, CPA intervals and proposed tests |
+| Output                                     | Steps → Utilities | Connect analysis to Results                                                    | Inspectable report retained in run history                     |
+
+The canvas displays configuration summaries even after a run. Each scheduling step has Receives/Produces instructions and saved input/output data inspection. No AI prompt is necessary for the statistical calculation. Save workflow retains a draft; publishing an App remains separate.
+
+The analysis objective is currently **lowest cost per attributed purchase**. Other objectives are not offered as if supported. The probability threshold defaults to 95%, and weekday test readiness requires at least two observed dates per compared weekday. These are decision rules: changing either does not change the posterior probability. Settings are recorded in each report. Requesting hourly analysis with daily-only fetching is rejected with instructions to correct the two settings.
+
+### Compatibility and execution
+
+Legacy standalone scheduling drafts are adapted on read to include an explicit fetch step, retaining existing node IDs and custom settings. The adapter is idempotent and does not write database rows. Published legacy App versions preserve their original fetch contract, as do already-running snapshots. Newly published explicit workflows retain their four public steps. A nested explicit fetch may accept already-fetched live Meta evidence; the account is still checked against the current workspace. Historical import evidence is not silently treated as a live account/date request.
+
+The fetch step uses the existing bounded daily/hourly reader, account attribution and impression-date reporting. It never queues or resumes historical imports. Daily-only fetching skips the hourly API request. Quotes for this four-step workflow remain zero AI credits. Scheduling analysis never expands into paid copy generation, and it never mutates advertising delivery or budgets.

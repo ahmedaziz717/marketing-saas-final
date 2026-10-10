@@ -42,7 +42,7 @@ export async function getWorkflowApp(
       code: "NOT_FOUND",
       message: "This App version is unavailable in this workspace.",
     });
-  return { ...row.app, graph: withPerformanceInputs(row.app.graph) };
+  return { ...row.app, graph: withPerformanceInputs(row.app.graph, false) };
 }
 
 /** Expand pinned versions on the server. Clients never submit executable App snapshots. */
@@ -211,6 +211,8 @@ export async function validateWorkflowConnections(
 ) {
   for (const node of graph.nodes) {
     const channel = workflowNodes[node.type].channel;
+    // Account comes from a typed upstream request, validated again at execution.
+    if (node.type === "meta_performance") continue;
     if (!channel) continue;
     if (!node.config.connectionId)
       throw new TRPCError({
@@ -237,6 +239,7 @@ export function expandOptimizers(graph: WorkflowGraph): WorkflowGraph {
   for (const node of graph.nodes.filter(
     n =>
       n.type === "optimize_dimension" &&
+      n.config.optimizer?.kind !== "weekday_time" &&
       n.config.optimizer?.mode === "analyze_generate"
   )) {
     const suffix = stableHash(node.id).slice(0, 16),

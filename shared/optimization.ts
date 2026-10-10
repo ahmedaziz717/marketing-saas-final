@@ -166,6 +166,13 @@ export const optimizerKinds = [
   "weekday_time",
 ] as const;
 export type OptimizerKind = (typeof optimizerKinds)[number];
+export const schedulingSettingsSchema = z.object({
+  comparison: z.enum(["both", "weekday", "hour"]).default("both"),
+  objective: z.literal("cost_per_purchase").default("cost_per_purchase"),
+  testProbability: z.number().min(0.5).max(0.999).default(0.95),
+  minimumWeekdayObservations: z.number().int().min(2).max(12).default(2),
+});
+export type SchedulingSettings = z.infer<typeof schedulingSettingsSchema>;
 export const optimizerSchema = z.object({
   kind: z.enum(optimizerKinds),
   channel: z
@@ -173,6 +180,7 @@ export const optimizerSchema = z.object({
     .default("meta_ads"),
   mode: z.enum(["analyze", "analyze_generate"]).default("analyze"),
   brief: z.string().max(10000).default(""),
+  scheduling: schedulingSettingsSchema.optional(),
 });
 export type Provenance = {
   apiVersion: string;

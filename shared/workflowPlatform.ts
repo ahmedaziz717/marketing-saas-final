@@ -1,4 +1,5 @@
 import { localScheduleToUtc, moveDate } from "./channels";
+import { schedulingWorkflowTemplate } from "./workflowPerformanceInputs";
 import {
   newWorkflowNode,
   type WorkflowFamily,
@@ -56,6 +57,15 @@ export const workflowSections: Record<
   },
 };
 export const businessWorkflowTemplates = [
+  {
+    id: "meta-scheduling",
+    family: "optimize",
+    name: "Meta scheduling analysis",
+    description:
+      "Choose account and dates, fetch live Meta data, compare purchase efficiency and review the evidence.",
+    color: "amber",
+    tags: ["Live Meta", "Confidence", "Read-only"],
+  },
   {
     id: "facebook-delivery",
     family: "activate",
@@ -122,6 +132,7 @@ export const businessWorkflowTemplates = [
 ] as const;
 
 export function businessWorkflowTemplate(id: string): WorkflowGraph | null {
+  if (id === "meta-scheduling") return schedulingWorkflowTemplate();
   const n = (type: WorkflowNodeType, id: string, x: number, y = 120) =>
     newWorkflowNode(type, id, x, y);
   const edge = (source: string, target: string, port: string) => ({

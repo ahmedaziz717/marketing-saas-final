@@ -201,3 +201,77 @@ it("partial reports withhold confidence and recommendations", () => {
   expect(r.suggestedTests).toEqual([]);
   r.dimensionReports.forEach(d => expect(d.statistics.confidence).toBeNull());
 });
+
+it("fetches only daily data when hourly is disabled and refuses mismatched analysis settings", async () => {
+  state.fetch.mockResolvedValue({
+    data: [row("2026-10-03", 100, 3)],
+    truncated: false,
+  });
+  const source = await liveSchedulingReport(account, range, {
+    includeHourly: false,
+  });
+  expect(state.fetch).toHaveBeenCalledTimes(1);
+  expect(source.includeHourly).toBe(false);
+  expect(source.hourlyWarning).toBeNull();
+  expect(() => schedulingRecommendation(source)).toThrow(
+    /Hourly data was turned off/
+  );
+  const r = schedulingRecommendation(source, {
+    comparison: "weekday",
+    objective: "cost_per_purchase",
+    testProbability: 0.9,
+    minimumWeekdayObservations: 3,
+  });
+  expect(r.dimensions).toEqual(["weekday"]);
+  expect(r.analysisSettings.testProbability).toBe(0.9);
+});
+
+it("uses saved test rules without altering the scientific probability", () => {
+  const groups = [
+    {
+      labels: ["Friday"],
+      spend: 1083.52,
+      purchases: 7,
+      dates: ["2026-10-02", "2026-10-09"],
+    },
+    {
+      labels: ["Thursday"],
+      spend: 1519.95,
+      purchases: 4,
+      dates: ["2026-10-01", "2026-10-08"],
+    },
+  ];
+  const source = {
+    weekday: groups,
+    hour: groups,
+    dailyRowCount: 4,
+    range,
+    hourlyConversionsReconciled: true,
+  };
+  const base = {
+    comparison: "weekday" as const,
+    objective: "cost_per_purchase" as const,
+    testProbability: 0.95,
+    minimumWeekdayObservations: 2,
+  };
+  const strict = schedulingRecommendation(source, base);
+  const relaxed = schedulingRecommendation(source, {
+    ...base,
+    testProbability: 0.9,
+  });
+  expect(strict.decision).toBe("insufficient_evidence");
+  expect(relaxed.decision).toBe("propose_test");
+  expect(strict.dimensionReports[0].statistics).toEqual(
+    relaxed.dimensionReports[0].statistics
+  );
+  expect(
+    schedulingRecommendation(source, {
+      ...base,
+      testProbability: 0.9,
+      minimumWeekdayObservations: 3,
+    }).decision
+  ).toBe("insufficient_evidence");
+  expect(
+    schedulingRecommendation(source, { ...base, comparison: "hour" }).dimensions
+  ).toEqual(["hour"]);
+});

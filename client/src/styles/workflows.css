@@ -308,12 +308,15 @@
 }
 .wf-canvas-shell {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   position: relative;
   min-height: 0;
 }
 .wf-canvas {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background-color: color-mix(in srgb, var(--background) 92%, #888 8%);
   background-image: radial-gradient(
@@ -1674,4 +1677,71 @@
 .wf-field-node-preview span {
   color: var(--muted-foreground);
   font-size: 11px;
+}
+
+/* Scheduling steps expose their contract without turning the canvas into a form. */
+.wf-node-summary {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.wf-node-summary p {
+  margin: 0;
+}
+.wf-node-summary p:first-child {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.wf-step-guide {
+  display: grid;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+}
+.wf-step-guide p,
+.wf-step-guide dd {
+  margin: 0;
+}
+.wf-step-guide dt {
+  font-weight: 600;
+  margin-top: 8px;
+}
+.wf-step-guide pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.wf-step-guide summary,
+.wf-build-guide summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.wf-step-guide details > p {
+  margin: 10px 0;
+}
+.wf-build-guide {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  font-size: 13px;
+  background: var(--background);
+}
+.wf-build-guide ol {
+  list-style: decimal;
+  padding-left: 20px;
+  margin: 12px 0;
+  display: grid;
+  gap: 7px;
+}
+.wf-build-guide p {
+  color: var(--muted-foreground);
+  margin: 10px 0;
 }

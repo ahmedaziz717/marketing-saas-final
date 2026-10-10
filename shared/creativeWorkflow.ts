@@ -27,6 +27,7 @@ export const workflowNodeTypes = [
   "start_trigger",
   "run_workflow",
   "meta_history",
+  "meta_performance",
   "classify_history",
   "analyze_history",
   "optimize_dimension",
@@ -104,6 +105,16 @@ export const workflowNodes: Record<
     channel: "meta_ads",
     output: "data",
     inputs: [{ id: "context", name: "Start", type: "any", multiple: true }],
+  },
+  meta_performance: {
+    name: "Fetch live Meta performance",
+    description:
+      "Read fresh daily and hourly account performance using connected account and date inputs. No historical import.",
+    group: "Meta Ads",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [{ id: "request", name: "Account & dates", type: "data" }],
   },
   classify_history: {
     name: "Classify imported ads",
@@ -364,6 +375,9 @@ export const workflowNodeSchema = z.object({
       })
       .optional(),
     performanceRequest: performanceInputSchema.optional(),
+    metaPerformance: z
+      .object({ includeHourly: z.boolean().default(true) })
+      .optional(),
     analysis: analysisQuerySchema.optional(),
     optimizer: optimizerSchema.optional(),
     incremental: z.boolean().optional(),
@@ -687,7 +701,11 @@ export function workflowRunProblem(
       !node.config.appVersionId
     )
       return `Choose a published App for “${node.title}”.`;
-    if (workflowNodes[node.type].channel && !node.config.connectionId)
+    if (
+      workflowNodes[node.type].channel &&
+      node.type !== "meta_performance" &&
+      !node.config.connectionId
+    )
       return `Choose a connected account for “${node.title}”.`;
     if (
       node.type === "meta_ad" &&
@@ -699,6 +717,22 @@ export function workflowRunProblem(
     if (node.type === "meta_activate" && !node.config.adId)
       return `Choose an existing ad for “${node.title}”.`;
     if (
+      node.type === "optimize_dimension" &&
+      node.config.optimizer?.kind === "weekday_time" &&
+      node.config.optimizer.scheduling?.comparison !== "weekday" &&
+      graph.edges.some(
+        e =>
+          e.target === node.id &&
+          graph.nodes.some(
+            n =>
+              n.id === e.source &&
+              n.type === "meta_performance" &&
+              n.config.metaPerformance?.includeHourly === false
+          )
+      )
+    )
+      return "Enable hourly data in Fetch live Meta performance or choose Weekdays in Analyze scheduling.";
+    if (
       ["meta_report", "facebook_report"].includes(node.type) &&
       node.config.datePreset === "custom" &&
       !node.config.range
@@ -706,6 +740,8 @@ export function workflowRunProblem(
       return `Choose a date range for “${node.title}”.`;
     if (
       [
+        "meta_performance",
+        "optimize_dimension",
         "review",
         "deliver_publication",
         "optimize_metric",

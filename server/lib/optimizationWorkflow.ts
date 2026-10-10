@@ -3,6 +3,7 @@ import {
   schedulingRecommendation,
 } from "./liveMetaScheduling";
 import { presetRange } from "../../shared/reportDates";
+import { performanceInputSchema } from "../../shared/workflowInputs";
 import { getConnection } from "./channelConnections";
 import { optimizerLibrary } from "../../shared/optimizerLibrary";
 import { and, eq } from "drizzle-orm";
@@ -29,8 +30,32 @@ export async function optimizationStep(
   node: WorkflowNode,
   input: WorkflowValue[]
 ): Promise<WorkflowStep | null> {
+  const complete = (
+    name: string,
+    data: Record<string, unknown>
+  ): WorkflowStep => ({
+    status: "completed",
+    outputs: [{ type: "data", name, data }],
+    finishedAtMs: Date.now(),
+  });
   if (node.type === "app_input" && node.config.performanceRequest) {
     requireOptimization(run.organizationId);
+    const legacyFetch = run.graph.edges.some(
+      e =>
+        e.source === node.id &&
+        run.graph.nodes.some(
+          n =>
+            n.id === e.target &&
+            n.type === "optimize_dimension" &&
+            n.config.optimizer?.kind === "weekday_time"
+        )
+    );
+    if (!legacyFetch)
+      return complete("Meta account and date selection", {
+        source: "meta_performance_request",
+        ...node.config.performanceRequest,
+      });
+    // Compatibility for already-running snapshots and pinned legacy Apps only.
     const c = await getConnection(
       db,
       run.organizationId,
@@ -49,6 +74,41 @@ export async function optimizationStep(
       finishedAtMs: Date.now(),
     };
   }
+  if (node.type === "meta_performance") {
+    requireOptimization(run.organizationId);
+    const data =
+      input.length === 1 && input[0].type === "data" ? input[0].data : null;
+    if (
+      !data ||
+      !["meta_performance_request", "live_meta_scheduling"].includes(
+        String(data.source)
+      )
+    )
+      throw new Error(
+        "Connect an Account & date range field to Fetch live Meta performance. Imported history is not a live account/date request."
+      );
+    const request = performanceInputSchema.parse(data);
+    const connection = await getConnection(
+      db,
+      run.organizationId,
+      request.connectionId,
+      "meta_ads"
+    );
+    if (connection.status !== "connected")
+      throw new Error(
+        "Reconnect the selected Meta ad account before fetching performance."
+      );
+    if (data.source === "live_meta_scheduling")
+      return complete("Supplied live Meta performance", data);
+    return complete(
+      "Live Meta scheduling performance",
+      await liveSchedulingReport(
+        connection,
+        request.range,
+        node.config.metaPerformance
+      )
+    );
+  }
   if (
     ![
       "start_trigger",
@@ -60,14 +120,6 @@ export async function optimizationStep(
   )
     return null;
   requireOptimization(run.organizationId);
-  const complete = (
-    name: string,
-    data: Record<string, unknown>
-  ): WorkflowStep => ({
-    status: "completed",
-    outputs: [{ type: "data", name, data }],
-    finishedAtMs: Date.now(),
-  });
   const step = run.steps[node.id];
   if (node.type === "start_trigger")
     return complete("Trigger", {
@@ -222,8 +274,15 @@ export async function optimizationStep(
       throw new Error(
         "Connect live scheduling data to a Scheduling optimizer."
       );
-    return complete("Scheduling analysis", schedulingRecommendation(source));
+    return complete(
+      "Scheduling analysis",
+      schedulingRecommendation(source, config.scheduling)
+    );
   }
+  if (config.kind === "weekday_time" && config.scheduling)
+    throw new Error(
+      "These scheduling settings require live Meta performance. Connect Fetch live Meta performance to this analysis step."
+    );
   const dimensionReports = [];
   if (typeof source.connectionId === "string" && source.query) {
     const base = analysisQuerySchema.parse(source.query);

@@ -66,3 +66,9 @@ it("flags old saved heuristic results instead of displaying false precision", ()
   expect(screen.getByText(/previous heuristic/)).toBeTruthy();
   expect(screen.queryByText(/50% confidence/)).toBeNull();
 });
+it("explains incompatible saved results instead of opening a blank report", () => {
+  render(<OptimizationResult data={{ bad: true }} />);
+  expect(screen.getByRole("alert").textContent).toMatch(
+    /Run the workflow again/
+  );
+});
