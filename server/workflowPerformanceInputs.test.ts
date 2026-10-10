@@ -108,3 +108,29 @@ it("rejects unavailable tenant connections and disconnected accounts", async () 
     /Reconnect/
   );
 });
+
+it("inserts a visible fetch exactly once, retains IDs and leaves pinned versions unchanged", () => {
+  const original = graph();
+  const ready = withPerformanceInputs(original);
+  const fetch = ready.nodes.find(n => n.type === "meta_performance")!;
+  expect(fetch).toBeDefined();
+  expect(ready.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        source: "evidence",
+        target: fetch.id,
+        port: "request",
+      }),
+      expect.objectContaining({
+        source: fetch.id,
+        target: "engine",
+        port: "evidence",
+      }),
+    ])
+  );
+  expect(withPerformanceInputs(ready)).toEqual(ready);
+  expect(original.nodes).toHaveLength(2);
+  const pinned = withPerformanceInputs(original, false);
+  expect(pinned.nodes).toHaveLength(2);
+  expect(pinned.edges).toEqual(original.edges);
+});

@@ -1,4 +1,9 @@
 import { OptimizationResult } from "./OptimizationResult";
+import {
+  schedulingGuide,
+  WorkflowSchedulingGuide,
+} from "./WorkflowSchedulingGuide";
+import { performanceField } from "@shared/workflowPerformanceInputs";
 import { WorkflowFormEditor } from "./WorkflowFormEditor";
 import {
   appFieldSchema,
@@ -101,6 +106,7 @@ const icons = {
   start_trigger: Play,
   run_workflow: GitBranch,
   meta_history: BarChart3,
+  meta_performance: BarChart3,
   classify_history: Layers,
   analyze_history: BarChart3,
   optimize_dimension: Target,
@@ -137,6 +143,27 @@ const pathBetween = (
 ) =>
   `M${a.x},${a.y} C${a.x + Math.max(70, Math.abs(b.x - a.x) * 0.45)},${a.y} ${b.x - Math.max(70, Math.abs(b.x - a.x) * 0.45)},${b.y} ${b.x},${b.y}`;
 type Run = { graph: WorkflowGraph; steps: WorkflowSteps; status: string };
+// Run-time account/date selections belong to the run, not to changes in the draft.
+function editorSignature(graph: WorkflowGraph, id: string) {
+  return workflowSignature(
+    {
+      ...graph,
+      nodes: graph.nodes.map(n =>
+        n.config.field?.kind === "performance_data"
+          ? {
+              ...n,
+              config: {
+                ...n.config,
+                performanceRequest: undefined,
+                fieldValue: undefined,
+              },
+            }
+          : n
+      ),
+    },
+    id
+  );
+}
 export function WorkflowCanvas({
   graph,
   onChange,
@@ -312,10 +339,16 @@ export function WorkflowCanvas({
     );
     if (fieldKind) {
       node.title = inputLabels[fieldKind];
-      node.config.field = appFieldSchema.parse({
-        kind: fieldKind,
-        source: systemInputChoices(fieldKind).length ? "system" : "custom",
-      });
+      node.config.field =
+        fieldKind === "performance_data"
+          ? performanceField()
+          : appFieldSchema.parse({
+              kind: fieldKind,
+              source: systemInputChoices(fieldKind).length
+                ? "system"
+                : "custom",
+            });
+      if (fieldKind === "performance_data") node.config.inputType = "data";
     }
     change({ ...graph, nodes: [...graph.nodes, node] });
     setSelected(node.id);
@@ -379,6 +412,37 @@ export function WorkflowCanvas({
   };
   return (
     <div className="wf-canvas-shell">
+      {family === "optimize" && (
+        <details className="wf-build-guide">
+          <summary>How to build this scheduling workflow</summary>
+          <ol>
+            <li>
+              <strong>Choose inputs:</strong> Add a step → Fields → Account &
+              date range. This becomes the form shown when the workflow runs.
+            </li>
+            <li>
+              <strong>Read Meta:</strong> Add Fetch live Meta performance.
+              Connect the field's output dot to Account & dates. Choose daily
+              only or daily + hourly.
+            </li>
+            <li>
+              <strong>Analyze:</strong> Add Optimization engine, select
+              Scheduling optimizer, and connect the fetch output to Evidence.
+              Set comparison and test-readiness rules.
+            </li>
+            <li>
+              <strong>Present:</strong> Add Output and connect the analysis to
+              Results. Save workflow, then Run workflow to choose the account
+              and dates. Inspect each step's inputs and outputs after it runs.
+            </li>
+          </ol>
+          <p>
+            You can also start with the Meta scheduling analysis template.
+            Saving keeps a draft; publishing as an App creates a reusable
+            version.
+          </p>
+        </details>
+      )}
       <div
         ref={viewport}
         className={`wf-canvas ${connecting ? "wf-connecting" : ""}`}
@@ -475,12 +539,13 @@ export function WorkflowCanvas({
           {graph.nodes.map(node => {
             const Icon = icons[node.type],
               meta = workflowNodes[node.type],
+              guide = schedulingGuide(node, graph),
               step = run?.steps[node.id],
               stale =
                 run &&
                 node.type !== "app" &&
-                workflowSignature(run.graph, node.id) !==
-                  workflowSignature(graph, node.id);
+                editorSignature(run.graph, node.id) !==
+                  editorSignature(graph, node.id);
             return (
               <article
                 key={node.id}
@@ -591,6 +656,13 @@ export function WorkflowCanvas({
                           : 12,
                   }}
                 >
+                  {guide && (
+                    <div className="wf-node-summary">
+                      {guide.summary.map(line => (
+                        <p key={line}>{line}</p>
+                      ))}
+                    </div>
+                  )}
                   {node.config.field ? (
                     <button
                       className="wf-field-node-preview"
@@ -605,7 +677,9 @@ export function WorkflowCanvas({
                               node.config.field,
                               node.config.field.defaultValue
                             )
-                          : "Set up this field"}
+                          : node.config.field.kind === "performance_data"
+                            ? "Choose account and dates at run time"
+                            : "Set up this field"}
                       </strong>
                       <span>
                         {fieldChoices(node.config.field).length
@@ -647,6 +721,16 @@ export function WorkflowCanvas({
                           />
                         ))}
                     </div>
+                  ) : guide ? (
+                    <button
+                      className="wf-field-node-preview"
+                      onClick={() => {
+                        setSelected(node.id);
+                        setLibrary(false);
+                      }}
+                    >
+                      <span>View instructions & settings →</span>
+                    </button>
                   ) : (
                     <div className="wf-node-placeholder">
                       <Icon size={29} />
@@ -868,12 +952,14 @@ export function WorkflowCanvas({
                     <h3>{group}</h3>
                     {Object.entries(workflowNodes)
                       .filter(
-                        ([, meta]) =>
+                        ([type, meta]) =>
                           meta.group === group &&
                           !meta.hidden &&
                           (!meta.channel ||
                             connectedChannels.includes(meta.channel)) &&
                           (paletteFamily === "all" ||
+                            (type === "meta_performance" &&
+                              paletteFamily === "optimize") ||
                             (!meta.family &&
                               [
                                 "Inputs",
@@ -991,6 +1077,36 @@ export function WorkflowCanvas({
                   onChange={config}
                 />
               )}
+              {selectedNode.type === "meta_performance" && (
+                <>
+                  <label>
+                    Performance to fetch
+                    <select
+                      value={
+                        selectedNode.config.metaPerformance?.includeHourly ===
+                        false
+                          ? "daily"
+                          : "both"
+                      }
+                      onChange={e =>
+                        config({
+                          metaPerformance: {
+                            includeHourly: e.target.value === "both",
+                          },
+                        })
+                      }
+                    >
+                      <option value="both">Daily + hourly (default)</option>
+                      <option value="daily">Daily only</option>
+                    </select>
+                  </label>
+                  <p className="wf-setting-help">
+                    Account and dates come from the connected field. Daily
+                    totals are always fetched so hourly conversions can be
+                    reconciled. This read uses 0 AI credits.
+                  </p>
+                </>
+              )}
               {selectedNode.config.field && (
                 <WorkflowFormEditor
                   key={`field-${selectedNode.id}`}
@@ -1000,6 +1116,16 @@ export function WorkflowCanvas({
                   onChange={change}
                 />
               )}
+              <WorkflowSchedulingGuide
+                node={selectedNode}
+                graph={graph}
+                steps={run?.steps}
+                stale={
+                  !!run &&
+                  editorSignature(run.graph, selectedNode.id) !==
+                    editorSignature(graph, selectedNode.id)
+                }
+              />
               {selectedNode.type === "image" ? (
                 <Button
                   variant="outline"

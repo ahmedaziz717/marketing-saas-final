@@ -7,7 +7,13 @@ export function OptimizationResult({
   data: Record<string, unknown>;
 }) {
   const parsed = optimizerOutputSchema.safeParse(data);
-  if (!parsed.success) return null;
+  if (!parsed.success)
+    return (
+      <p role="alert">
+        This saved result cannot be displayed in this report format. Run the
+        workflow again to create an updated report.
+      </p>
+    );
   const r = parsed.data;
   const live = data.source === "live_meta_scheduling";
   const dimensions = Array.isArray(data.dimensionReports)

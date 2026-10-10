@@ -319,6 +319,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
       node &&
       [
         "meta_report",
+        "meta_performance",
         "facebook_report",
         "analyze_history",
         "optimize_dimension",

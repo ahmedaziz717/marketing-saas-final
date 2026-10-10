@@ -304,6 +304,7 @@ export async function prepareWorkflowRun(
             (n.config.performanceRequest ||
               [
                 "meta_history",
+                "meta_performance",
                 "classify_history",
                 "analyze_history",
                 "optimize_dimension",

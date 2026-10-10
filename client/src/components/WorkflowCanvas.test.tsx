@@ -52,8 +52,16 @@ import {
   newWorkflowNode,
   workflowTemplate,
   type WorkflowGraph,
+  type WorkflowFamily,
+  workflowGraphProblem,
 } from "@shared/creativeWorkflow";
-function Harness({ initial }: { initial: WorkflowGraph }) {
+function Harness({
+  initial,
+  family = "create",
+}: {
+  initial: WorkflowGraph;
+  family?: WorkflowFamily;
+}) {
   const [graph, setGraph] = useState(initial);
   return (
     <>
@@ -63,6 +71,8 @@ function Harness({ initial }: { initial: WorkflowGraph }) {
         onChange={setGraph}
         organizationId={1}
         role="owner"
+        family={family}
+        connectedChannels={["meta_ads"]}
         busy={false}
         onRunNode={api.run}
       />
@@ -186,17 +196,106 @@ it("adds and configures an App field directly on the workflow canvas", () => {
   expect(graph().nodes[0].config.field?.kind).toBe("theme");
   expect(screen.getByText("Field settings")).toBeTruthy();
   expect(screen.queryByText("Open App form")).toBeNull();
-  fireEvent.click(
-    screen.getByRole("checkbox", { name: "Required" })
-  );
-  fireEvent.change(
-    screen.getByRole("combobox", { name: "Theme" }),
-    { target: { value: "spotlight" } }
-  );
+  fireEvent.click(screen.getByRole("checkbox", { name: "Required" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Theme" }), {
+    target: { value: "spotlight" },
+  });
   expect(graph().nodes[0].config.field).toMatchObject({
     required: true,
     defaultValue: "spotlight",
   });
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
   expect(graph().nodes[0].config.field?.defaultValue).toBe("");
+});
+
+it("builds scheduling from public fields and steps, exposes working settings and typed connections", () => {
+  render(<Harness family="optimize" initial={{ nodes: [], edges: [] }} />);
+  expect(
+    screen.getByText("How to build this scheduling workflow")
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Fields" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+    target: { value: "Account & date range" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Account & date range Defaults/ })
+  );
+  expect(graph().nodes[0].config.field?.required).toBe(true);
+  expect(graph().nodes[0].config.inputType).toBe("data");
+  fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+  fireEvent.click(screen.getByRole("button", { name: "Steps" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+    target: { value: "Fetch live Meta" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: /Fetch live Meta performance Read fresh/,
+    })
+  );
+  expect(screen.getByLabelText("Performance to fetch")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Performance to fetch"), {
+    target: { value: "daily" },
+  });
+  expect(graph().nodes[1].config.metaPerformance?.includeHourly).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+    target: { value: "Optimization engine" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Optimization engine Reusable/ })
+  );
+  fireEvent.change(screen.getByLabelText("Optimizer"), {
+    target: { value: "weekday_time" },
+  });
+  expect(screen.queryByLabelText("Verified brief")).toBeNull();
+  expect(screen.queryByLabelText("Mode")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Comparison"), {
+    target: { value: "weekday" },
+  });
+  fireEvent.change(
+    screen.getByLabelText("Probability required to propose a test"),
+    { target: { value: "0.9" } }
+  );
+  expect(graph().nodes[2].config.optimizer?.scheduling).toMatchObject({
+    comparison: "weekday",
+    testProbability: 0.9,
+  });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Connect output from Account & date range",
+    })
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Connect account & dates to Fetch live Meta performance",
+    })
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Connect output from Fetch live Meta performance",
+    })
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Connect evidence to Optimization engine",
+    })
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+    target: { value: "Collect and preview" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Output Collect and preview/ })
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Connect output from Optimization engine",
+    })
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Connect results to Output" })
+  );
+  expect(graph().edges).toHaveLength(3);
+  expect(workflowGraphProblem(graph())).toBeNull();
+  expect(api.error).not.toHaveBeenCalled();
 });

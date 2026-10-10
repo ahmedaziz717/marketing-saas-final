@@ -10,6 +10,10 @@ import { graphCollection, ChannelGraphError } from "./channelGraph";
 import { adMetrics } from "./channelReports";
 import { aggregateEvidence, type EvidenceRow } from "./optimizationAnalysis";
 import { purchaseEfficiencyConfidence } from "./schedulingStatistics";
+import {
+  schedulingSettingsSchema,
+  type SchedulingSettings,
+} from "../../shared/optimization";
 
 const weekdays = [
   "Sunday",
@@ -81,7 +85,8 @@ function rowsToGroups(
 /** Fresh, bounded account-level reads; never starts/resumes a historical import. */
 export async function liveSchedulingReport(
   c: ChannelConnection,
-  supplied: DateRange
+  supplied: DateRange,
+  options: { includeHourly: boolean } = { includeHourly: true }
 ) {
   const range = rangeSchema.parse(supplied),
     token = connectionToken(c);
@@ -107,34 +112,38 @@ export async function liveSchedulingReport(
     ...base,
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
   };
-  let hourly,
+  let hourly: { data: Record<string, any>[]; truncated: boolean } = {
+      data: [],
+      truncated: false,
+    },
     hourlyWarning: string | null = null;
-  try {
-    hourly = await graphCollection(
-      path,
-      token,
-      { ...hourlyParams, fields: trafficFields + ",actions,action_values" },
-      2
-    );
-  } catch (error) {
-    // Only unsupported field/breakdown errors allow a traffic-only fallback.
-    // Auth, throttling and transport failures must not look like valid reports.
-    if (
-      !(error instanceof ChannelGraphError) ||
-      error.code !== 100 ||
-      !/(actions|action_values|breakdown)/i.test(error.message)
-    )
-      throw error;
-    hourlyWarning =
-      "Meta rejected conversion fields with this hourly breakdown. Traffic metrics are shown; purchase confidence cannot be calculated. " +
-      error.message;
-    hourly = await graphCollection(
-      path,
-      token,
-      { ...hourlyParams, fields: trafficFields },
-      2
-    );
-  }
+  if (options.includeHourly)
+    try {
+      hourly = await graphCollection(
+        path,
+        token,
+        { ...hourlyParams, fields: trafficFields + ",actions,action_values" },
+        2
+      );
+    } catch (error) {
+      // Only unsupported field/breakdown errors allow a traffic-only fallback.
+      // Auth, throttling and transport failures must not look like valid reports.
+      if (
+        !(error instanceof ChannelGraphError) ||
+        error.code !== 100 ||
+        !/(actions|action_values|breakdown)/i.test(error.message)
+      )
+        throw error;
+      hourlyWarning =
+        "Meta rejected conversion fields with this hourly breakdown. Traffic metrics are shown; purchase confidence cannot be calculated. " +
+        error.message;
+      hourly = await graphCollection(
+        path,
+        token,
+        { ...hourlyParams, fields: trafficFields },
+        2
+      );
+    }
   const purchaseType =
     purchaseTypes.find(type =>
       daily.data.some(
@@ -204,7 +213,7 @@ export async function liveSchedulingReport(
       g.roas =
         g.spend !== null && g.spend > 0 ? g.purchaseValue / g.spend : null;
     }
-  if (!hourlyWarning && !reconciled)
+  if (options.includeHourly && !hourlyWarning && !reconciled)
     hourlyWarning = !hour.length
       ? "Meta returned no hourly rows for the selected period."
       : !hour.some(g => g.purchases !== null)
@@ -222,6 +231,7 @@ export async function liveSchedulingReport(
     fetchedAtMs: Date.now(),
     level: "account",
     dailyRowCount: daily.data.length,
+    includeHourly: options.includeHourly,
     truncated: daily.truncated || hourly.truncated,
     weekday,
     hour,
@@ -233,8 +243,20 @@ export async function liveSchedulingReport(
   };
 }
 
-export function schedulingRecommendation(source: Record<string, any>) {
-  const reports = ["weekday", "hour"].map(dimension => {
+export function schedulingRecommendation(
+  source: Record<string, any>,
+  supplied?: SchedulingSettings
+) {
+  const settings = schedulingSettingsSchema.parse(supplied ?? {});
+  const dimensions =
+    settings.comparison === "both"
+      ? ["weekday", "hour"]
+      : [settings.comparison];
+  if (dimensions.includes("hour") && source.includeHourly === false)
+    throw new Error(
+      "Hourly data was turned off in Fetch live Meta performance. Enable hourly data or choose Weekdays in Analyze scheduling."
+    );
+  const reports = dimensions.map(dimension => {
     const groups = (source[dimension] ?? []) as ReturnType<typeof rowsToGroups>;
     const incomplete =
       !!source.truncated ||
@@ -244,12 +266,12 @@ export function schedulingRecommendation(source: Record<string, any>) {
     const repeated =
       dimension === "weekday" &&
       groups.length > 0 &&
-      groups.every(g => g.dates?.length >= 2);
+      groups.every(g => g.dates?.length >= settings.minimumWeekdayObservations);
     // Test-readiness policy is SEPARATE from calculated probability. Hourly
     // aggregate data has no repeat-day stability estimate; never claim it does.
     const enough =
       statistics.confidence !== null &&
-      statistics.confidence >= 0.95 &&
+      statistics.confidence >= settings.testProbability &&
       (dimension !== "weekday" || repeated);
     return {
       dimension,
@@ -267,7 +289,7 @@ export function schedulingRecommendation(source: Record<string, any>) {
           ? String(source.hourlyWarning)
           : (statistics.reason ??
             (!repeated && dimension === "weekday"
-              ? "Probability can be estimated, but each weekday needs repeated observations before proposing a recurring schedule test."
+              ? `Probability can be estimated, but each weekday needs at least ${settings.minimumWeekdayObservations} observed dates before proposing a recurring schedule test.`
               : "The probability describes purchase efficiency under the model, not causal lift or profitability.")),
     };
   });
@@ -287,7 +309,8 @@ export function schedulingRecommendation(source: Record<string, any>) {
     confidence: null,
     message,
     sourceAdIds: [],
-    dimensions: ["weekday", "hour"],
+    dimensions,
+    analysisSettings: settings,
     requiresHumanApproval: true,
     accountName: source.accountName,
     range: source.range,
@@ -299,7 +322,10 @@ export function schedulingRecommendation(source: Record<string, any>) {
       message,
       `Account: ${source.accountName}. Dates: ${source.range.since} through ${source.range.until}. Time zone: ${source.timezone}.`,
       "Analysis objective: lowest cost per attributed purchase. ROAS is descriptive; no ROAS confidence is inferred from aggregate revenue.",
-      "Weekday and hour are separate comparisons, not a winning weekday-and-hour combination.",
+      dimensions.length === 2
+        ? "Weekday and hour are separate comparisons, not a winning weekday-and-hour combination."
+        : `Selected comparison: ${settings.comparison}.`,
+      `Test-readiness policy: at least ${Math.round(settings.testProbability * 1000) / 10}% probability of best purchase efficiency; weekdays require ${settings.minimumWeekdayObservations} observed dates per compared weekday.`,
       "Conversions are attributed to impression dates for delivery analysis. Recent results can change as delayed conversions arrive.",
     ],
     suggestedTests: ready.map(
@@ -312,11 +338,13 @@ export function schedulingRecommendation(source: Record<string, any>) {
       "Fresh account-level Meta Insights; no historical import or individual-ad counts. Purchase action: " +
         (source.purchaseType ?? "not returned") +
         ".",
-      "Both daily and hourly requests include purchase and revenue fields. Missing or unreconciled hourly conversions prevent hourly confidence; they are not silently replaced with clicks.",
+      source.includeHourly === false
+        ? "Daily performance was requested. Hourly fetching is turned off for this workflow."
+        : "Both daily and hourly requests include purchase and revenue fields. Missing or unreconciled hourly conversions prevent hourly confidence; they are not silently replaced with clicks.",
       "Confidence = posterior probability that the observed lowest-CPA period has the highest purchase rate per unit of spend among compared periods. It is conditional on an independent, constant-rate Poisson model and Jeffreys prior.",
       "40,000 deterministic posterior draws; Monte Carlo standard error is at most 0.25 percentage points. 95% credible intervals describe model uncertainty, not future guaranteed performance.",
       "Repeated users, attribution modelling, changing campaigns/audiences, day-to-day variability and non-random delivery can violate model assumptions. This probability is not a p-value, causal confidence, or proof of future lift. Fractional purchase counts are not treated as independent events.",
-      "The 95% test-readiness threshold and repeat-weekday check are decision rules, not the confidence calculation. No arbitrary 14-day cutoff is used.",
+      `The ${Math.round(settings.testProbability * 1000) / 10}% test-readiness threshold and ${settings.minimumWeekdayObservations}-observation weekday check are saved workflow decision rules, not the confidence calculation. No arbitrary 14-day cutoff is used.`,
       "Hourly buckets describe delivery hours, not purchase timestamps. Hourly totals cannot establish stability across individual days.",
       "No ad schedules, publications or budgets are changed by this report.",
     ],

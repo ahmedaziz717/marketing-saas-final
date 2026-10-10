@@ -17,6 +17,7 @@ import {
 } from "@shared/workflowInputs";
 import { Button } from "./ui/button";
 import { WorkflowInputControl } from "./WorkflowInputControl";
+import { performanceField } from "@shared/workflowPerformanceInputs";
 
 export function WorkflowFormEditor({
   graph,
@@ -135,10 +136,16 @@ export function WorkflowFormEditor({
                 80 + fields.length * 120
               );
               n.title = inputLabels[kind];
-              n.config.field = appFieldSchema.parse({
-                kind,
-                source: systemInputChoices(kind).length ? "system" : "custom",
-              });
+              n.config.field =
+                kind === "performance_data"
+                  ? performanceField()
+                  : appFieldSchema.parse({
+                      kind,
+                      source: systemInputChoices(kind).length
+                        ? "system"
+                        : "custom",
+                    });
+              if (kind === "performance_data") n.config.inputType = "data";
               onChange({ ...graph, nodes: [...graph.nodes, n] });
               setSelected(n.id);
             }}
@@ -204,7 +211,8 @@ export function WorkflowFormEditor({
             <label>
               <input
                 type="checkbox"
-                checked={f.required}
+                checked={f.kind === "performance_data" || f.required}
+                disabled={f.kind === "performance_data"}
                 onChange={e => update({ required: e.target.checked })}
               />
               Required

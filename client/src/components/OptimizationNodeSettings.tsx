@@ -5,6 +5,7 @@ import {
   optimizerSchema,
   analysisQuerySchema,
   dimensionNames,
+  schedulingSettingsSchema,
   type Dimension,
 } from "@shared/optimization";
 import { optimizerLibrary } from "@shared/optimizerLibrary";
@@ -35,6 +36,7 @@ export function OptimizationNodeSettings({
       dimensions: ["messaging_style"],
     }
   );
+  const scheduling = schedulingSettingsSchema.parse(optimizer.scheduling ?? {});
   return (
     <>
       {node.type === "start_trigger" && (
@@ -316,38 +318,165 @@ export function OptimizationNodeSettings({
               ))}
             </select>
           </label>
-          <label>
-            Mode
-            <select
-              value={optimizer.mode}
-              onChange={e =>
-                onChange({
-                  optimizer: {
-                    ...optimizer,
-                    mode: e.target.value as typeof optimizer.mode,
-                  },
-                })
-              }
-            >
-              <option value="analyze">Analyze evidence</option>
-              <option value="analyze_generate">
-                Analyze + generate candidates
-              </option>
-            </select>
-          </label>
-          <label>
-            Verified brief
-            <textarea
-              value={optimizer.brief}
-              onChange={e =>
-                onChange({ optimizer: { ...optimizer, brief: e.target.value } })
-              }
-            />
-          </label>
-          <p className="wf-setting-help">
-            Generation uses the existing credit quote. Recommendations are test
-            hypotheses and never authorize changes to campaigns or budgets.
-          </p>
+          {optimizer.kind === "weekday_time" ? (
+            <>
+              <p className="wf-setting-help">
+                Compare live Meta delivery periods by purchase efficiency. This
+                step calculates a report; it does not generate ads or change
+                delivery.
+              </p>
+              <label>
+                Comparison
+                <select
+                  value={scheduling.comparison}
+                  onChange={e =>
+                    onChange({
+                      optimizer: {
+                        ...optimizer,
+                        mode: "analyze",
+                        scheduling: {
+                          ...scheduling,
+                          comparison: e.target
+                            .value as typeof scheduling.comparison,
+                        },
+                      },
+                    })
+                  }
+                >
+                  <option value="both">
+                    Weekdays and hours (separate comparisons)
+                  </option>
+                  <option value="weekday">Weekdays</option>
+                  <option value="hour">Hours</option>
+                </select>
+              </label>
+              <label>
+                Analysis objective
+                <select value="cost_per_purchase" disabled>
+                  <option value="cost_per_purchase">
+                    Lowest cost per attributed purchase (CPA)
+                  </option>
+                </select>
+              </label>
+              <p className="wf-setting-help">
+                ROAS remains visible as context. Aggregate revenue alone cannot
+                support a ROAS confidence estimate.
+              </p>
+              <label>
+                Probability required to propose a test
+                <select
+                  value={scheduling.testProbability}
+                  onChange={e =>
+                    onChange({
+                      optimizer: {
+                        ...optimizer,
+                        mode: "analyze",
+                        scheduling: {
+                          ...scheduling,
+                          testProbability: Number(e.target.value),
+                        },
+                      },
+                    })
+                  }
+                >
+                  {Array.from(
+                    new Set([0.8, 0.9, 0.95, 0.99, scheduling.testProbability])
+                  )
+                    .sort((a, b) => a - b)
+                    .map(v => (
+                      <option key={v} value={v}>
+                        {+(v * 100).toFixed(1)}%{v === 0.95 ? " (default)" : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {scheduling.comparison !== "hour" && (
+                <label>
+                  Observed dates required per weekday
+                  <select
+                    value={scheduling.minimumWeekdayObservations}
+                    onChange={e =>
+                      onChange({
+                        optimizer: {
+                          ...optimizer,
+                          mode: "analyze",
+                          scheduling: {
+                            ...scheduling,
+                            minimumWeekdayObservations: Number(e.target.value),
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {Array.from({ length: 11 }, (_, i) => i + 2).map(v => (
+                      <option key={v} value={v}>
+                        {v} dates{v === 2 ? " (default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <p className="wf-setting-help">
+                These decision rules control when a test is proposed. They do
+                not change the calculated confidence percentage. Missing or
+                unreconciled data prevents a test recommendation.
+              </p>
+              <details className="wf-step-guide">
+                <summary>How confidence is calculated</summary>
+                <p>
+                  Bayesian Gamma–Poisson model with a Jeffreys prior. Compare
+                  attributed purchase counts per unit of spend across all
+                  observed periods using 40,000 reproducible draws. The result
+                  is the probability that the observed lowest-CPA period has the
+                  best purchase efficiency under this model.
+                </p>
+                <p>
+                  The report includes 95% CPA credible intervals. Non-random
+                  delivery, changing campaigns and attribution can violate the
+                  assumptions. This is not causal lift or a guarantee of future
+                  performance.
+                </p>
+              </details>
+            </>
+          ) : (
+            <>
+              <label>
+                Mode
+                <select
+                  value={optimizer.mode}
+                  onChange={e =>
+                    onChange({
+                      optimizer: {
+                        ...optimizer,
+                        mode: e.target.value as typeof optimizer.mode,
+                      },
+                    })
+                  }
+                >
+                  <option value="analyze">Analyze evidence</option>
+                  <option value="analyze_generate">
+                    Analyze + generate candidates
+                  </option>
+                </select>
+              </label>
+              <label>
+                Verified brief
+                <textarea
+                  value={optimizer.brief}
+                  onChange={e =>
+                    onChange({
+                      optimizer: { ...optimizer, brief: e.target.value },
+                    })
+                  }
+                />
+              </label>
+              <p className="wf-setting-help">
+                Generation uses the existing credit quote. Recommendations are
+                test hypotheses and never authorize changes to campaigns or
+                budgets.
+              </p>
+            </>
+          )}
         </>
       )}
     </>
