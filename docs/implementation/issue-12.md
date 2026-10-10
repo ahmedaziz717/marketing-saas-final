@@ -72,3 +72,10 @@ Baseline: `codex/render-supabase-migration` c12fdfea46d589a46c8737a8d528b3e53775
 - A zero-credit Headline Lab run waits for the same import, then will classify and analyze. Its completion and the real-data YTD CSV are outstanding release gates. No paid generation, publication, budget mutation or activation was performed.
 - The final follow-up is preserved as a draft PR: relevant-source metadata lookup, 100-ad classification batches, visible import pacing, regression/CSV assertions, and this checkpoint. Re-run TypeScript, the affected tests and release group after environment recovery before merging/deploying that draft.
 - Issue #12 stays open: phase 9 is incomplete. Do not describe a queued import, an unfinished analysis run, or a partial report as fully validated.
+
+## Resumed QA (2026-10-10)
+- Coding and authenticated browser access recovered. PR #15 was restored from its exact remote commit; the pre-outage local patch is preserved in a named git stash.
+- Expanded release suite: **117/117 tests pass** across 11 files. TypeScript and production frontend/backend builds pass. The source-ad metadata, batch boundary, and CSV assertions are now verified.
+- Live import reached over 38,000 records but Meta returned an ad-account rate-limit error. The provider block prevents full-history and completed-analysis verification; checkpoint data remains intact. Do not reset the cursor or bypass provider pacing.
+- Fixed a real cooldown defect found during live QA: response usage headers were captured on error but discarded by the catch path. Retry scheduling now respects the greater of provider recovery estimate, Retry-After, and bounded exponential delay. Regression verifies a one-hour provider cooldown makes no early request; all 13 focused ingestion/analysis tests and TypeScript pass. Retry exhaustion remains explicit and bounded.
+- No paid workflow or advertising mutation was executed. Mobile visual and real completed YTD report gates remain open until independently verified.

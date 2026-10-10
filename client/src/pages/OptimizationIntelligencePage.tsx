@@ -209,9 +209,11 @@ function Intelligence() {
                       progress.data.nextAtMs > Date.now() + 3000 && (
                         <p className="text-muted-foreground">
                           Meta sync is pacing requests. Next attempt after{" "}
-                          {new Date(progress.data.nextAtMs).toLocaleTimeString()}.
-                          You can leave this page; the import resumes automatically
-                          from its checkpoint.
+                          {new Date(
+                            progress.data.nextAtMs
+                          ).toLocaleTimeString()}
+                          . You can leave this page; the import resumes
+                          automatically from its checkpoint.
                         </p>
                       )}
                     {progress.data.error && (

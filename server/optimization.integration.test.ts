@@ -124,14 +124,26 @@ it("resumes paginated upserts atomically, preserves cursor on throttle, and reje
     .update(optimizationSyncs)
     .set({ nextAtMs: 0 })
     .where(eq(optimizationSyncs.id, job.id));
-  state.graph.mockRejectedValueOnce(
-    new ChannelGraphError("rate limit", true, 80004)
-  );
+  state.graph.mockImplementationOnce(async (...args: any[]) => {
+    args[5](
+      new Headers({
+        "x-business-use-case-usage": JSON.stringify({
+          account: [{ estimated_time_to_regain_access: 60 }],
+        }),
+      })
+    );
+    throw new ChannelGraphError("rate limit", true, 80004);
+  });
+  const beforeThrottle = Date.now();
   await processHistoryPage(state.db, job.id);
   [saved] = await state.db.select().from(optimizationSyncs);
   expect(saved.checkpoint.after).toBe("cursor-one");
   expect(saved.status).toBe("queued");
   expect(saved.attempts).toBe(1);
+  expect(saved.nextAtMs).toBeGreaterThanOrEqual(beforeThrottle + 3600000);
+  const callCount = state.graph.mock.calls.length;
+  await processHistoryPage(state.db, job.id);
+  expect(state.graph.mock.calls.length).toBe(callCount);
   await state.db
     .update(optimizationSyncs)
     .set({ nextAtMs: 0 })
@@ -250,7 +262,13 @@ it("resumes classification across a full batch and only returns report source-ad
     remoteId: "900100",
     date: "2026-01-01",
     grain: "daily",
-    data: { spend: "10", impressions: "100", clicks: "5", actions: [], action_values: [] },
+    data: {
+      spend: "10",
+      impressions: "100",
+      clicks: "5",
+      actions: [],
+      action_values: [],
+    },
   });
   const report = await analyzeHistory(state.db, org, cid, {
     range: { since: "2026-01-01", until: "2026-01-01" },
