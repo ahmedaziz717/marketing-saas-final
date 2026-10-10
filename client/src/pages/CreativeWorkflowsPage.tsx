@@ -1,3 +1,5 @@
+import { WorkflowInputControl } from "@/components/WorkflowInputControl";
+import { fieldValueProblem } from "@shared/workflowInputs";
 import { WorkflowFormEditor } from "@/components/WorkflowFormEditor";
 import { useEffect, useRef, useState } from "react";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
@@ -315,10 +317,16 @@ function WorkflowEditor({
   const [editorView, setEditorView] = useState<"workflow" | "form" | "preview">(
     "workflow"
   );
+  const [inputDialog, setInputDialog] = useState<{ target?: string } | null>(
+    null
+  );
+  const [runValues, setRunValues] = useState<Record<string, string>>({});
+  const [inputError, setInputError] = useState("");
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [review, setReview] = useState<{
     target?: string;
     credits: number;
+    inputs: Array<{ id: string; value: string }>;
     creditsByNode: Record<string, number>;
     nodeNames: Record<string, string>;
     reused: number;
@@ -392,7 +400,22 @@ function WorkflowEditor({
     window.addEventListener("beforeunload", guard);
     return () => window.removeEventListener("beforeunload", guard);
   }, [dirty]);
-  const startReview = async (target?: string) => {
+  const startReview = async (
+    target?: string,
+    suppliedInputs?: Array<{ id: string; value: string }>
+  ) => {
+    const fields =
+      graph?.nodes.filter(
+        n =>
+          n.type === "app_input" &&
+          n.config.field &&
+          !graph.edges.some(e => e.target === n.id)
+      ) ?? [];
+    if (fields.length && !suppliedInputs) {
+      setInputError("");
+      setInputDialog({ target });
+      return;
+    }
     try {
       await saveNow();
       const result = await quote.mutateAsync({
@@ -400,14 +423,18 @@ function WorkflowEditor({
         id,
         revision: revision.current,
         target,
+        inputs: suppliedInputs,
       });
       setReview({
         ...result,
+        inputs: suppliedInputs ?? [],
         target,
         requestId: crypto.randomUUID(),
         revision: revision.current,
       });
+      setInputDialog(null);
     } catch (e) {
+      setInputError((e as Error).message);
       toast.error((e as Error).message);
     }
   };
@@ -706,6 +733,106 @@ function WorkflowEditor({
         </div>
       )}
       <Dialog
+        open={!!inputDialog}
+        onOpenChange={open => !open && setInputDialog(null)}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Run inputs · {name}</DialogTitle>
+            <DialogDescription>
+              Supply the fields required by this workflow. These values apply to
+              this run; your saved defaults stay unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          {graph.nodes
+            .filter(
+              n =>
+                n.type === "app_input" &&
+                n.config.field &&
+                !graph.edges.some(e => e.target === n.id)
+            )
+            .map(n => {
+              const field = n.config.field!;
+              const condition = field.visibleWhen;
+              const parent = graph.nodes.find(p => p.id === condition?.fieldId);
+              const parentValue = parent?.config.field?.locked
+                ? parent.config.field.defaultValue
+                : (runValues[parent?.id ?? ""] ??
+                  parent?.config.fieldValue ??
+                  parent?.config.field?.defaultValue);
+              if (condition && parentValue !== condition.equals) return null;
+              return (
+                <div key={n.id} className="wf-form-field">
+                  <label>
+                    {n.title}
+                    {field.required ? " *" : ""}
+                  </label>
+                  <WorkflowInputControl
+                    field={field}
+                    title={n.title}
+                    organizationId={organizationId}
+                    value={
+                      field.locked
+                        ? field.defaultValue
+                        : (runValues[n.id] ??
+                          n.config.fieldValue ??
+                          field.defaultValue)
+                    }
+                    onChange={value =>
+                      setRunValues(old => ({ ...old, [n.id]: value }))
+                    }
+                  />
+                </div>
+              );
+            })}
+          {inputError && (
+            <p role="alert" className="text-destructive">
+              {inputError}
+            </p>
+          )}
+          <Button
+            disabled={quote.isPending}
+            onClick={() => {
+              const fields = graph.nodes.filter(
+                n =>
+                  n.type === "app_input" &&
+                  n.config.field &&
+                  !graph.edges.some(e => e.target === n.id)
+              );
+              const inputs = fields.map(n => ({
+                id: n.id,
+                value: n.config.field!.locked
+                  ? n.config.field!.defaultValue
+                  : (runValues[n.id] ??
+                    n.config.fieldValue ??
+                    n.config.field!.defaultValue),
+              }));
+              for (const n of fields) {
+                const f = n.config.field!;
+                if (
+                  f.visibleWhen &&
+                  inputs.find(i => i.id === f.visibleWhen!.fieldId)?.value !==
+                    f.visibleWhen.equals
+                )
+                  continue;
+                const problem = fieldValueProblem(
+                  f,
+                  inputs.find(i => i.id === n.id)!.value
+                );
+                if (problem) {
+                  setInputError(`${n.title}: ${problem}`);
+                  return;
+                }
+              }
+              setInputError("");
+              void startReview(inputDialog?.target, inputs);
+            }}
+          >
+            {quote.isPending ? "Checking inputs…" : "Continue to run review"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={publishOpen}
         onOpenChange={open => !publishApp.isPending && setPublishOpen(open)}
       >
@@ -850,6 +977,7 @@ function WorkflowEditor({
                     id,
                     revision: review.revision,
                     target: review.target,
+                    inputs: review.inputs,
                     requestId: review.requestId,
                     quotedCredits: review.credits,
                   });

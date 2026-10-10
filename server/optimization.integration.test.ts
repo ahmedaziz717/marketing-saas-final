@@ -12,6 +12,7 @@ vi.mock("./db", () => ({
 vi.mock("./lib/channelGraph", async original => ({
   ...(await original<typeof import("./lib/channelGraph")>()),
   graphRequest: (...a: any[]) => state.graph(...a),
+  graphCollection: (...a: any[]) => state.graph(...a),
 }));
 import {
   users,
@@ -474,4 +475,86 @@ it("deduplicates trigger events and pauses before every automated paid action", 
   await expect(
     outsider.quoteStep({ organizationId: other, runId: id!, nodeId: "writer" })
   ).rejects.toThrow(/access/);
+});
+it("runs the legacy Scheduling optimizer with explicit inputs through quote, run and worker without touching the paused import", async () => {
+  const { workflowsRouter } = await import("./routers/workflows");
+  const { optimizerTemplate } = await import("./lib/optimizationTemplates");
+  const { processNextWorkflowRun } = await import("./jobs/workflowWorker");
+  const { creativeWorkflowRuns } = await import("../drizzle/workflowSchema");
+  const user = (
+    await state.db.select().from(users).where(eq(users.id, uid))
+  )[0];
+  const caller = workflowsRouter.createCaller({
+    user,
+    req: {},
+    res: {},
+  } as any);
+  const saved = await caller.save({
+    organizationId: org,
+    name: "Scheduling input fixture",
+    family: "optimize",
+    graph: optimizerTemplate("weekday_time"),
+  });
+  const detail = await caller.get({ organizationId: org, id: saved.id });
+  expect(detail.graph.nodes[0].config.field?.kind).toBe("performance_data");
+  await expect(
+    caller.quote({
+      organizationId: org,
+      id: saved.id,
+      revision: saved.revision,
+    })
+  ).rejects.toThrow(/connected Meta ad account/);
+  const inputs = [
+    {
+      id: "evidence",
+      value: JSON.stringify({
+        connectionId: cid,
+        range: { since: "2026-09-01", until: "2026-09-30" },
+      }),
+    },
+  ];
+  const q = await caller.quote({
+    organizationId: org,
+    id: saved.id,
+    revision: saved.revision,
+    inputs,
+  });
+  expect(q.credits).toBe(0);
+  const before = await state.db.select().from(optimizationSyncs);
+  state.graph.mockResolvedValue({ data: [], truncated: false });
+  const run = await caller.run({
+    organizationId: org,
+    id: saved.id,
+    revision: saved.revision,
+    inputs,
+    quotedCredits: 0,
+    requestId: randomUUID(),
+  });
+  for (let i = 0; i < 4; i++) {
+    await state.db
+      .update(creativeWorkflowRuns)
+      .set({ leaseUntilMs: 0 })
+      .where(eq(creativeWorkflowRuns.id, run.id));
+    await processNextWorkflowRun(state.db);
+  }
+  const finished = (
+    await state.db
+      .select()
+      .from(creativeWorkflowRuns)
+      .where(eq(creativeWorkflowRuns.id, run.id))
+  )[0];
+  expect(finished.status).toBe("completed");
+  expect(finished.steps.engine.outputs[0].data).toMatchObject({
+    decision: "insufficient_evidence",
+    source: "live_meta_scheduling",
+  });
+  expect(finished.steps.evidence.outputs[0].data.range).toEqual({
+    since: "2026-09-01",
+    until: "2026-09-30",
+  });
+  expect(await state.db.select().from(optimizationSyncs)).toEqual(before);
+  expect(
+    (await caller.get({ organizationId: org, id: saved.id })).graph.nodes[0]
+      .config.fieldValue
+  ).toBeUndefined();
 });

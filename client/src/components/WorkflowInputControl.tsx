@@ -1,3 +1,4 @@
+import { WorkflowPerformanceInput } from "./WorkflowPerformanceInput";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -47,7 +48,14 @@ export function WorkflowInputControl({
   return (
     <div className="wf-input-control">
       {field.help && <p className="wf-field-help">{field.help}</p>}
-      {isChoiceField(field) ? (
+      {field.kind === "performance_data" ? (
+        <WorkflowPerformanceInput
+          value={value}
+          onChange={onChange}
+          organizationId={organizationId}
+          disabled={disabled}
+        />
+      ) : isChoiceField(field) ? (
         <>
           {field.multiple ? (
             <div className="wf-choice-list">
@@ -172,7 +180,9 @@ export function WorkflowInputControl({
       {field.ai &&
         !field.locked &&
         !isChoiceField(field) &&
-        !["asset", "product", "number", "url"].includes(field.kind) && (
+        !["asset", "product", "number", "url", "performance_data"].includes(
+          field.kind
+        ) && (
           <>
             <Button
               type="button"

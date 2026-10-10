@@ -64,18 +64,15 @@ async function runnable(
   input: z.infer<typeof runInput>
 ) {
   const workflow = await getWorkflow(db, input.organizationId, input.id);
-  if (!input.appVersionId) return workflow;
-  const app = await getWorkflowApp(
-    db,
-    input.organizationId,
-    input.appVersionId
-  );
-  if (app.workflowId !== workflow.id)
+  const app = input.appVersionId
+    ? await getWorkflowApp(db, input.organizationId, input.appVersionId)
+    : null;
+  if (app && app.workflowId !== workflow.id)
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Choose the matching workflow for this App.",
     });
-  const graph = structuredClone(app.graph);
+  const graph = structuredClone(app?.graph ?? workflow.graph);
   for (const field of input.inputs ?? []) {
     const node = graph.nodes.find(n => n.id === field.id);
     if (!node || !["text", "image", "app_input"].includes(node.type))
@@ -96,7 +93,11 @@ async function runnable(
     )
       node.config.text = field.text;
   }
-  return { ...workflow, graph, revision: input.revision };
+  return {
+    ...workflow,
+    graph,
+    revision: app ? input.revision : workflow.revision,
+  };
 }
 export const workflowsRouter = router({
   assistInput: protectedProcedure
