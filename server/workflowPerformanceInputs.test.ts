@@ -134,3 +134,27 @@ it("inserts a visible fetch exactly once, retains IDs and leaves pinned versions
   expect(pinned.nodes).toHaveLength(2);
   expect(pinned.edges).toEqual(original.edges);
 });
+
+it("compares saved run results with the draft independently of JSON key order and selected account/dates", async () => {
+  const { schedulingWorkflowTemplate, workflowDraftSignature } = await import(
+    "../shared/workflowPerformanceInputs"
+  );
+  const draft = schedulingWorkflowTemplate();
+  const run = JSON.parse(
+    JSON.stringify(draft, (_key, value) =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).reverse())
+        : value
+    )
+  );
+  run.nodes[0].config.performanceRequest = parsePerformanceInput(value);
+  run.nodes[0].config.fieldValue = value;
+  for (const n of draft.nodes)
+    expect(workflowDraftSignature(run, n.id)).toBe(
+      workflowDraftSignature(draft, n.id)
+    );
+  run.nodes[1].config.metaPerformance.includeHourly = false;
+  expect(workflowDraftSignature(run, "result")).not.toBe(
+    workflowDraftSignature(draft, "result")
+  );
+});

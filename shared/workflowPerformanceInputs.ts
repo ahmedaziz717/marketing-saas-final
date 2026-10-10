@@ -1,5 +1,39 @@
-import { newWorkflowNode, type WorkflowGraph } from "./creativeWorkflow";
+import {
+  newWorkflowNode,
+  workflowSignature,
+  type WorkflowGraph,
+} from "./creativeWorkflow";
 import { appFieldSchema } from "./workflowInputs";
+
+/** Display-only comparison: ignore run inputs and JSON object key ordering.
+ * Execution/cache signatures remain strict and keep the actual run inputs.
+ */
+export function workflowDraftSignature(graph: WorkflowGraph, id: string) {
+  const normalized = {
+    ...graph,
+    nodes: graph.nodes.map(n =>
+      n.config.field?.kind === "performance_data"
+        ? {
+            ...n,
+            config: {
+              ...n.config,
+              performanceRequest: undefined,
+              fieldValue: undefined,
+            },
+          }
+        : n
+    ),
+  };
+  return JSON.stringify(
+    JSON.parse(workflowSignature(normalized, id)),
+    (_key, value) =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(
+            Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+          )
+        : value
+  );
+}
 
 export const performanceField = () =>
   appFieldSchema.parse({
