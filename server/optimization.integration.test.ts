@@ -29,6 +29,8 @@ import { queueHistory, processHistoryPage } from "./lib/optimizationIngestion";
 import {
   saveClassification,
   classifyHistoryBatch,
+  analyzeHistory,
+  evidenceCsv,
 } from "./lib/optimizationAnalysis";
 import { optimizationRouter } from "./routers/optimization";
 import { ChannelGraphError } from "./lib/channelGraph";
@@ -223,6 +225,49 @@ it("batches imported classifications idempotently without fabricating unknown ob
   const second = await state.db.select().from(optimizationClassifications);
   expect(second).toHaveLength(first.length);
   expect(second.filter((r: any) => r.source === "human")).toEqual(humans);
+});
+
+it("resumes classification across a full batch and only returns report source-ad metadata", async () => {
+  const [original] = await state.db.select().from(optimizationRecords);
+  await state.db.insert(optimizationRecords).values(
+    Array.from({ length: 101 }, (_, i) => ({
+      ...original,
+      id: randomUUID(),
+      remoteId: String(900000 + i),
+      data: { id: String(900000 + i), name: "Unrelated historical ad" },
+    }))
+  );
+  const first = await classifyHistoryBatch(state.db, org, cid, "800000");
+  expect(first.processed).toBe(100);
+  expect(first.next).toBe("900099");
+  const last = await classifyHistoryBatch(state.db, org, cid, first.next!);
+  expect(last.processed).toBe(1);
+  expect(last.next).toBeNull();
+  await state.db.insert(optimizationRecords).values({
+    ...original,
+    id: randomUUID(),
+    kind: "insight",
+    remoteId: "900100",
+    date: "2026-01-01",
+    grain: "daily",
+    data: { spend: "10", impressions: "100", clicks: "5", actions: [], action_values: [] },
+  });
+  const report = await analyzeHistory(state.db, org, cid, {
+    range: { since: "2026-01-01", until: "2026-01-01" },
+    grain: "daily",
+    dimensions: [],
+    filters: [],
+    minimumConfidence: 0,
+  });
+  expect(report.sourceAds.map(a => a.id)).toEqual(["900100"]);
+  expect(report.summary.spend).toBe(10);
+  expect(report.summary.adCount).toBe(1);
+  const csv = evidenceCsv(report);
+  expect(csv).toContain('"2026-01-01","2026-01-01"');
+  expect(csv).toContain('"sourceAdIds"');
+  expect(csv).toContain('"900100"');
+  expect(csv).not.toContain('"900099"');
+  expect(csv).toContain("Observational associations are not causal effects");
 });
 
 it("pins nested workflow versions, rejects cycles and tenant crossing, and enforces mapped types", async () => {

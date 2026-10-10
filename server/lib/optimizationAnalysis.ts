@@ -326,7 +326,7 @@ export async function analyzeHistory(
     eq(optimizationRecords.organizationId, organizationId),
     eq(optimizationRecords.connectionId, connectionId)
   );
-  const [insights, objects, syncs] = await Promise.all([
+  const [insights, syncs] = await Promise.all([
     db
       .select()
       .from(optimizationRecords)
@@ -346,11 +346,6 @@ export async function analyzeHistory(
       .limit(50001),
     db
       .select()
-      .from(optimizationRecords)
-      .where(and(scope, eq(optimizationRecords.kind, "ad")))
-      .limit(20001),
-    db
-      .select()
       .from(optimizationSyncs)
       .where(
         and(
@@ -360,6 +355,20 @@ export async function analyzeHistory(
       ),
   ]);
   const relevantIds = Array.from(new Set(insights.map(r => r.remoteId)));
+  // Accounts can contain years of inactive ads. Fetch metadata for this report's
+  // source ads so unrelated inventory cannot truncate an otherwise complete report.
+  const objects = relevantIds.length
+    ? await db
+        .select()
+        .from(optimizationRecords)
+        .where(
+          and(
+            scope,
+            eq(optimizationRecords.kind, "ad"),
+            inArray(optimizationRecords.remoteId, relevantIds)
+          )
+        )
+    : [];
   const classifications = relevantIds.length
     ? await db
         .select()
@@ -424,7 +433,6 @@ export async function analyzeHistory(
     sync = syncs[0];
   const truncated =
     insights.length > 50000 ||
-    objects.length > 20000 ||
     classifications.length > 100000 ||
     result.combinationsTruncated;
   return {
@@ -594,6 +602,7 @@ export async function classifyHistoryBatch(
   connectionId: string,
   after = ""
 ) {
+  const batchSize = 100;
   await getConnection(db, organizationId, connectionId, "meta_ads");
   const scope = and(
     eq(optimizationRecords.organizationId, organizationId),
@@ -610,8 +619,8 @@ export async function classifyHistoryBatch(
       )
     )
     .orderBy(optimizationRecords.remoteId)
-    .limit(21);
-  const page = ads.slice(0, 20);
+    .limit(batchSize + 1);
+  const page = ads.slice(0, batchSize);
   const ids = page
     .flatMap(a => [
       String(a.data.creative?.id ?? ""),
@@ -748,6 +757,6 @@ export async function classifyHistoryBatch(
   await saveImportedBatch(db, organizationId, connectionId, pending);
   return {
     processed: page.length,
-    next: ads.length > 20 ? page.at(-1)!.remoteId : null,
+    next: ads.length > batchSize ? page.at(-1)!.remoteId : null,
   };
 }
