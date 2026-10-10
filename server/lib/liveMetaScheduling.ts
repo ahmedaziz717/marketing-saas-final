@@ -1,9 +1,15 @@
-import { rangeSchema, validDate, type DateRange } from "../../shared/channels";
+import {
+  rangeSchema,
+  validDate,
+  actionValue,
+  type DateRange,
+} from "../../shared/channels";
 import type { ChannelConnection } from "../../drizzle/channelSchema";
 import { connectionToken } from "./channelConnections";
-import { graphCollection } from "./channelGraph";
+import { graphCollection, ChannelGraphError } from "./channelGraph";
 import { adMetrics } from "./channelReports";
 import { aggregateEvidence, type EvidenceRow } from "./optimizationAnalysis";
+import { purchaseEfficiencyConfidence } from "./schedulingStatistics";
 
 const weekdays = [
   "Sunday",
@@ -14,10 +20,18 @@ const weekdays = [
   "Friday",
   "Saturday",
 ];
+const purchaseTypes = [
+  "offsite_conversion.fb_pixel_purchase",
+  "omni_purchase",
+  "purchase",
+];
+const trafficFields =
+  "date_start,date_stop,spend,impressions,clicks,inline_link_clicks";
 function rowsToGroups(
   rows: Record<string, any>[],
   dimension: "weekday" | "hour",
-  currency: string | null
+  currency: string | null,
+  purchaseType: string | null
 ) {
   const grouped = new Map<string, EvidenceRow[]>();
   for (const row of rows) {
@@ -30,15 +44,23 @@ function rowsToGroups(
             row.hourly_stats_aggregated_by_advertiser_time_zone ??
               "Unknown hour"
           );
+    const metrics = adMetrics(row);
+    // One action definition for the whole report; never add overlapping aliases.
+    metrics.purchases = purchaseType
+      ? actionValue(row.actions, [purchaseType])
+      : null;
+    metrics.purchaseValue = purchaseType
+      ? actionValue(row.action_values, [purchaseType])
+      : null;
     const list = grouped.get(label) ?? [];
     list.push({
       adId: "account-total",
       date: String(row.date_start),
-      metrics: adMetrics(row),
+      metrics,
       dimensions: {},
       confidence: 1,
       currency,
-      attribution: "Meta account attribution; conversion-date reporting",
+      attribution: "Meta account attribution; impression-date reporting",
     });
     grouped.set(label, list);
   }
@@ -48,10 +70,6 @@ function rowsToGroups(
       labels: [label],
       sourceAdIds: [],
       adCount: null,
-      // Hourly requests deliberately do not ask for conversion fields.
-      ...(dimension === "hour"
-        ? { purchases: null, purchaseValue: null, roas: null, cpa: null }
-        : {}),
     }))
     .sort((a, b) =>
       dimension === "weekday"
@@ -60,7 +78,7 @@ function rowsToGroups(
     );
 }
 
-/** Small account-level live reads, independent of the historical import and its checkpoint. */
+/** Fresh, bounded account-level reads; never starts/resumes a historical import. */
 export async function liveSchedulingReport(
   c: ChannelConnection,
   supplied: DateRange
@@ -68,38 +86,134 @@ export async function liveSchedulingReport(
   const range = rangeSchema.parse(supplied),
     token = connectionToken(c);
   const path = `act_${c.accountId.replace(/^act_/, "")}/insights`;
+  // Scheduling asks when ads were delivered, not when a later purchase happened.
   const base = {
     level: "account",
     time_range: JSON.stringify(range),
     use_account_attribution_setting: "true",
-    action_report_time: "conversion",
+    action_report_time: "impression",
   };
-  // A year produces at most 366 daily rows and 24 hour-of-day rows, not every historical ad/creative.
   const daily = await graphCollection(
     path,
     token,
     {
       ...base,
       time_increment: "1",
-      fields:
-        "date_start,date_stop,spend,impressions,clicks,inline_link_clicks,actions,action_values",
+      fields: trafficFields + ",actions,action_values",
     },
     5
   );
-  const hourly = await graphCollection(
-    path,
-    token,
-    {
-      ...base,
-      breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
-      fields:
-        "date_start,date_stop,spend,impressions,clicks,inline_link_clicks",
-    },
-    2
+  const hourlyParams = {
+    ...base,
+    breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+  };
+  let hourly,
+    hourlyWarning: string | null = null;
+  try {
+    hourly = await graphCollection(
+      path,
+      token,
+      { ...hourlyParams, fields: trafficFields + ",actions,action_values" },
+      2
+    );
+  } catch (error) {
+    // Only unsupported field/breakdown errors allow a traffic-only fallback.
+    // Auth, throttling and transport failures must not look like valid reports.
+    if (
+      !(error instanceof ChannelGraphError) ||
+      error.code !== 100 ||
+      !/(actions|action_values|breakdown)/i.test(error.message)
+    )
+      throw error;
+    hourlyWarning =
+      "Meta rejected conversion fields with this hourly breakdown. Traffic metrics are shown; purchase confidence cannot be calculated. " +
+      error.message;
+    hourly = await graphCollection(
+      path,
+      token,
+      { ...hourlyParams, fields: trafficFields },
+      2
+    );
+  }
+  const purchaseType =
+    purchaseTypes.find(type =>
+      daily.data.some(
+        row =>
+          Array.isArray(row.actions) &&
+          row.actions.some((a: any) => a.action_type === type)
+      )
+    ) ?? null;
+  const weekday = rowsToGroups(
+    daily.data,
+    "weekday",
+    c.details.currency ?? null,
+    purchaseType
   );
+  const hour = rowsToGroups(
+    hourly.data,
+    "hour",
+    c.details.currency ?? null,
+    purchaseType
+  );
+  const completeDaily =
+    weekday.length > 0 && weekday.every(g => g.purchases !== null);
+  const dailyPurchases = completeDaily
+    ? weekday.reduce((sum, g) => sum + g.purchases!, 0)
+    : null;
+  const knownHourly = hour.reduce((sum, g) => sum + (g.purchases ?? 0), 0);
+  const trafficReconciles = ["spend", "impressions", "clicks"].every(key => {
+    const k = key as "spend" | "impressions" | "clicks";
+    if (!weekday.every(g => g[k] !== null) || !hour.every(g => g[k] !== null))
+      return false;
+    return (
+      Math.abs(
+        weekday.reduce((s, g) => s + g[k]!, 0) -
+          hour.reduce((s, g) => s + g[k]!, 0)
+      ) <= (key === "spend" ? 0.1 : 0.001)
+    );
+  });
+  const reconciled =
+    !daily.truncated &&
+    !hourly.truncated &&
+    trafficReconciles &&
+    dailyPurchases !== null &&
+    Math.abs(knownHourly - dailyPurchases) < 0.000001 &&
+    hour.some(g => g.purchases !== null);
+  // Meta can omit actions on zero-action rows. Treat omission as zero ONLY when
+  // hourly conversion totals and delivery totals reconcile to the daily report.
+  if (reconciled)
+    for (const g of hour) {
+      if (g.purchases === null) g.purchases = 0;
+      g.cpa =
+        g.purchases > 0 && g.spend !== null ? g.spend / g.purchases : null;
+    }
+  const dailyValue =
+    weekday.length && weekday.every(g => g.purchaseValue !== null)
+      ? weekday.reduce((s, g) => s + g.purchaseValue!, 0)
+      : null;
+  const valueReconciles =
+    reconciled &&
+    dailyValue !== null &&
+    hour.some(g => g.purchaseValue !== null) &&
+    Math.abs(
+      hour.reduce((s, g) => s + (g.purchaseValue ?? 0), 0) - dailyValue
+    ) <= 0.1;
+  if (valueReconciles)
+    for (const g of hour) {
+      if (g.purchaseValue === null) g.purchaseValue = 0;
+      g.roas =
+        g.spend !== null && g.spend > 0 ? g.purchaseValue / g.spend : null;
+    }
+  if (!hourlyWarning && !reconciled)
+    hourlyWarning = !hour.length
+      ? "Meta returned no hourly rows for the selected period."
+      : !hour.some(g => g.purchases !== null)
+        ? "Purchase and revenue fields were requested, but Meta did not return usable hourly purchase counts. Traffic remains available; missing conversions are not zero."
+        : "Hourly purchase or delivery totals do not reconcile with the daily report. Returned values are shown for inspection, but hourly purchase confidence is withheld.";
   return {
     source: "live_meta_scheduling",
     schemaVersion: 1,
+    statisticsVersion: 2,
     accountName: c.name,
     connectionId: c.id,
     range,
@@ -109,52 +223,68 @@ export async function liveSchedulingReport(
     level: "account",
     dailyRowCount: daily.data.length,
     truncated: daily.truncated || hourly.truncated,
-    weekday: rowsToGroups(daily.data, "weekday", c.details.currency ?? null),
-    hour: rowsToGroups(hourly.data, "hour", c.details.currency ?? null),
+    weekday,
+    hour,
+    purchaseType,
+    hourlyWarning,
+    hourlyConversionsReconciled: reconciled,
+    hourlyValueReconciled: valueReconciles,
+    actionReportTime: "impression",
   };
 }
+
 export function schedulingRecommendation(source: Record<string, any>) {
   const reports = ["weekday", "hour"].map(dimension => {
     const groups = (source[dimension] ?? []) as ReturnType<typeof rowsToGroups>;
-    const eligible = groups.filter(
-      g =>
-        (g.impressions ?? 0) >= 1000 &&
-        (g.clicks ?? 0) >= 50 &&
-        g.ctr !== null &&
-        g.cpc !== null
-    );
+    const incomplete =
+      !!source.truncated ||
+      !groups.length ||
+      (dimension === "hour" && source.hourlyConversionsReconciled !== true);
+    const statistics = purchaseEfficiencyConfidence(groups, incomplete);
+    const repeated =
+      dimension === "weekday" &&
+      groups.length > 0 &&
+      groups.every(g => g.dates?.length >= 2);
+    // Test-readiness policy is SEPARATE from calculated probability. Hourly
+    // aggregate data has no repeat-day stability estimate; never claim it does.
     const enough =
-      !source.truncated && source.dailyRowCount >= 14 && eligible.length >= 2;
-    const ordered = [...eligible].sort((a, b) => (b.ctr ?? 0) - (a.ctr ?? 0));
+      statistics.confidence !== null &&
+      statistics.confidence >= 0.95 &&
+      (dimension !== "weekday" || repeated);
     return {
       dimension,
       decision: enough ? "propose_test" : "insufficient_evidence",
       sourceAdIds: [],
-      candidate: enough ? ordered[0].labels[0] : null,
+      candidate: statistics.candidate,
+      statistics,
+      repeatedWeekdays: repeated,
       evidence: {
         groups,
-        coverage: {
-          incomplete: source.truncated || !groups.length,
-          truncated: source.truncated,
-        },
+        coverage: { incomplete, truncated: !!source.truncated },
       },
+      explanation:
+        dimension === "hour" && source.hourlyWarning
+          ? String(source.hourlyWarning)
+          : (statistics.reason ??
+            (!repeated && dimension === "weekday"
+              ? "Probability can be estimated, but each weekday needs repeated observations before proposing a recurring schedule test."
+              : "The probability describes purchase efficiency under the model, not causal lift or profitability.")),
     };
   });
-  const enough = reports.every(r => r.decision === "propose_test");
+  const ready = reports.filter(r => r.decision === "propose_test");
   const message = !source.dailyRowCount
-    ? "Meta returned no daily performance for this account and date range. Choose another range or an account with delivery."
+    ? "Meta returned no daily performance for this account and date range."
     : source.truncated
-      ? "Meta returned a partial report. Choose a shorter date range; no schedule is recommended from incomplete results."
-      : !enough
-        ? "Live performance loaded, but there is not enough evidence to propose delivery windows. We require 14 days with delivery and at least two comparable buckets with 1,000 impressions and 50 clicks each."
-        : "Live performance loaded. The strongest observed click-through periods are candidates for a controlled test, not proven best times to buy.";
+      ? "Meta returned a partial report; confidence is not estimable from incomplete results."
+      : "Live performance loaded. Each comparison shows its own calculated purchase-efficiency confidence; there is no combined or fixed confidence score.";
   return {
     schemaVersion: 1,
     source: source.source,
+    statisticsVersion: 2,
     kind: "weekday_time",
     channel: "meta_ads",
-    decision: enough ? "propose_test" : "insufficient_evidence",
-    confidence: enough ? 0.5 : 0,
+    decision: ready.length ? "propose_test" : "insufficient_evidence",
+    confidence: null,
     message,
     sourceAdIds: [],
     dimensions: ["weekday", "hour"],
@@ -168,23 +298,27 @@ export function schedulingRecommendation(source: Record<string, any>) {
     observations: [
       message,
       `Account: ${source.accountName}. Dates: ${source.range.since} through ${source.range.until}. Time zone: ${source.timezone}.`,
-      "Weekday and hour results are separate comparisons; they do not establish a winning weekday-and-hour combination.",
-      "Candidate ranking uses weighted CTR (total clicks / total impressions); CPC and conversion metrics remain visible for review.",
+      "Analysis objective: lowest cost per attributed purchase. ROAS is descriptive; no ROAS confidence is inferred from aggregate revenue.",
+      "Weekday and hour are separate comparisons, not a winning weekday-and-hour combination.",
+      "Conversions are attributed to impression dates for delivery analysis. Recent results can change as delayed conversions arrive.",
     ],
-    suggestedTests: enough
-      ? reports.map(
-          r =>
-            `Consider a controlled ${r.dimension} test around ${r.candidate}, keeping audience, creative and budget stable.`
-        )
-      : [],
+    suggestedTests: ready.map(
+      r =>
+        `Consider a controlled ${r.dimension} purchase-efficiency test around ${r.candidate}. Keep audience, creative and budget stable; do not restrict other periods based on this report alone.`
+    ),
     generationBrief: "",
     dimensionReports: reports,
     caveats: [
-      "Account-level live Meta Insights, not the previously imported historical dataset. No individual ad counts are inferred.",
-      "Hourly purchase, revenue, CPA and ROAS metrics are not requested and remain unavailable; hourly candidates reflect clicks, not purchase profitability.",
-      "Daily conversions use the account attribution setting and conversion-date reporting. Purchases are not deduplicated business sales.",
-      "Observed differences can reflect existing delivery, budgets, audiences and campaigns. Statistical significance and causal lift have not been established.",
-      "This report does not change ad schedules, publish ads or change budgets.",
+      "Fresh account-level Meta Insights; no historical import or individual-ad counts. Purchase action: " +
+        (source.purchaseType ?? "not returned") +
+        ".",
+      "Both daily and hourly requests include purchase and revenue fields. Missing or unreconciled hourly conversions prevent hourly confidence; they are not silently replaced with clicks.",
+      "Confidence = posterior probability that the observed lowest-CPA period has the highest purchase rate per unit of spend among compared periods. It is conditional on an independent, constant-rate Poisson model and Jeffreys prior.",
+      "40,000 deterministic posterior draws; Monte Carlo standard error is at most 0.25 percentage points. 95% credible intervals describe model uncertainty, not future guaranteed performance.",
+      "Repeated users, attribution modelling, changing campaigns/audiences, day-to-day variability and non-random delivery can violate model assumptions. This probability is not a p-value, causal confidence, or proof of future lift. Fractional purchase counts are not treated as independent events.",
+      "The 95% test-readiness threshold and repeat-weekday check are decision rules, not the confidence calculation. No arbitrary 14-day cutoff is used.",
+      "Hourly buckets describe delivery hours, not purchase timestamps. Hourly totals cannot establish stability across individual days.",
+      "No ad schedules, publications or budgets are changed by this report.",
     ],
   };
 }

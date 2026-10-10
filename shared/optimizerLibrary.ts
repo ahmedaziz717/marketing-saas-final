@@ -133,7 +133,7 @@ export const optimizerOutputSchema = z.object({
     "propose_test",
     "unsupported_channel",
   ]),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number().min(0).max(1).nullable(),
   observations: z.array(z.string()),
   sourceAdIds: z.array(z.string()),
   dimensions: z.array(z.string()),

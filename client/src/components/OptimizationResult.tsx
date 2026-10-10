@@ -1,4 +1,6 @@
 import { optimizerOutputSchema } from "@shared/optimizerLibrary";
+const probability = (n: number) =>
+  n >= 0.9995 ? ">99.9%" : n < 0.0005 ? "<0.1%" : `${(n * 100).toFixed(1)}%`;
 export function OptimizationResult({
   data,
 }: {
@@ -18,8 +20,11 @@ export function OptimizationResult({
           {r.kind.replaceAll("_", " ")}
         </h3>
         <span className="rounded-full bg-violet-500/10 px-3 py-1 text-xs">
-          {r.decision.replaceAll("_", " ")} · {Math.round(r.confidence * 100)}%
-          confidence
+          {live
+            ? r.decision === "propose_test"
+              ? "Test candidate identified"
+              : "Observations · review evidence"
+            : `${r.decision.replaceAll("_", " ")} · ${r.confidence === null ? "Confidence not estimable" : `${Math.round(r.confidence * 100)}% confidence`}`}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -28,6 +33,12 @@ export function OptimizationResult({
           : `${r.sourceAdIds.length} source ads`}{" "}
         · Human approval required for production or campaign changes
       </p>
+      {live && data.statisticsVersion !== 2 && (
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          This saved result used the previous heuristic. Run the workflow again
+          for calculated confidence and hourly conversion retrieval.
+        </p>
+      )}
       <ul className="list-disc pl-5 text-sm space-y-2">
         {r.observations.map((o, i) => (
           <li key={i}>{o}</li>
@@ -37,8 +48,26 @@ export function OptimizationResult({
         <details className="border rounded-lg p-3" key={i}>
           <summary className="font-medium capitalize">
             {String(d.dimension).replaceAll("_", " ")} ·{" "}
-            {String(d.decision).replaceAll("_", " ")}
+            {live
+              ? typeof d.statistics?.confidence === "number"
+                ? `${probability(d.statistics.confidence)} confidence in lowest CPA · ${d.statistics.candidate}`
+                : "Purchase confidence not estimable"
+              : String(d.decision).replaceAll("_", " ")}
           </summary>
+          {live && (
+            <div className="mt-3 space-y-2 text-sm">
+              <p>{d.explanation}</p>
+              {typeof d.statistics?.confidence === "number" && (
+                <p>
+                  Estimated probability that {d.statistics.candidate} has the
+                  lowest cost per purchase among the{" "}
+                  {d.statistics.comparisons.length} observed periods, under the
+                  stated model. This is not confidence in ROAS or a future
+                  schedule change.
+                </p>
+              )}
+            </div>
+          )}
           <div className="mt-3 overflow-x-auto">
             <table className="text-xs w-full">
               <thead>
@@ -51,6 +80,7 @@ export function OptimizationResult({
                     "CTR %",
                     "CPC",
                     "Purchases",
+                    ...(live ? ["Revenue", "CPA"] : []),
                     "ROAS",
                     ...(live ? [] : ["Ads"]),
                   ].map(h => (
@@ -71,6 +101,7 @@ export function OptimizationResult({
                       g.ctr,
                       g.cpc,
                       g.purchases,
+                      ...(live ? [g.purchaseValue, g.cpa] : []),
                       g.roas,
                       ...(live ? [] : [g.adCount]),
                     ].map((v, k) => (
@@ -87,6 +118,63 @@ export function OptimizationResult({
               </tbody>
             </table>
           </div>
+          {live && d.statistics?.comparisons?.length > 0 && (
+            <details className="mt-3 rounded border p-3">
+              <summary className="text-sm font-medium">
+                Confidence calculation and 95% CPA credible intervals
+              </summary>
+              <p className="text-xs my-3">
+                Bayesian Gamma–Poisson model; spend is exposure, purchases are
+                counts. Jeffreys prior: p(rate) ∝ rate⁻½. Posterior:
+                Gamma(purchases + ½, rate = spend). All observed periods are
+                compared together using 40,000 reproducible draws. Monte Carlo
+                error is at most 0.25 percentage points; model uncertainty is
+                separate.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead>
+                    <tr>
+                      <th className="text-left p-2">Period</th>
+                      <th className="text-left p-2">
+                        Probability of lowest CPA
+                      </th>
+                      <th className="text-left p-2">
+                        95% CPA credible interval (
+                        {String(data.currency ?? "account currency")})
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.statistics.comparisons.map((c: any) => (
+                      <tr className="border-t" key={c.label}>
+                        <td className="p-2">{c.label}</td>
+                        <td className="p-2">
+                          {probability(c.probabilityBest)}
+                        </td>
+                        <td className="p-2">
+                          {c.cpaInterval95
+                            .map((n: number) =>
+                              n.toLocaleString(undefined, {
+                                maximumFractionDigits: 2,
+                              })
+                            )
+                            .join(" – ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs mt-3">
+                Assumes independent purchases and a stable purchase rate per
+                unit of spend within each period. Campaign mix, repeated users,
+                attribution modelling and day-to-day variation are not
+                controlled. ROAS uncertainty requires additional order-value
+                information; no ROAS confidence is manufactured.
+              </p>
+            </details>
+          )}
           <p className="text-xs mt-2">
             {live
               ? "Source: Meta Insights, selected account and date range"
