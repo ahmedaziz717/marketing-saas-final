@@ -1,3 +1,4 @@
+import { withPerformanceInputs } from "../../shared/workflowPerformanceInputs";
 import { prepareImageRequest } from "./imageRequest";
 import { readGenerationSource } from "./creativeImages";
 import { resolveWorkflowInputs } from "./workflowInputs";
@@ -84,7 +85,7 @@ export async function getWorkflow(
       code: "NOT_FOUND",
       message: "Workflow not found in this workspace.",
     });
-  return row;
+  return { ...row, graph: withPerformanceInputs(row.graph) };
 }
 export function workflowVideoSetup(
   node: WorkflowNode,
@@ -123,7 +124,8 @@ export async function workflowNodeCredits(
 ) {
   const imageKeys = input
     .filter(
-      (v): v is Extract<WorkflowValue, { type: "image" | "video" }> => v.type === "image"
+      (v): v is Extract<WorkflowValue, { type: "image" | "video" }> =>
+        v.type === "image"
     )
     .map(v => v.key);
   const text =
@@ -232,7 +234,11 @@ export async function prepareWorkflowRun(
   graph: WorkflowGraph,
   target?: string
 ) {
-  graph = await resolveWorkflowApps(db, organizationId, graph);
+  graph = await resolveWorkflowApps(
+    db,
+    organizationId,
+    withPerformanceInputs(graph)
+  );
   graph = await resolveWorkflowInputs(db, organizationId, graph);
   if (target && !graph.nodes.some(n => n.id === target))
     throw new TRPCError({
@@ -295,17 +301,22 @@ export async function prepareWorkflowRun(
         graph.nodes.some(
           n =>
             ancestors.has(n.id) &&
-            [
-              "meta_history", "classify_history", "analyze_history", "optimize_dimension", "start_trigger",
-              "meta_report",
-              "facebook_report",
-              "review",
-              "wait",
-              "facebook_post",
-              "meta_ad",
-              "deliver_publication",
-              "meta_activate",
-            ].includes(n.type)
+            (n.config.performanceRequest ||
+              [
+                "meta_history",
+                "classify_history",
+                "analyze_history",
+                "optimize_dimension",
+                "start_trigger",
+                "meta_report",
+                "facebook_report",
+                "review",
+                "wait",
+                "facebook_post",
+                "meta_ad",
+                "deliver_publication",
+                "meta_activate",
+              ].includes(n.type))
         )
       )
         throw new TRPCError({

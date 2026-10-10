@@ -1,3 +1,7 @@
+import {
+  liveSchedulingReport,
+  schedulingRecommendation,
+} from "./liveMetaScheduling";
 import { presetRange } from "../../shared/reportDates";
 import { getConnection } from "./channelConnections";
 import { optimizerLibrary } from "../../shared/optimizerLibrary";
@@ -25,6 +29,26 @@ export async function optimizationStep(
   node: WorkflowNode,
   input: WorkflowValue[]
 ): Promise<WorkflowStep | null> {
+  if (node.type === "app_input" && node.config.performanceRequest) {
+    requireOptimization(run.organizationId);
+    const c = await getConnection(
+      db,
+      run.organizationId,
+      node.config.performanceRequest.connectionId,
+      "meta_ads"
+    );
+    const data = await liveSchedulingReport(
+      c,
+      node.config.performanceRequest.range
+    );
+    return {
+      status: "completed",
+      outputs: [
+        { type: "data", name: "Live Meta scheduling performance", data },
+      ],
+      finishedAtMs: Date.now(),
+    };
+  }
   if (
     ![
       "start_trigger",
@@ -193,6 +217,13 @@ export async function optimizationStep(
     node.config.optimizer ?? { kind: "headline" }
   );
   const source = evidence.data;
+  if (source.source === "live_meta_scheduling") {
+    if (config.kind !== "weekday_time")
+      throw new Error(
+        "Connect live scheduling data to a Scheduling optimizer."
+      );
+    return complete("Scheduling analysis", schedulingRecommendation(source));
+  }
   const dimensionReports = [];
   if (typeof source.connectionId === "string" && source.query) {
     const base = analysisQuerySchema.parse(source.query);

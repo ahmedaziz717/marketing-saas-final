@@ -1,6 +1,6 @@
 import { analysisQuerySchema, optimizerSchema } from "./optimization";
 import { z } from "zod";
-import { appFieldSchema } from "./workflowInputs";
+import { performanceInputSchema, appFieldSchema } from "./workflowInputs";
 import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
 export const workflowFamilies = [
   "create",
@@ -363,6 +363,7 @@ export const workflowNodeSchema = z.object({
           .default("history_synced"),
       })
       .optional(),
+    performanceRequest: performanceInputSchema.optional(),
     analysis: analysisQuerySchema.optional(),
     optimizer: optimizerSchema.optional(),
     incremental: z.boolean().optional(),

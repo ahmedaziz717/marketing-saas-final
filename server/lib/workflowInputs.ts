@@ -1,8 +1,13 @@
+import { getConnection } from "./channelConnections";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { products } from "../../drizzle/schema";
 import type { WorkflowGraph } from "../../shared/creativeWorkflow";
-import { fieldValueProblem, fieldPrompt } from "../../shared/workflowInputs";
+import {
+  parsePerformanceInput,
+  fieldValueProblem,
+  fieldPrompt,
+} from "../../shared/workflowInputs";
 import type { LibraryDatabase } from "./assetLibrary";
 
 /** Resolve declared inputs server-side, using only workspace-owned catalog facts. */
@@ -23,6 +28,14 @@ export async function resolveWorkflowInputs(
   for (const n of graph.nodes) {
     const f = n.config.field;
     if (n.type !== "app_input" || !f) continue;
+    // A nested optimizer receives typed evidence from its caller, not a standalone form.
+    if (
+      f.kind === "performance_data" &&
+      graph.edges.some(e => e.target === n.id)
+    ) {
+      delete n.config.performanceRequest;
+      continue;
+    }
     const condition = f.visibleWhen;
     const hidden =
       condition && values.get(condition.fieldId) !== condition.equals;
@@ -34,6 +47,29 @@ export async function resolveWorkflowInputs(
           code: "BAD_REQUEST",
           message: `${n.title}: ${problem}`,
         });
+    }
+    if (f.kind === "performance_data") {
+      const selected = parsePerformanceInput(value);
+      if (!selected)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose a connected Meta ad account and a valid date range.",
+        });
+      const connection = await getConnection(
+        db,
+        organizationId,
+        selected.connectionId,
+        "meta_ads"
+      );
+      if (connection.status !== "connected")
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Reconnect the selected Meta ad account before running this workflow.",
+        });
+      n.config.performanceRequest = selected;
+      n.config.inputType = "data";
+      continue;
     }
     n.config.text = "";
     if (!value) continue;

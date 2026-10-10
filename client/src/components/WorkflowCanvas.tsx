@@ -1,3 +1,4 @@
+import { OptimizationResult } from "./OptimizationResult";
 import { WorkflowFormEditor } from "./WorkflowFormEditor";
 import {
   appFieldSchema,
@@ -1466,6 +1467,11 @@ export function WorkflowCanvas({
             />
           ) : preview?.type === "video" ? (
             <video src={preview.url} controls className="max-h-[70vh] w-full" />
+          ) : preview?.type === "data" &&
+            preview.data.requiresHumanApproval === true ? (
+            <div className="max-h-[65vh] overflow-auto">
+              <OptimizationResult data={preview.data} />
+            </div>
           ) : (
             <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap text-sm">
               {preview ? workflowValueText(preview) : ""}
@@ -1580,7 +1586,9 @@ function ResultPreview({
         <p>
           {value.type === "decision"
             ? String(value.data.recommendation ?? "View decision")
-            : "View measurements and reporting context"}
+            : String(
+                value.data.message ?? "View measurements and reporting context"
+              )}
         </p>
         <span>Inspect result →</span>
       </button>

@@ -1,8 +1,21 @@
 import { z } from "zod";
+import { rangeSchema } from "./channels";
+export const performanceInputSchema = z.object({
+  connectionId: z.string().uuid(),
+  range: rangeSchema,
+});
+export function parsePerformanceInput(value: string) {
+  try {
+    return performanceInputSchema.safeParse(JSON.parse(value)).data;
+  } catch {
+    return undefined;
+  }
+}
 import { CREATIVE_THEME_GROUPS } from "./creativeThemes";
 import { CREATIVE_ART_STYLES } from "./creativeBuilder";
 
 export const inputKinds = [
+  "performance_data",
   "text",
   "headline",
   "subheadline",
@@ -23,6 +36,7 @@ export const inputKinds = [
   "number",
 ] as const;
 export const inputLabels: Record<(typeof inputKinds)[number], string> = {
+  performance_data: "Performance data",
   text: "Text / instructions",
   headline: "Headline",
   subheadline: "Subheadline",
@@ -142,6 +156,8 @@ export function fieldValueProblem(
   field: AppField,
   value: string
 ): string | null {
+  if (field.kind === "performance_data" && !parsePerformanceInput(value))
+    return "Choose a connected Meta ad account and a valid date range.";
   if (field.required && !value.trim()) return "This field is required.";
   if (!value.trim()) return null;
   if (field.kind === "headline" && value.length > 200)
@@ -178,6 +194,12 @@ export function fieldValueProblem(
   return null;
 }
 export function fieldPrompt(field: AppField, value: string) {
+  if (field.kind === "performance_data") {
+    const selected = parsePerformanceInput(value);
+    return selected
+      ? `Live Meta performance · ${selected.range.since} to ${selected.range.until}`
+      : "Choose an ad account and date range when running.";
+  }
   return isChoiceField(field)
     ? selectionValues(value, field.multiple)
         .map(id => {

@@ -7,6 +7,7 @@ export function OptimizationResult({
   const parsed = optimizerOutputSchema.safeParse(data);
   if (!parsed.success) return null;
   const r = parsed.data;
+  const live = data.source === "live_meta_scheduling";
   const dimensions = Array.isArray(data.dimensionReports)
     ? (data.dimensionReports as Array<Record<string, any>>)
     : [];
@@ -22,8 +23,10 @@ export function OptimizationResult({
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
-        {r.sourceAdIds.length} source ads · Human approval required for
-        production or campaign changes
+        {live
+          ? `Live Meta account-level report · ${String(data.accountName)} · ${String(data.timezone)}`
+          : `${r.sourceAdIds.length} source ads`}{" "}
+        · Human approval required for production or campaign changes
       </p>
       <ul className="list-disc pl-5 text-sm space-y-2">
         {r.observations.map((o, i) => (
@@ -44,9 +47,12 @@ export function OptimizationResult({
                     "Cohort",
                     "Spend",
                     "Impressions",
+                    "Clicks",
+                    "CTR %",
+                    "CPC",
                     "Purchases",
                     "ROAS",
-                    "Ads",
+                    ...(live ? [] : ["Ads"]),
                   ].map(h => (
                     <th key={h} className="text-left p-2">
                       {h}
@@ -61,9 +67,12 @@ export function OptimizationResult({
                     {[
                       g.spend,
                       g.impressions,
+                      g.clicks,
+                      g.ctr,
+                      g.cpc,
                       g.purchases,
                       g.roas,
-                      g.adCount,
+                      ...(live ? [] : [g.adCount]),
                     ].map((v, k) => (
                       <td className="p-2" key={k}>
                         {typeof v === "number"
@@ -79,7 +88,9 @@ export function OptimizationResult({
             </table>
           </div>
           <p className="text-xs mt-2">
-            Sources: {d.sourceAdIds?.join(", ") || "No source ads"}
+            {live
+              ? "Source: Meta Insights, selected account and date range"
+              : `Sources: ${d.sourceAdIds?.join(", ") || "No source ads"}`}
           </p>
           {d.evidence?.coverage?.incomplete && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -88,8 +99,19 @@ export function OptimizationResult({
           )}
         </details>
       ))}
+      {typeof data.fetchedAtMs === "number" && (
+        <p className="text-xs text-muted-foreground">
+          Fetched {new Date(data.fetchedAtMs).toLocaleString()} · Currency:{" "}
+          {String(data.currency ?? "Unavailable")}
+        </p>
+      )}
       <div className="rounded-lg bg-primary/5 p-3">
         <h4 className="text-sm font-medium">Suggested test</h4>
+        {!r.suggestedTests.length && (
+          <p className="text-sm mt-2">
+            No schedule change recommended from the available evidence.
+          </p>
+        )}
         {r.suggestedTests.map(t => (
           <p className="text-sm mt-2" key={t}>
             {t}
