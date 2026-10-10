@@ -58,7 +58,7 @@ const tools = {
       icon: MessageSquare,
     },
   ],
-  optimize: [],
+  optimize: [{name: "Optimization intelligence", description: "Explore historical Meta evidence, classifications, and suggested tests.", href: "/app/optimize/intelligence", icon: BarChart3}],
   create: [],
 };
 const descriptions = {

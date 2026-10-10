@@ -1,3 +1,4 @@
+import OptimizationIntelligencePage from "./pages/OptimizationIntelligencePage";
 import PlatformAdminPage, {
   AccountInvitePage,
 } from "./pages/PlatformAdminPage";
@@ -125,6 +126,7 @@ function Router() {
         component={LegacyPublishingPage}
       />
       <Route path="/app/advertising/meta" component={AdvertisingPage} />
+      <Route path="/app/optimize/intelligence" component={OptimizationIntelligencePage} />
       <Route path="/app/analytics" component={AnalyticsPage} />
       <Route path="/app/analytics/advertising" component={AnalyticsPage} />
       <Route path="/app/analytics/social" component={AnalyticsPage} />
