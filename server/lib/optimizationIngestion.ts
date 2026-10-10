@@ -108,7 +108,12 @@ export function usageDelay(headers: Headers) {
             n >= 80
           )
             delay = Math.max(delay, 60000);
-          if (k === "estimated_time_to_regain_access" && typeof n === "number")
+          if (
+            k === "estimated_time_to_regain_access" &&
+            typeof n === "number" &&
+            Number.isFinite(n) &&
+            n > 0
+          )
             delay = Math.max(delay, n * 60000);
           if (typeof n === "object") walk(n);
         }
@@ -118,9 +123,13 @@ export function usageDelay(headers: Headers) {
       /* Headers are advisory. Server errors still trigger bounded backoff. */
     }
   }
-  return Math.min(delay, 86400000);
+  return delay;
 }
-export function retryDelay(error: unknown, attempts: number) {
+export function retryDelay(
+  error: unknown,
+  attempts: number,
+  providerDelayMs = 0
+) {
   if (attempts >= 8) return null;
   if (
     error instanceof ChannelGraphError &&
@@ -128,9 +137,10 @@ export function retryDelay(error: unknown, attempts: number) {
       !error.definitive ||
       [1, 2, 4, 17, 32, 613, 80000, 80004].includes(error.code ?? 0))
   )
-    return Math.min(
-      86400000,
-      Math.max(error.retryAfterMs ?? 0, Math.pow(2, attempts) * 5000)
+    return Math.max(
+      providerDelayMs,
+      error.retryAfterMs ?? 0,
+      Math.min(86400000, Math.pow(2, attempts) * 5000)
     );
   return null;
 }
@@ -279,6 +289,7 @@ export async function processHistoryPage(
     eq(optimizationSyncs.leaseOwner, leaseOwner)
   );
   const task = job.tasks[job.checkpoint.task];
+  let providerDelayMs = 1000;
   try {
     await requireOrganizationRole(job.actorUserId, job.organizationId, [
       "owner",
@@ -335,7 +346,6 @@ export async function processHistoryPage(
       params.breakdowns = "publisher_platform,platform_position";
     if (task.grain === "hourly")
       params.breakdowns = "hourly_stats_aggregated_by_advertiser_time_zone";
-    let delay = 1000;
     const response = await graphRequest<Record<string, any>>(
       path,
       connectionToken(c),
@@ -343,7 +353,7 @@ export async function processHistoryPage(
       undefined,
       false,
       h => {
-        delay = usageDelay(h);
+        providerDelayMs = usageDelay(h);
       }
     );
     const rows = task.kind === "account" ? [response] : response.data;
@@ -493,7 +503,7 @@ export async function processHistoryPage(
           status: checkpoint.task >= job.tasks.length ? "completed" : "queued",
           attempts: 0,
           error: null,
-          nextAtMs: fetchedAtMs + delay,
+          nextAtMs: fetchedAtMs + providerDelayMs,
           leaseUntilMs: 0,
           leaseOwner: null,
           updatedAtMs: fetchedAtMs,
@@ -501,7 +511,9 @@ export async function processHistoryPage(
         .where(fence);
     });
   } catch (error) {
-    const delay = retryDelay(error, job.attempts);
+    // Headers are observed before graphRequest throws. Honor provider recovery
+    // estimates on errors as well as successful pages; never retry ahead of them.
+    const delay = retryDelay(error, job.attempts, providerDelayMs);
     const message =
       error instanceof Error
         ? error.message.slice(0, 500)

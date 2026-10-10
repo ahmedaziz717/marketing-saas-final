@@ -205,6 +205,17 @@ function Intelligence() {
                       max={progress.data.totalTasks}
                       value={progress.data.completedTasks}
                     />
+                    {progress.data.status === "queued" &&
+                      progress.data.nextAtMs > Date.now() + 3000 && (
+                        <p className="text-muted-foreground">
+                          Meta sync is pacing requests. Next attempt after{" "}
+                          {new Date(
+                            progress.data.nextAtMs
+                          ).toLocaleTimeString()}
+                          . You can leave this page; the import resumes
+                          automatically from its checkpoint.
+                        </p>
+                      )}
                     {progress.data.error && (
                       <p className="text-destructive">{progress.data.error}</p>
                     )}

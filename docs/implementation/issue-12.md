@@ -61,3 +61,21 @@ Baseline: `codex/render-supabase-migration` c12fdfea46d589a46c8737a8d528b3e53775
 - Analyze + Generate produces test candidates through the existing quoted copy engine. Image/video production is composed with existing generation nodes and their own quotes/reviews.
 - CLX setup deliberately leaves destination URL/ad set unset. A creator must configure verified brand/product facts, choose generation models, approve asset versions, and approve the publication. Meta ads are delivered paused; activation/spending requires separate approval. Zero delivery after a paused publication is not a measured failure of the creative.
 - Rollback: disable the three rollout flags to stop new intelligence work; additive tables may remain. Re-deploy baseline c12fdfea46d589a46c8737a8d528b3e537750226 if needed. Never delete history to roll back the UI.
+
+
+## Staging validation checkpoint (2026-10-10)
+- PR #13 (implementation) and PR #14 (batching/component navigation) merged into the approved baseline branch. Both Render services are live on c8827b13cf06f5b83fab7d010c3bee8028311754. No services were suspended.
+- Web deploy dep-db4oqt142hec73eeoko0; worker deploy dep-db4ospl9fdbs73accdug. All five new database tables are present with RLS enabled. Rollout remains restricted to the authorized workspace.
+- 116 tests passed in the expanded release group. TypeScript and production frontend/backend builds passed. A subsequent source-ad lookup/classification batch-boundary change passed 13 focused tests. The final combined run and extra CSV assertions were started, but the coding environment went offline before their final results could be inspected; they are not claimed as verified.
+- Live Meta ingestion passed 23,500 records and resumed across deployment. Meta usage headers require request pacing. The background worker retains its cursor and continues automatically; the full YTD import is not complete at this checkpoint.
+- Five named starter Apps, fifteen reusable typed components and the CLX template are installed. Desktop Apps, intelligence controls and workflow canvas were inspected. Mobile navigation is regression-tested; actual mobile viewport visual inspection remains unverified because the available browser surface has no viewport control.
+- A zero-credit Headline Lab run waits for the same import, then will classify and analyze. Its completion and the real-data YTD CSV are outstanding release gates. No paid generation, publication, budget mutation or activation was performed.
+- The final follow-up is preserved as a draft PR: relevant-source metadata lookup, 100-ad classification batches, visible import pacing, regression/CSV assertions, and this checkpoint. Re-run TypeScript, the affected tests and release group after environment recovery before merging/deploying that draft.
+- Issue #12 stays open: phase 9 is incomplete. Do not describe a queued import, an unfinished analysis run, or a partial report as fully validated.
+
+## Resumed QA (2026-10-10)
+- Coding and authenticated browser access recovered. PR #15 was restored from its exact remote commit; the pre-outage local patch is preserved in a named git stash.
+- Expanded release suite: **117/117 tests pass** across 11 files. TypeScript and production frontend/backend builds pass. The source-ad metadata, batch boundary, and CSV assertions are now verified.
+- Live import reached over 38,000 records but Meta returned an ad-account rate-limit error. The provider block prevents full-history and completed-analysis verification; checkpoint data remains intact. Do not reset the cursor or bypass provider pacing.
+- Fixed a real cooldown defect found during live QA: response usage headers were captured on error but discarded by the catch path. Retry scheduling now respects the greater of provider recovery estimate, Retry-After, and bounded exponential delay. Regression verifies a one-hour provider cooldown makes no early request; all 13 focused ingestion/analysis tests and TypeScript pass. Retry exhaustion remains explicit and bounded.
+- No paid workflow or advertising mutation was executed. Mobile visual and real completed YTD report gates remain open until independently verified.
