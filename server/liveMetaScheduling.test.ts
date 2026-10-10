@@ -5,6 +5,7 @@ vi.mock("./lib/channelGraph", async original => ({
   ...(await original<typeof import("./lib/channelGraph")>()),
   graphCollection: state.fetch,
 }));
+import { ChannelGraphError } from "./lib/channelGraph";
 import {
   liveSchedulingReport,
   schedulingRecommendation,
@@ -15,105 +16,188 @@ const account = {
   name: "Fixture",
   details: { timezone: "America/Los_Angeles", currency: "USD" },
 } as any;
+const range = { since: "2026-10-03", until: "2026-10-09" };
+const actions = (value: number) => [
+  { action_type: "offsite_conversion.fb_pixel_purchase", value: String(value) },
+];
+const row = (date: string, spend: number, n: number, hour?: string) => ({
+  date_start: date,
+  spend: String(spend),
+  impressions: "1000",
+  clicks: "100",
+  actions: actions(n),
+  action_values: actions(n * 100),
+  ...(hour ? { hourly_stats_aggregated_by_advertiser_time_zone: hour } : {}),
+});
 beforeEach(() => {
   state.fetch.mockReset();
-  state.token.mockReset();
   state.token.mockReturnValue("fixture-token");
 });
-it("fetches the requested dates live, aggregates weighted metrics, and does not invent hourly purchases", async () => {
+it("requests purchases and revenue hourly, uses delivery attribution, reconciles real metrics", async () => {
   state.fetch
     .mockResolvedValueOnce({
+      data: [row("2026-10-03", 100, 3), row("2026-10-04", 100, 1)],
+      truncated: false,
+    })
+    .mockResolvedValueOnce({
       data: [
-        {
-          date_start: "2026-09-07",
-          spend: "10",
-          impressions: "100",
-          clicks: "10",
-        },
-        {
-          date_start: "2026-09-14",
-          spend: "90",
-          impressions: "900",
-          clicks: "9",
-        },
+        row("2026-10-03", 100, 3, "10:00"),
+        row("2026-10-03", 100, 1, "11:00"),
       ],
+      truncated: false,
+    });
+  const r = await liveSchedulingReport(account, range);
+  for (const call of state.fetch.mock.calls) {
+    expect(call[2]).toMatchObject({
+      level: "account",
+      time_range: JSON.stringify(range),
+      action_report_time: "impression",
+    });
+    expect(call[2].fields).toContain("actions,action_values");
+  }
+  expect(r.hourlyConversionsReconciled).toBe(true);
+  expect(r.hour[0]).toMatchObject({
+    purchases: 3,
+    purchaseValue: 300,
+    roas: 3,
+  });
+  const out = schedulingRecommendation(r);
+  expect(out.confidence).toBeNull();
+  expect(out.dimensionReports[0].statistics.confidence).toBeGreaterThan(0.5);
+  expect(out.dimensionReports[1].statistics.confidence).toBeGreaterThan(0.5);
+  expect(out.dimensionReports[0].repeatedWeekdays).toBe(false);
+});
+it("keeps suppressed conversions unknown and withholds hourly probability", async () => {
+  state.fetch
+    .mockResolvedValueOnce({
+      data: [row("2026-10-03", 100, 3)],
       truncated: false,
     })
     .mockResolvedValueOnce({
       data: [
         {
-          date_start: "2026-09-01",
-          spend: "10",
-          impressions: "100",
-          clicks: "10",
-          hourly_stats_aggregated_by_advertiser_time_zone:
-            "10:00:00 - 10:59:59",
+          date_start: "2026-10-03",
+          spend: "100",
+          impressions: "1000",
+          clicks: "100",
+          hourly_stats_aggregated_by_advertiser_time_zone: "10:00",
         },
       ],
       truncated: false,
     });
-  const range = { since: "2026-09-01", until: "2026-09-30" };
-  const result = await liveSchedulingReport(account, range);
-  expect(state.fetch).toHaveBeenCalledTimes(2);
-  expect(state.fetch.mock.calls[0][2]).toMatchObject({
-    level: "account",
-    time_range: JSON.stringify(range),
-    time_increment: "1",
-  });
-  expect(state.fetch.mock.calls[1][2].breakdowns).toBe(
-    "hourly_stats_aggregated_by_advertiser_time_zone"
-  );
-  expect(state.fetch.mock.calls[1][2].fields).not.toContain("actions");
-  expect(result.weekday[0]).toMatchObject({
-    labels: ["Monday"],
-    impressions: 1000,
-    clicks: 19,
-    ctr: 1.9,
-  });
-  expect(result.hour[0].purchases).toBeNull();
-  expect(result.timezone).toBe("America/Los_Angeles");
-  expect(schedulingRecommendation(result).decision).toBe(
-    "insufficient_evidence"
-  );
+  const r = await liveSchedulingReport(account, range);
+  expect(r.hour[0].purchases).toBeNull();
+  expect(r.hourlyWarning).toMatch(/requested.*did not return/);
+  expect(
+    schedulingRecommendation(r).dimensionReports[1].statistics.confidence
+  ).toBeNull();
 });
-it("returns an explicit empty result without reading any historical dataset", async () => {
+it("only fills omitted zero-action hours after totals reconcile", async () => {
+  state.fetch
+    .mockResolvedValueOnce({
+      data: [
+        { ...row("2026-10-03", 200, 3), impressions: "2000", clicks: "200" },
+      ],
+      truncated: false,
+    })
+    .mockResolvedValueOnce({
+      data: [
+        row("2026-10-03", 100, 3, "10:00"),
+        {
+          ...row("2026-10-03", 100, 0, "11:00"),
+          actions: undefined,
+          action_values: undefined,
+        },
+      ],
+      truncated: false,
+    });
+  const r = await liveSchedulingReport(account, range);
+  expect(r.hour[1]).toMatchObject({ purchases: 0, purchaseValue: 0, roas: 0 });
+  expect(r.hourlyConversionsReconciled).toBe(true);
+});
+it("does not infer valid confidence from mismatched hourly purchase totals", async () => {
+  state.fetch
+    .mockResolvedValueOnce({
+      data: [row("2026-10-03", 200, 3)],
+      truncated: false,
+    })
+    .mockResolvedValueOnce({
+      data: [
+        row("2026-10-03", 100, 1, "10:00"),
+        row("2026-10-03", 100, 1, "11:00"),
+      ],
+      truncated: false,
+    });
+  const r = await liveSchedulingReport(account, range);
+  expect(r.hourlyConversionsReconciled).toBe(false);
+  expect(r.hourlyWarning).toMatch(/do not reconcile/);
+  expect(
+    schedulingRecommendation(r).dimensionReports[1].statistics.confidence
+  ).toBeNull();
+});
+it("returns clear empty results without imported history", async () => {
   state.fetch.mockResolvedValue({ data: [], truncated: false });
-  const result = await liveSchedulingReport(account, {
-    since: "2025-12-01",
-    until: "2025-12-31",
-  });
-  const recommendation = schedulingRecommendation(result);
-  expect(recommendation.message).toMatch(/Meta returned no daily/);
-  expect(recommendation.suggestedTests).toEqual([]);
+  const r = schedulingRecommendation(
+    await liveSchedulingReport(account, range)
+  );
+  expect(r.message).toMatch(/no daily/);
+  expect(r.suggestedTests).toEqual([]);
+  expect(r.confidence).toBeNull();
 });
-it("propagates provider errors instead of substituting cached or imported results", async () => {
-  state.fetch.mockRejectedValue(new Error("Meta rate limit"));
-  await expect(
-    liveSchedulingReport(account, { since: "2026-09-01", until: "2026-09-30" })
-  ).rejects.toThrow(/rate limit/);
-  expect(state.fetch).toHaveBeenCalledTimes(1);
+it("only falls back for unsupported action/breakdown fields and explains why", async () => {
+  state.fetch
+    .mockResolvedValueOnce({
+      data: [row("2026-10-03", 100, 3)],
+      truncated: false,
+    })
+    .mockRejectedValueOnce(
+      new ChannelGraphError("actions not supported with breakdown", true, 100)
+    )
+    .mockResolvedValueOnce({ data: [], truncated: false });
+  const r = await liveSchedulingReport(account, range);
+  expect(state.fetch).toHaveBeenCalledTimes(3);
+  expect(r.hourlyWarning).toMatch(/Meta rejected/);
 });
-it("only proposes observational tests after minimum support and rejects partial reports", () => {
-  const groups = [1, 2].map(i => ({
-    labels: [`bucket${i}`],
-    impressions: 5000,
-    clicks: 100,
-    ctr: 2,
-    cpc: i,
-  }));
+it.each([
+  new ChannelGraphError("rate limit", true, 4),
+  new ChannelGraphError("token expired", true, 190),
+  new Error("network"),
+])(
+  "propagates provider failures without hidden traffic or history fallback",
+  async error => {
+    state.fetch
+      .mockResolvedValueOnce({ data: [], truncated: false })
+      .mockRejectedValueOnce(error);
+    await expect(liveSchedulingReport(account, range)).rejects.toThrow();
+    expect(state.fetch).toHaveBeenCalledTimes(2);
+  }
+);
+it("partial reports withhold confidence and recommendations", () => {
+  const groups = [
+    {
+      labels: ["Friday"],
+      spend: 100,
+      purchases: 20,
+      dates: ["2026-10-02", "2026-10-09"],
+    },
+    {
+      labels: ["Monday"],
+      spend: 100,
+      purchases: 1,
+      dates: ["2026-09-28", "2026-10-05"],
+    },
+  ];
   const source = {
-    source: "live_meta_scheduling",
     weekday: groups,
     hour: groups,
-    dailyRowCount: 20,
-    range: { since: "2026-09-01", until: "2026-09-30" },
-    truncated: false,
+    dailyRowCount: 4,
+    range,
+    hourlyConversionsReconciled: true,
   };
-  expect(schedulingRecommendation(source).decision).toBe("propose_test");
   expect(
-    schedulingRecommendation({ ...source, truncated: true }).suggestedTests
-  ).toEqual([]);
-  expect(schedulingRecommendation({ ...source, hour: [] }).decision).toBe(
-    "insufficient_evidence"
-  );
+    schedulingRecommendation(source).suggestedTests.length
+  ).toBeGreaterThan(0);
+  const r = schedulingRecommendation({ ...source, truncated: true });
+  expect(r.suggestedTests).toEqual([]);
+  r.dimensionReports.forEach(d => expect(d.statistics.confidence).toBeNull());
 });
