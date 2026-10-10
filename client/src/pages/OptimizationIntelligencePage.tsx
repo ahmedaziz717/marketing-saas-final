@@ -549,31 +549,34 @@ function Intelligence() {
                             Snapshot {new Date(a.observedAtMs).toLocaleString()}
                           </p>
                           <div className="grid gap-3 sm:grid-cols-2">
-                            {Object.entries(a.classifications).map(([d, v]) => (
-                              <details
-                                className="rounded-lg border p-3"
-                                key={d}
-                              >
-                                <summary>
-                                  {title(d)}:{" "}
-                                  {v?.labels.map(l => l.label).join(", ") ||
-                                    "Unknown"}
-                                </summary>
-                                <p className="text-xs mt-2">
-                                  {v?.source} · taxonomy v{v?.version} ·
-                                  revision {v?.revision}
-                                </p>
-                                {v?.labels.map(l => (
-                                  <p className="text-sm mt-2" key={l.id}>
-                                    {Math.round(l.confidence * 100)}% ·{" "}
-                                    {l.evidence}
+                            {dimensionNames
+                              .map(d => [d, a.classifications[d]] as const)
+                              .map(([d, v]) => (
+                                <details
+                                  className="rounded-lg border p-3"
+                                  key={d}
+                                >
+                                  <summary>
+                                    {title(d)}:{" "}
+                                    {v?.labels.map(l => l.label).join(", ") ||
+                                      "Unknown"}
+                                  </summary>
+                                  <p className="text-xs mt-2">
+                                    {v
+                                      ? `${v.source} · taxonomy v${v.version} · revision ${v.revision}`
+                                      : "No reliable source evidence; add a reviewed classification."}
                                   </p>
-                                ))}
-                                {v?.unknownReason && (
-                                  <p className="text-sm">{v.unknownReason}</p>
-                                )}
-                              </details>
-                            ))}
+                                  {v?.labels.map(l => (
+                                    <p className="text-sm mt-2" key={l.id}>
+                                      {Math.round(l.confidence * 100)}% ·{" "}
+                                      {l.evidence}
+                                    </p>
+                                  ))}
+                                  {v?.unknownReason && (
+                                    <p className="text-sm">{v.unknownReason}</p>
+                                  )}
+                                </details>
+                              ))}
                           </div>
                           {canEdit && (
                             <div className="space-y-2 border-t pt-4">

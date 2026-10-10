@@ -173,15 +173,18 @@ export async function optimizationStep(
       }
       query.adIds = Array.from(new Set(ids));
     }
-    return complete(
-      "Dimension evidence",
-      await analyzeHistory(
-        db,
-        run.organizationId,
-        node.config.connectionId!,
-        query
-      )
+    const report = await analyzeHistory(
+      db,
+      run.organizationId,
+      node.config.connectionId!,
+      query
     );
+    // Keep source IDs/provenance, without copying every classification into every nested step.
+    const { sourceAds, ...evidence } = report;
+    return complete("Dimension evidence", {
+      ...evidence,
+      sourceExplorer: "/app/optimize/intelligence",
+    });
   }
   const evidence = input.find(v => v.type === "data");
   if (evidence?.type !== "data")

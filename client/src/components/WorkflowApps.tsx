@@ -28,12 +28,21 @@ export function WorkflowApps({
 }) {
   const query = trpc.workflows.listApps.useQuery({ organizationId, family });
   const seen = new Set<string>();
-  const apps =
+  const published =
     query.data?.filter(app => {
       if (seen.has(app.workflowId)) return false;
       seen.add(app.workflowId);
       return true;
     }) ?? [];
+  const components = published.filter(app =>
+    app.graph.nodes.some(
+      n =>
+        n.type === "app_input" &&
+        n.config.inputType &&
+        n.config.inputType !== "any"
+    )
+  );
+  const apps = published.filter(app => !components.includes(app));
   return (
     <section className="wf-apps-section">
       <div className="wf-section-title">
@@ -88,6 +97,28 @@ export function WorkflowApps({
             Explore {workflowSections[family].name} workflows
           </Link>
         </div>
+      )}
+      {!!components.length && (
+        <details className="mt-6 rounded-xl border p-4">
+          <summary className="cursor-pointer font-medium">
+            Reusable workflow components ({components.length})
+          </summary>
+          <p className="mt-2 text-sm text-muted-foreground">
+            These typed components receive evidence from a parent workflow.
+            Choose them in a Run workflow node.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {components.map(app => (
+              <Link
+                key={app.id}
+                className="rounded-lg border p-3 text-sm"
+                href={`${workflowSections[family].path}?workflow=${app.workflowId}`}
+              >
+                {app.name} · v{app.version}
+              </Link>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );
