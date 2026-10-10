@@ -6,6 +6,7 @@ import {
 } from "../../drizzle/workflowSchema";
 import {
   type WorkflowGraph,
+  newWorkflowNode,
   workflowGraphSchema,
   workflowNodes,
 } from "../../shared/creativeWorkflow";
@@ -50,8 +51,10 @@ export async function resolveWorkflowApps(
   graph: WorkflowGraph,
   trail: string[] = []
 ): Promise<WorkflowGraph> {
-  let result = structuredClone(graph);
-  for (const call of graph.nodes.filter(n => n.type === "app")) {
+  let result = expandOptimizers(structuredClone(graph));
+  for (const call of graph.nodes.filter(n =>
+    ["app", "run_workflow"].includes(n.type)
+  )) {
     if (!call.config.appVersionId)
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -127,6 +130,12 @@ export async function resolveWorkflowApps(
                   : undefined,
               }
             : undefined,
+          inputMapping: n.config.inputMapping?.map(m => ({
+            ...m,
+            sourceNodeId: m.sourceNodeId
+              ? (mapped.get(m.sourceNodeId) ?? m.sourceNodeId)
+              : undefined,
+          })),
         },
         type: n.type === "output" ? ("app_output" as const) : n.type,
         x: call.x + n.x,
@@ -142,14 +151,41 @@ export async function resolveWorkflowApps(
         target: mapped.get(e.target)!,
       }))
     );
-    for (const input of inputs)
-      for (const edge of incoming)
+    if (
+      call.config.inputMapping?.some(
+        m =>
+          !inputs.some(i => i.id === m.targetNodeId) ||
+          (m.sourceNodeId && !incoming.some(e => e.source === m.sourceNodeId))
+      )
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "A workflow input mapping refers to an unavailable input.",
+      });
+    if (
+      new Set(call.config.inputMapping?.map(m => m.targetNodeId)).size !==
+      (call.config.inputMapping?.length ?? 0)
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Each child input can be mapped only once.",
+      });
+    for (const input of inputs) {
+      const mapping = call.config.inputMapping?.find(
+        m => m.targetNodeId === input.id
+      );
+      const mappedNode = result.nodes.find(n => n.id === mapped.get(input.id));
+      if (mappedNode && mapping) mappedNode.config.inputType = mapping.type;
+      for (const edge of incoming.filter(
+        e => !mapping?.sourceNodeId || e.source === mapping.sourceNodeId
+      ))
         result.edges.push({
           id: `i${stableHash({ prefix, input: input.id, edge }).slice(0, 24)}`,
           source: edge.source,
           target: mapped.get(input.id)!,
           port: "context",
         });
+    }
     for (const output of outputs)
       result.edges.push({
         id: `o${stableHash({ prefix, output: output.id }).slice(0, 24)}`,
@@ -192,4 +228,59 @@ export async function validateWorkflowConnections(
         message: `Reconnect the account for “${node.title}”.`,
       });
   }
+}
+
+/** Analyze + Generate expands into the same quoted generation and approval path as other workflows. */
+export function expandOptimizers(graph: WorkflowGraph): WorkflowGraph {
+  const result = structuredClone(graph);
+  for (const node of graph.nodes.filter(
+    n =>
+      n.type === "optimize_dimension" &&
+      n.config.optimizer?.mode === "analyze_generate"
+  )) {
+    const suffix = stableHash(node.id).slice(0, 16),
+      analysisId = `oe_${suffix}`,
+      copyId = `og_${suffix}`;
+    if (result.nodes.some(n => [analysisId, copyId].includes(n.id)))
+      throw new Error("Reserved optimizer step identifier collision.");
+    const analyzer = {
+      ...structuredClone(node),
+      id: analysisId,
+      config: {
+        ...node.config,
+        optimizer: { ...node.config.optimizer!, mode: "analyze" as const },
+      },
+    };
+    const copy = newWorkflowNode("optimize_copy", copyId, node.x + 320, node.y);
+    copy.config.text = `Generate five ${node.config.optimizer!.kind} test alternatives using the supplied generationBrief, evidence and brand rules. Do not invent winning variants or causal lift. ${node.config.optimizer!.brief}`;
+    result.nodes = result.nodes.map(n =>
+      n.id === node.id
+        ? {
+            ...n,
+            type: "app_output" as const,
+            config: { ...n.config, outputType: undefined },
+          }
+        : n
+    );
+    result.nodes.push(analyzer, copy);
+    result.edges = result.edges.map(e =>
+      e.target === node.id ? { ...e, target: analysisId } : e
+    );
+    result.edges.push(
+      {
+        id: `oei_${suffix}`,
+        source: analysisId,
+        target: copyId,
+        port: "evidence",
+      },
+      {
+        id: `oer_${suffix}`,
+        source: analysisId,
+        target: node.id,
+        port: "result",
+      },
+      { id: `ogr_${suffix}`, source: copyId, target: node.id, port: "result" }
+    );
+  }
+  return result;
 }

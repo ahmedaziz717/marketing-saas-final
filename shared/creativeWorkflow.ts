@@ -1,3 +1,4 @@
+import { analysisQuerySchema, optimizerSchema } from "./optimization";
 import { z } from "zod";
 import { appFieldSchema } from "./workflowInputs";
 import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
@@ -23,6 +24,12 @@ import {
 import { videoDirectionSchema, defaultVideoDirection } from "./videoCreation";
 
 export const workflowNodeTypes = [
+  "start_trigger",
+  "run_workflow",
+  "meta_history",
+  "classify_history",
+  "analyze_history",
+  "optimize_dimension",
   "text",
   "image",
   "assistant",
@@ -72,6 +79,69 @@ export const workflowNodes: Record<
     }[];
   }
 > = {
+  start_trigger: {
+    name: "Start trigger",
+    description:
+      "Manual, scheduled, event or workflow-call entry. Automation never authorizes spending.",
+    group: "Control",
+    output: "data",
+    inputs: [],
+  },
+  run_workflow: {
+    name: "Run workflow",
+    description:
+      "Invoke a pinned reusable workflow version with typed inputs and results.",
+    group: "Control",
+    output: "any",
+    inputs: [{ id: "context", name: "Inputs", type: "any", multiple: true }],
+  },
+  meta_history: {
+    name: "Fetch Meta history",
+    description:
+      "Resume read-only historical ingestion from January 2026 or sync recent changes.",
+    group: "Meta Ads",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [{ id: "context", name: "Start", type: "any", multiple: true }],
+  },
+  classify_history: {
+    name: "Classify imported ads",
+    description:
+      "Evidence-based taxonomy with unknown values and preserved human overrides.",
+    group: "Analysis",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [{ id: "context", name: "History", type: "data" }],
+  },
+  analyze_history: {
+    name: "Analyze dimensions",
+    description:
+      "Weighted performance, source ads, coverage and attribution limits.",
+    group: "Analysis",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [
+      { id: "context", name: "History", type: "data" },
+      {
+        id: "publication",
+        name: "Delivered publication (optional)",
+        type: "publication",
+        multiple: true,
+      },
+    ],
+  },
+  optimize_dimension: {
+    name: "Optimization engine",
+    description:
+      "Reusable channel-aware optimizer: analyze evidence or generate test candidates.",
+    group: "Engines",
+    family: "optimize",
+    output: "data",
+    inputs: [{ id: "evidence", name: "Evidence", type: "data" }],
+  },
   text: {
     name: "Text",
     description: "A brief, prompt, or reusable instructions.",
@@ -280,6 +350,63 @@ export const workflowNodeSchema = z.object({
   x: z.number().min(-10000).max(10000),
   y: z.number().min(-10000).max(10000),
   config: z.object({
+    trigger: z
+      .object({
+        kind: z
+          .enum(["manual", "scheduled", "event", "workflow_call"])
+          .default("manual"),
+        weekday: z.number().int().min(0).max(6).default(1),
+        hour: z.number().int().min(0).max(23).default(9),
+        timezone: timezoneSchema.default("UTC"),
+        event: z
+          .enum(["history_synced", "publication_delivered", "manual_event"])
+          .default("history_synced"),
+      })
+      .optional(),
+    analysis: analysisQuerySchema.optional(),
+    optimizer: optimizerSchema.optional(),
+    incremental: z.boolean().optional(),
+    measurePublishedOnly: z.boolean().optional(),
+    inputType: z
+      .enum([
+        "text",
+        "image",
+        "video",
+        "data",
+        "decision",
+        "publication",
+        "any",
+      ])
+      .optional(),
+    outputType: z
+      .enum([
+        "text",
+        "image",
+        "video",
+        "data",
+        "decision",
+        "publication",
+        "any",
+      ])
+      .optional(),
+    inputMapping: z
+      .array(
+        z.object({
+          sourceNodeId: z.string().min(1).max(80).optional(),
+          targetNodeId: z.string().max(80),
+          type: z.enum([
+            "text",
+            "image",
+            "video",
+            "data",
+            "decision",
+            "publication",
+            "any",
+          ]),
+        })
+      )
+      .max(20)
+      .optional(),
     field: appFieldSchema.optional(),
     fieldValue: z.string().max(10000).optional(),
     appVersionId: z.string().uuid().optional(),
@@ -384,6 +511,11 @@ export type WorkflowStep = {
   outputs?: WorkflowValue[];
   error?: string;
   videoJobId?: string;
+  historyJobId?: string;
+  classificationCursor?: string;
+  retryAttempts?: number;
+  approvalRequiredCredits?: boolean;
+  approvedCredits?: number;
   waitingReason?: string;
   wakeAtMs?: number;
   approvedByUserId?: number;
@@ -549,7 +681,10 @@ export function workflowRunProblem(
       )
         return `${model.name} does not accept a source video. Choose another model for “${node.title}”.`;
     }
-    if (node.type === "app" && !node.config.appVersionId)
+    if (
+      ["app", "run_workflow"].includes(node.type) &&
+      !node.config.appVersionId
+    )
       return `Choose a published App for “${node.title}”.`;
     if (workflowNodes[node.type].channel && !node.config.connectionId)
       return `Choose a connected account for “${node.title}”.`;

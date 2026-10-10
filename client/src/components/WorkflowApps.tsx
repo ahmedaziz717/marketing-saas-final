@@ -1,3 +1,5 @@
+import { OptimizationResult } from "./OptimizationResult";
+import { WorkflowAutomationControls } from "./WorkflowAutomationControls";
 import { WorkflowInputControl } from "./WorkflowInputControl";
 import { fieldValueProblem, fieldPrompt } from "@shared/workflowInputs";
 import { useState } from "react";
@@ -180,6 +182,11 @@ export function WorkflowAppRunner({
           <Workflow size={15} /> Open workflow
         </Link>
       </header>
+      <WorkflowAutomationControls
+        organizationId={organizationId}
+        appVersionId={id}
+        role={role}
+      />
       <div className="wf-app-run-layout">
         <section className="wf-app-form">
           <h2>Inputs</h2>
@@ -352,6 +359,10 @@ export function WorkflowAppRunner({
                 <Link href={`/app/publishing?publication=${v.id}`}>
                   {v.name} →
                 </Link>
+              ) : v.type === "data" &&
+                v.data.schemaVersion === 1 &&
+                v.data.requiresHumanApproval === true ? (
+                <OptimizationResult data={v.data} />
               ) : (
                 <pre className="wf-evidence">{workflowValueText(v)}</pre>
               )}

@@ -1,3 +1,4 @@
+import { WorkflowSpendApproval } from "./WorkflowAutomationControls";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -75,7 +76,14 @@ export function WorkflowRunReview({
               <strong>{run.graph.nodes.find(n => n.id === id)?.title}</strong>
               <p>{step.waitingReason ?? "Waiting for the next result."}</p>
             </div>
-            {step.publicationId ? (
+            {step.approvalRequiredCredits ? (
+              <WorkflowSpendApproval
+                organizationId={organizationId}
+                runId={run.id}
+                nodeId={id}
+                onRefresh={onRefresh}
+              />
+            ) : step.publicationId ? (
               <Link
                 href={`/app/publishing?publication=${step.publicationId}`}
                 target="_blank"

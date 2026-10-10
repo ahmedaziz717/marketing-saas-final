@@ -4,7 +4,8 @@ export class ChannelGraphError extends Error {
   constructor(
     message: string,
     public definitive: boolean,
-    public code?: number
+    public code?: number,
+    public retryAfterMs?: number
   ) {
     super(message);
     this.name = "ChannelGraphError";
@@ -31,7 +32,8 @@ export async function graphRequest<T = Record<string, any>>(
   token: string,
   params: Record<string, string> = {},
   body?: URLSearchParams | FormData,
-  video = false
+  video = false,
+  observe?: (headers: Headers) => void
 ): Promise<T> {
   if (!/^[A-Za-z0-9_/-]+$/.test(path) || path.includes(".."))
     throw new Error("Invalid Meta API path.");
@@ -63,6 +65,7 @@ export async function graphRequest<T = Record<string, any>>(
       false
     );
   }
+  observe?.(response.headers);
   const data = await response.json().catch(() => null);
   if (!response.ok || !data || data.error || data.success === false) {
     const text =
@@ -87,7 +90,14 @@ export async function graphRequest<T = Record<string, any>>(
       !!data?.error &&
         response.status < 500 &&
         ![1, 2].includes(data.error.code),
-      Number(data?.error?.code) || undefined
+      Number(data?.error?.code) || undefined,
+      response.status === 429 ||
+      [4, 17, 32, 613, 80000, 80004].includes(Number(data?.error?.code))
+        ? Math.max(
+            60000,
+            Number(response.headers.get("retry-after") || 0) * 1000
+          )
+        : undefined
     );
   }
   return data as T;

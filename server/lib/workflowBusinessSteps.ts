@@ -1,3 +1,4 @@
+import { optimizationStep } from "./optimizationWorkflow";
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -70,9 +71,32 @@ export async function executeWorkflowBusinessStep(
   node: WorkflowNode,
   input: WorkflowValue[]
 ): Promise<WorkflowStep | null> {
+  const optimized = await optimizationStep(db, run, node, input);
+  if (optimized) return optimized;
   const step = run.steps[node.id],
     now = Date.now();
-  if (node.type === "app_output") return complete(input);
+  if (node.type === "app_output") {
+    if (
+      node.config.outputType &&
+      node.config.outputType !== "any" &&
+      (!input.length || input.some(v => v.type !== node.config.outputType))
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Nested workflow returned an incompatible result type.",
+      });
+    return complete(input);
+  }
+  if (
+    node.type === "app_input" &&
+    node.config.inputType &&
+    node.config.inputType !== "any" &&
+    (!input.length || input.some(v => v.type !== node.config.inputType))
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Nested workflow input does not match its declared type.",
+    });
   if (node.type === "app_input")
     return complete([
       ...input,

@@ -1,3 +1,4 @@
+import { OptimizationTemplates } from "@/components/OptimizationTemplates";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowRight,
@@ -58,7 +59,15 @@ const tools = {
       icon: MessageSquare,
     },
   ],
-  optimize: [],
+  optimize: [
+    {
+      name: "Optimization intelligence",
+      description:
+        "Explore historical Meta evidence, classifications, and suggested tests.",
+      href: "/app/optimize/intelligence",
+      icon: BarChart3,
+    },
+  ],
   create: [],
 };
 const descriptions = {
@@ -151,7 +160,12 @@ function AppsWorkspace({
         </section>
       )}
       {canRun ? (
-        <WorkflowApps organizationId={organizationId} family={family} />
+        <>
+          {family === "optimize" && canRun && (
+            <OptimizationTemplates organizationId={organizationId} />
+          )}
+          <WorkflowApps organizationId={organizationId} family={family} />
+        </>
       ) : (
         <p className="surface p-6">
           A creator or publisher role is needed to run your team's Apps.

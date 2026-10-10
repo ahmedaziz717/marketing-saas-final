@@ -1,3 +1,5 @@
+import { ChannelGraphError } from "../lib/channelGraph";
+import { retryDelay } from "../lib/optimizationIngestion";
 import { randomUUID } from "node:crypto";
 import { workflowImageSize } from "../../shared/imageActionEstimate";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
@@ -125,6 +127,24 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         message:
           "This run reached its 31-day execution limit. Start a new run when ready.",
       });
+    if (step.wakeAtMs && step.retryAttempts && step.wakeAtMs > Date.now())
+      return true;
+    if (
+      run.triggerId &&
+      isGenerationNode(node.type) &&
+      step.approvedCredits === undefined &&
+      !step.videoJobId
+    ) {
+      run.steps[current] = {
+        ...step,
+        status: "waiting",
+        approvalRequiredCredits: true,
+        waitingReason:
+          "Review the credit quote and explicitly approve this generation before it can run.",
+      };
+      await persist({ steps: run.steps });
+      return true;
+    }
     if (isGenerationNode(node.type))
       await requireOrganizationRole(run.actorUserId, run.organizationId, [
         "owner",
@@ -291,9 +311,38 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
     };
     await persist({ steps: run.steps });
   } catch (error) {
+    const node = current
+      ? run.graph.nodes.find(n => n.id === current)
+      : undefined;
+    const step = current ? run.steps[current] : undefined;
+    const safeRead =
+      node &&
+      [
+        "meta_report",
+        "facebook_report",
+        "analyze_history",
+        "optimize_dimension",
+      ].includes(node.type);
+    const delay =
+      safeRead && error instanceof ChannelGraphError
+        ? retryDelay(error, step?.retryAttempts ?? 0)
+        : null;
+    if (current && delay !== null) {
+      run.steps[current] = {
+        ...step,
+        status: "waiting",
+        retryAttempts: (step?.retryAttempts ?? 0) + 1,
+        wakeAtMs: Date.now() + delay,
+        waitingReason:
+          "Provider throttled this read. Retrying from the same step.",
+      };
+      await persist({ steps: run.steps });
+      return true;
+    }
     const message =
-      error instanceof TRPCError
-        ? error.message
+      error instanceof TRPCError ||
+      (node && !isGenerationNode(node.type) && error instanceof Error)
+        ? (error as Error).message
         : categorizeGenerationError(error instanceof Error ? error.message : "")
             .userMessage;
     if (current)
@@ -463,6 +512,7 @@ async function executeStep(
       createdAtMs: Date.now(),
       metadata: {
         generatedImage: true,
+        direction: node.config.direction,
         workflowId: run.workflowId,
         workflowRunId: run.id,
         workflowNodeId: node.id,
