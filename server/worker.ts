@@ -1,3 +1,4 @@
+import { processHistoryPage } from "./lib/optimizationIngestion";
 import "dotenv/config";
 import { setTimeout } from "node:timers/promises";
 import { getDb, closeDb } from "./db";
@@ -25,6 +26,12 @@ async function main() {
   if (!db) throw new Error("Worker requires PostgreSQL");
   console.info('Publishing worker readiness', { liveSocialEnabled: process.env.LIVE_SOCIAL_ACTIONS_ENABLED === 'true', liveAdsEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === 'true' });
   let lastRecovery = 0;
+  const intelligenceLoop = (async () => {
+    while (!stopping) {
+      try { await processHistoryPage(db); } catch { console.error("Optimization history iteration failed"); }
+      await setTimeout(1500);
+    }
+  })();
   const workflowLoop = (async () => {
     while (!stopping) {
       try { await processNextWorkflowRun(db); } catch { console.error("Creative workflow worker iteration failed"); }
@@ -82,7 +89,7 @@ async function main() {
       await setTimeout(5000);
     }
   }
-  await Promise.all([catalogLoop, publishingLoop, videoLoop, videoHeartbeatLoop, workflowLoop]);
+  await Promise.all([intelligenceLoop, catalogLoop, publishingLoop, videoLoop, videoHeartbeatLoop, workflowLoop]);
   await closeDb();
 }
 
