@@ -134,7 +134,8 @@ export function selectWorkflowApp(
   if (selection.startsWith("builtin:") && !builtin?.nodeType)
     throw new Error(builtin?.unavailable ?? "This App is unavailable.");
   const node = newWorkflowNode(
-    builtin?.nodeType ?? "app",
+    builtin?.nodeType ??
+      (current.type === "run_workflow" ? "run_workflow" : "app"),
     current.id,
     current.x,
     current.y

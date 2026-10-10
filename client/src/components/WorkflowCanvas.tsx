@@ -97,6 +97,12 @@ const icons = {
   generate_image: ImageIcon,
   generate_video: Film,
   output: GitBranch,
+  start_trigger: Play,
+  run_workflow: GitBranch,
+  meta_history: BarChart3,
+  classify_history: Layers,
+  analyze_history: BarChart3,
+  optimize_dimension: Target,
   app: AppWindow,
   app_input: ArrowDownToLine,
   app_output: AppWindow,
@@ -936,6 +942,7 @@ export function WorkflowCanvas({
                 </label>
               )}
               {(selectedNode.type === "app" ||
+                selectedNode.type === "run_workflow" ||
                 selectedNode.config.builtinAppId) && (
                 <WorkflowAppPicker
                   node={selectedNode}
@@ -956,6 +963,12 @@ export function WorkflowCanvas({
                 />
               )}
               {[
+                "start_trigger",
+                "run_workflow",
+                "meta_history",
+                "classify_history",
+                "analyze_history",
+                "optimize_dimension",
                 "app",
                 "app_input",
                 "review",

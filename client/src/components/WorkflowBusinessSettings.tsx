@@ -1,3 +1,4 @@
+import { OptimizationNodeSettings } from "./OptimizationNodeSettings";
 import { useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -42,6 +43,7 @@ export function WorkflowBusinessSettings({
     config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
     <>
+      <OptimizationNodeSettings node={node} onChange={onChange} />
       {meta.channel && (
         <>
           <label>

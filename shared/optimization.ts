@@ -103,13 +103,12 @@ export function effectiveClassifications(
   const result: Partial<Record<Dimension, Classification>> = {};
   for (const row of rows) {
     const current = result[row.dimension];
+    const priority = { human: 3, import: 2, rule: 1 };
     if (
       !current ||
-      (row.source === "human" && current.source !== "human") ||
-      (row.source === current.source && row.revision > current.revision) ||
-      (row.source !== "human" &&
-        current.source !== "human" &&
-        row.observedAtMs > current.observedAtMs)
+      priority[row.source] > priority[current.source] ||
+      (priority[row.source] === priority[current.source] &&
+        row.revision > current.revision)
     )
       result[row.dimension] = row;
   }
@@ -134,6 +133,7 @@ export const historyRangeSchema = z
   );
 export const analysisQuerySchema = z.object({
   range: historyRangeSchema,
+  adIds: z.array(z.string().regex(/^\d+$/).max(100)).max(100).optional(),
   grain: z.enum(["daily", "placement", "hourly"]).default("daily"),
   dimensions: z.array(z.enum(dimensionNames)).max(4).default([]),
   filters: z
@@ -207,6 +207,7 @@ export type SyncCheckpoint = {
   warnings: string[];
   completedTasks: number;
   startedAtMs: number;
+  coverage?: { since: string; until: string };
 };
 export const evidenceCaveats = [
   "Observational associations are not causal effects. Audience, placement, bid, budget, season and attribution can confound comparisons.",

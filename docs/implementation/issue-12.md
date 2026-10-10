@@ -40,6 +40,24 @@ Baseline: `codex/render-supabase-migration` c12fdfea46d589a46c8737a8d528b3e53775
 - Meta rate limits: https://developers.facebook.com/documentation/ads-commerce/marketing-api/overview/rate-limiting.md/
 - Meta dynamic creative attribution: https://developers.facebook.com/documentation/ads-commerce/marketing-api/ad-creative/asset-feed-spec/insights.md/
 
-## Progress
-- Phase 1: audit and architecture recorded; implementation follows in separate commits.
-- Phases 2–9: pending. No live sync or rollout claimed yet.
+## Implementation status before staging rollout
+- Phase 1 complete: baseline audit, gap analysis, additive migration and feature-flag strategy.
+- Phases 2–3 implemented: durable per-page ingestion, quota backoff and leases, incremental overlap, per-field provenance, all independent taxonomy dimensions, canonical authored theme/style values and immutable human overrides.
+- Phase 4 implemented: date/grain/dimension/filter controls, weighted evidence, source-ad classifications, uncertainty and CSV export.
+- Phase 5 implemented: 15 reusable optimizers covering all requested dimensions (weekday/time combined), typed contracts, dimension-specific evidence, Analyze and metered Analyze + Generate. Other-channel adapters explicitly return unsupported until data integrations exist.
+- Phase 6 implemented: manual/weekly/event/workflow-call starts; pinned nested calls, selective typed mapping, tenant and recursion checks, event receipts, safe-read retries and per-step status. Scheduled/event runs pause before **every paid generation**. Event feedback loops are rejected even through nested calls.
+- Phase 7 implemented: idempotent installation of workspace-owned optimizer workflows and the five named Apps. Republishing customized versions does not modify global templates.
+- Phase 8 implemented as an executable, configuration-required CLX refresh template. It uses the connected account, nested optimizers and existing generation/review/publication paths, then filters outcome measurement to the delivered ad receipt. Manual by default; Monday scheduling requires publishing the configured version and enabling its trigger. No paid demonstration has been run.
+- Phase 9 in progress: local migration/type/build/targeted safety checks passed; staging rollout, actual read-only import, UI and exported-report validation are the remaining gates.
+
+## QA evidence and known limitations
+- Targeted release group: 84 tests, covering new features, migrations, existing delivery/generation safety, workflow canvas and analytics navigation. A receipt-edge wiring regression was caught and corrected before release.
+- TypeScript and production frontend/backend builds pass. Existing large frontend bundle warning remains.
+- Full-suite baseline comparison: legacy MySQL integration fixtures cannot run on the PostgreSQL test environment. Ten other failures were reproduced on the unchanged baseline (image-model expectation, stale bootstrap table count, and missing mocks/providers in CatalogSources, BrandPage, DashboardLayout and PlatformWebsitePage). The bootstrap count was updated for the current migration set; unrelated fixture failures are not reported as new regressions.
+- Imported visual labels without machine-readable evidence remain explicitly unknown. Reviewed visual labels and exact HEX values can be entered with evidence; this release does not spend money on vision classification automatically.
+- Meta object settings and creative text are current snapshots; the API does not reconstruct historical variants. Dynamic creative performance remains ad-level, not a claim about an individual headline/image asset.
+- Hourly insight fields can omit conversion metrics. Unsupported breakdowns, permission gaps, record limits and retention gaps are exposed as incomplete coverage and prevent performance recommendations.
+- Confidence/evidence-strength labels are conservative heuristics, not statistical significance or causal lift. Attribution windows, targeting, delivery and spend can confound comparisons.
+- Analyze + Generate produces test candidates through the existing quoted copy engine. Image/video production is composed with existing generation nodes and their own quotes/reviews.
+- CLX setup deliberately leaves destination URL/ad set unset. A creator must configure verified brand/product facts, choose generation models, approve asset versions, and approve the publication. Meta ads are delivered paused; activation/spending requires separate approval. Zero delivery after a paused publication is not a measured failure of the creative.
+- Rollback: disable the three rollout flags to stop new intelligence work; additive tables may remain. Re-deploy baseline c12fdfea46d589a46c8737a8d528b3e537750226 if needed. Never delete history to roll back the UI.

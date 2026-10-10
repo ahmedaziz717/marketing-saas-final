@@ -1,3 +1,4 @@
+import { installOptimizationTemplates } from "../lib/optimizationTemplates";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -34,6 +35,7 @@ async function authorize(
   requireOptimization(organizationId);
 }
 export const optimizationRouter = router({
+  installTemplates: protectedProcedure.input(account.extend({includeClx:z.boolean().default(false)})).mutation(async({ctx,input})=>{await authorize(ctx.user.id,input.organizationId,true);return installOptimizationTemplates(await libraryDatabase(),input.organizationId,ctx.user.id,input.connectionId,input.includeClx);}),
   availability: protectedProcedure
     .input(scope)
     .query(async ({ ctx, input }) => {

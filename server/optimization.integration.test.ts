@@ -64,38 +64,34 @@ beforeAll(async () => {
     .returning();
   org = os[0].id;
   other = os[1].id;
-  await state.db
-    .insert(organizationMemberships)
-    .values({
-      organizationId: org,
-      userId: uid,
-      role: "owner",
-      status: "active",
-      createdAtMs: 1,
-    });
+  await state.db.insert(organizationMemberships).values({
+    organizationId: org,
+    userId: uid,
+    role: "owner",
+    status: "active",
+    createdAtMs: 1,
+  });
   vi.stubEnv("OPTIMIZATION_TENANT_IDS", `${org},${other}`);
-  await state.db
-    .insert(channelConnections)
-    .values({
-      id: cid,
-      organizationId: org,
-      channel: "meta_ads",
-      accountId: "123",
-      name: "Fixture account",
-      status: "connected",
-      credentials: encryptToken("test-token"),
-      details: {
-        permissions: [],
-        tasks: [],
-        capabilities: ["read"],
-        warnings: [],
-        currency: "USD",
-        timezone: "UTC",
-      },
-      connectedByUserId: uid,
-      verifiedAtMs: 1,
-      updatedAtMs: 1,
-    });
+  await state.db.insert(channelConnections).values({
+    id: cid,
+    organizationId: org,
+    channel: "meta_ads",
+    accountId: "123",
+    name: "Fixture account",
+    status: "connected",
+    credentials: encryptToken("test-token"),
+    details: {
+      permissions: [],
+      tasks: [],
+      capabilities: ["read"],
+      warnings: [],
+      currency: "USD",
+      timezone: "UTC",
+    },
+    connectedByUserId: uid,
+    verifiedAtMs: 1,
+    updatedAtMs: 1,
+  });
 }, 30000);
 afterAll(async () => {
   vi.unstubAllEnvs();
@@ -205,4 +201,202 @@ it("creates immutable human revisions without cross-tenant object access", async
   await expect(
     saveClassification(state.db, other, cid, "456", a, "human", uid)
   ).rejects.toThrow(/workspace/);
+});
+
+it("pins nested workflow versions, rejects cycles and tenant crossing, and enforces mapped types", async () => {
+  const { creativeWorkflows, workflowAppVersions } = await import(
+    "../drizzle/workflowSchema"
+  );
+  const { newWorkflowNode } = await import("../shared/creativeWorkflow");
+  const { resolveWorkflowApps } = await import("./lib/workflowApps");
+  const { executeWorkflowBusinessStep } = await import(
+    "./lib/workflowBusinessSteps"
+  );
+  const workflowId = randomUUID(),
+    appId = randomUUID();
+  const input = newWorkflowNode("app_input", "input"),
+    out = newWorkflowNode("output", "output");
+  input.config.inputType = "data";
+  const graph = {
+    nodes: [input, out],
+    edges: [{ id: "edge", source: "input", target: "output", port: "result" }],
+  };
+  await state.db
+    .insert(creativeWorkflows)
+    .values({
+      id: workflowId,
+      organizationId: org,
+      actorUserId: uid,
+      name: "Typed child",
+      graph,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    });
+  await state.db
+    .insert(workflowAppVersions)
+    .values({
+      id: appId,
+      workflowId,
+      organizationId: org,
+      actorUserId: uid,
+      name: "Typed child",
+      family: "optimize",
+      graph,
+      version: 1,
+      workflowRevision: 1,
+      createdAtMs: 1,
+    });
+  const source = newWorkflowNode("app_input", "source"),
+    call = newWorkflowNode("run_workflow", "call");
+  call.config.appVersionId = appId;
+  call.config.inputMapping = [
+    { sourceNodeId: "source", targetNodeId: "input", type: "data" },
+  ];
+  const parent = {
+    nodes: [source, call],
+    edges: [
+      { id: "to-call", source: "source", target: "call", port: "context" },
+    ],
+  };
+  const resolved = await resolveWorkflowApps(state.db, org, parent);
+  expect(resolved.nodes.some(n => n.title.includes("v1"))).toBe(true);
+  expect(
+    resolved.nodes.find(n => n.id !== "source" && n.type === "app_input")
+      ?.config.inputType
+  ).toBe("data");
+  const noise = newWorkflowNode("text", "noise");
+  const mixed = await resolveWorkflowApps(state.db, org, {
+    nodes: [...parent.nodes, noise],
+    edges: [
+      ...parent.edges,
+      { id: "noise", source: "noise", target: "call", port: "context" },
+    ],
+  });
+  const child = mixed.nodes.find(
+    n => n.id !== "source" && n.type === "app_input"
+  )!;
+  expect(
+    mixed.edges.filter(e => e.target === child.id).map(e => e.source)
+  ).toEqual(["source"]);
+  await expect(resolveWorkflowApps(state.db, other, parent)).rejects.toThrow(
+    /workspace/
+  );
+  await expect(
+    executeWorkflowBusinessStep(
+      state.db,
+      { organizationId: org, steps: { input: { status: "pending" } } } as any,
+      input,
+      [{ type: "text", text: "wrong" }]
+    )
+  ).rejects.toThrow(/declared type/);
+  await state.db
+    .update(workflowAppVersions)
+    .set({
+      graph: {
+        nodes: [call, out],
+        edges: [
+          { id: "cycle", source: "call", target: "output", port: "result" },
+        ],
+      },
+    })
+    .where(eq(workflowAppVersions.id, appId));
+  await expect(resolveWorkflowApps(state.db, org, parent)).rejects.toThrow(
+    /recursively/
+  );
+});
+
+it("deduplicates trigger events and pauses before every automated paid action", async () => {
+  const {
+    creativeWorkflows,
+    creativeWorkflowRuns,
+    workflowAppVersions,
+    workflowTriggers,
+    workflowTriggerReceipts,
+  } = await import("../drizzle/workflowSchema");
+  const { newWorkflowNode } = await import("../shared/creativeWorkflow");
+  const { fireWorkflowTrigger } = await import("./lib/workflowTriggers");
+  const { processNextWorkflowRun } = await import("./jobs/workflowWorker");
+  const { workflowAutomationRouter } = await import(
+    "./routers/workflowAutomation"
+  );
+  const workflowId = randomUUID(),
+    appId = randomUUID(),
+    triggerId = randomUUID();
+  const writer = newWorkflowNode("assistant", "writer"),
+    out = newWorkflowNode("output", "output");
+  writer.config.text = "A paid generation must not start without approval.";
+  const graph = {
+    nodes: [writer, out],
+    edges: [{ id: "edge", source: "writer", target: "output", port: "result" }],
+  };
+  await state.db
+    .insert(creativeWorkflows)
+    .values({
+      id: workflowId,
+      organizationId: org,
+      actorUserId: uid,
+      name: "Automation safety",
+      graph,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    });
+  await state.db
+    .insert(workflowAppVersions)
+    .values({
+      id: appId,
+      workflowId,
+      organizationId: org,
+      actorUserId: uid,
+      name: "Automation safety",
+      family: "optimize",
+      graph,
+      version: 1,
+      workflowRevision: 1,
+      createdAtMs: 1,
+    });
+  await state.db
+    .insert(workflowTriggers)
+    .values({
+      id: triggerId,
+      organizationId: org,
+      actorUserId: uid,
+      appVersionId: appId,
+      enabled: 1,
+      config: {
+        kind: "event",
+        weekday: 1,
+        hour: 9,
+        timezone: "UTC",
+        event: "manual_event",
+      },
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    });
+  const id = await fireWorkflowTrigger(state.db, triggerId, "same-event");
+  expect(id).toBeTruthy();
+  expect(await fireWorkflowTrigger(state.db, triggerId, "same-event")).toBe(id);
+  expect(await state.db.select().from(workflowTriggerReceipts)).toHaveLength(1);
+  await state.db
+    .update(workflowTriggers)
+    .set({ enabled: 0 })
+    .where(eq(workflowTriggers.id, triggerId));
+  expect(
+    await fireWorkflowTrigger(state.db, triggerId, "another-event")
+  ).toBeNull();
+  await processNextWorkflowRun(state.db);
+  const [run] = await state.db
+    .select()
+    .from(creativeWorkflowRuns)
+    .where(eq(creativeWorkflowRuns.id, id!));
+  expect(run.steps.writer.status).toBe("waiting");
+  expect(run.steps.writer.approvalRequiredCredits).toBe(true);
+  expect(run.creditsByNode.writer).toBe(0);
+  const outsider = workflowAutomationRouter.createCaller({
+    user: { id: uid },
+    req: {},
+    res: {},
+  } as any);
+  await expect(
+    outsider.quoteStep({ organizationId: other, runId: id!, nodeId: "writer" })
+  ).rejects.toThrow(/access/);
 });

@@ -183,7 +183,8 @@ export async function queueHistory(
         cursors: [],
         pages: 0,
         rows: 0,
-        warnings: [],
+        warnings: incremental ? (existing?.checkpoint.warnings ?? []) : [],
+        coverage: existing?.checkpoint.coverage,
         completedTasks: 0,
         startedAtMs: Date.now(),
       } as SyncCheckpoint,
@@ -250,7 +251,29 @@ export async function processHistoryPage(
       .returning();
     return r;
   });
-  if (!job) return false;
+  if (!job) {
+    const [due] = await db
+      .select()
+      .from(optimizationSyncs)
+      .where(
+        and(
+          inArray(optimizationSyncs.organizationId, allowed),
+          eq(optimizationSyncs.status, "completed"),
+          lte(optimizationSyncs.updatedAtMs, now - 86400000)
+        )
+      )
+      .orderBy(optimizationSyncs.updatedAtMs)
+      .limit(1);
+    if (due)
+      await queueHistory(
+        db,
+        due.organizationId,
+        due.actorUserId,
+        due.connectionId,
+        true
+      );
+    return false;
+  }
   const fence = and(
     eq(optimizationSyncs.id, job.id),
     eq(optimizationSyncs.leaseOwner, leaseOwner)
@@ -274,7 +297,22 @@ export async function processHistoryPage(
     if (!task) {
       await db
         .update(optimizationSyncs)
-        .set({ status: "completed", leaseUntilMs: 0, leaseOwner: null })
+        .set({
+          status: "completed",
+          updatedAtMs: now,
+          checkpoint: {
+            ...job.checkpoint,
+            coverage: {
+              since: [
+                job.checkpoint.coverage?.since ?? job.since,
+                job.since,
+              ].sort()[0],
+              until: job.until,
+            },
+          },
+          leaseUntilMs: 0,
+          leaseOwner: null,
+        })
         .where(fence);
       return true;
     }
@@ -427,6 +465,16 @@ export async function processHistoryPage(
         pages: job.checkpoint.pages + 1,
         rows: job.checkpoint.rows + rows.length,
         completedTasks: job.checkpoint.completedTasks + (after ? 0 : 1),
+        coverage:
+          !after && job.checkpoint.task + 1 >= job.tasks.length
+            ? {
+                since: [
+                  job.checkpoint.coverage?.since ?? job.since,
+                  job.since,
+                ].sort()[0],
+                until: job.until,
+              }
+            : job.checkpoint.coverage,
       };
       await tx
         .update(optimizationSyncs)

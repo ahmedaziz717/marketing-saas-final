@@ -1,3 +1,4 @@
+import { workflowAutomationRouter } from "./routers/workflowAutomation";
 import { optimizationRouter } from "./routers/optimization";
 import { platformAdminRouter } from "./routers/platformAdmin";
 import { videoRouter } from "./routers/video";
@@ -46,6 +47,7 @@ export const appRouter = router({
   creativeBuilder: creativeBuilderRouter,
   video: videoRouter,
   workflows: workflowsRouter,
+  workflowAutomation: workflowAutomationRouter,
   optimization: optimizationRouter,
   models: modelsRouter,
   assetLibrary: assetLibraryRouter,

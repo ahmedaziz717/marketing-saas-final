@@ -1,3 +1,9 @@
+import { publications } from "../../drizzle/channelSchema";
+import {
+  brandAssets,
+  creativeVariants,
+  creativeJobs,
+} from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
 import { and, eq, desc, gte, lte, gt, inArray } from "drizzle-orm";
 import {
@@ -134,7 +140,7 @@ export async function saveClassification(
   connectionId: string,
   adId: string,
   assertion: Assertion,
-  source: "human" | "rule",
+  source: "human" | "rule" | "import",
   actorUserId?: number
 ) {
   const parsed = assertionSchema.parse(assertion);
@@ -329,6 +335,9 @@ export async function analyzeHistory(
           scope,
           eq(optimizationRecords.kind, "insight"),
           eq(optimizationRecords.grain, query.grain),
+          query.adIds
+            ? inArray(optimizationRecords.remoteId, query.adIds)
+            : undefined,
           gte(optimizationRecords.date, query.range.since),
           lte(optimizationRecords.date, query.range.until)
         )
@@ -389,7 +398,20 @@ export async function analyzeHistory(
       date: r.date,
       metrics: adMetrics(r.data),
       dimensions,
-      confidence: 1,
+      confidence: query.dimensions.length
+        ? Math.min(
+            ...query.dimensions.map(d =>
+              ["weekday", "hour", "placement", "timezone"].includes(d)
+                ? dimensions[d]?.some(v => v !== "unknown")
+                  ? 1
+                  : 0
+                : Math.max(
+                    0,
+                    ...(labels[d]?.labels ?? []).map(l => l.confidence)
+                  )
+            )
+          )
+        : 1,
       currency: r.provenance.currency,
       attribution: r.provenance.attribution,
     };
@@ -404,6 +426,7 @@ export async function analyzeHistory(
   return {
     ...result,
     query,
+    connectionId,
     account: {
       id: c.accountId,
       name: c.name,
@@ -423,11 +446,17 @@ export async function analyzeHistory(
       })),
     coverage: {
       status: sync?.status ?? "not_synced",
-      since: sync?.since ?? null,
-      until: sync?.until ?? null,
+      since: sync?.checkpoint.coverage?.since ?? sync?.since ?? null,
+      until: sync?.checkpoint.coverage?.until ?? sync?.until ?? null,
       updatedAtMs: sync?.updatedAtMs ?? null,
       truncated,
-      incomplete: !sync || sync.status !== "completed" || truncated,
+      incomplete:
+        !sync ||
+        sync.status !== "completed" ||
+        truncated ||
+        !!sync.checkpoint.warnings.length ||
+        query.range.since < (sync.checkpoint.coverage?.since ?? sync.since) ||
+        query.range.until > (sync.checkpoint.coverage?.until ?? sync.until),
       warnings: sync?.checkpoint.warnings ?? [],
     },
     caveats: evidenceCaveats,
@@ -527,7 +556,7 @@ export async function classifyHistoryBatch(
           )
         )
     : [];
-  for (const ad of page)
+  for (const ad of page) {
     for (const assertion of classifyImported(
       ad.data,
       related.find(
@@ -544,6 +573,104 @@ export async function classifyHistoryBatch(
         assertion,
         "rule"
       );
+    const [publication] = await db
+      .select()
+      .from(publications)
+      .where(
+        and(
+          eq(publications.organizationId, organizationId),
+          eq(publications.connectionId, connectionId),
+          eq(publications.externalId, ad.remoteId)
+        )
+      )
+      .limit(1);
+    if (publication?.assetKey) {
+      const [kind, id] = publication.assetKey.split(":");
+      let authored: Record<string, any> | undefined,
+        width: number | undefined,
+        height: number | undefined;
+      if (kind === "creative") {
+        const [asset] = await db
+          .select({ variant: creativeVariants, job: creativeJobs })
+          .from(creativeVariants)
+          .innerJoin(
+            creativeJobs,
+            and(
+              eq(creativeJobs.id, creativeVariants.jobId),
+              eq(creativeJobs.organizationId, organizationId)
+            )
+          )
+          .where(
+            and(
+              eq(creativeVariants.organizationId, organizationId),
+              eq(creativeVariants.id, Number(id))
+            )
+          )
+          .limit(1);
+        if (asset) {
+          authored = (asset.job.briefSnapshot as any)?.setup;
+          width = asset.variant.renderMetadata?.width;
+          height = asset.variant.renderMetadata?.height;
+        }
+      } else if (kind === "asset") {
+        const [asset] = await db
+          .select()
+          .from(brandAssets)
+          .where(
+            and(
+              eq(brandAssets.organizationId, organizationId),
+              eq(brandAssets.id, Number(id))
+            )
+          )
+          .limit(1);
+        if (asset) {
+          authored = asset.metadata?.direction as any;
+          width = Number(asset.metadata?.width) || undefined;
+          height = Number(asset.metadata?.height) || undefined;
+        }
+      }
+      const scene = authored?.shot ?? authored?.setting;
+      const metadata: Partial<Record<Dimension, unknown>> = {
+        theme: authored?.theme,
+        art_style: authored?.artStyle,
+        scene:
+          scene === "product"
+            ? "product_only"
+            : scene === "lifestyle"
+              ? "lifestyle_without_person"
+              : scene
+                ? ["female", "male", "people", "multiple"].includes(scene)
+                  ? "lifestyle_with_people"
+                  : undefined
+                : undefined,
+      };
+      if (width && height) {
+        const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+        const g = gcd(width, height);
+        metadata.aspect_ratio = `${width / g}:${height / g}`;
+      }
+      for (const [dimension, value] of Object.entries(metadata))
+        if (value)
+          await saveClassification(
+            db,
+            organizationId,
+            connectionId,
+            ad.remoteId,
+            {
+              dimension: dimension as Dimension,
+              labels: [
+                {
+                  id: String(value),
+                  label: String(value),
+                  confidence: 1,
+                  evidence: `Authored EL asset ${publication.assetKey}; selected settings, not a visual inference.`,
+                },
+              ],
+            },
+            "import"
+          );
+    }
+  }
   return {
     processed: page.length,
     next: ads.length > 20 ? page.at(-1)!.remoteId : null,

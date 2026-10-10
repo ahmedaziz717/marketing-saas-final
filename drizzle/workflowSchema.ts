@@ -62,6 +62,7 @@ export const creativeWorkflowRuns = appSchema
         .references(() => users.id),
       graph: json("graph").$type<WorkflowGraph>().notNull(),
       appVersionId: varchar("appVersionId", { length: 36 }),
+      triggerId: varchar("triggerId", { length: 36 }),
       steps: json("steps").$type<WorkflowSteps>().notNull(),
       references: json("references")
         .$type<VideoReference[]>()
@@ -118,6 +119,66 @@ export const workflowAppVersions = appSchema
     t => [
       uniqueIndex("workflow_app_version_unique").on(t.workflowId, t.version),
       index("workflow_app_org_created").on(t.organizationId, t.createdAtMs),
+    ]
+  )
+  .enableRLS();
+
+export const workflowTriggers = appSchema
+  .table(
+    "workflow_triggers",
+    {
+      id: varchar("id", { length: 36 }).primaryKey(),
+      organizationId: integer("organizationId")
+        .notNull()
+        .references(() => organizations.id),
+      actorUserId: integer("actorUserId")
+        .notNull()
+        .references(() => users.id),
+      appVersionId: varchar("appVersionId", { length: 36 })
+        .notNull()
+        .references(() => workflowAppVersions.id),
+      enabled: integer("enabled").notNull().default(0),
+      config: json("config")
+        .$type<
+          NonNullable<WorkflowGraph["nodes"][number]["config"]["trigger"]>
+        >()
+        .notNull(),
+      nextAtMs: bigint("nextAtMs", { mode: "number" }).notNull().default(0),
+      lastEventAtMs: bigint("lastEventAtMs", { mode: "number" })
+        .notNull()
+        .default(0),
+      error: text("error"),
+      createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+      updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+    },
+    t => [
+      uniqueIndex("workflow_trigger_version").on(
+        t.organizationId,
+        t.appVersionId
+      ),
+      index("workflow_trigger_due").on(t.enabled, t.nextAtMs),
+    ]
+  )
+  .enableRLS();
+export const workflowTriggerReceipts = appSchema
+  .table(
+    "workflow_trigger_receipts",
+    {
+      id: varchar("id", { length: 64 }).primaryKey(),
+      organizationId: integer("organizationId")
+        .notNull()
+        .references(() => organizations.id),
+      triggerId: varchar("triggerId", { length: 36 })
+        .notNull()
+        .references(() => workflowTriggers.id),
+      runId: varchar("runId", { length: 36 })
+        .notNull()
+        .references(() => creativeWorkflowRuns.id),
+      eventKey: text("eventKey").notNull(),
+      createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    },
+    t => [
+      index("workflow_trigger_receipts_org").on(t.organizationId, t.triggerId),
     ]
   )
   .enableRLS();

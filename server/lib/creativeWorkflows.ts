@@ -296,6 +296,7 @@ export async function prepareWorkflowRun(
           n =>
             ancestors.has(n.id) &&
             [
+              "meta_history", "classify_history", "analyze_history", "optimize_dimension", "start_trigger",
               "meta_report",
               "facebook_report",
               "review",
