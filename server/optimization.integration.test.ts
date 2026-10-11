@@ -466,6 +466,7 @@ it("deduplicates trigger events and pauses before every automated paid action", 
     .where(eq(creativeWorkflowRuns.id, id!));
   expect(run.steps.writer.status).toBe("waiting");
   expect(run.steps.writer.approvalRequiredCredits).toBe(true);
+  expect(run.steps.writer.waitingFor).toBe("approval");
   expect(run.creditsByNode.writer).toBe(0);
   const outsider = workflowAutomationRouter.createCaller({
     user: { id: uid },
@@ -579,3 +580,65 @@ it.each(["legacy", "explicit"])(
     ).toBeUndefined();
   }
 );
+
+it("marks a paused history dependency as idle and restores its slot when resumed", async () => {
+  const { optimizationStep } = await import("./lib/optimizationWorkflow");
+  const { newWorkflowNode } = await import("../shared/creativeWorkflow");
+  const { workflowRunOccupiesSlot } = await import(
+    "../shared/workflowRunActivity"
+  );
+  const node = newWorkflowNode("meta_history", "history");
+  node.config.connectionId = cid;
+  const job = (
+    await state.db
+      .select()
+      .from(optimizationSyncs)
+      .where(eq(optimizationSyncs.connectionId, cid))
+  )[0];
+  expect(job).toBeTruthy();
+  const run = {
+    organizationId: org,
+    actorUserId: uid,
+    status: "running",
+    graph: { nodes: [node], edges: [] },
+    steps: { history: { status: "waiting", historyJobId: job.id } },
+  } as any;
+  const calls = state.graph.mock.calls.length;
+  try {
+    await state.db
+      .update(optimizationSyncs)
+      .set({ status: "paused" })
+      .where(eq(optimizationSyncs.id, job.id));
+    const paused = (
+      await state.db
+        .select()
+        .from(optimizationSyncs)
+        .where(eq(optimizationSyncs.id, job.id))
+    )[0];
+    run.steps.history = await optimizationStep(state.db, run, node, []);
+    expect(run.steps.history.waitingFor).toBe("paused_history");
+    expect(run.steps.history.waitingReason).toContain("History import paused");
+    expect(workflowRunOccupiesSlot(run)).toBe(false);
+    expect(
+      (
+        await state.db
+          .select()
+          .from(optimizationSyncs)
+          .where(eq(optimizationSyncs.id, job.id))
+      )[0]
+    ).toEqual(paused);
+    await state.db
+      .update(optimizationSyncs)
+      .set({ status: "queued" })
+      .where(eq(optimizationSyncs.id, job.id));
+    run.steps.history = await optimizationStep(state.db, run, node, []);
+    expect(run.steps.history.waitingFor).toBeUndefined();
+    expect(workflowRunOccupiesSlot(run)).toBe(true);
+    expect(state.graph.mock.calls).toHaveLength(calls);
+  } finally {
+    await state.db
+      .update(optimizationSyncs)
+      .set({ status: job.status })
+      .where(eq(optimizationSyncs.id, job.id));
+  }
+});

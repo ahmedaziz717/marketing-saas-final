@@ -51,6 +51,10 @@ import {
 import type { WorkflowFamily } from "@shared/creativeWorkflow";
 import { StageToolNavigation } from "@/components/StageToolNavigation";
 import { WorkflowRunReview } from "@/components/WorkflowRunReview";
+import {
+  workflowRunActivity,
+  workflowRunStatusLabel,
+} from "@shared/workflowRunActivity";
 
 export default function CreativeWorkflowsPage({
   family = "create",
@@ -641,13 +645,15 @@ function WorkflowEditor({
       )}
       <footer className="wf-runbar">
         <div className="flex items-center gap-2">
-          <span className={`wf-status-dot ${active ? "is-running" : ""}`} />
+          <span
+            className={`wf-status-dot ${active && workflowRunActivity(active) === "running" ? "is-running" : ""}`}
+          />
           {active ? (
             <>
               <strong>
                 {active.stopRequested
                   ? "Stopping after current step…"
-                  : "Workflow running"}
+                  : workflowRunStatusLabel(active)}
               </strong>
               <span>
                 {
@@ -710,7 +716,7 @@ function WorkflowEditor({
               {runs.map((r, i) => (
                 <option value={r.id} key={r.id}>
                   {i === 0 ? "Latest run" : `Run ${runs.length - i}`} ·{" "}
-                  {r.status} ·{" "}
+                  {workflowRunStatusLabel(r)} ·{" "}
                   {new Date(r.createdAtMs).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",

@@ -555,6 +555,8 @@ export type WorkflowStep = {
   approvalRequiredCredits?: boolean;
   approvedCredits?: number;
   waitingReason?: string;
+  /** Set by the runner, never by workflow configuration or run inputs. */
+  waitingFor?: "approval" | "paused_history";
   wakeAtMs?: number;
   approvedByUserId?: number;
   approvedAtMs?: number;

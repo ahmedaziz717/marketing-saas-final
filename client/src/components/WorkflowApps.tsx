@@ -11,6 +11,7 @@ import { workflowSections, workflowValueText } from "@shared/workflowPlatform";
 import type { WorkflowFamily } from "@shared/creativeWorkflow";
 import { Button } from "./ui/button";
 import { WorkflowRunReview } from "./WorkflowRunReview";
+import { workflowRunStatusLabel } from "@shared/workflowRunActivity";
 import {
   Dialog,
   DialogContent,
@@ -369,7 +370,10 @@ export function WorkflowAppRunner({
           </Button>
         </section>
         <section className="wf-app-results">
-          <h2>Latest result {latest && <span>· {latest.status}</span>}</h2>
+          <h2>
+            Latest result{" "}
+            {latest && <span>· {workflowRunStatusLabel(latest)}</span>}
+          </h2>
           {latest?.error && <p role="alert">{latest.error}</p>}
           {!latest && (
             <p>Run this App to see its outputs and review any actions.</p>
