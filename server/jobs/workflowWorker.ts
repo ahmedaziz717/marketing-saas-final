@@ -320,6 +320,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
       [
         "meta_report",
         "meta_performance",
+        "meta_copy_performance",
         "facebook_report",
         "analyze_history",
         "optimize_dimension",

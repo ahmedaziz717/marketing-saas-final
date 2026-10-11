@@ -48,6 +48,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { WorkflowCanvas } from "./WorkflowCanvas";
+import { copyEvidenceWorkflowTemplate } from "@shared/workflowPerformanceInputs";
 import {
   newWorkflowNode,
   workflowTemplate,
@@ -84,6 +85,29 @@ const graph = () =>
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
+});
+it("exposes copy-evidence wiring, source requirements and editable purchase comparison rules", () => {
+  render(
+    <Harness initial={copyEvidenceWorkflowTemplate()} family="optimize" />
+  );
+  expect(
+    screen.getByText("How to build this copy-analysis workflow")
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Settings for Compare copy styles" })
+  );
+  expect(
+    screen.getByText(/Account totals and weekday\/hour reports/)
+  ).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Comparison objective"), {
+    target: { value: "roas" },
+  });
+  fireEvent.change(screen.getByLabelText("Minimum purchases per style"), {
+    target: { value: "8" },
+  });
+  expect(
+    graph().nodes.find(n => n.id === "compare_copy")?.config.copyComparison
+  ).toMatchObject({ objective: "roas", minimumPurchases: 8 });
 });
 it("connects typed ports, rejects incompatible connections, and supports undo", () => {
   render(

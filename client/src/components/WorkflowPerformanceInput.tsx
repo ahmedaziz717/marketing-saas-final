@@ -87,8 +87,8 @@ export function WorkflowPerformanceInput({
       </fieldset>
       <p className="text-xs text-muted-foreground">
         Fetches fresh performance directly from Meta when you run. No ad changes
-        or spending. If daily or hourly data is missing, the result will explain
-        the gap instead of recommending a schedule.
+        or spending. Missing data and coverage limits are explained in the
+        report instead of being treated as evidence for a recommendation.
       </p>
     </fieldset>
   );

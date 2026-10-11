@@ -305,6 +305,8 @@ export async function prepareWorkflowRun(
               [
                 "meta_history",
                 "meta_performance",
+                "meta_copy_performance",
+                "compare_copy_styles",
                 "classify_history",
                 "analyze_history",
                 "optimize_dimension",

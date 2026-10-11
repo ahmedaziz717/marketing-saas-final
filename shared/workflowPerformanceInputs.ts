@@ -150,3 +150,45 @@ export function schedulingWorkflowTemplate(): WorkflowGraph {
     ],
   };
 }
+
+export function copyEvidenceWorkflowTemplate(): WorkflowGraph {
+  const input = newWorkflowNode("app_input", "account_dates", 40, 80);
+  input.title = "Account & date range";
+  input.config.inputType = "data";
+  input.config.field = {
+    ...performanceField(),
+    help: "Choose the connected Meta account and reporting dates for this run. No brand or account is assumed.",
+  };
+  const fetch = newWorkflowNode("meta_copy_performance", "fetch_ads", 390, 80);
+  const comparison = newWorkflowNode(
+    "compare_copy_styles",
+    "compare_copy",
+    740,
+    80
+  );
+  comparison.config.copyComparison = {
+    objective: "cpa",
+    minimumImpressions: 1000,
+    minimumPurchases: 5,
+  };
+  const output = newWorkflowNode("output", "report", 1090, 80);
+  output.title = "Copy evidence report";
+  return {
+    nodes: [input, fetch, comparison, output],
+    edges: [
+      { id: "selection", source: input.id, target: fetch.id, port: "request" },
+      {
+        id: "evidence",
+        source: fetch.id,
+        target: comparison.id,
+        port: "evidence",
+      },
+      {
+        id: "report",
+        source: comparison.id,
+        target: output.id,
+        port: "result",
+      },
+    ],
+  };
+}

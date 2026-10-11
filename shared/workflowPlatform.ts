@@ -1,5 +1,8 @@
 import { localScheduleToUtc, moveDate } from "./channels";
-import { schedulingWorkflowTemplate } from "./workflowPerformanceInputs";
+import {
+  schedulingWorkflowTemplate,
+  copyEvidenceWorkflowTemplate,
+} from "./workflowPerformanceInputs";
 import {
   newWorkflowNode,
   type WorkflowFamily,
@@ -57,6 +60,15 @@ export const workflowSections: Record<
   },
 };
 export const businessWorkflowTemplates = [
+  {
+    id: "meta-copy-evidence",
+    family: "optimize",
+    name: "Meta copy evidence",
+    description:
+      "Choose account and dates, fetch individual ads and copy, compare styles, and inspect the evidence report.",
+    color: "amber",
+    tags: ["Live Meta", "Copy styles", "Read-only"],
+  },
   {
     id: "meta-scheduling",
     family: "optimize",
@@ -132,6 +144,7 @@ export const businessWorkflowTemplates = [
 ] as const;
 
 export function businessWorkflowTemplate(id: string): WorkflowGraph | null {
+  if (id === "meta-copy-evidence") return copyEvidenceWorkflowTemplate();
   if (id === "meta-scheduling") return schedulingWorkflowTemplate();
   const n = (type: WorkflowNodeType, id: string, x: number, y = 120) =>
     newWorkflowNode(type, id, x, y);
