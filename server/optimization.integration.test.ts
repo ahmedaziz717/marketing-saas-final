@@ -19,7 +19,9 @@ import {
   organizations,
   organizationMemberships,
 } from "../drizzle/schema";
-import { channelConnections } from "../drizzle/channelSchema";
+import { channelConnections, publications } from "../drizzle/channelSchema";
+import { contentSchema } from "../shared/channels";
+import { publicationCopyTags } from "../shared/copyTaxonomy";
 import {
   optimizationRecords,
   optimizationSyncs,
@@ -35,6 +37,10 @@ import {
 } from "./lib/optimizationAnalysis";
 import { optimizationRouter } from "./routers/optimization";
 import { ChannelGraphError } from "./lib/channelGraph";
+import {
+  saveCopySnapshots,
+  tagLiveCopyEvidence,
+} from "./lib/copyClassificationStore";
 let engine: PGlite, org: number, uid: number, other: number;
 const cid = randomUUID();
 beforeAll(async () => {
@@ -103,6 +109,75 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await engine?.close();
+});
+it("persists imported copy tags with tenant scoping, refreshes changed text, and rejects stale snapshots", async () => {
+  const copy = {
+    headline: ["Save $200"],
+    primary_text: ["Faster PCs"],
+    description: [],
+  };
+  await saveCopySnapshots(
+    state.db,
+    org,
+    cid,
+    [{ id: "555", name: "External ad", copy }],
+    "live_meta",
+    100
+  );
+  const load = async () =>
+    (
+      await state.db
+        .select()
+        .from(optimizationRecords)
+        .where(eq(optimizationRecords.kind, "copy_tags"))
+    ).find((r: any) => r.remoteId === "555");
+  const initial = await load();
+  expect(initial.organizationId).toBe(org);
+  expect(initial.data.tags.fields.headline[0].dimensions).toHaveLength(8);
+  await saveCopySnapshots(
+    state.db,
+    org,
+    cid,
+    [
+      {
+        id: "555",
+        name: "External ad",
+        copy: { ...copy, headline: ["Free shipping"] },
+      },
+    ],
+    "live_meta",
+    200
+  );
+  const latest = await load();
+  expect(latest.id).toBe(initial.id);
+  expect(latest.data.fingerprint).not.toBe(initial.data.fingerprint);
+  await saveCopySnapshots(
+    state.db,
+    org,
+    cid,
+    [{ id: "555", name: "External ad", copy }],
+    "imported_meta",
+    50
+  );
+  expect((await load()).data.tags.fields.headline[0].text).toBe(
+    "Free shipping"
+  );
+  await expect(
+    saveCopySnapshots(
+      state.db,
+      other,
+      cid,
+      [{ id: "555", name: "Forbidden", copy }],
+      "live_meta",
+      300
+    )
+  ).rejects.toThrow();
+  expect((await load()).data.tags.fields.headline[0].text).toBe(
+    "Free shipping"
+  );
+  await state.db
+    .delete(optimizationRecords)
+    .where(eq(optimizationRecords.id, initial.id));
 });
 it("resumes paginated upserts atomically, preserves cursor on throttle, and rejects another tenant", async () => {
   const job = await queueHistory(state.db, org, uid, cid);
@@ -241,7 +316,10 @@ it("batches imported classifications idempotently without fabricating unknown ob
 });
 
 it("resumes classification across a full batch and only returns report source-ad metadata", async () => {
-  const [original] = await state.db.select().from(optimizationRecords);
+  const [original] = await state.db
+    .select()
+    .from(optimizationRecords)
+    .where(eq(optimizationRecords.kind, "ad"));
   await state.db.insert(optimizationRecords).values(
     Array.from({ length: 101 }, (_, i) => ({
       ...original,
@@ -641,4 +719,58 @@ it("marks a paused history dependency as idle and restores its slot when resumed
       .set({ status: job.status })
       .where(eq(optimizationSyncs.id, job.id));
   }
+});
+
+it("joins authored subheadlines only to the same published creative and clears untrusted image text", async () => {
+  const id = randomUUID();
+  await state.db.insert(publications).values({
+    id,
+    organizationId: org,
+    connectionId: cid,
+    channel: "meta_ads",
+    state: "published",
+    content: contentSchema.parse({
+      title: "Authored copy",
+      copyTags: publicationCopyTags({}, "Enjoy faster play"),
+    }),
+    externalId: "888",
+    result: { creativeId: "creative-888" },
+    timezone: "UTC",
+    createdByUserId: uid,
+    createdAtMs: 1,
+    updatedAtMs: 1,
+  });
+  const evidence = {
+    connectionId: cid,
+    accountId: "123",
+    fetchedAtMs: 1000,
+    ads: [
+      {
+        id: "888",
+        name: "Authored",
+        creativeId: "creative-888",
+        copy: { headline: ["A PC"], subheadline: ["Untrusted text"] },
+      },
+      {
+        id: "889",
+        name: "External",
+        creativeId: "creative-889",
+        copy: { headline: ["Another PC"], subheadline: ["Untrusted text"] },
+      },
+    ],
+  } as any;
+  const tagged = await tagLiveCopyEvidence(state.db, org, evidence);
+  expect(tagged.ads[0].copy.subheadline).toEqual(["Enjoy faster play"]);
+  expect(tagged.ads[1].copy.subheadline).toEqual([]);
+  evidence.ads[0].creativeId = "changed-creative";
+  expect(
+    (await tagLiveCopyEvidence(state.db, org, evidence)).ads[0].copy.subheadline
+  ).toEqual([]);
+  await expect(
+    tagLiveCopyEvidence(state.db, other, evidence)
+  ).rejects.toThrow();
+  await expect(
+    tagLiveCopyEvidence(state.db, org, { ...evidence, accountId: "999" })
+  ).rejects.toThrow(/match/);
+  await state.db.delete(publications).where(eq(publications.id, id));
 });

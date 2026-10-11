@@ -34,6 +34,7 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ client: { channels: { report: { query: vi.fn() } } } }),
+    optimization: { copyReport: { useMutation: () => ({ mutate: vi.fn() }) } },
     channels: {
       connections: {
         useQuery: () => ({

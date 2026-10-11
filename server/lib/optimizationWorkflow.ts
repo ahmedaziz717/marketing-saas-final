@@ -1,3 +1,4 @@
+import { tagLiveCopyEvidence } from "./copyClassificationStore";
 import {
   liveSchedulingReport,
   schedulingRecommendation,
@@ -119,7 +120,10 @@ export async function optimizationStep(
       throw new Error("Evidence does not match the connected account.");
     return complete(
       "Copy evidence report",
-      compareLiveCopy(parsed.data, node.config.copyComparison)
+      compareLiveCopy(
+        await tagLiveCopyEvidence(db, run.organizationId, parsed.data),
+        node.config.copyComparison
+      )
     );
   }
   if (node.type === "meta_performance") {

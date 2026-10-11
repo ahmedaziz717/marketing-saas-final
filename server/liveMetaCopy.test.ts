@@ -79,7 +79,12 @@ it("extracts actual copy without inventing image subheadlines and excludes ambig
       object_story_spec: { link_data: { name: "Shop now" } },
     })
   ).toEqual({
-    copy: { headline: ["Shop now"], primary_text: [], description: [] },
+    copy: {
+      headline: ["Shop now"],
+      subheadline: [],
+      primary_text: [],
+      description: [],
+    },
     ambiguous: false,
     warning: null,
   });
@@ -210,21 +215,21 @@ async function evidence() {
 it("uses weighted purchase efficiency and explicit rule matches with traceable source IDs", async () => {
   const result = compareLiveCopy(await evidence());
   const headline = result.fields[0];
-  expect(headline.groups.find(g => g.label === "direct")).toMatchObject({
+  expect(headline.groups.find(g => g.value === "direct")).toMatchObject({
     spend: 400,
     purchases: 15,
     cpa: 400 / 15,
     roas: 1,
     sourceAdIds: ["11", "12"],
   });
-  expect(headline.observedLeader).toBe("reassuring");
+  expect(headline.observedLeader).toBe("Reassuring");
   expect(headline.classifications[0].evidence[0]).toContain("Shop now");
   expect(result.confidence).toBeNull();
   expect(headline.groups[0]).not.toHaveProperty("confidence");
   expect(
     compareLiveCopy(await evidence(), { objective: "roas" }).fields[0]
       .observedLeader
-  ).toBe("reassuring");
+  ).toBe("Reassuring");
 });
 it("does not declare a leader from partial, missing, tied or single-style evidence", async () => {
   const r = await evidence();
@@ -262,8 +267,49 @@ it("keeps unclassified and multi-variant evidence visible without attributing th
     result.fields[0].groups.find(g => g.label === "Unclassified")?.eligible
   ).toBe(false);
   expect(
-    result.fields[0].groups.find(g => g.label === "reassuring")?.cpa
+    result.fields[0].groups.find(g => g.value === "reassuring")?.cpa
   ).toBeNull();
+});
+it("compares every dimension independently, with multi-value membership counted once per ad", async () => {
+  const r = await evidence();
+  r.ads[0].copy.headline = ["Save $200 on faster custom-built PCs"];
+  r.ads[1].copy.headline = ["Save $100 on faster PCs"];
+  r.ads[2].copy.headline = ["Trusted quality"];
+  const result = compareLiveCopy(r);
+  expect(result.comparisons).toHaveLength(32);
+  const angles = result.comparisons.find(
+    c => c.field === "headline" && c.dimension === "messaging_angle"
+  )!;
+  expect(angles.groups.find(g => g.value === "savings")).toMatchObject({
+    adCount: 2,
+    spend: 400,
+    cpa: 400 / 15,
+  });
+  expect(angles.groups.find(g => g.value === "performance")).toMatchObject({
+    adCount: 2,
+    spend: 400,
+  });
+  expect(angles.groups.find(g => g.value === "customization")).toMatchObject({
+    adCount: 1,
+    spend: 100,
+  });
+  expect(result.taggedAds[0].tags.fields.headline[0].dimensions).toHaveLength(
+    8
+  );
+  const filtered = compareLiveCopy(r, { dimensions: ["offer", "copy_length"] });
+  expect(filtered.comparisons).toHaveLength(8);
+  expect(filtered.taggedAds[0].tags.fields.headline[0].dimensions).toHaveLength(
+    8
+  );
+  r.ads[0].copy.headline.push("Warranty for peace of mind");
+  r.ads[0].ambiguous = true;
+  const dynamic = compareLiveCopy(r);
+  expect(dynamic.taggedAds[0].tags.fields.headline).toHaveLength(2);
+  expect(
+    dynamic.comparisons.every(c =>
+      c.groups.every(g => !g.sourceAdIds.includes("11"))
+    )
+  ).toBe(true);
 });
 it("validates all four typed connections and rejects trigger metadata and scheduling totals", () => {
   const graph = copyEvidenceWorkflowTemplate();

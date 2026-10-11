@@ -270,6 +270,47 @@ const version = (p: { id: string; revision: number }) => ({
   id: p.id,
   revision: p.revision,
 });
+it("stores all copy tags on ad drafts, replaces stale client tags on edits, and retains separate variants", async () => {
+  const saved = await creator.publishing.save(
+    input({
+      channel: "meta_ads",
+      connectionId: adsId,
+      content: contentSchema.parse({
+        title: "Copy analysis fixture",
+        headline: "Save $200",
+        message: "Enjoy faster gaming",
+        description: "32GB memory",
+        textVariants: {
+          headlines: ["Free shipping"],
+          messages: [],
+          descriptions: [],
+        },
+      }),
+    })
+  );
+  expect(saved.content.copyTags?.fields.headline).toHaveLength(2);
+  expect(saved.content.copyTags?.fields.headline[0].dimensions).toHaveLength(8);
+  expect(
+    saved.content.copyTags?.fields.description[0].dimensions.find(
+      d => d.dimension === "specificity"
+    )?.labels[0].value
+  ).toBe("technical_spec");
+  const edited = await creator.publishing.save(
+    input({
+      ...saved,
+      organizationId: org,
+      content: { ...saved.content, headline: "A gaming PC" },
+    })
+  );
+  expect(edited.content.copyTags?.fields.headline[0].text).toBe("A gaming PC");
+  expect(
+    edited.content.copyTags?.fields.headline[0].dimensions.find(
+      d => d.dimension === "offer"
+    )?.labels[0].value
+  ).toBe("no_explicit_offer");
+  expect(saved.content.copyTags?.fields.headline[0].text).toBe("Save $200");
+  expect(state.graph).not.toHaveBeenCalled();
+});
 async function approved(extra: Record<string, any> = {}, approver = owner) {
   const item = await creator.publishing.save(input(extra));
   await approver.publishing.review({ ...version(item), decision: "approved" });

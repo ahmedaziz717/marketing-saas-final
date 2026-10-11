@@ -1,3 +1,4 @@
+import { AdvertisingCopyReport } from "@/components/AdvertisingCopyReport";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { useQueries } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
@@ -590,6 +591,22 @@ function Analytics() {
               </p>
             </section>
           )}
+          {tab === "advertising" &&
+            bounded
+              .filter(c => c.channel === "meta_ads")
+              .map(c => (
+                <section
+                  className="mb-6"
+                  key={`copy-${c.id}-${range.since}-${range.until}`}
+                >
+                  <p className="font-medium">{c.name}</p>
+                  <AdvertisingCopyReport
+                    organizationId={organizationId!}
+                    connectionId={c.id}
+                    range={range}
+                  />
+                </section>
+              ))}
           <div className="space-y-7">
             {bounded.map((c, i) => (
               <section key={c.id} className="surface min-w-0 p-4 md:p-6">

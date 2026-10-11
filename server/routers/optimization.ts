@@ -1,3 +1,8 @@
+import { liveMetaCopyReport, compareLiveCopy } from "../lib/liveMetaCopy";
+import { tagLiveCopyEvidence } from "../lib/copyClassificationStore";
+import { getConnection } from "../lib/channelConnections";
+import { rangeSchema } from "../../shared/channels";
+import { copyComparisonSchema } from "../../shared/copyEvidence";
 import { installOptimizationTemplates } from "../lib/optimizationTemplates";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -35,6 +40,32 @@ async function authorize(
   requireOptimization(organizationId);
 }
 export const optimizationRouter = router({
+  copyReport: protectedProcedure
+    .input(
+      account.extend({
+        range: rangeSchema,
+        settings: copyComparisonSchema.default(() =>
+          copyComparisonSchema.parse({})
+        ),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await authorize(ctx.user.id, input.organizationId);
+      const db = await libraryDatabase();
+      const connection = await getConnection(
+        db,
+        input.organizationId,
+        input.connectionId,
+        "meta_ads"
+      );
+      if (connection.status !== "connected")
+        throw new Error("Reconnect this Meta account before analyzing copy.");
+      const evidence = await liveMetaCopyReport(connection, input.range);
+      return compareLiveCopy(
+        await tagLiveCopyEvidence(db, input.organizationId, evidence),
+        input.settings
+      );
+    }),
   installTemplates: protectedProcedure
     .input(account.extend({ includeClx: z.boolean().default(false) }))
     .mutation(async ({ ctx, input }) => {

@@ -1,3 +1,5 @@
+import { copyTaxonomy, type CopyDimension } from "@shared/copyTaxonomy";
+import { CopyTaxonomyReference } from "@/components/CopyTags";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -14,6 +16,7 @@ import {
   type AnalysisQuery,
 } from "@shared/optimization";
 const title = (v: string) =>
+  copyTaxonomy[v as CopyDimension]?.label ??
   v.replaceAll("_", " ").replace(/^./, c => c.toUpperCase());
 const number = (v: unknown) =>
   typeof v === "number"
@@ -537,6 +540,7 @@ function Intelligence() {
                     <h2 className="text-xl font-semibold">
                       Source ads and classifications
                     </h2>
+                    <CopyTaxonomyReference />
                     <select
                       aria-label="Source ad"
                       className={channelInput + " w-full"}
@@ -554,11 +558,15 @@ function Intelligence() {
                       .filter(a => a.id === selectedAd)
                       .map(a => (
                         <div key={a.id} className="space-y-3">
-                          <p className="text-sm">
-                            Ad {a.id} · Campaign {a.campaignId ?? "unavailable"}{" "}
-                            · Creative {a.creativeId ?? "unavailable"} ·
-                            Snapshot {new Date(a.observedAtMs).toLocaleString()}
-                          </p>
+                          <details className="text-xs">
+                            <summary>Technical references</summary>
+                            <p>
+                              Ad {a.id} · Campaign{" "}
+                              {a.campaignId ?? "unavailable"} · Creative{" "}
+                              {a.creativeId ?? "unavailable"} · Snapshot{" "}
+                              {new Date(a.observedAtMs).toLocaleString()}
+                            </p>
+                          </details>
                           <div className="grid gap-3 sm:grid-cols-2">
                             {dimensionNames
                               .map(d => [d, a.classifications[d]] as const)
@@ -579,7 +587,11 @@ function Intelligence() {
                                   </p>
                                   {v?.labels.map(l => (
                                     <p className="text-sm mt-2" key={l.id}>
-                                      {Math.round(l.confidence * 100)}% ·{" "}
+                                      {v?.source === "rule"
+                                        ? "Automatic signal · "
+                                        : v?.source === "human"
+                                          ? "Reviewed · "
+                                          : "Authored metadata · "}
                                       {l.evidence}
                                     </p>
                                   ))}
