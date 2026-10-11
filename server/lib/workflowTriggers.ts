@@ -27,6 +27,7 @@ import { workflowImageReferences } from "./creativeWorkflows";
 import { withOrganizationTransaction } from "./activity";
 import { stableHash } from "./policy";
 import { optimizationEnabled } from "./optimizationFlags";
+import { workflowRunOccupiesSlot } from "../../shared/workflowRunActivity";
 import type { LibraryDatabase } from "./assetLibrary";
 
 export async function fireWorkflowTrigger(
@@ -84,7 +85,11 @@ export async function fireWorkflowTrigger(
       .where(eq(workflowTriggerReceipts.id, receiptId));
     if (prior) return prior.runId;
     const running = await tx
-      .select({ id: creativeWorkflowRuns.id })
+      .select({
+        status: creativeWorkflowRuns.status,
+        graph: creativeWorkflowRuns.graph,
+        steps: creativeWorkflowRuns.steps,
+      })
       .from(creativeWorkflowRuns)
       .where(
         and(
@@ -92,7 +97,7 @@ export async function fireWorkflowTrigger(
           inArray(creativeWorkflowRuns.status, ["queued", "running"])
         )
       );
-    if (running.length >= 3) return null;
+    if (running.filter(workflowRunOccupiesSlot).length >= 3) return null;
     const steps: WorkflowSteps = {};
     for (const id of workflowOrder(graph)) steps[id] = { status: "pending" };
     const runId = randomUUID();

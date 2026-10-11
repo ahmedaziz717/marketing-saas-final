@@ -61,6 +61,7 @@ const waiting = (
   ...step,
   status: "waiting",
   waitingReason,
+  waitingFor: undefined,
   startedAtMs: step.startedAtMs ?? Date.now(),
   ...extra,
 });
@@ -114,6 +115,7 @@ export async function executeWorkflowBusinessStep(
       {
         outputs: input,
         reviewHash: hash,
+        waitingFor: "approval",
         approvedByUserId: undefined,
         approvedAtMs: undefined,
       }
@@ -249,7 +251,8 @@ export async function executeWorkflowBusinessStep(
     if (step.reviewData)
       return waiting(
         step,
-        "Review this ad and explicitly confirm activation. Existing budgets and targeting apply."
+        "Review this ad and explicitly confirm activation. Existing budgets and targeting apply.",
+        { waitingFor: "approval" }
       );
     const c = await getConnection(
       db,
@@ -269,6 +272,7 @@ export async function executeWorkflowBusinessStep(
       step,
       "Review this ad and explicitly confirm activation. Existing budgets and targeting apply.",
       {
+        waitingFor: "approval",
         reviewData: {
           before: review.before,
           params: review.params,
@@ -337,7 +341,7 @@ export async function executeWorkflowBusinessStep(
       return waiting(
         step,
         "Open the publication to approve its content and destination.",
-        { publicationId: item.id, outputs: [reference] }
+        { publicationId: item.id, outputs: [reference], waitingFor: "approval" }
       );
     if (!liveDeliveryEnabled(item.channel))
       return waiting(
@@ -388,7 +392,7 @@ export async function executeWorkflowBusinessStep(
         return waiting(
           step,
           "Approve this image as a finished asset in the Asset Library, then this step will continue.",
-          { outputs: [image] }
+          { outputs: [image], waitingFor: "approval" }
         );
     }
     if (node.type === "meta_ad" && !image)

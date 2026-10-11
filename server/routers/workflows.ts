@@ -12,6 +12,7 @@ import { brandKits, products } from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { workflowRunOccupiesSlot } from "../../shared/workflowRunActivity";
 import { z } from "zod";
 import {
   creativeWorkflows,
@@ -668,7 +669,11 @@ export const workflowsRouter = router({
             message: "The workflow changed. Review a new estimate.",
           });
         const active = await tx
-          .select({ id: creativeWorkflowRuns.id })
+          .select({
+            status: creativeWorkflowRuns.status,
+            graph: creativeWorkflowRuns.graph,
+            steps: creativeWorkflowRuns.steps,
+          })
           .from(creativeWorkflowRuns)
           .where(
             and(
@@ -676,11 +681,11 @@ export const workflowsRouter = router({
               inArray(creativeWorkflowRuns.status, ["queued", "running"])
             )
           );
-        if (active.length >= 3)
+        if (active.filter(workflowRunOccupiesSlot).length >= 3)
           throw new TRPCError({
             code: "TOO_MANY_REQUESTS",
             message:
-              "Three workflows are already running in this workspace. Wait for one to finish.",
+              "Three workflows are processing in this workspace. Let one finish or stop an unneeded run from its workflow. Runs awaiting approval or a paused history import do not count toward this limit.",
           });
         const state = await creditState(tx, input.organizationId);
         if (

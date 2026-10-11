@@ -688,6 +688,42 @@ it("composes pinned Apps across families and prevents foreign App execution", as
     })
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
+it("admits new work past three approval waits but still caps processing runs at three", async () => {
+  const graph = textGraph();
+  graph.nodes.splice(1, 0, newWorkflowNode("review", "review"));
+  graph.edges = [
+    { id: "a", source: "input", target: "review", port: "context" },
+    { id: "b", source: "review", target: "output", port: "result" },
+  ];
+  const waitingIds: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const { run } = await queue(graph);
+    waitingIds.push(run.id);
+    await finish();
+  }
+  const fresh = await queue(textGraph("Read-only test"));
+  expect(fresh.quote.credits).toBe(0);
+  await finish(20);
+  expect(
+    (await owner.get({ organizationId: org, id: fresh.saved.id })).runs[0]
+      .status
+  ).toBe("completed");
+  const waiting = (await state.db.select().from(creativeWorkflowRuns)).filter(
+    (run: any) => waitingIds.includes(run.id)
+  );
+  expect(waiting).toHaveLength(3);
+  for (const run of waiting) {
+    expect(run.steps.review.waitingFor).toBe("approval");
+    expect(run.steps.review.approvedByUserId).toBeUndefined();
+    expect(run.steps.output.status).toBe("pending");
+  }
+  for (let i = 0; i < 3; i++) await queue(textGraph());
+  await expect(queue(textGraph())).rejects.toMatchObject({
+    code: "TOO_MANY_REQUESTS",
+  });
+  expect(state.llm).not.toHaveBeenCalled();
+  expect(state.image).not.toHaveBeenCalled();
+});
 it("pauses at exact-input review, enforces reviewer access, and resumes after approval", async () => {
   const graph = textGraph();
   graph.nodes.splice(1, 0, newWorkflowNode("review", "review"));
@@ -699,6 +735,7 @@ it("pauses at exact-input review, enforces reviewer access, and resumes after ap
   await finish();
   let result = (await owner.get({ organizationId: org, id: saved.id })).runs[0];
   expect(result.steps.review.status).toBe("waiting");
+  expect(result.steps.review.waitingFor).toBe("approval");
   expect(result.steps.output.status).toBe("pending");
   await expect(
     reviewer.reviewStep({
@@ -821,6 +858,7 @@ it("creates one Facebook draft and waits for publication approval without sendin
     .runs[0];
   expect(result.steps.post.status).toBe("completed");
   expect(result.steps.delivery.status).toBe("waiting");
+  expect(result.steps.delivery.waitingFor).toBe("approval");
   const drafts = await state.db.select().from(publications);
   expect(drafts).toHaveLength(1);
   expect(drafts[0].state).toBe("needs_review");

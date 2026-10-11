@@ -188,6 +188,7 @@ export async function optimizationStep(
         ...step,
         status: "waiting",
         historyJobId: job.id,
+        waitingFor: job.status === "paused" ? "paused_history" : undefined,
         waitingReason: "Importing Meta history; checkpoints survive restarts.",
       };
     }
@@ -211,7 +212,8 @@ export async function optimizationStep(
       return {
         ...step,
         status: "waiting",
-        waitingReason: `History: ${job.checkpoint.completedTasks}/${job.tasks.length} slices.`,
+        waitingFor: job.status === "paused" ? "paused_history" : undefined,
+        waitingReason: `${job.status === "paused" ? "History import paused" : "History"}: ${job.checkpoint.completedTasks}/${job.tasks.length} slices.${job.status === "paused" ? " Resume it from Optimization intelligence when ready." : ""}`,
       };
     return complete("Imported Meta history", {
       connectionId: job.connectionId,

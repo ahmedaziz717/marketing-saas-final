@@ -139,6 +139,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         ...step,
         status: "waiting",
         approvalRequiredCredits: true,
+        waitingFor: "approval",
         waitingReason:
           "Review the credit quote and explicitly approve this generation before it can run.",
       };
@@ -334,6 +335,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         ...step,
         status: "waiting",
         retryAttempts: (step?.retryAttempts ?? 0) + 1,
+        waitingFor: undefined,
         wakeAtMs: Date.now() + delay,
         waitingReason:
           "Provider throttled this read. Retrying from the same step.",
