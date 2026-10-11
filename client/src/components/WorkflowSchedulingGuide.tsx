@@ -5,6 +5,7 @@ import {
   type WorkflowSteps,
 } from "@shared/creativeWorkflow";
 import { schedulingSettingsSchema } from "@shared/optimization";
+import { copyComparisonSchema } from "@shared/copyEvidence";
 
 export function schedulingGuide(node: WorkflowNode, graph: WorkflowGraph) {
   if (
@@ -23,7 +24,61 @@ export function schedulingGuide(node: WorkflowNode, graph: WorkflowGraph) {
       input:
         "A user's selection, or live performance supplied by a parent workflow.",
       output:
-        "Account selection and an inclusive date range. Connect the output dot to Account & dates on Fetch live Meta performance.",
+        "Account selection and an inclusive date range. Connect the output dot to Account & dates on a live Meta fetch step.",
+    };
+  if (node.type === "meta_copy_performance")
+    return {
+      summary: [
+        "Individual ads + actual copy",
+        "Fresh performance for selected dates",
+        "Read-only · no historical import",
+      ],
+      purpose:
+        "Read ad-level Meta results, then join each ad ID to its current creative text. This includes ads that are paused now but delivered during the selected dates. At most 100 ads are inspected; incomplete coverage is disclosed.",
+      input:
+        "Connect the Account & date range field. A Start trigger does not supply ad performance.",
+      output:
+        "Actual headlines, primary text and descriptions, matched performance, source IDs, and coverage warnings. Text embedded inside images and individual dynamic-creative variant results are not inferred.",
+    };
+  if (node.type === "compare_copy_styles") {
+    const settings = copyComparisonSchema.parse(
+      node.config.copyComparison ?? {}
+    );
+    return {
+      summary: [
+        settings.objective === "cpa"
+          ? "Compare purchase CPA"
+          : "Compare purchase ROAS",
+        `${settings.minimumImpressions} impressions + ${settings.minimumPurchases} purchases per style`,
+        "Explicit text rules · inspect source ads",
+      ],
+      purpose:
+        "Group single-variant ads using existing educational, direct and reassuring text rules, then compare aggregate purchase efficiency. Change the objective and eligibility thresholds below. This is descriptive evidence, not a causal test or an AI-generated opinion.",
+      input:
+        "Connect Fetch Meta ad copy & results to Ad copy & results. Account totals and weekday/hour reports do not contain the required creative text.",
+      output:
+        "Separate headline, primary-text and description comparisons, source ads, rule matches, missing-data warnings and limitations. No unsupported confidence percentage or winning dynamic variant is invented.",
+    };
+  }
+  if (
+    node.type === "output" &&
+    graph.nodes.some(
+      n =>
+        n.type === "compare_copy_styles" &&
+        workflowAncestors(graph, node.id).has(n.id)
+    )
+  )
+    return {
+      summary: [
+        "Copy comparisons + source ads",
+        "Coverage + interpretation limits",
+        "Open the report after running",
+      ],
+      purpose:
+        "Present the connected copy analysis and retain it in run history. Save workflow keeps this draft editable. This workflow does not generate or publish ads.",
+      input: "Connect Compare copy styles to Results.",
+      output:
+        "A readable evidence report with actual ad text, metrics, selected account and dates, and comparison settings.",
     };
   if (node.type === "meta_performance")
     return {

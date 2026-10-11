@@ -1,4 +1,6 @@
 import { OptimizationResult } from "./OptimizationResult";
+import { CopyEvidenceResult } from "./CopyEvidenceResult";
+import { CopyComparisonSettings } from "./CopyComparisonSettings";
 import {
   schedulingGuide,
   WorkflowSchedulingGuide,
@@ -109,6 +111,8 @@ const icons = {
   run_workflow: GitBranch,
   meta_history: BarChart3,
   meta_performance: BarChart3,
+  meta_copy_performance: BarChart3,
+  compare_copy_styles: Target,
   classify_history: Layers,
   analyze_history: BarChart3,
   optimize_dimension: Target,
@@ -393,37 +397,68 @@ export function WorkflowCanvas({
   };
   return (
     <div className="wf-canvas-shell">
-      {family === "optimize" && (
+      {graph.nodes.some(n => n.type === "compare_copy_styles") && (
         <details className="wf-build-guide">
-          <summary>How to build this scheduling workflow</summary>
+          <summary>How to build this copy-analysis workflow</summary>
           <ol>
             <li>
               <strong>Choose inputs:</strong> Add a step → Fields → Account &
-              date range. This becomes the form shown when the workflow runs.
+              date range. Select the account and dates when running.
             </li>
             <li>
-              <strong>Read Meta:</strong> Add Fetch live Meta performance.
-              Connect the field's output dot to Account & dates. Choose daily
-              only or daily + hourly.
+              <strong>Fetch ads:</strong> Connect the field to Fetch Meta ad
+              copy & results. This retrieves real ad text and matching
+              performance for those dates.
             </li>
             <li>
-              <strong>Analyze:</strong> Add Optimization engine, select
-              Scheduling optimizer, and connect the fetch output to Evidence.
-              Set comparison and test-readiness rules.
+              <strong>Compare:</strong> Connect the fetch to Compare copy
+              styles. Choose purchase CPA or ROAS and the minimum evidence
+              filters.
             </li>
             <li>
-              <strong>Present:</strong> Add Output and connect the analysis to
-              Results. Save workflow, then Run workflow to choose the account
-              and dates. Inspect each step's inputs and outputs after it runs.
+              <strong>Review:</strong> Connect the comparison to Output. Inspect
+              actual ads, style groups, exclusions and limitations before making
+              creative decisions.
             </li>
           </ol>
           <p>
-            You can also start with the Meta scheduling analysis template.
-            Saving keeps a draft; publishing as an App creates a reusable
-            version.
+            This workflow reads and compares evidence using 0 AI credits. It
+            does not generate or publish ads.
           </p>
         </details>
       )}
+      {family === "optimize" &&
+        !graph.nodes.some(n => n.type === "compare_copy_styles") && (
+          <details className="wf-build-guide">
+            <summary>How to build this scheduling workflow</summary>
+            <ol>
+              <li>
+                <strong>Choose inputs:</strong> Add a step → Fields → Account &
+                date range. This becomes the form shown when the workflow runs.
+              </li>
+              <li>
+                <strong>Read Meta:</strong> Add Fetch live Meta performance.
+                Connect the field's output dot to Account & dates. Choose daily
+                only or daily + hourly.
+              </li>
+              <li>
+                <strong>Analyze:</strong> Add Optimization engine, select
+                Scheduling optimizer, and connect the fetch output to Evidence.
+                Set comparison and test-readiness rules.
+              </li>
+              <li>
+                <strong>Present:</strong> Add Output and connect the analysis to
+                Results. Save workflow, then Run workflow to choose the account
+                and dates. Inspect each step's inputs and outputs after it runs.
+              </li>
+            </ol>
+            <p>
+              You can also start with the Meta scheduling analysis template.
+              Saving keeps a draft; publishing as an App creates a reusable
+              version.
+            </p>
+          </details>
+        )}
       <div
         ref={viewport}
         className={`wf-canvas ${connecting ? "wf-connecting" : ""}`}
@@ -939,7 +974,10 @@ export function WorkflowCanvas({
                           (!meta.channel ||
                             connectedChannels.includes(meta.channel)) &&
                           (paletteFamily === "all" ||
-                            (type === "meta_performance" &&
+                            ([
+                              "meta_performance",
+                              "meta_copy_performance",
+                            ].includes(type) &&
                               paletteFamily === "optimize") ||
                             (!meta.family &&
                               [
@@ -1057,6 +1095,18 @@ export function WorkflowCanvas({
                   organizationId={organizationId}
                   onChange={config}
                 />
+              )}
+              {selectedNode.type === "compare_copy_styles" && (
+                <CopyComparisonSettings node={selectedNode} onChange={config} />
+              )}
+              {selectedNode.type === "meta_copy_performance" && (
+                <p className="wf-setting-help">
+                  Reads up to 500 ad insight rows and inspects the 100
+                  highest-spend returned ads. Partial coverage is shown
+                  explicitly. Use a narrower date range if the report is
+                  incomplete. No historical import is started. This read uses 0
+                  AI credits.
+                </p>
               )}
               {selectedNode.type === "meta_performance" && (
                 <>
@@ -1574,6 +1624,11 @@ export function WorkflowCanvas({
             />
           ) : preview?.type === "video" ? (
             <video src={preview.url} controls className="max-h-[70vh] w-full" />
+          ) : preview?.type === "data" &&
+            preview.data.source === "live_meta_copy_analysis" ? (
+            <div className="max-h-[65vh] overflow-auto">
+              <CopyEvidenceResult data={preview.data} />
+            </div>
           ) : preview?.type === "data" &&
             preview.data.requiresHumanApproval === true ? (
             <div className="max-h-[65vh] overflow-auto">
