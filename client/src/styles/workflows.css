@@ -1381,6 +1381,13 @@
   grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
   gap: 24px;
 }
+.wf-app-run-layout-report {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wf-app-run-layout-report .wf-app-form {
+  width: 100%;
+  max-width: 720px;
+}
 .wf-app-form,
 .wf-app-results {
   min-width: 0;

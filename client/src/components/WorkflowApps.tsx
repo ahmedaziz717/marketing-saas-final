@@ -1,4 +1,4 @@
-import { OptimizationResult } from "./OptimizationResult";
+import { isWorkflowReport, WorkflowDataResult } from "./WorkflowDataResult";
 import { WorkflowAutomationControls } from "./WorkflowAutomationControls";
 import { WorkflowInputControl } from "./WorkflowInputControl";
 import { fieldValueProblem, fieldPrompt } from "@shared/workflowInputs";
@@ -199,6 +199,9 @@ export function WorkflowAppRunner({
     latest?.graph.nodes
       .filter(n => n.type === "output")
       .flatMap(n => latest.steps[n.id]?.outputs ?? []) ?? [];
+  const hasReport = output.some(
+    value => value.type === "data" && isWorkflowReport(value.data)
+  );
   return (
     <div className="wf-app-runner" data-family={item.family}>
       <Button variant="ghost" onClick={onBack}>
@@ -219,7 +222,9 @@ export function WorkflowAppRunner({
         appVersionId={id}
         role={role}
       />
-      <div className="wf-app-run-layout">
+      <div
+        className={`wf-app-run-layout${hasReport ? " wf-app-run-layout-report" : ""}`}
+      >
         <section className="wf-app-form">
           <h2>Inputs</h2>
           {fields.length ? (
@@ -394,10 +399,8 @@ export function WorkflowAppRunner({
                 <Link href={`/app/publishing?publication=${v.id}`}>
                   {v.name} →
                 </Link>
-              ) : v.type === "data" &&
-                v.data.schemaVersion === 1 &&
-                v.data.requiresHumanApproval === true ? (
-                <OptimizationResult data={v.data} />
+              ) : v.type === "data" ? (
+                <WorkflowDataResult data={v.data} />
               ) : (
                 <pre className="wf-evidence">{workflowValueText(v)}</pre>
               )}
