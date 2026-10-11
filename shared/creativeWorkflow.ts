@@ -1,4 +1,5 @@
 import { analysisQuerySchema, optimizerSchema } from "./optimization";
+import { copyComparisonSchema } from "./copyEvidence";
 import { z } from "zod";
 import { performanceInputSchema, appFieldSchema } from "./workflowInputs";
 import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
@@ -28,6 +29,8 @@ export const workflowNodeTypes = [
   "run_workflow",
   "meta_history",
   "meta_performance",
+  "meta_copy_performance",
+  "compare_copy_styles",
   "classify_history",
   "analyze_history",
   "optimize_dimension",
@@ -115,6 +118,25 @@ export const workflowNodes: Record<
     channel: "meta_ads",
     output: "data",
     inputs: [{ id: "request", name: "Account & dates", type: "data" }],
+  },
+  meta_copy_performance: {
+    name: "Fetch Meta ad copy & results",
+    description:
+      "Read individual ads' current copy and selected-period performance from Meta, with explicit coverage limits.",
+    group: "Meta Ads",
+    family: "measure",
+    channel: "meta_ads",
+    output: "data",
+    inputs: [{ id: "request", name: "Account & dates", type: "data" }],
+  },
+  compare_copy_styles: {
+    name: "Compare copy styles",
+    description:
+      "Compare headline, primary-text and description styles against purchase CPA or ROAS; inspect source ads and limitations.",
+    group: "Analysis",
+    family: "optimize",
+    output: "data",
+    inputs: [{ id: "evidence", name: "Ad copy & results", type: "data" }],
   },
   classify_history: {
     name: "Classify imported ads",
@@ -375,6 +397,7 @@ export const workflowNodeSchema = z.object({
       })
       .optional(),
     performanceRequest: performanceInputSchema.optional(),
+    copyComparison: copyComparisonSchema.optional(),
     metaPerformance: z
       .object({ includeHourly: z.boolean().default(true) })
       .optional(),
@@ -703,7 +726,7 @@ export function workflowRunProblem(
       return `Choose a published App for “${node.title}”.`;
     if (
       workflowNodes[node.type].channel &&
-      node.type !== "meta_performance" &&
+      !["meta_performance", "meta_copy_performance"].includes(node.type) &&
       !node.config.connectionId
     )
       return `Choose a connected account for “${node.title}”.`;
@@ -741,6 +764,8 @@ export function workflowRunProblem(
     if (
       [
         "meta_performance",
+        "meta_copy_performance",
+        "compare_copy_styles",
         "optimize_dimension",
         "review",
         "deliver_publication",
@@ -752,6 +777,18 @@ export function workflowRunProblem(
       )
     )
       return `Connect all inputs to “${node.title}”.`;
+    if (["meta_copy_performance", "compare_copy_styles"].includes(node.type)) {
+      const source = graph.nodes.find(n =>
+        graph.edges.some(e => e.target === node.id && e.source === n.id)
+      );
+      if (source?.type === "start_trigger")
+        return `“${node.title}” needs ${node.type === "meta_copy_performance" ? "an Account & date range field" : "ad copy and performance"}. Start trigger metadata is not performance evidence.`;
+      if (
+        node.type === "compare_copy_styles" &&
+        source?.type === "meta_performance"
+      )
+        return "Connect Fetch Meta ad copy & results to Compare copy styles. Account-level scheduling totals contain no ad copy.";
+    }
     if (node.type === "optimize_metric" && node.config.goal === undefined)
       return `Set a target for “${node.title}”.`;
     if (

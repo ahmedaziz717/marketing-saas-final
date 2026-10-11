@@ -212,7 +212,8 @@ export async function validateWorkflowConnections(
   for (const node of graph.nodes) {
     const channel = workflowNodes[node.type].channel;
     // Account comes from a typed upstream request, validated again at execution.
-    if (node.type === "meta_performance") continue;
+    if (["meta_performance", "meta_copy_performance"].includes(node.type))
+      continue;
     if (!channel) continue;
     if (!node.config.connectionId)
       throw new TRPCError({

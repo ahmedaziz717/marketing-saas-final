@@ -24,6 +24,8 @@ import { requireOptimization } from "./optimizationFlags";
 import { queueHistory } from "./optimizationIngestion";
 import { analyzeHistory, classifyHistoryBatch } from "./optimizationAnalysis";
 import { optimizeEvidence } from "./optimizerService";
+import { liveMetaCopyReport, compareLiveCopy } from "./liveMetaCopy";
+import { copyEvidenceSchema } from "../../shared/copyEvidence";
 export async function optimizationStep(
   db: LibraryDatabase,
   run: CreativeWorkflowRun,
@@ -73,6 +75,52 @@ export async function optimizationStep(
       ],
       finishedAtMs: Date.now(),
     };
+  }
+  if (node.type === "meta_copy_performance") {
+    requireOptimization(run.organizationId);
+    const value =
+      input.length === 1 && input[0].type === "data" ? input[0].data : null;
+    if (value?.source !== "meta_performance_request")
+      throw new Error(
+        "Connect an Account & date range field to Fetch Meta ad copy & results. Trigger metadata and account totals are not ad-level evidence."
+      );
+    const request = performanceInputSchema.parse(value);
+    const c = await getConnection(
+      db,
+      run.organizationId,
+      request.connectionId,
+      "meta_ads"
+    );
+    if (c.status !== "connected")
+      throw new Error(
+        "Reconnect the selected Meta ad account before fetching ads."
+      );
+    return complete(
+      "Live Meta ad copy & results",
+      await liveMetaCopyReport(c, request.range)
+    );
+  }
+  if (node.type === "compare_copy_styles") {
+    requireOptimization(run.organizationId);
+    const value =
+      input.length === 1 && input[0].type === "data" ? input[0].data : null;
+    const parsed = copyEvidenceSchema.safeParse(value);
+    if (!parsed.success)
+      throw new Error(
+        "Connect Fetch Meta ad copy & results to Compare copy styles. This step requires individual ads, actual copy, and their matching performance."
+      );
+    const c = await getConnection(
+      db,
+      run.organizationId,
+      parsed.data.connectionId,
+      "meta_ads"
+    );
+    if (c.accountId.replace(/^act_/, "") !== parsed.data.accountId)
+      throw new Error("Evidence does not match the connected account.");
+    return complete(
+      "Copy evidence report",
+      compareLiveCopy(parsed.data, node.config.copyComparison)
+    );
   }
   if (node.type === "meta_performance") {
     requireOptimization(run.organizationId);
