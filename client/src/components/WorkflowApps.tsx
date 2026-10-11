@@ -39,6 +39,7 @@ export function WorkflowApps({
     app.graph.nodes.some(
       n =>
         n.type === "app_input" &&
+        !n.config.field &&
         n.config.inputType &&
         n.config.inputType !== "any"
     )

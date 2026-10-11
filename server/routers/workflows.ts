@@ -234,7 +234,8 @@ export const workflowsRouter = router({
     .input(
       reference.extend({
         revision: z.number().int().positive(),
-        description: z.string().trim().max(600).default(""),
+        name: z.string().trim().min(1).max(100).optional(),
+        description: z.string().trim().max(600).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -314,8 +315,8 @@ export const workflowsRouter = router({
             version: (latest?.version ?? 0) + 1,
             workflowRevision: workflow.revision,
             family: workflow.family,
-            name: workflow.name,
-            description: input.description,
+            name: input.name ?? latest?.name ?? workflow.name,
+            description: input.description ?? latest?.description ?? "",
             graph: {
               ...workflow.graph,
               nodes: workflow.graph.nodes.map(n =>
@@ -405,7 +406,12 @@ export const workflowsRouter = router({
       .orderBy(desc(creativeWorkflowRuns.createdAtMs))
       .limit(20);
     const [published] = await db
-      .select({ version: workflowAppVersions.version })
+      .select({
+        id: workflowAppVersions.id,
+        version: workflowAppVersions.version,
+        name: workflowAppVersions.name,
+        description: workflowAppVersions.description,
+      })
       .from(workflowAppVersions)
       .where(
         and(
@@ -418,6 +424,7 @@ export const workflowsRouter = router({
     return {
       ...workflow,
       latestPublishedVersion: published?.version ?? null,
+      latestPublishedApp: published ?? null,
       runs: runs.map(publicWorkflowRun),
     };
   }),

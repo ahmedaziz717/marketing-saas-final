@@ -6,6 +6,7 @@ import { copyEvidenceWorkflowTemplate } from "@shared/workflowPerformanceInputs"
 
 const api = vi.hoisted(() => ({
   app: undefined as any,
+  apps: [] as any[],
   runs: [] as any[],
   run: vi.fn(),
 }));
@@ -19,6 +20,7 @@ vi.mock("./WorkflowRunReview", () => ({ WorkflowRunReview: () => null }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     workflows: {
+      listApps: { useQuery: () => ({ data: api.apps }) },
       getApp: { useQuery: () => ({ data: api.app }) },
       get: { useQuery: () => ({ data: { runs: api.runs } }) },
       quote: { useMutation: () => ({ mutateAsync: vi.fn() }) },
@@ -28,7 +30,7 @@ vi.mock("@/lib/trpc", () => ({
     assetLibrary: { studioList: { useQuery: () => ({ data: [] }) } },
   },
 }));
-import { WorkflowAppRunner } from "./WorkflowApps";
+import { WorkflowApps, WorkflowAppRunner } from "./WorkflowApps";
 
 function savedRun(outputs: WorkflowValue[]) {
   return {
@@ -63,8 +65,60 @@ beforeEach(() => {
     graph: copyEvidenceWorkflowTemplate(),
   };
   api.runs = [];
+  api.apps = [];
 });
 afterEach(cleanup);
+
+it("shows existing typed form Apps in Your Apps, links to their latest version and keeps parent-only components separate", () => {
+  const componentGraph = copyEvidenceWorkflowTemplate();
+  delete componentGraph.nodes[0].config.field;
+  api.apps = [
+    { ...api.app, id: "app-v2", version: 2, name: "My copy analysis App" },
+    api.app,
+    {
+      ...api.app,
+      id: "component-v1",
+      workflowId: "component-workflow",
+      name: "Parent evidence component",
+      graph: componentGraph,
+    },
+    {
+      ...api.app,
+      id: "mixed-v1",
+      workflowId: "mixed-workflow",
+      name: "Form and parent evidence component",
+      graph: {
+        ...componentGraph,
+        nodes: [
+          ...componentGraph.nodes,
+          { ...api.app.graph.nodes[0], id: "form-field" },
+        ],
+      },
+    },
+  ];
+  const { container } = render(
+    <WorkflowApps organizationId={1} family="optimize" />
+  );
+  expect(screen.getByRole("heading", { name: "Your Apps 1" })).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "My copy analysis App" })
+  ).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Copy analysis" })).toBeNull();
+  expect(
+    screen.getByRole("link", { name: "Open App" }).getAttribute("href")
+  ).toBe("/app/optimize/apps?app=app-v2");
+  expect(
+    screen.getByRole("link", { name: "Edit workflow" }).getAttribute("href")
+  ).toBe("/app/optimize/workflows?workflow=workflow-1");
+  const components = within(container.querySelector("details")!);
+  expect(components.getByText("Reusable workflow components (2)")).toBeTruthy();
+  expect(components.getByText("Parent evidence component · v1")).toBeTruthy();
+  expect(
+    components.getByText("Form and parent evidence component · v1")
+  ).toBeTruthy();
+  expect(components.queryByText("My copy analysis App")).toBeNull();
+  expect(api.run).not.toHaveBeenCalled();
+});
 
 it("renders a completed published copy report as evidence tables without rerunning or dumping its JSON", () => {
   const data = {

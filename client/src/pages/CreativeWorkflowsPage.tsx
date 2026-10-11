@@ -315,8 +315,10 @@ function WorkflowEditor({
     [savedString, setSavedString] = useState(""),
     [saveError, setSaveError] = useState("");
   const [publishOpen, setPublishOpen] = useState(false),
+    [appName, setAppName] = useState(""),
     [appDescription, setAppDescription] = useState("");
   const publishApp = trpc.workflows.publishApp.useMutation();
+  const utils = trpc.useUtils();
   const connections = trpc.channels.connections.useQuery({ organizationId });
   const [editorView, setEditorView] = useState<"workflow" | "form" | "preview">(
     "workflow"
@@ -568,6 +570,14 @@ function WorkflowEditor({
             onClick={async () => {
               try {
                 await saveNow();
+                const refreshed = await detail.refetch();
+                if (refreshed.error) throw refreshed.error;
+                const published = refreshed.data?.latestPublishedApp;
+                setAppName(
+                  published?.name ??
+                    (latest.current.name.trim() || "Untitled workflow")
+                );
+                setAppDescription(published?.description ?? "");
                 setPublishOpen(true);
               } catch (e) {
                 toast.error((e as Error).message);
@@ -846,8 +856,8 @@ function WorkflowEditor({
           <DialogHeader>
             <DialogTitle>
               {detail.data?.latestPublishedVersion
-                ? `Publish a new version of ${name}`
-                : `Publish ${name} as an App`}
+                ? "Publish a new App version"
+                : "Publish as an App"}
             </DialogTitle>
             <DialogDescription>
               Your team can run a simple App or reuse this version as a step in
@@ -855,6 +865,24 @@ function WorkflowEditor({
               publish a new version.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="publish-app-name">App name</label>
+            <Input
+              id="publish-app-name"
+              value={appName}
+              maxLength={100}
+              required
+              aria-describedby="publish-app-name-help"
+              onChange={e => setAppName(e.target.value)}
+              placeholder="Give your App a name"
+            />
+            <p
+              id="publish-app-name-help"
+              className="text-sm text-muted-foreground"
+            >
+              Shown in Your Apps. Your workflow keeps its own name.
+            </p>
+          </div>
           <label className="space-y-2">
             App description
             <Input
@@ -889,7 +917,10 @@ function WorkflowEditor({
           </div>
           <Button
             disabled={
-              publishApp.isPending || save.isPending || !!appResults.error
+              publishApp.isPending ||
+              save.isPending ||
+              !!appResults.error ||
+              !appName.trim()
             }
             onClick={async () => {
               try {
@@ -903,10 +934,15 @@ function WorkflowEditor({
                   organizationId,
                   id,
                   revision: revision.current,
+                  name: appName.trim(),
                   description: appDescription,
                 });
+                await Promise.all([
+                  utils.workflows.listApps.invalidate({ organizationId }),
+                  utils.workflows.get.invalidate({ organizationId, id }),
+                ]);
                 setPublishOpen(false);
-                toast.success(`App version ${app.version} published`);
+                toast.success(`${app.name} · version ${app.version} published`);
                 navigate(`${workflowSections[family].appsPath}?app=${app.id}`);
               } catch (e) {
                 toast.error((e as Error).message);
