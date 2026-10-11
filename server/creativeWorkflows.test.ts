@@ -631,6 +631,82 @@ it("publishes immutable App versions in each family and isolates their inputs", 
       .config.text
   ).toBe("Published value");
 });
+it("names Apps independently, retains metadata on republish and keeps previous versions immutable", async () => {
+  const saved = await owner.save({
+    organizationId: org,
+    family: "optimize",
+    name: "WF Test 1",
+    graph: textGraph(),
+  });
+  const publish = { organizationId: org, id: saved.id, revision: 1 };
+  const v1 = await owner.publishApp({
+    ...publish,
+    name: "  Copy Performance App  ",
+    description: "Compare copy styles",
+  });
+  expect(v1.name).toBe("Copy Performance App");
+  expect(await owner.get({ organizationId: org, id: saved.id })).toMatchObject({
+    name: "WF Test 1",
+    latestPublishedApp: {
+      id: v1.id,
+      version: 1,
+      name: "Copy Performance App",
+      description: "Compare copy styles",
+    },
+  });
+  await owner.save({
+    ...publish,
+    name: "Renamed workflow draft",
+    graph: textGraph("New draft value"),
+  });
+  const v2 = await owner.publishApp({ ...publish, revision: 2 });
+  expect(v2).toMatchObject({
+    version: 2,
+    name: "Copy Performance App",
+    description: "Compare copy styles",
+  });
+  const v3 = await owner.publishApp({
+    ...publish,
+    revision: 2,
+    name: "Copy Explorer",
+    description: "",
+  });
+  expect(v3).toMatchObject({
+    version: 3,
+    name: "Copy Explorer",
+    description: "",
+  });
+  expect(await owner.getApp({ organizationId: org, id: v1.id })).toMatchObject({
+    name: "Copy Performance App",
+    description: "Compare copy styles",
+    version: 1,
+  });
+  expect((await owner.get({ organizationId: org, id: saved.id })).name).toBe(
+    "Renamed workflow draft"
+  );
+  expect(
+    (await owner.listApps({ organizationId: org, family: "optimize" }))[0].id
+  ).toBe(v3.id);
+  for (const name of ["", "   ", "x".repeat(101)]) {
+    await expect(
+      owner.publishApp({ ...publish, revision: 2, name })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  }
+  await expect(
+    outsider.publishApp({
+      ...publish,
+      organizationId: otherOrg,
+      revision: 2,
+      name: "Foreign rename",
+    })
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect((await owner.listApps({ organizationId: org })).length).toBe(3);
+  expect((await owner.get({ organizationId: org, id: saved.id })).runs).toEqual(
+    []
+  );
+  expect(await state.db.select().from(aiUsage)).toHaveLength(0);
+});
+
 it("composes pinned Apps across families and prevents foreign App execution", async () => {
   const inner = textGraph("Pinned content");
   inner.nodes[0].type = "app_input";
