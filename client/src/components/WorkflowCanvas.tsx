@@ -1,5 +1,4 @@
-import { OptimizationResult } from "./OptimizationResult";
-import { CopyEvidenceResult } from "./CopyEvidenceResult";
+import { WorkflowDataResult } from "./WorkflowDataResult";
 import { CopyComparisonSettings } from "./CopyComparisonSettings";
 import {
   schedulingGuide,
@@ -1624,15 +1623,9 @@ export function WorkflowCanvas({
             />
           ) : preview?.type === "video" ? (
             <video src={preview.url} controls className="max-h-[70vh] w-full" />
-          ) : preview?.type === "data" &&
-            preview.data.source === "live_meta_copy_analysis" ? (
+          ) : preview?.type === "data" ? (
             <div className="max-h-[65vh] overflow-auto">
-              <CopyEvidenceResult data={preview.data} />
-            </div>
-          ) : preview?.type === "data" &&
-            preview.data.requiresHumanApproval === true ? (
-            <div className="max-h-[65vh] overflow-auto">
-              <OptimizationResult data={preview.data} />
+              <WorkflowDataResult data={preview.data} />
             </div>
           ) : (
             <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap text-sm">
