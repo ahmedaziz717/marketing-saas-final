@@ -49,15 +49,15 @@ export function schedulingGuide(node: WorkflowNode, graph: WorkflowGraph) {
         settings.objective === "cpa"
           ? "Compare purchase CPA"
           : "Compare purchase ROAS",
-        `${settings.minimumImpressions} impressions + ${settings.minimumPurchases} purchases per style`,
-        "Explicit text rules · inspect source ads",
+        `${settings.minimumImpressions} impressions + ${settings.minimumPurchases} purchases per value`,
+        `${settings.dimensions.length} dimensions · inspect copy and tags`,
       ],
       purpose:
-        "Group single-variant ads using existing educational, direct and reassuring text rules, then compare aggregate purchase efficiency. Change the objective and eligibility thresholds below. This is descriptive evidence, not a causal test or an AI-generated opinion.",
+        "Tag every text variant across messaging style, angle, emotional tone, benefits/features, urgency, offers, specificity and length. Compare performance by the dimensions selected below. Automatic tags use explicit text signals and measured lengths; unsupported interpretations remain unclassified. This is descriptive evidence, not a causal test.",
       input:
         "Connect Fetch Meta ad copy & results to Ad copy & results. Account totals and weekday/hour reports do not contain the required creative text.",
       output:
-        "Separate headline, primary-text and description comparisons, source ads, rule matches, missing-data warnings and limitations. No unsupported confidence percentage or winning dynamic variant is invented.",
+        "Separate headline, primary-text, description and available authored image-subheadline comparisons. Ad names, actual copy, assigned values and supporting text are shown together. Technical IDs are in details. No unsupported confidence percentage or winning dynamic variant is invented.",
     };
   }
   if (
