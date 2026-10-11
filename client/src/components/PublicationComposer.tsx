@@ -1,3 +1,4 @@
+import { SavedCopyTags } from "./CopyTags";
 import { AdCampaignPicker } from "./AdCampaignPicker";
 import { CampaignPlanSelect } from "./CampaignPlanSelect";
 import { ContentPreview } from "./ContentPreview";
@@ -1461,6 +1462,9 @@ export function PublicationDetails({
         <p className="whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-sm">
           {item.content.message || "No caption"}
         </p>
+        {item.content.copyTags && (
+          <SavedCopyTags tags={item.content.copyTags} />
+        )}
         {item.channel === "meta_ads" && (
           <div className="rounded-xl border p-4 space-y-2 text-sm">
             <p>

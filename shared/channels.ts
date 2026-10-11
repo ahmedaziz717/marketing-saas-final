@@ -1,3 +1,4 @@
+import { copyTagsSchema } from "./copyTaxonomy";
 import { z } from "zod";
 
 export const channelSchema = z.enum(["facebook", "meta_ads"]);
@@ -93,6 +94,7 @@ export const linkSchema = z
     }
   }, "Use an HTTP or HTTPS destination URL.");
 export const contentSchema = z.object({
+  copyTags: copyTagsSchema.optional(),
   campaignPlanId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().max(5000).default(""),

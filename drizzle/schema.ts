@@ -519,6 +519,7 @@ export const creativeVariants = appSchema.table("creative_variants", {
   imageUrl: text("imageUrl").notNull(),
   imageStorageKey: varchar("imageStorageKey", { length: 500 }),
   renderMetadata: json("renderMetadata").$type<{
+    copyTags?: import("../shared/copyTaxonomy").CopyTags;
     campaignPlanId?: number;
     productIds: number[];
     promotion?: import("../shared/creativeBuilder").CreativeSetup["promotion"];

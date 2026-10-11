@@ -1,3 +1,10 @@
+import { creativeCopy } from "../../shared/metaCreativeCopy";
+export { creativeCopy } from "../../shared/metaCreativeCopy";
+import {
+  classifyCopy,
+  copyTaxonomy,
+  type CopyDimension,
+} from "../../shared/copyTaxonomy";
 import type { ChannelConnection } from "../../drizzle/channelSchema";
 import {
   actionValue,
@@ -28,67 +35,6 @@ const purchaseActions = [
 ];
 const attribution =
   "Meta account attribution setting; conversion-date reporting. Platform-attributed purchases are not deduplicated business sales.";
-
-/** Extract only supplied creative text; never infer image text or dynamic variant results. */
-export function creativeCopy(creative: Record<string, any>) {
-  const story = creative.object_story_spec ?? {};
-  const link = story.link_data ?? {};
-  const video = story.video_data ?? {};
-  const feed = creative.asset_feed_spec ?? {};
-  const children = Array.isArray(link.child_attachments)
-    ? link.child_attachments
-    : [];
-  const texts = (values: unknown[]) =>
-    Array.from(
-      new Set(
-        values
-          .filter((v): v is string => typeof v === "string" && !!v.trim())
-          .map(v => v.trim())
-      )
-    );
-  const feedTexts = (v: unknown) =>
-    Array.isArray(v) ? v.map(i => i?.text) : [];
-  const copy = {
-    headline: texts([
-      creative.title,
-      link.name,
-      video.title,
-      ...feedTexts(feed.titles),
-      ...children.map((c: any) => c.name),
-    ]),
-    primary_text: texts([
-      creative.body,
-      link.message,
-      video.message,
-      story.photo_data?.message,
-      ...feedTexts(feed.bodies),
-    ]),
-    description: texts([
-      link.description,
-      video.link_description,
-      ...feedTexts(feed.descriptions),
-      ...children.map((c: any) => c.description),
-    ]),
-  };
-  const oversized = copyFields.some(
-    f => copy[f].length > 20 || copy[f].some(t => t.length > 4000)
-  );
-  const ambiguous =
-    children.length > 0 ||
-    copyFields.some(f => copy[f].length > 1) ||
-    oversized;
-  for (const field of copyFields)
-    copy[field] = copy[field].slice(0, 20).map(t => t.slice(0, 4000));
-  return {
-    copy,
-    ambiguous,
-    warning: oversized
-      ? "Creative text exceeded the inspection limit; excluded from style comparisons."
-      : ambiguous
-        ? "Multiple variants or carousel cards: ad-level results cannot identify the winning individual text."
-        : null,
-  };
-}
 
 /** Bounded, read-only, fresh queries. Does not enqueue or resume historical ingestion. */
 export async function liveMetaCopyReport(
@@ -192,7 +138,7 @@ export async function liveMetaCopyReport(
     ads.push(...batch);
   }
   const missingCreativeAds = ads.filter(
-    a => !copyFields.some(f => a.copy[f].length)
+    a => !copyFields.some(f => (a.copy[f] ?? []).length)
   ).length;
   const truncated = insights.truncated || rows.length > MAX_ADS;
   return copyEvidenceSchema.parse({
@@ -250,17 +196,38 @@ export function copyStyle(text: string) {
 export function compareLiveCopy(value: unknown, supplied: unknown = {}) {
   const source = copyEvidenceSchema.parse(value);
   const settings = copyComparisonSchema.parse(supplied);
-  const fields = copyFields.map(field => {
+  const taggedAds = source.ads.map(ad => ({
+    adId: ad.id,
+    tags: classifyCopy(ad.copy),
+  }));
+  const tagsByAd = new Map(taggedAds.map(ad => [ad.adId, ad.tags]));
+  const compare = (
+    field: (typeof copyFields)[number],
+    dimension: CopyDimension
+  ) => {
     const candidates = source.ads.filter(
-      a => !a.ambiguous && !a.warning && a.copy[field].length === 1
+      a => !a.ambiguous && !a.warning && (a.copy[field] ?? []).length === 1
     );
-    const buckets = new Map<string, typeof candidates>();
+    const buckets = new Map<
+      string,
+      { label: string; ads: typeof candidates }
+    >();
     for (const ad of candidates) {
-      const label = copyStyle(ad.copy[field][0]).label;
-      buckets.set(label, [...(buckets.get(label) ?? []), ad]);
+      const tag = tagsByAd
+        .get(ad.id)!
+        .fields[field][0].dimensions.find(d => d.dimension === dimension)!;
+      for (const label of tag.labels.length
+        ? tag.labels
+        : [{ value: "unknown", label: "Unclassified" }]) {
+        const bucket = buckets.get(label.value) ?? {
+          label: label.label,
+          ads: [],
+        };
+        bucket.ads.push(ad);
+        buckets.set(label.value, bucket);
+      }
     }
-    const groups = Array.from(buckets, ([label, ads]) => {
-      // Reuse metric aggregation, not the legacy classifier-confidence score or daily sample labels.
+    const groups = Array.from(buckets, ([value, { label, ads }]) => {
       const {
         confidence: _confidence,
         dates: _dates,
@@ -278,21 +245,19 @@ export function compareLiveCopy(value: unknown, supplied: unknown = {}) {
           attribution: source.attribution,
         }))
       );
-      return { label, ...metrics };
+      return { value, label, ...metrics };
     })
       .map(group => ({
         ...group,
         eligible:
-          group.label !== "Unclassified" &&
+          group.value !== "unknown" &&
           group.impressions !== null &&
           group.impressions >= settings.minimumImpressions &&
           group.purchases !== null &&
           group.purchases >= settings.minimumPurchases &&
           group.spend !== null &&
           group.spend > 0 &&
-          (settings.objective === "cpa"
-            ? group.cpa !== null
-            : group.roas !== null),
+          group[settings.objective] !== null,
       }))
       .sort(
         (a, b) =>
@@ -303,44 +268,71 @@ export function compareLiveCopy(value: unknown, supplied: unknown = {}) {
           a.label.localeCompare(b.label)
       );
     const eligible = groups.filter(g => g.eligible);
-    const metric = settings.objective;
-    const tied =
-      eligible.length >= 2 && eligible[0][metric] === eligible[1][metric];
+    const distinctMembership =
+      eligible.length >= 2 &&
+      eligible[0].sourceAdIds.slice().sort().join() !==
+        eligible[1].sourceAdIds.slice().sort().join();
     const observedLeader =
       !source.coverage.truncated &&
       !source.coverage.missingCreativeAds &&
-      eligible.length >= 2 &&
-      !tied
+      distinctMembership &&
+      eligible[0][settings.objective] !== eligible[1][settings.objective]
         ? eligible[0].label
         : null;
     return {
       field,
+      dimension,
       groups,
       observedLeader,
       comparedAds: candidates.length,
       excludedAds: source.ads.length - candidates.length,
-      classifications: candidates.map(ad => ({
-        adId: ad.id,
-        ...copyStyle(ad.copy[field][0]),
-      })),
+      taggedAds: candidates.filter(
+        a =>
+          tagsByAd
+            .get(a.id)!
+            .fields[field][0].dimensions.find(d => d.dimension === dimension)!
+            .labels.length
+      ).length,
+      classifications: candidates.map(ad => {
+        const tag = tagsByAd
+          .get(ad.id)!
+          .fields[field][0].dimensions.find(d => d.dimension === dimension)!;
+        return {
+          adId: ad.id,
+          label: tag.labels.map(l => l.label).join(" + ") || "Unclassified",
+          evidence: tag.labels.flatMap(l => l.evidence),
+        };
+      }),
     };
-  });
+  };
+  const comparisons = copyFields.flatMap(field =>
+    Array.from(new Set(settings.dimensions)).map(d => compare(field, d))
+  );
   return {
     source: "live_meta_copy_analysis",
-    schemaVersion: 1,
+    schemaVersion: 2,
     settings,
     evidence: source,
-    fields,
+    taggedAds,
+    comparisons,
+    // Preserve the legacy field projection for clients and exports that use it.
+    fields: copyFields.map(
+      field =>
+        comparisons.find(
+          c => c.field === field && c.dimension === "messaging_style"
+        ) ?? compare(field, "messaging_style")
+    ),
     confidence: null,
-    summary: fields.some(f => f.observedLeader)
-      ? "Observed style differences are available for review. They do not establish that the copy caused the results."
-      : "Insufficient comparable evidence to identify a style leader. Inspect source ads, missing fields, and coverage below.",
+    summary: comparisons.some(f => f.observedLeader)
+      ? "Observed copy differences are available across the selected dimensions. These associations do not establish what caused sales."
+      : "Copy is classified across the selected dimensions. There is not enough comparable evidence to identify a performance leader.",
     limitations: [
       "This is a descriptive comparison, not an A/B test. Creative, audience, placement, offer and budget differences can explain performance.",
-      "No statistically calibrated confidence percentage is available for this copy-style comparison. It is not reported as 0% or a fixed score.",
-      "Styles use existing explicit text rules (educational, direct, reassuring); unmatched text stays Unclassified. Rule matches are shown with each source ad and are not proof of a winning style.",
-      "Each ad contributes once within each field. Headline, primary-text and description tables overlap and must not be added together.",
-      "Multi-variant and carousel ads are shown as evidence but excluded from style ranking because individual text performance is not established.",
+      "No statistically calibrated confidence percentage is available for copy effects. It is not reported as 0% or a fixed score.",
+      "Automatic tags use explicit English text signals and measured word/character counts, not an AI semantic judgment. Unsupported interpretations remain Unclassified; review the matched text before drawing conclusions.",
+      "An ad can have multiple values within a dimension. Each value counts that ad once; value groups and copy-field tables overlap and must not be added together. These are ad-level results, not isolated headline or description effects.",
+      "All variants are tagged. Multi-variant and carousel ads are excluded from performance ranking because individual text performance is not established.",
+      "Subheadlines require authored EL image text with a matching published creative. External image text is not inferred from the Meta primary text.",
     ],
   };
 }

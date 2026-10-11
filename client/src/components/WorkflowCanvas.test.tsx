@@ -102,12 +102,14 @@ it("exposes copy-evidence wiring, source requirements and editable purchase comp
   fireEvent.change(screen.getByLabelText("Comparison objective"), {
     target: { value: "roas" },
   });
-  fireEvent.change(screen.getByLabelText("Minimum purchases per style"), {
+  fireEvent.change(screen.getByLabelText("Minimum purchases per value"), {
     target: { value: "8" },
   });
-  expect(
-    graph().nodes.find(n => n.id === "compare_copy")?.config.copyComparison
-  ).toMatchObject({ objective: "roas", minimumPurchases: 8 });
+  fireEvent.click(screen.getByLabelText("Emotional tone"));
+  const settings = graph().nodes.find(n => n.id === "compare_copy")?.config
+    .copyComparison;
+  expect(settings).toMatchObject({ objective: "roas", minimumPurchases: 8 });
+  expect(settings?.dimensions).not.toContain("emotional_tone");
 });
 it("connects typed ports, rejects incompatible connections, and supports undo", () => {
   render(

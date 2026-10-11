@@ -1,3 +1,4 @@
+import { publicationCopyTags } from "../../shared/copyTaxonomy";
 import sharp from "sharp";
 import { marketingJson } from "../lib/marketingDrafts";
 import { assetCopyRequestSchema } from "../../shared/adCopy";
@@ -965,12 +966,23 @@ export const publishingRouter = router({
               message: "Choose a connected destination.",
             });
         }
-        if (input.assetKey) {
+        const subheadlines: string[] = [];
+        const copyAssetKeys = Array.from(
+          new Set(
+            [
+              input.assetKey,
+              ...Object.values(input.content.placementAssetKeys ?? {}),
+              ...(input.content.carouselAssetKeys ?? []),
+            ].filter((key): key is string => !!key)
+          )
+        );
+        for (const copyAssetKey of copyAssetKeys) {
           const asset = await readLibraryAsset(
             tx,
             input.organizationId,
-            input.assetKey
+            copyAssetKey
           );
+          if (asset.subheadline) subheadlines.push(asset.subheadline);
           if (asset.state !== "approved" || asset.purpose !== "finished")
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
@@ -983,7 +995,10 @@ export const publishingRouter = router({
           channel: input.channel,
           connectionId: input.connectionId,
           assetKey: input.assetKey,
-          content: normalizedContent.data,
+          content: {
+            ...normalizedContent.data,
+            copyTags: publicationCopyTags(normalizedContent.data, subheadlines),
+          },
           scheduledAtMs: input.scheduledAtMs,
           timezone: input.timezone,
           state: "draft" as const,

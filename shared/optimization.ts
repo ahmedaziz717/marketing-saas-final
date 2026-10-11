@@ -1,11 +1,16 @@
+import { copyDimensions, copyTaxonomy } from "./copyTaxonomy";
 import { z } from "zod";
 import { CREATIVE_THEME_LIST } from "./creativeThemes";
 import { CREATIVE_ART_STYLES } from "./creativeBuilder";
 
-export const TAXONOMY_VERSION = 1;
+export const TAXONOMY_VERSION = 2;
 export const dimensionNames = [
   "messaging_style",
   "emotional_appeal",
+  "emotional_tone",
+  "benefit_feature",
+  "specificity",
+  "copy_length",
   "urgency",
   "messaging_angle",
   "persona",
@@ -58,7 +63,12 @@ export const dimensionOptions: Partial<
 > = {
   theme: CREATIVE_THEME_LIST,
   art_style: CREATIVE_ART_STYLES,
-  messaging_style: messagingStyles.map(id => ({ id, name: id })),
+  ...Object.fromEntries(
+    copyDimensions.map(d => [
+      d,
+      copyTaxonomy[d].values.map(v => ({ id: v.id, name: v.label })),
+    ])
+  ),
   scene: [
     "product_only",
     "lifestyle_without_person",

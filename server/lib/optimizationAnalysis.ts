@@ -1,3 +1,6 @@
+import { classifyCopyText } from "../../shared/copyTaxonomy";
+import { creativeCopy } from "../../shared/metaCreativeCopy";
+import { saveCopySnapshots } from "./copyClassificationStore";
 import { publications } from "../../drizzle/channelSchema";
 import {
   brandAssets,
@@ -94,44 +97,26 @@ export function classifyImported(
       `targeting:${stableHash(adset.targeting).slice(0, 12)}`,
       JSON.stringify(adset.targeting).slice(0, 1800)
     );
-  const copy = [
-    creative.title,
-    creative.body,
-    creative.object_story_spec?.link_data?.message,
-    ...(creative.asset_feed_spec?.bodies ?? []).map((b: any) => b.text),
-  ]
-    .filter(Boolean)
-    .join("\n");
-  const rules: [Dimension, string, RegExp][] = [
-    [
-      "urgency",
-      "time_limited",
-      /\b(today only|ends? tonight|limited time|last chance)\b/i,
-    ],
-    [
+  const copy = Object.values(creativeCopy(creative).copy).flat().join("\n");
+  for (const tag of classifyCopyText(copy).dimensions) {
+    const assertion = assertions.get(tag.dimension)!;
+    assertion.unknownReason = tag.unknownReason;
+    assertion.labels = tag.labels.map(label => ({
+      id: label.value,
+      label: label.label,
+      confidence: 0.65,
+      evidence: label.evidence.length
+        ? `Text signals: ${label.evidence.join("; ")}. Review interpretation.`
+        : "No explicit signal detected by the current text rules.",
+    }));
+  }
+  if (/\b(financing|monthly payments|pay over time|APR)\b/i.test(copy))
+    add(
       "financing",
       "financing_mentioned",
-      /\b(financing|monthly payments|pay over time|APR)\b/i,
-    ],
-    ["offer", "discount_mentioned", /\b(\d+% off|save \$\d+|discount|sale)\b/i],
-    [
-      "messaging_style",
-      "educational",
-      /\b(learn how|step.by.step|guide to)\b/i,
-    ],
-    ["messaging_style", "direct", /\b(shop now|buy now|sign up)\b/i],
-    [
-      "messaging_style",
-      "reassuring",
-      /\b(warranty|guarantee|peace of mind)\b/i,
-    ],
-    ["messaging_angle", "performance", /\b(performance|FPS|speed)\b/i],
-  ];
-  for (const [d, v, re] of rules) {
-    const m = copy.match(re);
-    if (m)
-      add(d, v, `Text rule matched “${m[0]}”; review interpretation.`, 0.65);
-  }
+      "Explicit financing language.",
+      0.65
+    );
   return Array.from(assertions.values());
 }
 export async function saveClassification(
@@ -755,6 +740,30 @@ export async function classifyHistoryBatch(
     }
   }
   await saveImportedBatch(db, organizationId, connectionId, pending);
+  await saveCopySnapshots(
+    db,
+    organizationId,
+    connectionId,
+    page.map(ad => ({
+      id: ad.remoteId,
+      observedAtMs: Math.max(
+        ad.updatedAtMs,
+        related.find(
+          r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
+        )?.updatedAtMs ?? 0
+      ),
+      name: String(ad.data.name ?? "Untitled ad"),
+      copy: creativeCopy(
+        related.find(
+          r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
+        )?.data ??
+          ad.data.creative ??
+          {}
+      ).copy,
+    })),
+    "imported_meta",
+    Date.now()
+  );
   return {
     processed: page.length,
     next: ads.length > batchSize ? page.at(-1)!.remoteId : null,

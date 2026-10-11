@@ -1,3 +1,4 @@
+import { copyDimensions } from "./copyTaxonomy";
 import {
   newWorkflowNode,
   workflowSignature,
@@ -167,6 +168,7 @@ export function copyEvidenceWorkflowTemplate(): WorkflowGraph {
     80
   );
   comparison.config.copyComparison = {
+    dimensions: [...copyDimensions],
     objective: "cpa",
     minimumImpressions: 1000,
     minimumPurchases: 5,

@@ -1,3 +1,4 @@
+import { classifyCopy } from "../../shared/copyTaxonomy";
 import { prepareImageRequest } from "../lib/imageRequest";
 import {
   imageBatchQuote,
@@ -357,6 +358,7 @@ export async function runBuilderJob(
                   })
                 : undefined,
             copy: setup.copy,
+            copyTags: classifyCopy({ headline: [setup.copy.headline], subheadline: [setup.copy.subheadline] }),
             mood: setup.mood,
             artStyle: setup.artStyle,
             shot: setup.shot,
