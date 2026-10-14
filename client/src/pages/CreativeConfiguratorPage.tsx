@@ -30,6 +30,10 @@ import { AssetUploadDialog } from "@/components/AssetUploadDialog";
 import { ActionCredits } from "@/components/ActionCredits";
 import { ChoiceArt } from "@/components/configurator/ChoiceArt";
 import {
+  ConfigurationComparison,
+  ModelComparison,
+} from "@/components/configurator/Comparisons";
+import {
   Dialog,
   DialogContent,
   DialogTitle,
@@ -73,6 +77,8 @@ import {
   imageReferenceCount,
   modelCompatibility,
   videoWithModel,
+  readConfigurationSnapshot,
+  type ConfigurationSnapshot,
   type ConfiguratorState,
 } from "@shared/creativeConfigurator";
 import "@/styles/configurator.css";
@@ -155,6 +161,19 @@ function Configurator() {
     id: string;
     revision: number;
   } | null>(null);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState<"models" | "builds" | null>(
+    null
+  );
+  const [baseline, setBaseline] = useState<ConfigurationSnapshot | null>(() => {
+    try {
+      return readConfigurationSnapshot(
+        localStorage.getItem(storageKey + ":comparison")
+      );
+    } catch {
+      return null;
+    }
+  });
   const configRef = useRef(config);
   configRef.current = config;
   const canCreate = ["owner", "admin", "creator"].includes(
@@ -211,6 +230,9 @@ function Configurator() {
         : "people"
     : (video.direction?.setting ?? "product");
   const currentSection = configuratorSections.find(s => s.id === section)!;
+  const categories = currentSection.categories.filter(
+    c => !isImage || !["audio", "subtitles"].includes(c.id)
+  );
   const products = options.data?.products ?? [];
   const selectedProduct = products.find(
     p => p.id === image.products[0]?.productId
@@ -297,6 +319,60 @@ function Configurator() {
       ? quote.data?.credits
       : undefined;
   const ready = credits !== undefined && !busy;
+  const comparisonModels = (models.data ?? []).filter(
+    m =>
+      m.kind === config.kind &&
+      m.enabled !== false &&
+      compareIds.includes(m.id) &&
+      generationModel(m.routeId)
+  );
+  function keepComparison(value: ConfigurationSnapshot) {
+    setBaseline(value);
+    try {
+      localStorage.setItem(storageKey + ":comparison", JSON.stringify(value));
+    } catch {
+      toast.info(
+        "Comparison kept for this session. Browser storage is unavailable."
+      );
+    }
+  }
+  function duplicateForComparison() {
+    keepComparison({
+      config: structuredClone(config),
+      credits: credits ?? null,
+      capturedAt: Date.now(),
+    });
+    if (isImage) {
+      setSavedImage(null);
+      updateImage({ name: image.name.slice(0, 145) + " · Alternative" });
+    } else {
+      setSavedVideo(null);
+      updateVideo({ title: video.title.slice(0, 145) + " · Alternative" });
+    }
+    toast.success(
+      "Original kept for comparison. Customize this alternative, then choose Compare builds."
+    );
+  }
+  function swapBuilds() {
+    if (!baseline) return;
+    const restored = baseline.config;
+    keepComparison({
+      config: structuredClone(config),
+      credits: credits ?? null,
+      capturedAt: Date.now(),
+    });
+    setSavedImage(null);
+    setSavedVideo(null);
+    update(structuredClone(restored));
+    go("output", "review");
+  }
+  function toggleCompare(id: string) {
+    const currentIds = comparisonModels.map(m => m.id);
+    if (currentIds.includes(id))
+      setCompareIds(currentIds.filter(i => i !== id));
+    else if (currentIds.length < 3) setCompareIds([...currentIds, id]);
+    else toast.info("Compare up to three models. Remove one to add another.");
+  }
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(config));
@@ -559,13 +635,26 @@ function Configurator() {
                 </div>
               </button>
               {c.reason && <p className="cfg-disabled-reason">{c.reason}</p>}
-              <button
-                className="cfg-info"
-                onClick={() => setInfo(c)}
-                aria-label={"More about " + c.title}
-              >
-                <CircleHelp size={15} /> Details
-              </button>
+              <div className="cfg-card-tools">
+                <button
+                  className="cfg-info"
+                  onClick={() => setInfo(c)}
+                  aria-label={"More about " + c.title}
+                >
+                  <CircleHelp size={15} /> Details
+                </button>
+                {category === "model" && (
+                  <label className="cfg-compare-check">
+                    <input
+                      type="checkbox"
+                      checked={comparisonModels.some(m => m.id === c.id)}
+                      onChange={() => toggleCompare(c.id)}
+                      aria-label={"Compare " + c.title}
+                    />{" "}
+                    Compare
+                  </label>
+                )}
+              </div>
             </article>
           ))}
         </div>
@@ -613,6 +702,73 @@ function Configurator() {
     },
   ];
   function content() {
+    if (category === "audio") {
+      const controls = Object.entries(
+        model?.inputSchema.properties ?? {}
+      ).filter(([k, p]) => /audio|sound/.test(k) && p.type === "boolean");
+      return (
+        <div className="cfg-form">
+          <h3>Give your video a sound</h3>
+          <p>
+            Audio controls follow your selected model. Changes are included in
+            the generation quote.
+          </p>
+          {controls.length ? (
+            controls.map(([key, property]) => (
+              <Field
+                key={key}
+                title={property.title || key.replaceAll("_", " ")}
+                help={property.description}
+              >
+                <select
+                  value={String(
+                    (video.modelOptions?.[key] ?? property.default ?? false) ===
+                      true
+                  )}
+                  onChange={e =>
+                    modelSettingsChanged({
+                      ...video.modelOptions,
+                      [key]: e.target.value === "true",
+                    })
+                  }
+                >
+                  <option value="false">Off</option>
+                  <option value="true">On</option>
+                </select>
+              </Field>
+            ))
+          ) : (
+            <div className="cfg-note">
+              This model does not expose audio controls.{" "}
+              <button onClick={() => go("model")}>Explore other models</button>
+            </div>
+          )}
+          <div className="cfg-note">
+            <strong>Voice, music & sound effects</strong>
+            <p>
+              Separate voice selection, music tracks and audio mixing are not
+              available in this prototype. For models with generated audio,
+              describe the desired sound in your prompt; exact delivery depends
+              on the model.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    if (category === "subtitles")
+      return (
+        <div className="cfg-empty">
+          <h3>Subtitles & finishing</h3>
+          <p>
+            Subtitle transcription, timing and style selection are not available
+            in this prototype yet. No subtitle service is added to your build or
+            credit total.
+          </p>
+          <p>
+            Generated on-screen text is not a substitute for timed subtitles.
+          </p>
+        </div>
+      );
     if (category === "type")
       return cards(
         [
@@ -1278,6 +1434,26 @@ function Configurator() {
             configuration is quoted before generation. Model illustrations are
             not sample outputs.
           </p>
+          <div className="cfg-compare-bar">
+            <span>
+              <strong>{comparisonModels.length} / 3</strong> models to compare{" "}
+              <small>Check Compare on any model card.</small>
+            </span>
+            <div className="cfg-actions">
+              <button
+                disabled={!comparisonModels.length}
+                onClick={() => setCompareIds([])}
+              >
+                Clear
+              </button>
+              <button
+                disabled={comparisonModels.length < 2}
+                onClick={() => setCompareOpen("models")}
+              >
+                Compare models
+              </button>
+            </div>
+          </div>
           {models.isLoading && <p>Loading model catalog…</p>}
           {models.error && (
             <button onClick={() => models.refetch()}>
@@ -1532,6 +1708,14 @@ function Configurator() {
           </p>
         </div>
         <div className="cfg-actions">
+          <button disabled={busy} onClick={duplicateForComparison}>
+            {baseline ? "Replace saved comparison" : "Duplicate & compare"}
+          </button>
+          {baseline && (
+            <button disabled={busy} onClick={() => setCompareOpen("builds")}>
+              Compare builds
+            </button>
+          )}
           <button onClick={() => setDraftsOpen(true)}>Saved drafts</button>
           <button disabled={busy} onClick={saveDraft}>
             <Save size={15} /> Save draft
@@ -1640,7 +1824,7 @@ function Configurator() {
             role="group"
             aria-label="Section categories"
           >
-            {currentSection.categories.map(c => (
+            {categories.map(c => (
               <button
                 key={c.id}
                 aria-pressed={category === c.id}
@@ -1758,6 +1942,31 @@ function Configurator() {
             {info.reason && <p className="cfg-problems">{info.reason}</p>}
           </DialogContent>
         </Dialog>
+      )}
+      {compareOpen === "models" && comparisonModels.length >= 2 && (
+        <ModelComparison
+          choices={comparisonModels}
+          references={referenceCount}
+          hasVideo={!isImage && !!video.sourceVideoKey}
+          selectedId={setup.modelId}
+          onChoose={id => chooseModel(models.data!.find(m => m.id === id)!)}
+          onClose={() => setCompareOpen(null)}
+        />
+      )}
+      {compareOpen === "builds" && baseline && (
+        <ConfigurationComparison
+          baseline={baseline}
+          current={config}
+          credits={credits}
+          context={{
+            products,
+            assets: assets.data ?? [],
+            logos: options.data?.logos ?? [],
+            models: models.data ?? [],
+          }}
+          onSwap={swapBuilds}
+          onClose={() => setCompareOpen(null)}
+        />
       )}
       <Dialog open={confirm} onOpenChange={open => !busy && setConfirm(open)}>
         <DialogContent className="cfg-modal">

@@ -158,11 +158,13 @@ export const configuratorSections = [
   },
   {
     id: "message",
-    title: "Message & Motion",
+    title: "Story & Sound",
     subtitle: "Tell your story",
     categories: [
       { id: "message", title: "Copy & prompt" },
       { id: "direction", title: "Creative direction" },
+      { id: "audio", title: "Audio" },
+      { id: "subtitles", title: "Subtitles" },
     ],
   },
   {
@@ -184,3 +186,30 @@ export const configuratorSections = [
     ],
   },
 ] as const;
+
+export type ConfigurationSnapshot = {
+  config: ConfiguratorState;
+  credits: number | null;
+  capturedAt: number;
+};
+export function readConfigurationSnapshot(
+  raw: string | null
+): ConfigurationSnapshot | null {
+  try {
+    const value = JSON.parse(raw ?? "null");
+    const config = readConfiguration(JSON.stringify(value?.config));
+    if (
+      !config ||
+      !Number.isFinite(value.capturedAt) ||
+      value.capturedAt < 0 ||
+      !(
+        value.credits === null ||
+        (Number.isFinite(value.credits) && value.credits >= 0)
+      )
+    )
+      return null;
+    return { config, credits: value.credits, capturedAt: value.capturedAt };
+  } catch {
+    return null;
+  }
+}
