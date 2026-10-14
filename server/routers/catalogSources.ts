@@ -12,6 +12,7 @@ import { encryptToken, catalogEncryptionKey } from "../lib/secureToken";
 import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
 import { appendActivity } from "../lib/activity";
+import { previewStudioProductPage } from "../lib/studioProductPage";
 const org = z.object({ organizationId: z.number().int().positive() });
 const idInput = org.extend({ sourceId: z.number().int().positive() });
 async function owner(userId: number, organizationId: number) {
@@ -21,6 +22,26 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  previewProductPage: protectedProcedure
+    .input(org.extend({ website: z.string().trim().min(3).max(2048) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+      ]);
+      try {
+        return await previewStudioProductPage(input.website);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read this product page.",
+        });
+      }
+    }),
   discoverOfferings: protectedProcedure
     .input(org.extend({ website: z.string().url() }))
     .mutation(async ({ ctx, input }) => {

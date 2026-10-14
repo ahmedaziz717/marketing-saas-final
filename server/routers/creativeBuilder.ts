@@ -5,7 +5,10 @@ import {
   imageModelQuote,
   resolveModel,
 } from "../lib/modelCatalog";
-import { creativeImageOutputs } from "../../shared/creativeBuilder";
+import {
+  isReferenceCreative,
+  creativeImageOutputs,
+} from "../../shared/creativeBuilder";
 import { referenceCapacity, generationModel } from "../../shared/modelCatalog";
 import type { ProviderRate } from "../../shared/platformAdmin";
 import {
@@ -13,6 +16,8 @@ import {
   selectedPeople,
   personReferenceKey,
 } from "../../shared/creativeBuilder";
+import { readLibraryAsset } from "../lib/assetLibrary";
+import { parseAssetKey } from "../../shared/assetLibrary";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { storagePut } from "../storage";
@@ -212,8 +217,50 @@ export async function loadInputs(
       code: "PRECONDITION_FAILED",
       message: "Choose approved campaign references from this workspace.",
     });
+  const sourceReferences = await Promise.all(
+    (setup.sourceAssetKeys ?? []).map(async key => {
+      const asset = await readLibraryAsset(db, organizationId, key);
+      if (
+        asset.state !== "approved" ||
+        asset.mediaType !== "image" ||
+        asset.mimeType === "image/gif"
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Choose approved JPG, PNG or WebP source images from this workspace.",
+        });
+      const parsed = parseAssetKey(key);
+      const [row] =
+        parsed.kind === "asset"
+          ? await db
+              .select({ storageKey: brandAssets.storageKey })
+              .from(brandAssets)
+              .where(
+                and(
+                  eq(brandAssets.id, parsed.id),
+                  eq(brandAssets.organizationId, organizationId)
+                )
+              )
+          : await db
+              .select({ storageKey: creativeVariants.imageStorageKey })
+              .from(creativeVariants)
+              .where(
+                and(
+                  eq(creativeVariants.id, parsed.id),
+                  eq(creativeVariants.organizationId, organizationId)
+                )
+              );
+      if (!row?.storageKey)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This image needs to be saved to your workspace first.",
+        });
+      return { id: parsed.id, key, storageKey: row.storageKey, url: asset.url };
+    })
+  );
   return {
-    references,
+    references: [...sourceReferences, ...references],
     personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
@@ -258,7 +305,7 @@ export async function runBuilderJob(
       })
     );
     const groups =
-      setup.promotionMode === "platform"
+      setup.promotionMode === "platform" || isReferenceCreative(setup)
         ? [[]]
         : setup.productMode === "together"
           ? [resolved.products]
@@ -358,7 +405,10 @@ export async function runBuilderJob(
                   })
                 : undefined,
             copy: setup.copy,
-            copyTags: classifyCopy({ headline: [setup.copy.headline], subheadline: [setup.copy.subheadline] }),
+            copyTags: classifyCopy({
+              headline: [setup.copy.headline],
+              subheadline: [setup.copy.subheadline],
+            }),
             mood: setup.mood,
             artStyle: setup.artStyle,
             shot: setup.shot,
@@ -484,7 +534,7 @@ export async function builderImageQuote(
     }
   }
   const groups =
-    setup.promotionMode === "platform"
+    setup.promotionMode === "platform" || isReferenceCreative(setup)
       ? [[]]
       : setup.productMode === "together"
         ? [resolved.products]
@@ -532,6 +582,51 @@ export async function builderImageQuote(
 }
 
 export const creativeBuilderRouter = router({
+  studioHistory: protectedProcedure
+    .input(
+      organizationInput.extend({
+        briefId: z.number().int().positive().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editorRoles,
+      ]);
+      const db = (await getDb())!;
+      const rows = await db
+        .select({
+          id: creativeVariants.id,
+          title: creativeVariants.name,
+          url: creativeVariants.imageUrl,
+          createdAtMs: creativeVariants.createdAtMs,
+          status: creativeVariants.status,
+          snapshot: creativeJobs.briefSnapshot,
+        })
+        .from(creativeVariants)
+        .innerJoin(
+          creativeJobs,
+          and(
+            eq(creativeJobs.id, creativeVariants.jobId),
+            eq(creativeJobs.organizationId, input.organizationId)
+          )
+        )
+        .where(
+          and(
+            eq(creativeVariants.organizationId, input.organizationId),
+            isNotNull(creativeVariants.imageUrl),
+            input.briefId
+              ? eq(creativeVariants.briefId, input.briefId)
+              : undefined
+          )
+        )
+        .orderBy(desc(creativeVariants.createdAtMs), desc(creativeVariants.id))
+        .limit(24);
+      return rows.map(({ snapshot, ...item }) => {
+        // Only return the validated generation-time settings, never private job metadata.
+        const parsed = creativeSetupSchema.safeParse(snapshot?.setup);
+        return { ...item, setup: parsed.success ? parsed.data : null };
+      });
+    }),
   quote: protectedProcedure
     .input(organizationInput.extend({ setup: creativeSetupSchema }))
     .query(async ({ ctx, input }) => {
