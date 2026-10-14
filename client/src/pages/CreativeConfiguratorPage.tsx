@@ -24,10 +24,11 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { ModelSettings } from "@/components/ModelPicker";
-import { LifestylePersonPicker } from "@/components/LifestylePersonPicker";
-import { VideoReferencePicker } from "@/components/VideoReferencePicker";
-import { AssetUploadDialog } from "@/components/AssetUploadDialog";
+import { StudioPeople } from "@/components/configurator/StudioPeople";
+import { StudioSources } from "@/components/configurator/StudioSources";
+import { StudioPreview } from "@/components/configurator/StudioPreview";
 import { ActionCredits } from "@/components/ActionCredits";
+import { studioModelArtwork } from "@/components/configurator/studioArtwork";
 import { ChoiceArt } from "@/components/configurator/ChoiceArt";
 import {
   ConfigurationComparison,
@@ -48,6 +49,8 @@ import {
   creativeSetupSchema,
   generationSetupIssues,
   outputCount,
+  creativeImageOutputs,
+  formatDetails,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
 import {
@@ -148,8 +151,6 @@ function Configurator() {
   const [info, setInfo] = useState<Choice | null>(null),
     [confirm, setConfirm] = useState(false),
     [draftsOpen, setDraftsOpen] = useState(false);
-  const [picker, setPicker] = useState<"images" | "video" | null>(null),
-    [upload, setUpload] = useState(false);
   const [storageOk, setStorageOk] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -182,7 +183,7 @@ function Configurator() {
   const options = trpc.creativeBuilder.options.useQuery(scope, {
     enabled: !!organizationId && canCreate,
   });
-  const models = trpc.models.catalog.useQuery(scope, {
+  const models = trpc.models.studioCatalog.useQuery(scope, {
     enabled: !!organizationId && canCreate,
     staleTime: 60000,
   });
@@ -237,10 +238,21 @@ function Configurator() {
   const selectedProduct = products.find(
     p => p.id === image.products[0]?.productId
   );
-  const videoReference = assets.data?.find(a => a.key === video.imageKeys[0]);
+  const selectedCatalog = trpc.video.catalogImages.useQuery(
+    {
+      ...scope,
+      selectedOnly: true,
+      selectedKeys: video.imageKeys.filter(k => k.startsWith("product_image:")),
+    },
+    { enabled: canCreate && !isImage }
+  );
+  const videoReference =
+    assets.data?.find(a => a.key === video.imageKeys[0]) ??
+    selectedCatalog.data?.items.find(a => a.key === video.imageKeys[0]);
   const preview = isImage
     ? (selectedProduct?.images.find(i => i.id === image.products[0]?.imageId)
         ?.url ??
+      assets.data?.find(a => a.key === image.sourceAssetKeys?.[0])?.url ??
       options.data?.references.find(a => a.id === image.referenceAssetIds?.[0])
         ?.url)
     : videoReference?.url;
@@ -314,6 +326,40 @@ function Configurator() {
     }
   );
   const quote = isImage ? imageQuote : videoQuote;
+  const imageOutputs = creativeImageOutputs(quotedConfig.image);
+  const planningOutputs = imageOutputs.length
+    ? imageOutputs
+    : quotedConfig.image.formatIds
+        .map(formatDetails)
+        .filter(Boolean)
+        .map(f => ({ width: f!.width, height: f!.height }));
+  const planning = trpc.models.studioEstimate.useQuery(
+    {
+      ...scope,
+      kind: config.kind,
+      modelId:
+        (isImage ? quotedConfig.image.modelId : quotedConfig.video.modelId) ??
+        "",
+      options:
+        (isImage
+          ? quotedConfig.image.modelOptions
+          : quotedConfig.video.modelOptions) ?? {},
+      outputs:
+        isImage && planningOutputs.length
+          ? planningOutputs
+          : [{ width: 1080, height: 1080 }],
+      sourceSeconds: !isImage
+        ? assets.data?.find(a => a.key === video.sourceVideoKey)
+            ?.durationSeconds
+        : undefined,
+    },
+    {
+      enabled: canCreate && !!selectedModel?.available && sameQuote,
+      retry: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
   const baselineImageQuote = trpc.creativeBuilder.quote.useQuery(
     { ...scope, setup: baseline?.config.image ?? image },
     {
@@ -343,14 +389,21 @@ function Configurator() {
       ? quote.data?.credits
       : undefined;
   const ready = credits !== undefined && !busy;
+  const estimateCredits =
+    credits ?? planning.data?.credits ?? selectedModel?.estimatedCredits;
   const quoteLabel =
+    estimateCredits != null
+      ? `${credits === undefined ? "≈ " : ""}${estimateCredits.toLocaleString()} credits`
+      : planning.error
+        ? "Credits unavailable"
+        : "Calculating credits…";
+  const creditDetail =
     credits !== undefined
-      ? credits.toLocaleString() + " credits"
-      : issues.length
-        ? "Complete setup for quote"
-        : quote.error
-          ? "Quote unavailable"
-          : "Updating quote…";
+      ? "Total for this creative"
+      : !sameQuote || planning.isFetching
+        ? "Updating with your choices…"
+        : (planning.data?.assumptions ??
+          "Select a model to see its credit estimate");
   const comparisonModels = (models.data ?? []).filter(
     m =>
       m.kind === config.kind &&
@@ -645,7 +698,12 @@ function Configurator() {
                 aria-label={"Select " + c.title}
                 onClick={() => onSelect(c.id)}
               >
-                <div className="cfg-card-art">
+                <div
+                  className={
+                    "cfg-card-art" +
+                    (category === "brand" ? " cfg-contain" : "")
+                  }
+                >
                   {c.image ? (
                     <img src={c.image} alt={c.title} loading="lazy" />
                   ) : (
@@ -743,7 +801,7 @@ function Configurator() {
           <h3>Give your video a sound</h3>
           <p>
             Audio controls follow your selected model. Changes are included in
-            the generation quote.
+            the credit total.
           </p>
           {controls.length ? (
             controls.map(([key, property]) => (
@@ -831,275 +889,28 @@ function Configurator() {
           update({ ...config, kind: id as "image" | "video" });
         }
       );
-    if (category === "source") {
-      if (!isImage)
-        return (
-          <div className="cfg-form">
-            <h3>Your starting material</h3>
-            <p>
-              Choose product photos or library assets. Models that edit, extend
-              or transfer motion also need a source video.
-            </p>
-            <div className="cfg-actions">
-              <button onClick={() => setPicker("images")}>
-                Choose reference images{" "}
-                <span>{video.imageKeys.length} selected</span>
-              </button>
-              <button onClick={() => setPicker("video")}>
-                Choose source video
-              </button>
-            </div>
-            <div className="cfg-reference-list">
-              {video.imageKeys.map((key, i) => {
-                const a = assets.data?.find(a => a.key === key);
-                return (
-                  <div key={key}>
-                    {a?.url && <img src={a.url} alt="" />}
-                    <span>{a?.name ?? "Catalog reference " + (i + 1)}</span>
-                    <button
-                      aria-label={"Remove reference " + (i + 1)}
-                      onClick={() =>
-                        updateVideo({
-                          imageKeys: video.imageKeys.filter(k => k !== key),
-                        })
-                      }
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {video.sourceVideoKey && (
-              <div className="cfg-note">
-                Source clip:{" "}
-                {assets.data?.find(a => a.key === video.sourceVideoKey)?.name ??
-                  "Selected video"}{" "}
-                <button onClick={() => updateVideo({ sourceVideoKey: null })}>
-                  Remove
-                </button>
-              </div>
-            )}
-            <p className="cfg-help">
-              References are never removed automatically when you change a
-              model. Incompatible models explain their limits.
-            </p>
-          </div>
-        );
+    if (category === "source")
       return (
-        <>
-          {tabs([
-            { id: "all", name: "Catalog" },
-            { id: "business", name: "Business / service" },
-            { id: "references", name: "Brand references" },
-          ])}
-          {tab === "business" ? (
-            <div className="cfg-form">
-              <div className="cfg-note">
-                For directories, services, subscriptions and ideas. A catalog
-                product is not required.
-              </div>
-              <button
-                className="cfg-primary"
-                onClick={() =>
-                  updateImage({
-                    promotionMode: "platform",
-                    products: [],
-                    promotion: image.promotion ?? {
-                      kind: "platform",
-                      title: "",
-                      description: "",
-                    },
-                  })
-                }
-              >
-                {image.promotionMode === "platform"
-                  ? "Business promotion selected"
-                  : "Use a business promotion"}
-              </button>
-              {image.promotionMode === "platform" && (
-                <>
-                  <Field title="Promotion type">
-                    <select
-                      value={image.promotion?.kind ?? "platform"}
-                      onChange={e =>
-                        updateImage({
-                          promotion: {
-                            title: "",
-                            description: "",
-                            ...image.promotion,
-                            kind: e.target.value as NonNullable<
-                              CreativeSetup["promotion"]
-                            >["kind"],
-                          },
-                        })
-                      }
-                    >
-                      {PROMOTION_TYPES.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field title="Offering name">
-                    <input
-                      value={image.promotion?.title ?? ""}
-                      onChange={e =>
-                        updateImage({
-                          promotion: {
-                            kind: "platform",
-                            description: "",
-                            ...image.promotion,
-                            title: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field
-                    title="What should we promote?"
-                    help="Describe real benefits, audience and verified claims."
-                  >
-                    <textarea
-                      value={image.promotion?.description ?? ""}
-                      onChange={e =>
-                        updateImage({
-                          promotion: {
-                            kind: "platform",
-                            title: "",
-                            ...image.promotion,
-                            description: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                </>
-              )}
-            </div>
-          ) : tab === "references" ? (
-            <>
-              <p className="cfg-help">
-                Up to three approved Brand references. Manage uploads and
-                approval in <Link href="/app/brand">Brand</Link>.
-              </p>
-              {cards(
-                (options.data?.references ?? []).map(r => ({
-                  id: String(r.id),
-                  title: r.name,
-                  description: "Approved brand reference",
-                  image: r.url,
-                  reason:
-                    (image.referenceAssetIds?.length ?? 0) >= 3 &&
-                    !image.referenceAssetIds?.includes(r.id)
-                      ? "Remove a reference before adding another."
-                      : undefined,
-                })),
-                (image.referenceAssetIds ?? []).map(String),
-                id =>
-                  updateImage({
-                    referenceAssetIds: image.referenceAssetIds?.includes(
-                      Number(id)
-                    )
-                      ? image.referenceAssetIds.filter(i => i !== Number(id))
-                      : [...(image.referenceAssetIds ?? []), Number(id)],
-                  }),
-                true
-              )}
-            </>
-          ) : (
-            <>
-              <Field title="Product arrangement">
-                <select
-                  value={image.productMode}
-                  onChange={e => {
-                    if (
-                      e.target.value === "together" &&
-                      image.products.length > 3
-                    )
-                      return toast.error(
-                        "Remove products until three remain before combining them."
-                      );
-                    updateImage({
-                      productMode: e.target.value as "together" | "separate",
-                    });
-                  }}
-                >
-                  <option value="separate">
-                    Separate image set for each product
-                  </option>
-                  <option value="together">Combine up to three products</option>
-                </select>
-              </Field>
-              {cards(
-                products.map(p => ({
-                  id: String(p.id),
-                  title: p.name,
-                  description:
-                    p.recordType === "service"
-                      ? "Service · no product photograph required"
-                      : p.sku || "Approved catalog product",
-                  image: p.images[0]?.url,
-                  reason:
-                    !p.images.length && p.recordType !== "service"
-                      ? "Add a product image in Catalog first."
-                      : image.products.length >=
-                            (image.productMode === "together" ? 3 : 12) &&
-                          !image.products.some(i => i.productId === p.id)
-                        ? "Selection limit reached. Remove a product to choose another."
-                        : undefined,
-                })),
-                image.products.map(p => String(p.productId)),
-                id => {
-                  const p = products.find(p => p.id === Number(id))!;
-                  updateImage({
-                    promotionMode: "offerings",
-                    products: image.products.some(i => i.productId === p.id)
-                      ? image.products.filter(i => i.productId !== p.id)
-                      : [
-                          ...image.products,
-                          {
-                            productId: p.id,
-                            imageId: p.images[0]?.id ?? null,
-                            featuredSpecKeys: [],
-                            includePrice: false,
-                          },
-                        ],
-                  });
-                },
-                true
-              )}
-              {image.products.map(selection => {
-                const p = products.find(p => p.id === selection.productId);
-                return p && p.images.length > 1 ? (
-                  <Field key={p.id} title={"Photo for " + p.name}>
-                    <select
-                      value={selection.imageId ?? ""}
-                      onChange={e =>
-                        updateImage({
-                          products: image.products.map(i =>
-                            i.productId === p.id
-                              ? { ...i, imageId: Number(e.target.value) }
-                              : i
-                          ),
-                        })
-                      }
-                    >
-                      {p.images.map((photo, i) => (
-                        <option value={photo.id} key={photo.id}>
-                          Product photo {i + 1}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : null;
-              })}
-            </>
-          )}
-        </>
+        <StudioSources
+          organizationId={organizationId!}
+          role={membership?.role ?? "creator"}
+          kind={config.kind}
+          image={image}
+          video={video}
+          products={products}
+          assets={assets.data ?? []}
+          search={search}
+          updateImage={updateImage}
+          updateVideo={updateVideo}
+          onUploaded={async () => {
+            await Promise.all([
+              utils.assetLibrary.studioList.invalidate(),
+              utils.creativeBuilder.options.invalidate(),
+              utils.video.catalogImages.invalidate(),
+            ]);
+          }}
+        />
       );
-    }
     if (category === "brand")
       return (
         <>
@@ -1140,6 +951,38 @@ function Configurator() {
               reference image or finish branding in an editor.
             </p>
           )}
+          {isImage && !!options.data?.references.length && (
+            <section className="cfg-brand-references">
+              <h3>Brand imagery</h3>
+              <p className="cfg-help">
+                Add up to three approved references for your brand's visual
+                direction.
+              </p>
+              {cards(
+                options.data.references.map(r => ({
+                  id: `reference:${r.id}`,
+                  title: r.name,
+                  description: "Approved brand reference",
+                  image: r.url,
+                  reason:
+                    (image.referenceAssetIds?.length ?? 0) >= 3 &&
+                    !image.referenceAssetIds?.includes(r.id)
+                      ? "Remove a reference before adding another."
+                      : undefined,
+                })),
+                (image.referenceAssetIds ?? []).map(id => `reference:${id}`),
+                key => {
+                  const id = Number(key.split(":")[1]);
+                  updateImage({
+                    referenceAssetIds: image.referenceAssetIds?.includes(id)
+                      ? image.referenceAssetIds.filter(x => x !== id)
+                      : [...(image.referenceAssetIds ?? []), id],
+                  });
+                },
+                true
+              )}
+            </section>
+          )}
         </>
       );
     if (category === "scene")
@@ -1179,22 +1022,15 @@ function Configurator() {
           </button>
         </div>
       ) : (
-        <div className="cfg-form">
-          <LifestylePersonPicker
-            setup={{
-              shot: "multiple" as const,
-              people: isImage ? (image.people ?? []) : video.people,
-            }}
-            onChange={next =>
-              isImage
-                ? updateImage({ people: next.people })
-                : updateVideo({ people: next.people })
-            }
-          />
-          <p className="cfg-help">
-            Selected people count toward your AI model's reference-image limit.
-          </p>
-        </div>
+        <StudioPeople
+          organizationId={organizationId!}
+          selected={isImage ? (image.people ?? []) : video.people}
+          onChange={people =>
+            isImage
+              ? updateImage({ people, person: undefined })
+              : updateVideo({ people })
+          }
+        />
       );
     if (category === "theme")
       return (
@@ -1462,9 +1298,9 @@ function Configurator() {
             </Field>
           </div>
           <p className="cfg-help">
-            Card prices are estimates at model defaults. Your complete
-            configuration is quoted before generation. Model illustrations are
-            not sample outputs.
+            Card prices are estimates at model defaults. Your complete credit
+            total is confirmed before generation. Artwork is visual inspiration,
+            not a sample generated by each model.
           </p>
           <div className="cfg-compare-bar">
             <span>
@@ -1506,6 +1342,7 @@ function Configurator() {
                 id: m.id,
                 title: m.name,
                 description: m.maker + " · " + m.variant,
+                image: studioModelArtwork(m.id, config.kind),
                 art: config.kind,
                 badge: m.direct ? "Great Value" : undefined,
                 reason: reason ?? undefined,
@@ -1516,7 +1353,7 @@ function Configurator() {
                         m.estimatedCredits +
                         " credits / " +
                         (isImage ? "image" : String(m.estimatedSeconds) + "s")
-                      : "Quote required"}
+                      : "See credits on selection"}
                     <br />
                     {referenceCapacity(d)} image references{" "}
                     {requiresVideo(d) ? "· Source video required" : ""}
@@ -1610,7 +1447,7 @@ function Configurator() {
               : "Your configuration is ready"}
           </strong>
           <p>
-            Review your selections and the current credit quote. Generation
+            Review your selections and the current credit total. Generation
             creates an asset for review.
           </p>
         </div>
@@ -1637,11 +1474,11 @@ function Configurator() {
         {quote.error && (
           <div className="cfg-problems">
             {quote.error.message}
-            <button onClick={() => quote.refetch()}>Retry quote</button>
+            <button onClick={() => quote.refetch()}>Refresh credits</button>
           </div>
         )}
         <p className="cfg-help">
-          The composition shown above is a configuration preview, not an
+          The composition shown above is a creative direction preview, not an
           AI-generated result. Generation can vary; review the finished asset
           before use.
         </p>
@@ -1662,7 +1499,9 @@ function Configurator() {
           ? image.promotion?.title || "Business promotion"
           : image.products.length
             ? image.products.length + " catalog item(s)"
-            : "Choose a subject"
+            : image.sourceAssetKeys?.length
+              ? `${image.sourceAssetKeys.length} source images`
+              : "Choose a subject"
         : video.imageKeys.length +
           " references" +
           (video.sourceVideoKey ? " + source clip" : ""),
@@ -1711,7 +1550,7 @@ function Configurator() {
   if (!canCreate)
     return (
       <div className="surface p-8">
-        A creator role is required to use Creative Configurator.
+        A creator role is required to use Creative Studio.
       </div>
     );
   if (options.error)
@@ -1730,7 +1569,7 @@ function Configurator() {
           </Link>
           <div className="cfg-title">
             <h1>
-              Creative Configurator<span>Studio / 01</span>
+              Creative Studio<span>Made by you</span>
             </h1>
             <span className="cfg-pilot">Preview app</span>
           </div>
@@ -1756,43 +1595,87 @@ function Configurator() {
       </div>
       <fieldset disabled={busy} className="cfg-workspace">
         <div className="cfg-stage">
-          <div className="cfg-preview" style={{ background: theme.palette[0] }}>
-            {preview ? (
-              <img src={preview} alt="Selected source reference" />
-            ) : (
-              <ChoiceArt
-                name={theme.name}
-                type={scene === "people" ? "people" : config.kind}
-                palette={theme.palette}
-              />
-            )}
-            <span className="cfg-preview-label">
-              {preview ? "Source reference" : "Direction illustration"}
-            </span>
-            <div className="cfg-preview-caption">
-              <span>
-                {isImage ? "STILL / " : "MOTION / "}
-                {theme.name}
+          <StudioPreview
+            key={config.kind + ":" + (savedImage?.briefId ?? "new")}
+            organizationId={organizationId!}
+            kind={config.kind}
+            briefId={savedImage?.briefId}
+            assets={assets.data ?? []}
+            videos={videos.data ?? []}
+            reuse={trial => {
+              setSavedImage(null);
+              setSavedVideo(null);
+              update({
+                ...configRef.current,
+                ...(trial.imageSetup
+                  ? {
+                      kind: "image",
+                      image: {
+                        ...trial.imageSetup,
+                        name:
+                          trial.imageSetup.name.slice(0, 140) +
+                          " · new version",
+                      },
+                    }
+                  : {}),
+                ...(trial.videoSetup
+                  ? {
+                      kind: "video",
+                      video: {
+                        ...trial.videoSetup,
+                        title:
+                          trial.videoSetup.title.slice(0, 140) +
+                          " · new version",
+                      },
+                    }
+                  : {}),
+              });
+              toast.success(
+                "Settings loaded into a new draft. Review them before generating."
+              );
+            }}
+          >
+            <div
+              className="cfg-preview"
+              style={{ background: theme.palette[0] }}
+            >
+              {preview ? (
+                <img src={preview} alt="Selected source reference" />
+              ) : (
+                <ChoiceArt
+                  name={theme.name}
+                  type={scene === "people" ? "people" : config.kind}
+                  palette={theme.palette}
+                />
+              )}
+              <span className="cfg-preview-label">
+                {preview ? "Source reference" : "Visual inspiration"}
               </span>
-              <strong>
-                {isImage
-                  ? image.copy.headline || "Your story starts here."
-                  : video.title}
-              </strong>
+              <div className="cfg-preview-caption">
+                <span>
+                  {isImage ? "STILL / " : "MOTION / "}
+                  {theme.name}
+                </span>
+                <strong>
+                  {isImage
+                    ? image.copy.headline || "Your story starts here."
+                    : video.title}
+                </strong>
+              </div>
             </div>
-          </div>
+          </StudioPreview>
           <div className="cfg-build">
             <div className="cfg-build-top">
-              <span className="cfg-eyebrow">YOUR CREATIVE, CONFIGURED</span>
+              <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
               <span className="cfg-draft-status">
                 {storageOk
                   ? "Remembered in this browser"
                   : "Browser storage unavailable · save a draft"}
               </span>
             </div>
-            <Field title="Configuration name">
+            <Field title="Creative name">
               <input
-                aria-label="Configuration name"
+                aria-label="Creative name"
                 value={isImage ? image.name : video.title}
                 maxLength={160}
                 onChange={e =>
@@ -1815,6 +1698,7 @@ function Configurator() {
               <span>
                 <small>Generation total</small>
                 <strong>{quoteLabel}</strong>
+                <small aria-live="polite">{creditDetail}</small>
               </span>
               <button
                 className="cfg-primary"
@@ -1825,7 +1709,7 @@ function Configurator() {
             </div>
           </div>
         </div>
-        <nav className="cfg-sections" aria-label="Configurator sections">
+        <nav className="cfg-sections" aria-label="Studio sections">
           {configuratorSections.map((s, i) => {
             const Icon = sectionIcons[i];
             return (
@@ -1908,14 +1792,10 @@ function Configurator() {
       )}
       <div className="cfg-bottom">
         <div>
-          <strong>
-            {issues.length
-              ? `${issues.length} ${issues.length === 1 ? "item" : "items"} to review`
-              : quoteLabel}
-          </strong>
+          <strong>{quoteLabel}</strong>
           <span>
-            {isImage ? outputCount(image) + " images" : "1 video"} ·{" "}
-            {busy ? "Working…" : "Generation only; publishing is separate"}
+            {busy ? "Working…" : creditDetail}
+            {issues.length ? ` · ${issues.length} items to complete` : ""}
           </span>
         </div>
         <div className="cfg-actions">
@@ -1991,7 +1871,10 @@ function Configurator() {
           }}
           context={{
             products,
-            assets: assets.data ?? [],
+            assets: [
+              ...(assets.data ?? []),
+              ...(selectedCatalog.data?.items ?? []),
+            ],
             references: options.data?.references ?? [],
             logos: options.data?.logos ?? [],
             models: models.data ?? [],
@@ -2006,9 +1889,8 @@ function Configurator() {
             Generate this {isImage ? "image set" : "video"}?
           </DialogTitle>
           <DialogDescription>
-            Your current configuration will use{" "}
-            {credits ?? "a refreshed quote of"} credits. The result goes to your
-            workspace for review.
+            Your current configuration will use {credits ?? "the displayed"}{" "}
+            credits. The result goes to your workspace for review.
           </DialogDescription>
           <p>
             {selectedModel?.name} ·{" "}
@@ -2017,7 +1899,7 @@ function Configurator() {
           {credits === undefined && (
             <p>
               Configuration or pricing changed. Close this dialog and review the
-              current quote.
+              current credit total.
             </p>
           )}
           <button className="cfg-primary" disabled={!ready} onClick={generate}>
@@ -2040,7 +1922,7 @@ function Configurator() {
                   const parsed = creativeSetupSchema.safeParse(d.setup);
                   if (!parsed.success)
                     return toast.error(
-                      "This draft cannot be opened in the configurator."
+                      "This draft cannot be opened in Creative Studio."
                     );
                   update({ ...config, kind: "image", image: parsed.data });
                   setSavedImage({ briefId: d.id, updatedAtMs: d.updatedAtMs });
@@ -2065,7 +1947,7 @@ function Configurator() {
                     const parsed = videoSetupSchema.safeParse(d.setup);
                     if (!parsed.success)
                       return toast.error(
-                        "This draft cannot be opened in the configurator."
+                        "This draft cannot be opened in Creative Studio."
                       );
                     update({ ...config, kind: "video", video: parsed.data });
                     setSavedVideo({ id: d.id, revision: d.revision });
@@ -2091,45 +1973,6 @@ function Configurator() {
           </div>
         </DialogContent>
       </Dialog>
-      {picker && (
-        <VideoReferencePicker
-          organizationId={organizationId!}
-          kind={picker}
-          assets={assets.data ?? []}
-          selected={
-            picker === "video"
-              ? video.sourceVideoKey
-                ? [video.sourceVideoKey]
-                : []
-              : video.imageKeys
-          }
-          limit={picker === "video" ? 1 : 9 - video.people.length}
-          onChange={keys =>
-            picker === "video"
-              ? updateVideo({ sourceVideoKey: keys[0] ?? null })
-              : updateVideo({ imageKeys: keys })
-          }
-          onClose={() => setPicker(null)}
-          onUpload={() => setUpload(true)}
-        />
-      )}
-      <AssetUploadDialog
-        open={upload}
-        onClose={() => setUpload(false)}
-        organizationId={organizationId!}
-        role={membership?.role ?? ""}
-        parent={null}
-        defaultDisposition="draft"
-        defaultPurpose="source"
-        mediaFilter={picker === "video" ? "video" : "image"}
-        onSaved={() => utils.assetLibrary.studioList.invalidate()}
-        onComplete={() => {
-          setUpload(false);
-          toast.success(
-            "Uploaded to your library. Select it from the reference picker."
-          );
-        }}
-      />
     </div>
   );
 }
@@ -2188,7 +2031,7 @@ function ModelSynopsis({
         </dd>
       </dl>
       <p>
-        Use Model settings for the exact controls. The final credit quote
+        Use Model settings for the exact controls. The final credit total
         reflects your settings and output count.
       </p>
     </>

@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { studioArtwork } from "./studioArtwork";
 
 /** Small, local editorial illustrations. These are visual guides, never claimed model outputs. */
 export function ChoiceArt({
@@ -11,6 +12,16 @@ export function ChoiceArt({
   palette?: readonly string[];
 }) {
   const uid = useId().replaceAll(":", "");
+  const photograph = studioArtwork(name);
+  if (photograph)
+    return (
+      <img
+        className="cfg-art cfg-art-photo"
+        src={photograph}
+        alt={name + " visual inspiration"}
+        loading="lazy"
+      />
+    );
   const hash = Array.from(name).reduce((s, c) => s + c.charCodeAt(0), 0);
   const people = /people|person|creator/i.test(type);
   const video = /video|motion|edit|extend/i.test(type);

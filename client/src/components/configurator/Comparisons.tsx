@@ -145,7 +145,7 @@ export function ModelComparison({
       "Starting estimate",
       choices.map(c =>
         c.estimatedCredits == null
-          ? "Quote required"
+          ? "Estimate unavailable"
           : `≈ ${c.estimatedCredits} credits / ${c.kind === "image" ? "image" : `${c.estimatedSeconds ?? "default"} seconds`}`
       )
     ),
@@ -272,7 +272,11 @@ function describe(
                 context.products.find(x => x.id === p.productId)?.name ??
                 "Unavailable catalog item"
             )
-            .join(" · ") || "No subject selected"
+            .join(" · ") ||
+          (c.image.sourceAssetKeys ?? [])
+            .map(k => sourceReference(k, context).name)
+            .join(" · ") ||
+          "No subject selected"
       : c.video.imageKeys
           .map(k => sourceReference(k, context).name)
           .join(" · ") || "Prompt only",
@@ -283,6 +287,9 @@ function describe(
             .map(
               p => sourceReference(`product_image:${p.imageId}`, context).name
             ),
+          ...(c.image.sourceAssetKeys ?? []).map(
+            k => sourceReference(k, context).name
+          ),
           ...(c.image.referenceAssetIds ?? []).map(
             id =>
               context.references.find(a => a.id === id)?.name ??
@@ -399,17 +406,17 @@ export function ConfigurationComparison({
     label: "Generation total",
     values: [
       baselineQuote?.pending
-        ? "Updating quote…"
+        ? "Updating credits…"
         : !baselineQuote?.error && baselineQuote?.credits !== undefined
-          ? `${baselineQuote.credits.toLocaleString()} credits · refreshed quote`
+          ? `${baselineQuote.credits.toLocaleString()} credits · current total`
           : baseline.credits == null
             ? baselineQuote?.error
-              ? `Quote unavailable: ${baselineQuote.error}`
-              : "No quote captured"
-            : `${baseline.credits.toLocaleString()} credits · saved estimate (${new Date(baseline.capturedAt).toLocaleString()}); current quote unavailable`,
+              ? `Credits unavailable: ${baselineQuote.error}`
+              : "No saved estimate"
+            : `${baseline.credits.toLocaleString()} credits · saved estimate (${new Date(baseline.capturedAt).toLocaleString()}); current total unavailable`,
       credits === undefined
-        ? "Complete setup for current quote"
-        : `${credits.toLocaleString()} credits · current quote`,
+        ? "Complete setup for current total"
+        : `${credits.toLocaleString()} credits · current total`,
     ],
     different:
       (baselineQuote?.pending || baselineQuote?.error
@@ -421,8 +428,8 @@ export function ConfigurationComparison({
       <DialogContent className="cfg-modal cfg-compare-modal sm:max-w-5xl">
         <DialogTitle>Compare creative configurations</DialogTitle>
         <DialogDescription>
-          Your saved comparison and current build. The saved build's quote
-          refreshes when you compare. Generation always checks the current
+          Your saved comparison and current build. The saved build's credit
+          total refreshes when you compare. Generation always checks the current
           price. Comparing does not use credits.
         </DialogDescription>
         <CompareTable
@@ -451,6 +458,9 @@ export function ConfigurationComparison({
                           context
                         ).url
                       : null) ??
+                  (c.image.sourceAssetKeys?.[0]
+                    ? sourceReference(c.image.sourceAssetKeys[0], context).url
+                    : null) ??
                   context.references.find(
                     a => a.id === c.image.referenceAssetIds?.[0]
                   )?.url)

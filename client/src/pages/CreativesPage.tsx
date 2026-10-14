@@ -36,7 +36,7 @@ import { editablePublication, type Channel } from "@shared/channels";
 const creationChoices = [
   {
     path: "configurator",
-    title: "Creative Configurator",
+    title: "Creative Studio",
     icon: SlidersHorizontal,
     description:
       "A new visual studio. Configure images and videos with guided choices, model filters and live credit quotes.",
