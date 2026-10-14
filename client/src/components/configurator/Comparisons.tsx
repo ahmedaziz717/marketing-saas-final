@@ -224,9 +224,27 @@ type Context = {
     images: { id: number; url: string }[];
   }[];
   assets: { key: string; name?: string; url?: string | null }[];
+  references: { id: number; name: string; url: string }[];
   logos: { id: number; name: string }[];
   models: CatalogChoice[];
 };
+function sourceReference(key: string, context: Context) {
+  const asset = context.assets.find(a => a.key === key);
+  if (asset)
+    return { name: asset.name || "Uploaded reference", url: asset.url };
+  const imageId = key.startsWith("product_image:")
+    ? Number(key.slice(14))
+    : NaN;
+  const product = context.products.find(p =>
+    p.images.some(i => i.id === imageId)
+  );
+  return product
+    ? {
+        name: `${product.name} · Photo ${product.images.findIndex(i => i.id === imageId) + 1}`,
+        url: product.images.find(i => i.id === imageId)?.url,
+      }
+    : { name: "Unavailable reference", url: null };
+}
 function describe(
   c: ConfiguratorState,
   context: Context
@@ -256,15 +274,42 @@ function describe(
             )
             .join(" · ") || "No subject selected"
       : c.video.imageKeys
-          .map(
-            k =>
-              context.assets.find(a => a.key === k)?.name ||
-              "Catalog / uploaded reference"
-          )
+          .map(k => sourceReference(k, context).name)
           .join(" · ") || "Prompt only",
     "Source images": image
-      ? `${c.image.products.filter(p => p.imageId !== null).length} catalog · ${c.image.referenceAssetIds?.length ?? 0} additional references`
-      : `${c.video.imageKeys.length} references${c.video.sourceVideoKey ? " + source video" : ""}`,
+      ? [
+          ...c.image.products
+            .filter(p => p.imageId !== null)
+            .map(
+              p => sourceReference(`product_image:${p.imageId}`, context).name
+            ),
+          ...(c.image.referenceAssetIds ?? []).map(
+            id =>
+              context.references.find(a => a.id === id)?.name ??
+              "Unavailable reference"
+          ),
+        ].join("\n") || "No source images"
+      : c.video.imageKeys
+          .map(k => sourceReference(k, context).name)
+          .join("\n") || "No source images",
+    "Source video": image
+      ? "Not applicable"
+      : c.video.sourceVideoKey
+        ? sourceReference(c.video.sourceVideoKey, context).name
+        : "No source video",
+    "Product arrangement": image
+      ? c.image.productMode === "together"
+        ? "Together in one composition"
+        : "Separate creative per product"
+      : "Not applicable",
+    "Product details": image
+      ? c.image.products
+          .map(
+            p =>
+              `${context.products.find(x => x.id === p.productId)?.name ?? "Catalog item"}: ${p.includePrice ? "Include price" : "No price"}${p.featuredSpecKeys.length ? " · " + p.featuredSpecKeys.join(", ") : ""}`
+          )
+          .join("\n") || "Not applicable"
+      : "Not applicable",
     Scene: image
       ? c.image.shot === "product"
         ? "Subject only"
@@ -386,14 +431,36 @@ export function ConfigurationComparison({
                 ? c.image
                 : (c.video.direction ?? defaultVideoDirection);
             const theme = getCreativeTheme(d.theme);
+            const source =
+              c.kind === "image"
+                ? ((c.image.promotionMode === "platform"
+                    ? null
+                    : c.image.products[0]?.imageId
+                      ? sourceReference(
+                          `product_image:${c.image.products[0].imageId}`,
+                          context
+                        ).url
+                      : null) ??
+                  context.references.find(
+                    a => a.id === c.image.referenceAssetIds?.[0]
+                  )?.url)
+                : c.video.imageKeys[0]
+                  ? sourceReference(c.video.imageKeys[0], context).url
+                  : null;
             return (
               <div className="cfg-compare-art">
-                <ChoiceArt
-                  name={theme.name}
-                  type={c.kind}
-                  palette={theme.palette}
-                />
-                <small>Direction illustration</small>
+                {source ? (
+                  <img src={source} alt="Source reference" />
+                ) : (
+                  <ChoiceArt
+                    name={theme.name}
+                    type={c.kind}
+                    palette={theme.palette}
+                  />
+                )}
+                <small>
+                  {source ? "Source reference" : "Direction illustration"}
+                </small>
               </div>
             );
           })}

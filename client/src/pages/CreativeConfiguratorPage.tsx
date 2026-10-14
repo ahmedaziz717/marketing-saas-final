@@ -1961,6 +1961,7 @@ function Configurator() {
           context={{
             products,
             assets: assets.data ?? [],
+            references: options.data?.references ?? [],
             logos: options.data?.logos ?? [],
             models: models.data ?? [],
           }}
