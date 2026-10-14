@@ -535,12 +535,12 @@ it("keeps completed generation in the large preview and requires explicit approv
   expect(api.route).not.toHaveBeenCalled();
   expect(api.approveLogo).not.toHaveBeenCalled();
   expect(
-    (
-      screen.getByRole("button", {
-        name: "Activate / Publish",
-      }) as HTMLButtonElement
-    ).disabled
-  ).toBe(true);
+    screen
+      .getByRole("link", { name: "Activate / Publish" })
+      .getAttribute("href")
+  ).toBe("/app/activate/studio?asset=creative%3A55");
+  // Following the link opens preparation; asset approval remains explicit.
+  expect(api.approveLogo).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Approve" }));
   await waitFor(() =>
     expect(api.approveLogo).toHaveBeenCalledWith({
