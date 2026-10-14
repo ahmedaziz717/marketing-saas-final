@@ -159,7 +159,12 @@ export function PublicationComposer({
   const scrollBody = useRef<HTMLDivElement>(null);
   function goToStep(next: "setup" | "creative" | "delivery" | "preview") {
     setStep(next);
-    if (scrollBody.current) scrollBody.current.scrollTop = 0;
+    if (studio) {
+      scrollBody.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+    } else if (scrollBody.current) scrollBody.current.scrollTop = 0;
   }
   const [pickerOpen, setPickerOpen] = useState(false);
   const [placement, setPlacement] = useState(
