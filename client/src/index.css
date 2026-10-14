@@ -1859,9 +1859,7 @@
 /* Persistent shortcuts for the two visual Studios. */
 .studio-shortcuts { display:flex; gap:8px; flex-wrap:wrap; padding:10px 28px; border-bottom:1px solid var(--border); background:var(--card); }
 .studio-shortcut { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:8px 14px; border:1px solid var(--border); border-radius:12px; color:var(--muted-foreground); font-size:12px; font-weight:600; transition:background .15s,color .15s; }
-.studio-shortcut-create:hover,.studio-shortcut-create[aria-current="page"] { color:#6d50d8; background:#ede8fb; border-color:#c5b8ee; }
-.studio-shortcut-activate:hover,.studio-shortcut-activate[aria-current="page"] { color:#a74624; background:#fff0e5; border-color:#edc3a8; }
+.studio-shortcut:hover,.studio-shortcut[aria-current="page"] { color:#6d50d8; background:#ede8fb; border-color:#c5b8ee; }
 .dark .studio-shortcut-create:hover,.dark .studio-shortcut-create[aria-current="page"] { color:#c1b1ff; background:#302841; border-color:#544672; }
-.dark .studio-shortcut-activate:hover,.dark .studio-shortcut-activate[aria-current="page"] { color:#ffc6a6; background:#3d2b26; border-color:#6d4838; }
 .studio-shortcut:focus-visible { outline:3px solid var(--ring); outline-offset:3px; }
 @media(max-width:640px) { .studio-shortcuts { padding:10px 16px; }.studio-shortcut { flex:1; padding:8px; font-size:11px; } }

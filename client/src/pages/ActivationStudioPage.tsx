@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   PublicationComposer,
   PublicationDetails,
   PublicationStatus,
+  type Publication,
 } from "@/components/PublicationComposer";
 import {
   Dialog,
@@ -40,6 +41,11 @@ function ActivationStudio() {
     publicationId ? "saved" : "edit"
   );
   const [changeChannel, setChangeChannel] = useState(false);
+  const [showChannels, setShowChannels] = useState(!publicationId);
+  const [visitedChannels, setVisitedChannels] = useState<Channel[]>([]);
+  const [savedDrafts, setSavedDrafts] = useState<
+    Partial<Record<Channel, Publication>>
+  >({});
   const scope = { organizationId: organizationId! };
   const connections = trpc.channels.connections.useQuery(scope, {
     enabled: !!organizationId,
@@ -51,6 +57,12 @@ function ActivationStudio() {
     { ...scope, id: publicationId },
     { enabled: !!organizationId && !!publicationId }
   );
+  useEffect(() => {
+    if (publicationId && publication.data?.id === publicationId) {
+      const item = publication.data;
+      setSavedDrafts(previous => ({ ...previous, [item.channel]: item }));
+    }
+  }, [publicationId, publication.data]);
   const canCompose = ["owner", "admin", "creator", "publisher"].includes(
     membership?.role ?? ""
   );
@@ -67,11 +79,31 @@ function ActivationStudio() {
   );
   const missingAsset =
     !!assetKey && !assets.isLoading && !assets.error && !initialAsset;
-  const currentChannel = publication.data?.channel ?? channel;
+  const currentChannel = channel ?? publication.data?.channel;
+  // Keep each channel's in-progress composer mounted while browsing destinations.
+  // Account/campaign selections never leak from paid ads into organic posts.
+  const draftChannels = Array.from(
+    new Set([
+      ...visitedChannels,
+      ...(Object.keys(savedDrafts) as Channel[]),
+      ...(publication.data ? [publication.data.channel] : []),
+    ])
+  );
+  function chooseChannel(value: Channel) {
+    setChannel(value);
+    setVisitedChannels(previous =>
+      previous.includes(value) ? previous : [...previous, value]
+    );
+    setShowChannels(false);
+    setView("edit");
+  }
   function reset() {
     setChangeChannel(false);
     setPublicationId("");
     setChannel(null);
+    setVisitedChannels([]);
+    setSavedDrafts({});
+    setShowChannels(true);
     setView("edit");
   }
   return (
@@ -94,8 +126,10 @@ function ActivationStudio() {
           </p>
         </div>
         <div className="cfg-actions">
-          <Link href="/app/creatives/studio">Creative Studio</Link>
-          <Link href="/app/publishing">
+          <Link className="cfg-secondary" href="/app/creatives/studio">
+            Creative Studio
+          </Link>
+          <Link className="cfg-secondary" href="/app/publishing">
             <CalendarDays size={16} />
             Calendar & drafts
           </Link>
@@ -107,7 +141,7 @@ function ActivationStudio() {
         </p>
       ) : (
         <>
-          {assetKey && (!currentChannel || missingAsset) && (
+          {assetKey && (showChannels || missingAsset) && (
             <div className="activation-source-banner">
               {initialAsset?.mediaType === "image" && (
                 <img src={initialAsset.url} alt={initialAsset.name} />
@@ -170,7 +204,7 @@ function ActivationStudio() {
             </p>
           )}
           {publicationId && publication.data && view !== "edit" ? (
-            <section className="activation-saved">
+            <section className="cfg-body activation-saved">
               <div className="activation-choice-symbol">
                 <Send size={40} />
               </div>
@@ -197,10 +231,10 @@ function ActivationStudio() {
                 </button>
               </div>
             </section>
-          ) : !currentChannel && !publicationId ? (
-            <section className="activation-channel-section">
+          ) : showChannels ? (
+            <section className="cfg-body activation-channel-section">
               <div className="activation-section-title">
-                <span className="activation-step-kicker">01 / Destination</span>
+                <span className="cfg-eyebrow">01 / Destination</span>
                 <h2>Where would you like to show up?</h2>
                 <p>
                   Choose a connected channel. Your account, formats and delivery
@@ -252,7 +286,8 @@ function ActivationStudio() {
                           </span>
                         </div>
                       }
-                      onSelect={() => setChannel(value)}
+                      selected={currentChannel === value}
+                      onSelect={() => chooseChannel(value)}
                     >
                       {value === "meta_ads" &&
                         initialAsset?.mediaType === "video" && (
@@ -289,23 +324,38 @@ function ActivationStudio() {
                 Manage channel connections →
               </Link>
             </section>
-          ) : currentChannel &&
-            (!publicationId || publication.data) &&
-            !missingAsset ? (
-            <PublicationComposer
-              key={`${organizationId}:${currentChannel}:${publication.data?.id ?? "new"}:${publication.data?.revision ?? 0}`}
-              studio
-              initialChannel={currentChannel}
-              initialAssetKey={assetKey || undefined}
-              item={publication.data ?? undefined}
-              onChangeChannel={() => setChangeChannel(true)}
-              onClose={() => setChangeChannel(true)}
-              onSaved={(id, next) => {
-                setPublicationId(id);
-                setView(next ? "review" : "saved");
-              }}
-            />
           ) : null}
+          {draftChannels.map(draftChannel => {
+            const item =
+              publicationId && publication.data?.channel === draftChannel
+                ? publication.data
+                : savedDrafts[draftChannel];
+            return (
+              <div
+                key={draftChannel}
+                hidden={
+                  showChannels ||
+                  view !== "edit" ||
+                  currentChannel !== draftChannel ||
+                  missingAsset
+                }
+              >
+                <PublicationComposer
+                  key={`${organizationId}:${draftChannel}:${item ? `${item.id}:${item.revision}` : "new"}`}
+                  studio
+                  initialChannel={draftChannel}
+                  initialAssetKey={assetKey || undefined}
+                  item={item}
+                  onChangeChannel={() => setShowChannels(true)}
+                  onClose={() => setChangeChannel(true)}
+                  onSaved={(id, next) => {
+                    setPublicationId(id);
+                    setView(next ? "review" : "saved");
+                  }}
+                />
+              </div>
+            );
+          })}
           {publication.data && view === "review" && (
             <PublicationDetails
               item={publication.data}

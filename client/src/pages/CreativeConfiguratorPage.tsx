@@ -1,3 +1,4 @@
+import { StudioSections } from "@/components/configurator/StudioSections";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -1744,25 +1745,15 @@ function Configurator() {
             </div>
           </div>
         </div>
-        <nav className="cfg-sections" aria-label="Studio sections">
-          {configuratorSections.map((s, i) => {
-            const Icon = sectionIcons[i];
-            return (
-              <button
-                key={s.id}
-                aria-current={section === s.id ? "step" : undefined}
-                onClick={() => go(s.id)}
-              >
-                <Icon size={22} />
-                <span>
-                  <strong>{s.title}</strong>
-                  <small>{s.subtitle}</small>
-                </span>
-                <b>{"0" + (i + 1)}</b>
-              </button>
-            );
-          })}
-        </nav>
+        <StudioSections
+          label="Studio sections"
+          current={section}
+          items={configuratorSections.map((s, i) => ({
+            ...s,
+            icon: sectionIcons[i],
+          }))}
+          onSelect={id => go(id)}
+        />
         <div className="cfg-body">
           <div
             className="cfg-categories"
