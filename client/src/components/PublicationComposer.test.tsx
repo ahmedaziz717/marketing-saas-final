@@ -499,9 +499,11 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   fireEvent.change(screen.getByLabelText("Publish date and time"), {
     target: { value: "2099-06-15T12:30" },
   });
-  fireEvent.click(screen.getByRole("button", { name: /3 Creative & copy/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Creative & copy/ }));
   expect(caption().value).toBe("Our new collection is here.");
-  fireEvent.click(screen.getByRole("button", { name: /5 Review/ }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /Review Ready to approve/ })
+  );
   fireEvent.click(
     screen.getByRole("button", { name: "Save & review delivery" })
   );
@@ -548,7 +550,7 @@ it("disables read-only Studio accounts and omits expired connections", () => {
 
 it("uses edited Studio timing for existing drafts and blocks dates in the past", () => {
   render(<PublicationComposer {...baseProps} studio item={deliveryItem()} />);
-  fireEvent.click(screen.getByRole("button", { name: /4 Timing/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Timing Plan delivery/ }));
   fireEvent.change(screen.getByLabelText("Publish date and time"), {
     target: { value: "2000-01-01T12:00" },
   });

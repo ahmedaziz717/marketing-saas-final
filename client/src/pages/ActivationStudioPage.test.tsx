@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Router } from "wouter";
@@ -33,7 +34,18 @@ vi.mock("@/lib/trpc", () => ({
 vi.mock("@/components/PublicationComposer", () => ({
   PublicationComposer: (props: any) => {
     api.composer(props);
-    return <p>Composer ready</p>;
+    const [text, setText] = useState("");
+    return (
+      <>
+        <p>Composer ready</p>
+        <label>
+          Draft text
+          <input value={text} onChange={event => setText(event.target.value)} />
+        </label>
+        <button onClick={props.onChangeChannel}>Channel</button>
+        <button onClick={props.onClose}>Cancel</button>
+      </>
+    );
   },
   PublicationDetails: () => null,
   PublicationStatus: () => null,
@@ -189,4 +201,43 @@ it("provides a calendar link if a saved publication no longer exists", () => {
     "no longer available"
   );
   expect(screen.getByRole("link", { name: "Open your calendar" })).toBeTruthy();
+});
+
+it("revisits channels without a reset dialog and preserves independent channel drafts", () => {
+  setup();
+  fireEvent.click(screen.getByRole("button", { name: "Select Meta Ads" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Draft text" }), {
+    target: { value: "My paid ad" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Channel" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Select Facebook" }));
+  expect(
+    (screen.getByRole("textbox", { name: "Draft text" }) as HTMLInputElement)
+      .value
+  ).toBe("");
+  fireEvent.change(screen.getByRole("textbox", { name: "Draft text" }), {
+    target: { value: "My organic post" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Channel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Meta Ads" }));
+  expect(
+    (screen.getByRole("textbox", { name: "Draft text" }) as HTMLInputElement)
+      .value
+  ).toBe("My paid ad");
+  fireEvent.click(screen.getByRole("button", { name: "Channel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Facebook" }));
+  expect(
+    (screen.getByRole("textbox", { name: "Draft text" }) as HTMLInputElement)
+      .value
+  ).toBe("My organic post");
+});
+it("still confirms explicitly discarding unsaved drafts", () => {
+  setup();
+  fireEvent.click(screen.getByRole("button", { name: "Select Meta Ads" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Start new activation" }));
+  expect(screen.queryByText("Composer ready")).toBeNull();
+  expect(screen.getByRole("button", { name: "Select Meta Ads" })).toBeTruthy();
 });

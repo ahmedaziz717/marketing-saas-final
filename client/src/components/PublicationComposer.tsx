@@ -1,3 +1,4 @@
+import { StudioSections } from "./configurator/StudioSections";
 import { StudioCard } from "./configurator/StudioCard";
 import {
   CalendarDays,
@@ -6,6 +7,8 @@ import {
   Layers,
   RectangleVertical,
   Building2,
+  Radio,
+  ClipboardCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { SavedCopyTags } from "./CopyTags";
@@ -27,7 +30,7 @@ import { AdTextOptionsEditor } from "./AdTextOptionsEditor";
 import { PlacementAssetPicker } from "./PlacementAssetPicker";
 import { placementSlots } from "@shared/metaPlacements";
 import { ApprovedAssetPicker } from "./ApprovedAssetPicker";
-import { useEffect, useRef, useState, type SetStateAction } from "react";
+import { useEffect, useRef, useState, useId, type SetStateAction } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -140,6 +143,8 @@ export function PublicationComposer({
   onSaved: (id: string, next?: "activate", channel?: Channel) => void;
 }) {
   const { organizationId, membership } = useWorkspace();
+  const fieldPrefix = useId();
+  const fieldId = (name: string) => (studio ? `${fieldPrefix}-${name}` : name);
   const [mediaOpen, setMediaOpen] = useState(false);
   const nextAction = useRef<"activate" | undefined>(undefined);
   const composing = stage === "create" || !item;
@@ -314,8 +319,9 @@ export function PublicationComposer({
         : "Choose an approved photo or video, or remove the current selection.";
   }
   function focusIssue(field: string) {
-    const element = document.getElementById(
-      field === "asset" ? "pub-asset" : `pub-${field}`
+    const name = field === "asset" ? "pub-asset" : `pub-${field}`;
+    const element = scrollBody.current?.querySelector<HTMLElement>(
+      `[id="${fieldId(name)}"], [id="${name}"]`
     );
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
     element?.focus({ preventScroll: true });
@@ -471,35 +477,17 @@ export function PublicationComposer({
           </DialogHeader>
         </>
       )}
-      {wizard && (
+      {wizard && !studio && (
         <nav
-          aria-label={studio ? "Activation steps" : "Ad creation steps"}
-          className={
-            studio
-              ? "activation-steps"
-              : "grid grid-cols-3 gap-2 border-b bg-muted/30 px-4 py-3"
-          }
+          aria-label="Ad creation steps"
+          className="grid grid-cols-3 gap-2 border-b bg-muted/30 px-4 py-3"
         >
-          {studio && (
-            <button type="button" onClick={onChangeChannel}>
-              <span>1</span>Channel
-            </button>
-          )}
-          {(studio
-            ? ([
-                [
-                  "setup",
-                  channel === "meta_ads" ? "Account & campaign" : "Page",
-                ],
-                ["creative", "Creative & copy"],
-                ["delivery", "Timing"],
-                ["preview", "Review"],
-              ] as const)
-            : ([
-                ["setup", "Account & targeting"],
-                ["creative", "Creative"],
-                ["preview", "Preview"],
-              ] as const)
+          {(
+            [
+              ["setup", "Account & targeting"],
+              ["creative", "Creative"],
+              ["preview", "Preview"],
+            ] as const
           ).map(([value, label], i) => (
             <button
               type="button"
@@ -509,7 +497,7 @@ export function PublicationComposer({
               className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs sm:text-sm ${step === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted"}`}
             >
               <span className="shrink-0 rounded-full border border-current/30 px-1.5 text-xs">
-                {i + (studio ? 2 : 1)}
+                {i + 1}
               </span>
               <span>{label}</span>
             </button>
@@ -518,14 +506,14 @@ export function PublicationComposer({
       )}
       <div className={studio ? "activation-workspace" : undefined}>
         {studio && (
-          <aside className="activation-preview">
+          <aside className="cfg-stage activation-preview">
             <ContentPreview
               channel={channel}
               content={content}
               asset={selectedAsset}
               assets={assets.data ?? []}
             />
-            <div className="activation-summary">
+            <div className="cfg-build activation-summary">
               <h3>Your activation</h3>
               <dl>
                 <dt>Channel</dt>
@@ -558,11 +546,54 @@ export function PublicationComposer({
             </div>
           </aside>
         )}
+        {studio && (
+          <StudioSections
+            label="Activation steps"
+            current={step}
+            items={
+              [
+                {
+                  id: "channel",
+                  title: "Channel",
+                  subtitle: "Where to publish",
+                  icon: Radio,
+                },
+                {
+                  id: "setup",
+                  title: channel === "meta_ads" ? "Account & campaign" : "Page",
+                  subtitle: "Your destination",
+                  icon: Building2,
+                },
+                {
+                  id: "creative",
+                  title: "Creative & copy",
+                  subtitle: "Shape your message",
+                  icon: Image,
+                },
+                {
+                  id: "delivery",
+                  title: "Timing",
+                  subtitle: "Plan delivery",
+                  icon: CalendarDays,
+                },
+                {
+                  id: "preview",
+                  title: "Review",
+                  subtitle: "Ready to approve",
+                  icon: ClipboardCheck,
+                },
+              ] as const
+            }
+            onSelect={value =>
+              value === "channel" ? onChangeChannel?.() : goToStep(value)
+            }
+          />
+        )}
         <div
           ref={scrollBody}
           className={
             studio
-              ? "activation-fields"
+              ? "cfg-body activation-fields"
               : "min-h-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6"
           }
         >
@@ -607,9 +638,11 @@ export function PublicationComposer({
               <>
                 {channel === "meta_ads" && !studio && (
                   <div className="space-y-2">
-                    <Label htmlFor="pub-ad-platform">Advertising channel</Label>
+                    <Label htmlFor={fieldId("pub-ad-platform")}>
+                      Advertising channel
+                    </Label>
                     <select
-                      id="pub-ad-platform"
+                      id={fieldId("pub-ad-platform")}
                       className={channelInput + " bg-card"}
                       value={connectedAccounts.length ? platform : ""}
                       onChange={e => setPlatform(e.target.value)}
@@ -636,7 +669,7 @@ export function PublicationComposer({
                       : "sm:col-span-2 space-y-2"
                   }
                 >
-                  <Label htmlFor="pub-destination">
+                  <Label htmlFor={fieldId("pub-destination")}>
                     {channel === "facebook" ? "Social account" : "Ad account"}
                   </Label>
                   {channel === "facebook" && (
@@ -647,7 +680,7 @@ export function PublicationComposer({
                   )}
                   {studio ? (
                     <div
-                      id="pub-destination"
+                      id={fieldId("pub-destination")}
                       className="cfg-card-grid activation-account-grid"
                       tabIndex={-1}
                     >
@@ -691,7 +724,7 @@ export function PublicationComposer({
                   ) : (
                     <>
                       <select
-                        id="pub-destination"
+                        id={fieldId("pub-destination")}
                         className={channelInput}
                         value={connectionId}
                         aria-invalid={showErrors && !!socialErrors.destination}
@@ -831,9 +864,11 @@ export function PublicationComposer({
                       />
                     </details>
                     <div className="sm:col-span-2">
-                      <Label htmlFor="pub-title">Internal title</Label>
+                      <Label htmlFor={fieldId("pub-title")}>
+                        Internal title
+                      </Label>
                       <input
-                        id="pub-title"
+                        id={fieldId("pub-title")}
                         className={channelInput}
                         maxLength={180}
                         value={content.title}
@@ -941,7 +976,7 @@ export function PublicationComposer({
                   )}
                   {!placement && (
                     <Button
-                      id="pub-asset"
+                      id={fieldId("pub-asset")}
                       type="button"
                       variant="outline"
                       className={channel === "facebook" ? "" : "w-full"}
@@ -1225,9 +1260,11 @@ export function PublicationComposer({
                 )}
                 {channel === "meta_ads" && !multipleTextOptions && (
                   <div className="sm:col-span-2">
-                    <Label htmlFor="pub-message">Primary ad text</Label>
+                    <Label htmlFor={fieldId("pub-message")}>
+                      Primary ad text
+                    </Label>
                     <textarea
-                      id="pub-message"
+                      id={fieldId("pub-message")}
                       className={channelInput + " min-h-28"}
                       maxLength={5000}
                       value={content.message}
@@ -1244,9 +1281,9 @@ export function PublicationComposer({
                 )}
                 {channel === "meta_ads" && (
                   <div className="sm:col-span-2">
-                    <Label htmlFor="pub-link">Destination URL</Label>
+                    <Label htmlFor={fieldId("pub-link")}>Destination URL</Label>
                     <input
-                      id="pub-link"
+                      id={fieldId("pub-link")}
                       type="url"
                       className={channelInput}
                       placeholder="https://"
@@ -1259,9 +1296,11 @@ export function PublicationComposer({
                   <>
                     {!multipleTextOptions && (
                       <div>
-                        <Label htmlFor="pub-headline">Headline</Label>
+                        <Label htmlFor={fieldId("pub-headline")}>
+                          Headline
+                        </Label>
                         <input
-                          id="pub-headline"
+                          id={fieldId("pub-headline")}
                           className={channelInput}
                           maxLength={200}
                           value={content.headline}
@@ -1270,9 +1309,9 @@ export function PublicationComposer({
                       </div>
                     )}
                     <div>
-                      <Label htmlFor="pub-cta">Call to action</Label>
+                      <Label htmlFor={fieldId("pub-cta")}>Call to action</Label>
                       <select
-                        id="pub-cta"
+                        id={fieldId("pub-cta")}
                         className={channelInput}
                         value={content.callToAction}
                         onChange={e => setField("callToAction", e.target.value)}
@@ -1288,9 +1327,11 @@ export function PublicationComposer({
                     </div>
                     {!multipleTextOptions && (
                       <div className="sm:col-span-2">
-                        <Label htmlFor="pub-description">Description</Label>
+                        <Label htmlFor={fieldId("pub-description")}>
+                          Description
+                        </Label>
                         <input
-                          id="pub-description"
+                          id={fieldId("pub-description")}
                           className={channelInput}
                           maxLength={300}
                           value={content.description}
@@ -1320,9 +1361,11 @@ export function PublicationComposer({
                     Facebook.
                   </p>
                   <div className="space-y-2">
-                    <Label htmlFor="pub-title">Internal title (optional)</Label>
+                    <Label htmlFor={fieldId("pub-title")}>
+                      Internal title (optional)
+                    </Label>
                     <input
-                      id="pub-title"
+                      id={fieldId("pub-title")}
                       className={channelInput}
                       maxLength={180}
                       value={
@@ -1357,11 +1400,11 @@ export function PublicationComposer({
                     }
                   />
                   <div className="space-y-2">
-                    <Label htmlFor="pub-campaign-label">
+                    <Label htmlFor={fieldId("pub-campaign-label")}>
                       Campaign label (optional)
                     </Label>
                     <input
-                      id="pub-campaign-label"
+                      id={fieldId("pub-campaign-label")}
                       className={channelInput}
                       maxLength={180}
                       value={content.campaignLabel}
@@ -1448,9 +1491,11 @@ export function PublicationComposer({
                   </div>
                 )}
                 <div>
-                  <Label htmlFor="pub-date">Publish date and time</Label>
+                  <Label htmlFor={fieldId("pub-date")}>
+                    Publish date and time
+                  </Label>
                   <input
-                    id="pub-date"
+                    id={fieldId("pub-date")}
                     type="datetime-local"
                     className={channelInput}
                     value={local}
@@ -1472,9 +1517,9 @@ export function PublicationComposer({
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="pub-timezone">Time zone</Label>
+                  <Label htmlFor={fieldId("pub-timezone")}>Time zone</Label>
                   <input
-                    id="pub-timezone"
+                    id={fieldId("pub-timezone")}
                     className={channelInput}
                     value={timezone}
                     placeholder="America/New_York"
@@ -1506,11 +1551,11 @@ export function PublicationComposer({
               channel === "meta_ads" &&
               (!wizard || step === "creative") && (
                 <div className="sm:col-span-2">
-                  <Label htmlFor="pub-campaign-label">
+                  <Label htmlFor={fieldId("pub-campaign-label")}>
                     Campaign label (optional)
                   </Label>
                   <input
-                    id="pub-campaign-label"
+                    id={fieldId("pub-campaign-label")}
                     className={channelInput}
                     value={content.campaignLabel}
                     onChange={e => setField("campaignLabel", e.target.value)}
@@ -1527,7 +1572,13 @@ export function PublicationComposer({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal">
+      <div
+        className={
+          studio
+            ? "cfg-actions activation-footer"
+            : "flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal"
+        }
+      >
         {showErrors && Object.keys(socialErrors).length > 0 && (
           <p role="alert" className="w-full text-sm text-destructive">
             {Object.values(socialErrors)[0]}
@@ -1551,6 +1602,7 @@ export function PublicationComposer({
         </Button>
         {wizard && step !== "preview" && (
           <Button
+            className={studio ? "cfg-primary" : undefined}
             onClick={() =>
               goToStep(
                 step === "setup"
@@ -1572,6 +1624,7 @@ export function PublicationComposer({
         )}
         {stage === "create" && (!wizard || step === "preview") && (
           <Button
+            className={studio ? "cfg-primary" : undefined}
             disabled={
               save.isPending ||
               (channel === "meta_ads" && !content.title.trim())
