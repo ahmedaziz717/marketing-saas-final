@@ -314,11 +314,43 @@ function Configurator() {
     }
   );
   const quote = isImage ? imageQuote : videoQuote;
+  const baselineImageQuote = trpc.creativeBuilder.quote.useQuery(
+    { ...scope, setup: baseline?.config.image ?? image },
+    {
+      enabled:
+        canCreate &&
+        compareOpen === "builds" &&
+        baseline?.config.kind === "image",
+      retry: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+  const baselineVideoQuote = trpc.video.quote.useQuery(
+    { ...scope, setup: baseline?.config.video ?? video },
+    {
+      enabled:
+        canCreate &&
+        compareOpen === "builds" &&
+        baseline?.config.kind === "video",
+      retry: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+  const baselineQuote =
+    baseline?.config.kind === "image" ? baselineImageQuote : baselineVideoQuote;
   const credits =
     !issues.length && sameQuote && !quote.isFetching && !quote.error
       ? quote.data?.credits
       : undefined;
   const ready = credits !== undefined && !busy;
+  const quoteLabel =
+    credits !== undefined
+      ? credits.toLocaleString() + " credits"
+      : issues.length
+        ? "Complete setup for quote"
+        : quote.error
+          ? "Quote unavailable"
+          : "Updating quote…";
   const comparisonModels = (models.data ?? []).filter(
     m =>
       m.kind === config.kind &&
@@ -1782,13 +1814,7 @@ function Configurator() {
             <div className="cfg-estimate">
               <span>
                 <small>Generation total</small>
-                <strong>
-                  {credits !== undefined
-                    ? credits.toLocaleString() + " credits"
-                    : quote.isFetching && sameQuote
-                      ? "Quoting…"
-                      : "Complete setup for quote"}
-                </strong>
+                <strong>{quoteLabel}</strong>
               </span>
               <button
                 className="cfg-primary"
@@ -1883,9 +1909,9 @@ function Configurator() {
       <div className="cfg-bottom">
         <div>
           <strong>
-            {credits !== undefined
-              ? credits.toLocaleString() + " credits"
-              : issues.length + " items to review"}
+            {issues.length
+              ? `${issues.length} ${issues.length === 1 ? "item" : "items"} to review`
+              : quoteLabel}
           </strong>
           <span>
             {isImage ? outputCount(image) + " images" : "1 video"} ·{" "}
@@ -1958,6 +1984,11 @@ function Configurator() {
           baseline={baseline}
           current={config}
           credits={credits}
+          baselineQuote={{
+            credits: baselineQuote.data?.credits,
+            pending: baselineQuote.isFetching,
+            error: baselineQuote.error?.message,
+          }}
           context={{
             products,
             assets: assets.data ?? [],

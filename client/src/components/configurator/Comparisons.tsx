@@ -376,6 +376,7 @@ export function ConfigurationComparison({
   baseline,
   current,
   credits,
+  baselineQuote,
   context,
   onSwap,
   onClose,
@@ -383,6 +384,7 @@ export function ConfigurationComparison({
   baseline: ConfigurationSnapshot;
   current: ConfiguratorState;
   credits?: number;
+  baselineQuote?: { credits?: number; pending?: boolean; error?: string };
   context: Context;
   onSwap: () => void;
   onClose: () => void;
@@ -396,24 +398,32 @@ export function ConfigurationComparison({
   rows.unshift({
     label: "Generation total",
     values: [
-      baseline.credits == null
-        ? "Incomplete setup · no quote captured"
-        : `${baseline.credits.toLocaleString()} credits · saved estimate`,
+      baselineQuote?.pending
+        ? "Updating quote…"
+        : !baselineQuote?.error && baselineQuote?.credits !== undefined
+          ? `${baselineQuote.credits.toLocaleString()} credits · refreshed quote`
+          : baseline.credits == null
+            ? baselineQuote?.error
+              ? `Quote unavailable: ${baselineQuote.error}`
+              : "No quote captured"
+            : `${baseline.credits.toLocaleString()} credits · saved estimate (${new Date(baseline.capturedAt).toLocaleString()}); current quote unavailable`,
       credits === undefined
         ? "Complete setup for current quote"
         : `${credits.toLocaleString()} credits · current quote`,
     ],
-    different: baseline.credits !== (credits ?? null),
+    different:
+      (baselineQuote?.pending || baselineQuote?.error
+        ? null
+        : (baselineQuote?.credits ?? baseline.credits)) !== (credits ?? null),
   });
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="cfg-modal cfg-compare-modal sm:max-w-5xl">
         <DialogTitle>Compare creative configurations</DialogTitle>
         <DialogDescription>
-          Your saved comparison and current build. The saved estimate was
-          captured {new Date(baseline.capturedAt).toLocaleString()}; restoring
-          it requests a fresh quote before generation. Comparing does not use
-          credits.
+          Your saved comparison and current build. The saved build's quote
+          refreshes when you compare. Generation always checks the current
+          price. Comparing does not use credits.
         </DialogDescription>
         <CompareTable
           titles={configs.map((c, i) => (
