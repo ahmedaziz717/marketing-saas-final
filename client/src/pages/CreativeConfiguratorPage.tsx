@@ -155,6 +155,7 @@ function Configurator() {
   const [storageOk, setStorageOk] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [pendingImageJob, setPendingImageJob] = useState<number | null>(null);
   const [savedImage, setSavedImage] = useState<{
     briefId: number;
     updatedAtMs: number;
@@ -392,7 +393,7 @@ function Configurator() {
     !issues.length && sameQuote && !quote.isFetching && !quote.error
       ? quote.data?.credits
       : undefined;
-  const ready = credits !== undefined && !busy;
+  const ready = credits !== undefined && !busy && !pendingImageJob;
   const estimateCredits =
     credits ?? planning.data?.credits ?? selectedModel?.estimatedCredits;
   const quoteLabel =
@@ -593,14 +594,17 @@ function Configurator() {
           expectedUpdatedAtMs: savedImage?.updatedAtMs,
         });
         setSavedImage(saved);
-        await imageGenerate.mutateAsync({
+        const started = await imageGenerate.mutateAsync({
           ...scope,
           briefId: saved.briefId,
           expectedUpdatedAtMs: saved.updatedAtMs,
           requestId: crypto.randomUUID(),
           quotedCredits: credits,
         });
-        navigate("/app/creatives/drafts?filter=images");
+        setPendingImageJob(started.jobId);
+        document
+          .querySelector(".cfg-stage")
+          ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
       } else {
         const saved = await videoSave.mutateAsync({
           ...scope,
@@ -617,7 +621,9 @@ function Configurator() {
         navigate("/app/creatives/video?video=" + saved.id);
       }
       toast.success(
-        "Generation started. Your results will appear in your workspace."
+        isImage
+          ? "Creating your images. Results will appear here and remain saved as drafts."
+          : "Generation started. Your results will appear in your workspace."
       );
       await utils.models.credits.invalidate();
     } catch (e) {
@@ -1620,6 +1626,13 @@ function Configurator() {
           <StudioPreview
             key={config.kind + ":" + (savedImage?.briefId ?? "new")}
             organizationId={organizationId!}
+            role={membership?.role ?? ""}
+            jobId={pendingImageJob}
+            onSettled={() => {
+              setPendingImageJob(null);
+              void utils.assetLibrary.studioList.invalidate();
+              void utils.models.credits.invalidate();
+            }}
             kind={config.kind}
             briefId={savedImage?.briefId}
             assets={assets.data ?? []}

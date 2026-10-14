@@ -1,9 +1,16 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Film, ImagePlus, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import type { CreativeSetup } from "@shared/creativeBuilder";
 import { videoSetupSchema, type VideoSetup } from "@shared/videoCreation";
+import {
+  libraryAssetLink,
+  mayApproveAndAdd,
+  mayReviewAssets,
+  workflowLabel,
+} from "@shared/assetWorkflow";
+import { canSubmitAsset } from "@shared/assetLibrary";
 import type { LibraryAsset } from "@shared/assetLibrary";
 
 type Trial = {
@@ -18,6 +25,9 @@ type Trial = {
 
 export function StudioPreview({
   organizationId,
+  role,
+  jobId,
+  onSettled,
   kind,
   briefId,
   assets,
@@ -26,6 +36,9 @@ export function StudioPreview({
   reuse,
 }: {
   organizationId: number;
+  role: string;
+  jobId?: number | null;
+  onSettled: () => void;
   kind: "image" | "video";
   briefId?: number;
   assets: LibraryAsset[];
@@ -48,6 +61,77 @@ export function StudioPreview({
     { organizationId, briefId: all ? undefined : briefId },
     { enabled: kind === "image", refetchOnWindowFocus: true }
   );
+  const utils = trpc.useUtils();
+  const approve = trpc.assetLibrary.approveAndAdd.useMutation();
+  const review = trpc.assetLibrary.review.useMutation();
+  const submit = trpc.assetLibrary.submit.useMutation();
+  const [actionError, setActionError] = useState("");
+  const [generationError, setGenerationError] = useState("");
+  const settled = useRef<number | null>(null);
+  const job = trpc.creativeBuilder.studioJob.useQuery(
+    { organizationId, jobId: jobId ?? 1 },
+    { enabled: !!jobId, refetchInterval: jobId ? 3000 : false }
+  );
+  useEffect(() => {
+    if (!jobId) return;
+    setGenerationError("");
+    const result = job.data;
+    if (
+      !result ||
+      result.id !== jobId ||
+      settled.current === jobId ||
+      !["completed", "failed"].includes(result.status)
+    )
+      return;
+    settled.current = jobId;
+    const first = result.variants.find(item => item.url);
+    if (first?.url)
+      setSelected({ ...first, key: `creative:${first.id}`, url: first.url });
+    if (result.status === "failed")
+      setGenerationError(
+        result.errorMessage ||
+          "Generation could not finish. Any completed images are saved as drafts."
+      );
+    void history.refetch();
+    onSettled();
+  }, [jobId, job.data, onSettled]);
+  const selectedAsset = assets.find(asset => asset.key === selected?.key);
+  const working = approve.isPending || review.isPending || submit.isPending;
+  const canApprove =
+    selectedAsset &&
+    (canSubmitAsset(selectedAsset.state)
+      ? mayApproveAndAdd(role)
+      : selectedAsset.state === "needs_review" && mayReviewAssets(role));
+  async function approveSelected() {
+    if (!selectedAsset) return;
+    setActionError("");
+    const input = {
+      organizationId,
+      key: selectedAsset.key,
+      revision: selectedAsset.revision,
+    };
+    try {
+      if (canApprove) {
+        if (selectedAsset.state === "needs_review")
+          await review.mutateAsync({
+            ...input,
+            decision: "approved",
+            note: "Approved in Creative Studio.",
+          });
+        else await approve.mutateAsync(input);
+      } else await submit.mutateAsync(input);
+      await Promise.all([
+        utils.assetLibrary.studioList.invalidate(),
+        utils.assetLibrary.list.invalidate(),
+      ]);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Could not update approval. Please retry."
+      );
+    }
+  }
   const trials: Trial[] =
     kind === "image"
       ? (history.data ?? []).flatMap(item =>
@@ -69,7 +153,7 @@ export function StudioPreview({
             return asset?.mediaType === "video" && item.status === "completed"
               ? [
                   {
-                    key: item.id,
+                    key: asset.key,
                     title: item.setup.title,
                     url: asset.url,
                     createdAtMs: item.createdAtMs,
@@ -82,6 +166,15 @@ export function StudioPreview({
           .slice(0, 24);
   return (
     <div className="cfg-preview-gallery">
+      {!!jobId && (
+        <p role="status" className="cfg-generation-status">
+          Creating your images… You can stay here; finished versions will appear
+          below automatically.
+        </p>
+      )}
+      {(generationError || job.error?.message) && (
+        <p role="alert">{generationError || job.error?.message}</p>
+      )}
       {selected ? (
         <div className="cfg-result-preview">
           {kind === "image" ? (
@@ -98,8 +191,55 @@ export function StudioPreview({
             <strong>{selected.title}</strong>
             <small>
               Generated {new Date(selected.createdAtMs).toLocaleString()} ·{" "}
-              {selected.status}
+              {selectedAsset
+                ? workflowLabel(selectedAsset.state)
+                : "Saved draft"}
             </small>
+            <div className="cfg-result-actions">
+              <button
+                type="button"
+                className="cfg-primary"
+                disabled={
+                  working ||
+                  !selectedAsset ||
+                  selectedAsset.state === "approved" ||
+                  (!canApprove && !canSubmitAsset(selectedAsset.state))
+                }
+                onClick={() => void approveSelected()}
+              >
+                {selectedAsset?.state === "approved"
+                  ? "Approved"
+                  : working
+                    ? "Saving…"
+                    : canApprove
+                      ? "Approve"
+                      : "Submit for approval"}
+              </button>
+              <button
+                type="button"
+                className="cfg-secondary"
+                disabled
+                title="The Activate configurator is coming next. No publishing occurs here."
+              >
+                Activate / Publish
+              </button>
+            </div>
+            <p className="cfg-help">
+              {selectedAsset?.state === "approved"
+                ? "Approved in Asset Library. Approval does not publish your creative."
+                : "Saved automatically in Asset Library → Drafts. Approval is optional until you are ready."}{" "}
+              Activate / Publish will open the next configurator when available.
+            </p>
+            {actionError && <p role="alert">{actionError}</p>}
+            <Link
+              href={
+                selectedAsset && selectedAsset.state !== "draft"
+                  ? libraryAssetLink(selected.key, selectedAsset.state)
+                  : `/app/library?view=drafts&asset=${encodeURIComponent(selected.key)}`
+              }
+            >
+              View in Asset Library
+            </Link>
             <button
               type="button"
               disabled={!selected.imageSetup && !selected.videoSetup}

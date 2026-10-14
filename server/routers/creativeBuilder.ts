@@ -582,6 +582,57 @@ export async function builderImageQuote(
 }
 
 export const creativeBuilderRouter = router({
+  studioJob: protectedProcedure
+    .input(organizationInput.extend({ jobId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editorRoles,
+      ]);
+      const db = (await getDb())!;
+      await recoverExpiredBuilderJobs(db, input.organizationId);
+      const [job] = await db
+        .select({
+          id: creativeJobs.id,
+          status: creativeJobs.status,
+          errorMessage: creativeJobs.errorMessage,
+        })
+        .from(creativeJobs)
+        .where(
+          and(
+            eq(creativeJobs.id, input.jobId),
+            eq(creativeJobs.organizationId, input.organizationId)
+          )
+        )
+        .limit(1);
+      if (!job)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Generation not found.",
+        });
+      const variants = await db
+        .select({
+          id: creativeVariants.id,
+          title: creativeVariants.name,
+          url: creativeVariants.imageUrl,
+          createdAtMs: creativeVariants.createdAtMs,
+          status: creativeVariants.status,
+        })
+        .from(creativeVariants)
+        .where(
+          and(
+            eq(creativeVariants.organizationId, input.organizationId),
+            eq(creativeVariants.jobId, job.id)
+          )
+        )
+        .orderBy(creativeVariants.id);
+      return {
+        ...job,
+        errorMessage: job.errorMessage
+          ? categorizeGenerationError(job.errorMessage).userMessage
+          : null,
+        variants,
+      };
+    }),
   studioHistory: protectedProcedure
     .input(
       organizationInput.extend({

@@ -58,6 +58,8 @@ function matchesState(
   surface: AssetSurface,
   view: string
 ) {
+  if (surface === "library" && view === "drafts")
+    return asset.state === "draft";
   if (surface === "library")
     return view === "history"
       ? ["changes_requested", "rejected"].includes(asset.state)
@@ -101,7 +103,12 @@ export function AssetWorkbench({
   const selectedKey = embedded ? localKey : params.get("asset"),
     reviseKey = embedded ? null : params.get("revise");
   const [, navigate] = useLocation();
-  const views = surface === "studio" ? studioViews : libraryViews;
+  const views =
+    surface === "studio"
+      ? studioViews
+      : canCreate
+        ? [{ id: "drafts", label: "Drafts" }, ...libraryViews]
+        : libraryViews;
   const requestedView = embedded ? localView : params.get("view");
   const view = views.some(item => item.id === requestedView)
     ? requestedView!
@@ -124,16 +131,21 @@ export function AssetWorkbench({
   const utils = trpc.useUtils();
   const library = trpc.assetLibrary.list.useQuery(
     { organizationId: organizationId! },
-    { enabled: !!organizationId && surface === "library" }
+    { enabled: !!organizationId && surface === "library" && view !== "drafts" }
   );
   const studio = trpc.assetLibrary.studioList.useQuery(
     { organizationId: organizationId! },
     {
-      enabled: !!organizationId && surface === "studio" && canCreate,
-      refetchInterval: surface === "studio" && canCreate ? 5000 : false,
+      enabled:
+        !!organizationId &&
+        (surface === "studio" || view === "drafts") &&
+        canCreate,
+      refetchInterval:
+        (surface === "studio" || view === "drafts") && canCreate ? 5000 : false,
     }
   );
-  const query = surface === "studio" ? studio : library;
+  const query =
+    surface === "studio" || (view === "drafts" && canCreate) ? studio : library;
   const assets = query.data ?? [],
     selected = assets.find(item => item.key === selectedKey);
   const [channelFilter, setChannelFilter] = useState("all"),
@@ -322,7 +334,7 @@ export function AssetWorkbench({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {surface === "studio"
                   ? "Drafts and experiments stay here. Submit only the versions you want reviewed."
-                  : "Only submitted and approved assets appear here. Working drafts stay in Content Studio."}
+                  : "Generated creations are saved as drafts. Approve only the versions you want to use."}
               </p>
             </div>
             <div className="flex gap-2">
@@ -547,8 +559,8 @@ export function AssetWorkbench({
             <DialogTitle className="break-words">{selected?.name}</DialogTitle>
             <DialogDescription>
               {surface === "studio"
-                ? "Image drafts stay in Studio until submitted or explicitly approved. Previously submitted versions remain linked to their library record."
-                : "Review the submitted version here. Approval does not publish a post or authorize advertising spend."}
+                ? "Drafts are saved automatically. Submit or approve this version when ready."
+                : "Review this saved version here. Approval does not publish a post or authorize advertising spend."}
             </DialogDescription>
           </DialogHeader>
           {selected && (
@@ -672,7 +684,7 @@ export function AssetWorkbench({
                     : "Finished content: approval makes it eligible for a separate post or advertising review."}
                 </p>
                 <AssetWorkflowActions
-                  surface={surface}
+                  surface={selected.state === "draft" ? "studio" : surface}
                   state={selected.state}
                   role={role}
                   busy={busy}
