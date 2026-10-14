@@ -1,3 +1,4 @@
+import { StudioNavigation } from "./StudioNavigation";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -282,6 +283,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             </a>
           </div>
         </header>
+        <StudioNavigation />
         <div
           id="workspace-content"
           className="mx-auto w-full max-w-[1600px] flex-1 p-4 md:p-7 lg:p-8"

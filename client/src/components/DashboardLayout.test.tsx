@@ -23,6 +23,9 @@ vi.mock("@/hooks/useWorkspace", () => ({
     ],
   }),
 }));
+vi.mock("./CreditBalance", () => ({
+  CreditBalance: () => <span>1,000 credits</span>,
+}));
 vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => false }));
 function setup() {
   const router = memoryLocation({ path: "/app/creatives", record: true });
@@ -81,4 +84,15 @@ it("keeps navigation usable when preference storage is unavailable", () => {
   setup();
   fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
   expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+});
+
+it("keeps both Studio links visible at the top of the workspace", () => {
+  setup();
+  const nav = screen.getByRole("navigation", { name: "Studios" });
+  expect(
+    nav.querySelector('a[href="/app/creatives/studio"]')?.textContent
+  ).toContain("Creative Studio");
+  expect(
+    nav.querySelector('a[href="/app/activate/studio"]')?.textContent
+  ).toContain("Activation Studio");
 });
