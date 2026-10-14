@@ -27,6 +27,7 @@ import { ModelSettings } from "@/components/ModelPicker";
 import { StudioPeople } from "@/components/configurator/StudioPeople";
 import { StudioSources } from "@/components/configurator/StudioSources";
 import { StudioPreview } from "@/components/configurator/StudioPreview";
+import { StudioLogos } from "@/components/configurator/StudioLogos";
 import { ActionCredits } from "@/components/ActionCredits";
 import { studioModelArtwork } from "@/components/configurator/studioArtwork";
 import { ChoiceArt } from "@/components/configurator/ChoiceArt";
@@ -197,6 +198,9 @@ function Configurator() {
     enabled: !!organizationId && canCreate,
   });
   const utils = trpc.useUtils();
+  const approveLogo = trpc.assetLibrary.approveAndAdd.useMutation(),
+    reviewLogo = trpc.assetLibrary.review.useMutation(),
+    submitLogo = trpc.assetLibrary.submit.useMutation();
   const imageSave = trpc.creativeBuilder.save.useMutation(),
     videoSave = trpc.video.save.useMutation();
   const imageGenerate = trpc.creativeBuilder.generate.useMutation(),
@@ -926,24 +930,41 @@ function Configurator() {
             </Link>
           </div>
           {isImage ? (
-            cards(
-              [
-                {
-                  id: "none",
-                  title: "No logo",
-                  description: "Keep the composition free of an embedded logo.",
-                },
-                ...(options.data?.logos ?? []).map(l => ({
-                  id: String(l.id),
-                  title: l.name,
-                  description: "Approved brand logo",
-                  image: l.url,
-                })),
-              ],
-              [image.logoAssetId ? String(image.logoAssetId) : "none"],
-              id =>
-                updateImage({ logoAssetId: id === "none" ? null : Number(id) })
-            )
+            <StudioLogos
+              assets={assets.data ?? []}
+              role={membership?.role ?? "creator"}
+              selectedId={image.logoAssetId}
+              search={search}
+              loading={assets.isLoading}
+              loadError={
+                assets.error
+                  ? "Saved logos could not be loaded. Refresh to try again."
+                  : undefined
+              }
+              onChange={logoAssetId => updateImage({ logoAssetId })}
+              onAction={async (asset, action) => {
+                const input = {
+                  ...scope,
+                  key: asset.key,
+                  revision: asset.revision,
+                };
+                if (action === "submit") await submitLogo.mutateAsync(input);
+                else if (asset.state === "needs_review")
+                  await reviewLogo.mutateAsync({
+                    ...input,
+                    decision: "approved",
+                    note: "Approved from Creative Studio's logo picker.",
+                  });
+                else await approveLogo.mutateAsync(input);
+                await Promise.all([
+                  utils.assetLibrary.studioList.invalidate(),
+                  utils.assetLibrary.list.invalidate(),
+                  utils.creativeBuilder.options.invalidate(),
+                ]);
+                if (action === "submit")
+                  toast.success("Logo submitted for review.");
+              }}
+            />
           ) : (
             <p className="cfg-help">
               Video uses your selected references and written direction. Exact
@@ -1342,7 +1363,7 @@ function Configurator() {
                 id: m.id,
                 title: m.name,
                 description: m.maker + " · " + m.variant,
-                image: studioModelArtwork(m.id, config.kind),
+                image: studioModelArtwork(m.routeId, config.kind),
                 art: config.kind,
                 badge: m.direct ? "Great Value" : undefined,
                 reason: reason ?? undefined,

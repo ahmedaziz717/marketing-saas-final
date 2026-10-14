@@ -63,27 +63,27 @@ const named: Record<string, string> = {
 };
 export const studioArtwork = (name: string) =>
   named[name] ? `/studio-art/${named[name]}.webp` : undefined;
+/** Dedicated model covers, separate from theme/style previews. Variants share family art. */
 export function studioModelArtwork(id: string, kind: "image" | "video") {
-  const images =
+  const key = id.toLowerCase();
+  const families =
     kind === "image"
       ? [
-          "spotlight",
-          "style-editorial",
-          "style-illustration",
-          "style-three-d",
-          "neon-cyber",
-          "style-animation",
+          "sunburst",
+          "flare",
+          "marketing-studio",
+          "recraft",
+          "soul",
+          "ideogram",
+          "qwen",
+          "z-image",
         ]
-      : [
-          "video",
-          "people",
-          "dark-cinematic",
-          "lifestyle",
-          "desert-heat",
-          "launch",
-        ];
-  const index =
-    Array.from(id).reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) %
-    images.length;
-  return `/studio-art/${images[index]}.webp`;
+      : ["seedance", "kling", "wan", "ltx", "minimax", "happy-horse"];
+  let family = families.find(name => key.includes(name));
+  if (key.includes("grok")) family = `grok-${kind}`;
+  if (key.includes("gpt-image") && !family)
+    family = key.includes("mini") ? "gpt-mini" : "gpt-image";
+  // Covers for other cinematic routes use dedicated video artwork, never theme previews.
+  if (!family && key.includes("genjutsu")) family = "minimax";
+  return `/studio-art/models/${family ?? (kind === "image" ? "gpt-image" : "kling")}.webp`;
 }
