@@ -24,6 +24,10 @@ const api = vi.hoisted(() => ({
   route: vi.fn(),
   drafts: [] as any[],
   history: [] as any[],
+  assets: [] as any[],
+  approveLogo: vi.fn(),
+  reviewLogo: vi.fn(),
+  submitLogo: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({
@@ -66,7 +70,10 @@ vi.mock("@/lib/trpc", () => ({
         list: { invalidate: vi.fn() },
         catalogImages: { invalidate: vi.fn() },
       },
-      assetLibrary: { studioList: { invalidate: vi.fn() } },
+      assetLibrary: {
+        studioList: { invalidate: vi.fn() },
+        list: { invalidate: vi.fn() },
+      },
       models: { credits: { invalidate: vi.fn() } },
     }),
     creativeBuilder: {
@@ -129,7 +136,12 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
-    assetLibrary: { studioList: { useQuery: () => ({ data: [] }) } },
+    assetLibrary: {
+      studioList: { useQuery: () => ({ data: api.assets }) },
+      approveAndAdd: { useMutation: () => ({ mutateAsync: api.approveLogo }) },
+      review: { useMutation: () => ({ mutateAsync: api.reviewLogo }) },
+      submit: { useMutation: () => ({ mutateAsync: api.submitLogo }) },
+    },
     catalogSources: {
       previewProductPage: {
         useMutation: () => ({ reset: vi.fn(), mutateAsync: vi.fn() }),
@@ -171,6 +183,10 @@ beforeEach(() => {
   api.org = 1;
   api.drafts = [];
   api.history = [];
+  api.assets = [];
+  api.approveLogo.mockReset().mockResolvedValue({ success: true });
+  api.reviewLogo.mockReset().mockResolvedValue({ success: true });
+  api.submitLogo.mockReset().mockResolvedValue({ success: true });
   api.save.mockResolvedValue({ briefId: 1, updatedAtMs: 123 });
   api.generate.mockResolvedValue({ status: "queued" });
 });
@@ -425,3 +441,50 @@ it("previews a generated version without changing settings or generating, and re
   expect(api.save).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
 });
+
+it.each(["draft", "needs_review"])(
+  "shows a %s logo and uses the existing versioned approval flow",
+  async state => {
+    api.assets = [
+      {
+        key: "asset:4",
+        name: "Website logo",
+        url: "/logo.png",
+        mediaType: "image",
+        sourceType: "logo",
+        state,
+        revision: "a".repeat(64),
+      },
+    ];
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+    expect(screen.getByRole("img", { name: "Website logo" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Approve & use logo" }));
+    const input = {
+      organizationId: 1,
+      key: "asset:4",
+      revision: "a".repeat(64),
+    };
+    if (state === "draft") {
+      await waitFor(() => expect(api.approveLogo).toHaveBeenCalledWith(input));
+      expect(api.reviewLogo).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() =>
+        expect(api.reviewLogo).toHaveBeenCalledWith({
+          ...input,
+          decision: "approved",
+          note: "Approved from Creative Studio's logo picker.",
+        })
+      );
+      expect(api.approveLogo).not.toHaveBeenCalled();
+    }
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "Select Website logo" })
+          .getAttribute("aria-pressed")
+      ).toBe("true")
+    );
+    expect(api.generate).not.toHaveBeenCalled();
+  }
+);
