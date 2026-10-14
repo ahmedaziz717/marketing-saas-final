@@ -1698,3 +1698,20 @@
   border-radius: 7px;
   padding: 10px;
 }
+
+.cfg-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.cfg-result-actions button {
+  flex: 1;
+  min-width: 140px;
+}
+.cfg-generation-status {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--cfg-panel);
+  border: 1px solid var(--cfg-border);
+}

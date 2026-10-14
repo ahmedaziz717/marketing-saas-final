@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   route: vi.fn(),
   drafts: [] as any[],
   history: [] as any[],
+  job: undefined as any,
   assets: [] as any[],
   approveLogo: vi.fn(),
   reviewLogo: vi.fn(),
@@ -77,6 +78,7 @@ vi.mock("@/lib/trpc", () => ({
       models: { credits: { invalidate: vi.fn() } },
     }),
     creativeBuilder: {
+      studioJob: { useQuery: () => ({ data: api.job }) },
       studioHistory: {
         useQuery: () => ({ data: api.history, refetch: vi.fn() }),
       },
@@ -183,12 +185,13 @@ beforeEach(() => {
   api.org = 1;
   api.drafts = [];
   api.history = [];
+  api.job = undefined;
   api.assets = [];
   api.approveLogo.mockReset().mockResolvedValue({ success: true });
   api.reviewLogo.mockReset().mockResolvedValue({ success: true });
   api.submitLogo.mockReset().mockResolvedValue({ success: true });
   api.save.mockResolvedValue({ briefId: 1, updatedAtMs: 123 });
-  api.generate.mockResolvedValue({ status: "queued" });
+  api.generate.mockResolvedValue({ status: "queued", jobId: 12 });
 });
 it("compares at most three models and never invokes generation", () => {
   open();
@@ -488,3 +491,87 @@ it.each(["draft", "needs_review"])(
     expect(api.generate).not.toHaveBeenCalled();
   }
 );
+
+it("keeps completed generation in the large preview and requires explicit approval", async () => {
+  const config = newConfiguration();
+  config.image.products = [
+    { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
+  ];
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
+  api.job = {
+    id: 12,
+    status: "completed",
+    variants: [
+      {
+        id: 55,
+        title: "Fresh creative",
+        url: "/fresh.png",
+        createdAtMs: 1,
+        status: "pending",
+      },
+    ],
+  };
+  api.assets = [
+    {
+      key: "creative:55",
+      name: "Fresh creative",
+      url: "/fresh.png",
+      state: "draft",
+      revision: "a".repeat(64),
+      mediaType: "image",
+      sourceType: "creative",
+    },
+  ];
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirm · 174 credits" })
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("img", { name: "Fresh creative" }).getAttribute("src")
+    ).toBe("/fresh.png")
+  );
+  expect(api.route).not.toHaveBeenCalled();
+  expect(api.approveLogo).not.toHaveBeenCalled();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Activate / Publish",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  await waitFor(() =>
+    expect(api.approveLogo).toHaveBeenCalledWith({
+      organizationId: 1,
+      key: "creative:55",
+      revision: "a".repeat(64),
+    })
+  );
+});
+it("reports a failed generation in place without navigating or approving", async () => {
+  const config = newConfiguration();
+  config.image.products = [
+    { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
+  ];
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
+  api.job = {
+    id: 12,
+    status: "failed",
+    errorMessage: "The provider could not finish this image.",
+    variants: [],
+  };
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirm · 174 credits" })
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain(
+      "The provider could not finish"
+    )
+  );
+  expect(api.route).not.toHaveBeenCalled();
+  expect(api.approveLogo).not.toHaveBeenCalled();
+});
