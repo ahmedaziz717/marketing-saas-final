@@ -1576,3 +1576,108 @@
   font-size: 11px;
   margin-top: 7px;
 }
+
+.cfg-model-settings {
+  display: grid;
+  gap: 28px;
+  margin-top: 18px;
+}
+.cfg-setting-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.cfg-setting-group legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.cfg-setting-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  max-width: 100%;
+}
+.cfg-setting-tiles .cfg-card-art {
+  height: 104px;
+}
+.cfg-setting-tiles .cfg-card-copy {
+  padding: 12px;
+}
+.cfg-setting-tiles .cfg-card-copy h3 {
+  font-size: 13px;
+}
+.cfg-setting-tiles .cfg-card-copy p {
+  font-size: 11px;
+}
+.cfg-setting-art {
+  width: 100%;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--cfg-violet);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--cfg-violet) 12%, var(--cfg-panel)),
+    var(--cfg-panel)
+  );
+}
+.cfg-setting-art strong {
+  font-size: 21px;
+  letter-spacing: -0.5px;
+}
+.cfg-ratio-outline {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cfg-violet) 12%, transparent);
+}
+.cfg-quality-meter {
+  display: flex;
+  gap: 4px;
+  align-items: end;
+  height: 31px;
+}
+.cfg-quality-meter i {
+  width: 9px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--cfg-line);
+}
+.cfg-quality-meter i:nth-child(2) {
+  height: 19px;
+}
+.cfg-quality-meter i:nth-child(3) {
+  height: 23px;
+}
+.cfg-quality-meter i:nth-child(4) {
+  height: 27px;
+}
+.cfg-quality-meter i:nth-child(5) {
+  height: 31px;
+}
+.cfg-quality-meter .is-on {
+  background: var(--cfg-violet);
+}
+.cfg-setting-custom {
+  max-width: 360px;
+  padding-bottom: 15px;
+}
+.cfg-setting-custom label,
+.cfg-setting-custom small {
+  display: block;
+  margin: 12px 15px 0;
+  font-size: 12px;
+}
+.cfg-setting-custom small {
+  color: var(--cfg-muted);
+  font-size: 11px;
+}
+.cfg-setting-custom input {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--cfg-line);
+  background: var(--cfg-panel);
+  border-radius: 7px;
+  padding: 10px;
+}

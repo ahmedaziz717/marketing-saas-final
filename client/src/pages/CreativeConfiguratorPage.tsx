@@ -1379,6 +1379,7 @@ function Configurator() {
             model restores its own defaults.
           </p>
           <ModelSettings
+            presentation="tiles"
             organizationId={organizationId}
             modelId={setup.modelId}
             options={setup.modelOptions}
