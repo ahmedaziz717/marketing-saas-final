@@ -1,0 +1,666 @@
+{
+  "generator": "Built-in image generation",
+  "purpose": "Original editorial inspiration; not actual output samples from the model named on a card.",
+  "assets": [
+    {
+      "id": "style-realistic",
+      "name": "Realistic",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Extremely realistic macro photograph of a worn cognac leather camera case on a textured stone slab, subtle pores, stitching, physical lens reflections and natural daylight. Documentary precision.",
+      "file": "style-realistic.webp"
+    },
+    {
+      "id": "style-cinematic",
+      "name": "Cinematic",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. A sculptural white sports coupe parked under a rain-soaked elevated train at blue hour, anamorphic lighting, red reflected traffic light, cinematic depth and film still composition, no people or branding.",
+      "file": "style-cinematic.webp"
+    },
+    {
+      "id": "type-image",
+      "name": "Image",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. A sculptural translucent cobalt vase with one coral flower, dramatic pale peach studio wall, exceptionally crisp gallery-quality still-life photography.",
+      "file": "type-image.webp"
+    },
+    {
+      "id": "scene-subject",
+      "name": "Subject only",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. An unbranded pearl-white over-ear headphone isolated on a soft sage studio background, clean product-only photography, no props, meticulous polished detail.",
+      "file": "scene-subject.webp"
+    },
+    {
+      "id": "model-cinema-studio",
+      "name": "Cinema Studio",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. An elegant futuristic cinema camera floating over a dark burgundy velvet stage, beautiful precision glass optics and subtle golden volumetric beams, cinematic production identity.",
+      "file": "models/cinema-studio.webp"
+    },
+    {
+      "id": "model-genjutsu",
+      "name": "Genjutsu",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Surreal cinematic scene of a small luminous koi fish swimming in midair through an impossible origami city at violet dusk, exquisite reflective details, fantastical visual-effects identity.",
+      "file": "models/genjutsu.webp"
+    },
+    {
+      "id": "mood-premium",
+      "name": "Premium",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Premium. Use refined materials, controlled highlights, elegant spacing, and quiet luxury restraint. Main subject: an elegant burgundy leather handbag on dark walnut with a small brushed brass accent, quiet luxury.",
+      "file": "mood-premium.webp"
+    },
+    {
+      "id": "mood-playful",
+      "name": "Playful",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Playful. Use expressive color, buoyant shapes, and light visual energy while retaining brand polish. Main subject: a coral instant camera balancing on cheerful yellow and sky blue sculptural spheres, playful physical studio photography, NOT a cartoon or animated world, no sneaker.",
+      "file": "mood-playful.webp"
+    },
+    {
+      "id": "mood-warm",
+      "name": "Warm",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Warm. Use inviting warm tones, soft natural light, and an approachable optimistic atmosphere. Main subject: a honey-coloured candle in amber glass with knitted oatmeal linen and morning sun.",
+      "file": "mood-warm.webp"
+    },
+    {
+      "id": "mood-bold",
+      "name": "Bold",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Bold. Use assertive scale, strong graphic contrast, and an immediate high-impact composition. Main subject: an oversized bright red stool in a dramatic black-and-white architectural space.",
+      "file": "mood-bold.webp"
+    },
+    {
+      "id": "mood-minimal",
+      "name": "Minimal",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Minimal. Use one dominant focal point, generous negative space, and only essential supporting elements. Main subject: a single red pear on a vast soft grey surface, extraordinarily spare composition.",
+      "file": "mood-minimal.webp"
+    },
+    {
+      "id": "mood-dark",
+      "name": "Dark",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Dark. Use deep controlled backgrounds, focused highlights, and premium contrast without losing product detail. Main subject: a charcoal ceramic espresso cup revealed by a single thin beam of silver light against deep black.",
+      "file": "mood-dark.webp"
+    },
+    {
+      "id": "mood-vibrant",
+      "name": "Vibrant",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Vibrant. Use energetic color, lively contrast, and confident visual rhythm while keeping the product easy to read. Main subject: a cobalt blue bicycle helmet floating amid hot pink, orange and aqua sculptural ribbons.",
+      "file": "mood-vibrant.webp"
+    },
+    {
+      "id": "mood-clean",
+      "name": "Clean",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Mood: Clean. Use crisp visual hierarchy, balanced whitespace, restrained color, and a polished uncluttered finish. Main subject: a pristine white glass pitcher with clear water and a single long shadow on pale porcelain.",
+      "file": "mood-clean.webp"
+    },
+    {
+      "id": "new-year",
+      "name": "New Year",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: New Year. Art direction: Midnight celebration with restrained gold light, elegant confetti, and optimistic forward momentum. Palette: #0F172A, #FBBF24, #E2E8F0. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "new-year.webp"
+    },
+    {
+      "id": "winter-reset",
+      "name": "Winter Reset",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Winter Reset. Art direction: Crisp winter clarity, clean blue-white light, and a calm fresh-start composition. Palette: #0C4A6E, #7DD3FC, #F8FAFC. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "winter-reset.webp"
+    },
+    {
+      "id": "ces-launch",
+      "name": "New Year Reveal",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: New Year Reveal. Art direction: An editorial new-year reveal with crisp blue accents, a simple stage, and confident introduction of the selected offering. Palette: #020617, #0EA5E9, #F8FAFC. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "ces-launch.webp"
+    },
+    {
+      "id": "new-year-upgrade",
+      "name": "New Year Upgrade",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: New Year Upgrade. Art direction: Forward-looking upgrade story with ascending forms, clean energy, and confident product emphasis. Palette: #111827, #8B5CF6, #FFFFFF. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "new-year-upgrade.webp"
+    },
+    {
+      "id": "productivity-kickoff",
+      "name": "Productivity Kickoff",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Productivity Kickoff. Art direction: Organized, focused composition that communicates a capable start to the year through clean structure and momentum. Palette: #172554, #38BDF8, #F8FAFC. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "productivity-kickoff.webp"
+    },
+    {
+      "id": "frost-premium",
+      "name": "Frosted Premium",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Frosted Premium. Art direction: Luxury winter treatment with frosted glass depth, silver-blue highlights, and refined product lighting. Palette: #0F172A, #BAE6FD, #FFFFFF. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "frost-premium.webp"
+    },
+    {
+      "id": "valentines",
+      "name": "Valentine's Day · Romantic Elegance",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Valentine's Day · Romantic Elegance. Art direction: Sophisticated romantic atmosphere with ruby, blush, and soft metallic accents; avoid cliché clutter. Palette: #4C0519, #F43F5E, #FBCFE8. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "valentines.webp"
+    },
+    {
+      "id": "valentines-playful",
+      "name": "Valentine's Day · Playful Color",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Valentine's Day · Playful Color. Art direction: Bold paper-cut hearts, playful curved typography space, coral and pink color blocks, and a lighthearted inclusive mood. Palette: #FFF1F2, #E11D48, #FB923C. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "valentines-playful.webp"
+    },
+    {
+      "id": "valentines-self-care",
+      "name": "Valentine's Day · A Moment for You",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Valentine's Day · A Moment for You. Art direction: Soft linen textures, warm daylight, muted rose accents, and a peaceful self-appreciation mood suitable for products or experiences. Palette: #F5F0E8, #A78B8A, #3F3F46. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "valentines-self-care.webp"
+    },
+    {
+      "id": "valentines-modern",
+      "name": "Valentine's Day · Modern Minimal",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Valentine's Day · Modern Minimal. Art direction: An ivory editorial layout with one sculptural red ribbon, precise spacing, and restrained romantic accents. Palette: #FFF7ED, #B91C1C, #18181B. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "valentines-modern.webp"
+    },
+    {
+      "id": "presidents-day",
+      "name": "Presidents Day",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Presidents Day. Art direction: Confident red, white, and blue promotional composition with polished patriotic restraint. Palette: #1E3A8A, #DC2626, #FFFFFF. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "presidents-day.webp"
+    },
+    {
+      "id": "winter-clearance",
+      "name": "Winter Clearance",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Winter Clearance. Art direction: Crisp seasonal promotion with icy color, bold approved offer space, and clear product hierarchy. Palette: #082F49, #38BDF8, #FFFFFF. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "winter-clearance.webp"
+    },
+    {
+      "id": "love-your-setup",
+      "name": "Everyday Joy",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Everyday Joy. Art direction: Warm lifestyle atmosphere with soft pink accents and thoughtfully framed details that celebrate small everyday moments. Palette: #2E1065, #EC4899, #FDE68A. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "love-your-setup.webp"
+    },
+    {
+      "id": "championship-weekend",
+      "name": "Championship Weekend",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Championship Weekend. Art direction: Big-game energy with stadium-inspired light, premium dark contrast, and dynamic but uncluttered composition. Palette: #111827, #F59E0B, #FFFFFF. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "championship-weekend.webp"
+    },
+    {
+      "id": "creator-appreciation",
+      "name": "Customer Appreciation",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Customer Appreciation. Art direction: Warm inclusive appreciation styling with elegant color and human-centered editorial balance; do not invent testimonials. Palette: #312E81, #A78BFA, #F8FAFC. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "creator-appreciation.webp"
+    },
+    {
+      "id": "march-madness",
+      "name": "March Momentum",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: March Momentum. Art direction: Energetic spring composition with curved forms, orange accents, and optimistic movement without sports-event or team branding. Palette: #172554, #F97316, #FFFFFF. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "march-madness.webp"
+    },
+    {
+      "id": "spring-launch",
+      "name": "Spring Launch",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Spring Launch. Art direction: Fresh launch atmosphere with modern botanical forms, clean green light, and new-season momentum. Palette: #052E16, #22C55E, #F0FDF4. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "spring-launch.webp"
+    },
+    {
+      "id": "st-patricks",
+      "name": "St. Patrick's Day",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: St. Patrick's Day. Art direction: Deep emerald and subtle gold seasonal styling with refined celebratory accents. Palette: #052E16, #16A34A, #FBBF24. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "st-patricks.webp"
+    },
+    {
+      "id": "spring-sale",
+      "name": "Spring Sale",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Spring Sale. Art direction: Bright seasonal promotion with blossom-inspired color and reserved space for approved savings copy. Palette: #4C1D95, #F472B6, #FDE68A. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "spring-sale.webp"
+    },
+    {
+      "id": "tax-refund-early",
+      "name": "Tax Refund Season",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Tax Refund Season. Art direction: Smart-value promotional mood using green and gold accents without inventing financial or offer claims. Palette: #052E16, #22C55E, #FBBF24. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "tax-refund-early.webp"
+    },
+    {
+      "id": "women-in-tech",
+      "name": "International Women's Day",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: International Women's Day. Art direction: An inclusive celebration of women with expressive violet color, thoughtful editorial spacing, and confident typography; do not invent endorsements or achievements. Palette: #3B0764, #C084FC, #67E8F9. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "women-in-tech.webp"
+    },
+    {
+      "id": "tax-refund",
+      "name": "Tax Refund Sale",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Tax Refund Sale. Art direction: Value-led seasonal sale treatment with disciplined green accents and strong approved-offer hierarchy. Palette: #14532D, #4ADE80, #FDE047. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "tax-refund.webp"
+    },
+    {
+      "id": "earth-day",
+      "name": "Earth Day",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Earth Day. Art direction: Nature-forward composition with organic textures and responsible visual cues; make no unsupported sustainability claims. Palette: #052E16, #22C55E, #BBF7D0. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "earth-day.webp"
+    },
+    {
+      "id": "spring-gaming",
+      "name": "Spring Energy",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Spring Energy. Art direction: Fresh pastel atmosphere with lavender and teal accents, natural light, and airy spacing around the featured offering. Palette: #312E81, #C4B5FD, #67E8F9. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "spring-gaming.webp"
+    },
+    {
+      "id": "easter-weekend",
+      "name": "Easter Weekend",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Easter Weekend. Art direction: Refined spring celebration with soft pastel geometry and subtle festive accents. Palette: #4C1D95, #F9A8D4, #FDE68A. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "easter-weekend.webp"
+    },
+    {
+      "id": "creator-workflow",
+      "name": "Everyday Ease",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Everyday Ease. Art direction: A simple everyday lifestyle composition with organized layers, human-scale details, and breathing room around the selected offering. Palette: #0F172A, #06B6D4, #F8FAFC. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "creator-workflow.webp"
+    },
+    {
+      "id": "clean-setup",
+      "name": "Spring Refresh",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Spring Refresh. Art direction: Bright refreshed environment with clean surfaces, airy spacing, and a welcoming seasonal composition. Palette: #F8FAFC, #A7F3D0, #0F172A. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "clean-setup.webp"
+    },
+    {
+      "id": "memorial-day",
+      "name": "Memorial Day · Quiet Remembrance",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Memorial Day · Quiet Remembrance. Art direction: A quiet commemorative layout with muted navy, cream, and restrained red details. Use generous whitespace; no celebratory fireworks, military endorsement, or invented charitable claims. Palette: #1E3A8A, #B91C1C, #FFFFFF. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "memorial-day.webp"
+    },
+    {
+      "id": "memorial-day-heritage",
+      "name": "Memorial Day · Heritage",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Memorial Day · Heritage. Art direction: Respectful heritage styling with subtle woven texture, muted patriotic colors, and timeless serif typography space. No celebration, sales hype, or implied military affiliation. Palette: #172554, #9F1239, #F5F0E8. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "memorial-day-heritage.webp"
+    },
+    {
+      "id": "memorial-day-minimal",
+      "name": "Memorial Day · Minimal Tribute",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Memorial Day · Minimal Tribute. Art direction: A spacious white composition with one restrained navy line and a small muted red accent; dignified, quiet, and commemorative. Palette: #F8FAFC, #334155, #9F1239. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "memorial-day-minimal.webp"
+    },
+    {
+      "id": "memorial-day-weekend",
+      "name": "Memorial Day · Weekend Edit",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Memorial Day · Weekend Edit. Art direction: An understated early-summer editorial setting with warm natural light. Keep any supplied retail offer distinct from commemorative messaging; no invented discounts or urgency. Palette: #FEF3C7, #1E3A8A, #A16207. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "memorial-day-weekend.webp"
+    },
+    {
+      "id": "mothers-day",
+      "name": "Mother's Day · Floral Appreciation",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mother's Day · Floral Appreciation. Art direction: Elegant appreciation theme with floral-inspired color, warm light, and sophisticated gift positioning. Palette: #4A044E, #F472B6, #FDE68A. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mothers-day.webp"
+    },
+    {
+      "id": "mothers-day-modern",
+      "name": "Mother's Day · Modern Gratitude",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mother's Day · Modern Gratitude. Art direction: Clean ivory editorial styling, sculptural pink forms, and generous space for a sincere message. Palette: #FAF7F2, #9D174D, #27272A. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mothers-day-modern.webp"
+    },
+    {
+      "id": "mothers-day-time",
+      "name": "Mother's Day · Time Together",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mother's Day · Time Together. Art direction: Warm golden-hour light, soft organic textures, and inviting space suggesting shared experiences without inventing people or packages. Palette: #FFF7ED, #D97706, #78350F. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mothers-day-time.webp"
+    },
+    {
+      "id": "mothers-day-soft",
+      "name": "Mother's Day · Soft Luxury",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mother's Day · Soft Luxury. Art direction: Soft lavender, satin-like texture, and delicate champagne accents with refined restrained composition. Palette: #F5F3FF, #C4B5FD, #6B5B43. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mothers-day-soft.webp"
+    },
+    {
+      "id": "graduation",
+      "name": "Graduation Season",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Graduation Season. Art direction: Achievement-focused celebration with clean gold accents, upward movement, and polished milestone energy. Palette: #111827, #FBBF24, #FFFFFF. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "graduation.webp"
+    },
+    {
+      "id": "summer-preview",
+      "name": "Summer Preview",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Summer Preview. Art direction: Warm early-summer atmosphere with bright horizon light and optimistic seasonal energy. Palette: #0C4A6E, #FB923C, #FDE68A. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "summer-preview.webp"
+    },
+    {
+      "id": "small-business",
+      "name": "Small Business Week",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Small Business Week. Art direction: Authentic business-ready presentation with clear utility, confident structure, and human-scale professionalism. Palette: #172554, #38BDF8, #F8FAFC. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "small-business.webp"
+    },
+    {
+      "id": "gaming-anniversary",
+      "name": "Anniversary Celebration",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Anniversary Celebration. Art direction: Milestone celebration with restrained confetti, warm metallic accents, and space for a verified anniversary year. Palette: #2E1065, #8B5CF6, #FBBF24. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "gaming-anniversary.webp"
+    },
+    {
+      "id": "fathers-day",
+      "name": "Father's Day · Refined Classic",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Father's Day · Refined Classic. Art direction: Bold, refined appreciation theme with navy and gold accents and confident gift-ready product focus. Palette: #172554, #2563EB, #FBBF24. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fathers-day.webp"
+    },
+    {
+      "id": "fathers-day-outdoors",
+      "name": "Father's Day · Open Air",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Father's Day · Open Air. Art direction: Natural green textures, warm daylight, and relaxed outdoor editorial styling relevant to the selected offering. Palette: #ECFCCB, #365314, #A16207. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fathers-day-outdoors.webp"
+    },
+    {
+      "id": "fathers-day-modern",
+      "name": "Father's Day · Modern Simplicity",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Father's Day · Modern Simplicity. Art direction: Clean stone backdrop, geometric orange accents, and contemporary uncluttered composition. Palette: #FAFAF9, #475569, #EA580C. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fathers-day-modern.webp"
+    },
+    {
+      "id": "fathers-day-moments",
+      "name": "Father's Day · Shared Moments",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Father's Day · Shared Moments. Art direction: Warm amber light and tactile everyday materials with inviting space for an experience-led message. Palette: #FEF3C7, #92400E, #172554. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fathers-day-moments.webp"
+    },
+    {
+      "id": "summer-kickoff",
+      "name": "Summer Kickoff",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Summer Kickoff. Art direction: High-energy summer opening with warm sun, ocean-inspired color, and vibrant movement. Palette: #0C4A6E, #F97316, #FDE047. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "summer-kickoff.webp"
+    },
+    {
+      "id": "pride-month",
+      "name": "Pride Month",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Pride Month. Art direction: Inclusive celebration using a refined spectrum of color, confident energy, and respectful visual balance. Palette: #111827, #F43F5E, #8B5CF6. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "pride-month.webp"
+    },
+    {
+      "id": "mid-year-upgrade",
+      "name": "Mid-Year Upgrade",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mid-Year Upgrade. Art direction: Progress-oriented premium direction with upward movement, refined lighting, and product improvement cues. Palette: #111827, #D4AF37, #FFFFFF. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mid-year-upgrade.webp"
+    },
+    {
+      "id": "graduation-late",
+      "name": "Graduate Upgrade",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Graduate Upgrade. Art direction: Modern achievement story connecting a new chapter with a capable product upgrade. Palette: #0F172A, #FBBF24, #E2E8F0. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "graduation-late.webp"
+    },
+    {
+      "id": "creator-season",
+      "name": "Season of Possibility",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Season of Possibility. Art direction: Expressive seasonal styling with rich violet accents, layered paper textures, and optimistic editorial energy. Palette: #312E81, #A78BFA, #22D3EE. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "creator-season.webp"
+    },
+    {
+      "id": "independence-day",
+      "name": "Independence Day · Evening Sparkle",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Independence Day · Evening Sparkle. Art direction: Celebratory red, white, and blue composition with refined fireworks-inspired light and bold product staging. Palette: #1E3A8A, #DC2626, #FFFFFF. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "independence-day.webp"
+    },
+    {
+      "id": "independence-day-picnic",
+      "name": "Independence Day · Summer Gathering",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Independence Day · Summer Gathering. Art direction: Sunlit summer setting with subtle red-white-blue fabric accents and relaxed gathering energy. Palette: #FFFBEB, #DC2626, #1D4ED8. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "independence-day-picnic.webp"
+    },
+    {
+      "id": "independence-day-modern",
+      "name": "Independence Day · Modern Americana",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Independence Day · Modern Americana. Art direction: Clean color-blocked Americana with restrained stars, architectural whitespace, and graphic editorial rhythm. Palette: #FAFAF9, #1E3A8A, #B91C1C. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "independence-day-modern.webp"
+    },
+    {
+      "id": "independence-day-coastal",
+      "name": "Independence Day · Coastal Weekend",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Independence Day · Coastal Weekend. Art direction: Airy coastal light, pale blue textures, and a small red accent; relaxed and refined with no crowded decorations. Palette: #EFF6FF, #0369A1, #E11D48. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "independence-day-coastal.webp"
+    },
+    {
+      "id": "summer-gaming",
+      "name": "Summer Living",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Summer Living. Art direction: Warm sunset color, relaxed lifestyle energy, and an inviting seasonal environment adapted to the selected product or service. Palette: #7C2D12, #FB923C, #67E8F9. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "summer-gaming.webp"
+    },
+    {
+      "id": "mid-year-sale",
+      "name": "Mid-Year Sale",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Mid-Year Sale. Art direction: High-impact promotional hierarchy with bold red and gold accents and reserved approved-offer space. Palette: #450A0A, #EF4444, #FBBF24. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "mid-year-sale.webp"
+    },
+    {
+      "id": "prime-event",
+      "name": "Summer Shopping Event",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Summer Shopping Event. Art direction: A broad summer retail-event composition with warm orange accents, clean visual hierarchy, and space for verified promotional details. Palette: #0C4A6E, #F59E0B, #FFFFFF. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "prime-event.webp"
+    },
+    {
+      "id": "hot-deal",
+      "name": "Summer Hot Deal",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Summer Hot Deal. Art direction: Heat-driven promotional styling with energetic orange light and clear approved-deal hierarchy. Palette: #3B0A02, #F97316, #FDE047. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "hot-deal.webp"
+    },
+    {
+      "id": "outdoor-creator",
+      "name": "Outdoor Living",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Outdoor Living. Art direction: Natural outdoor light, fresh foliage, and relaxed lifestyle composition appropriate to the selected offering. Palette: #134E4A, #2DD4BF, #FDE68A. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "outdoor-creator.webp"
+    },
+    {
+      "id": "back-to-school",
+      "name": "Back to School",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Back to School. Art direction: Fresh academic-season energy with structured layouts, bold color, and practical product focus. Palette: #172554, #E11D48, #FFFFFF. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "back-to-school.webp"
+    },
+    {
+      "id": "late-summer",
+      "name": "Late Summer",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Late Summer. Art direction: Golden sunset fading to violet dusk with warm end-of-season nostalgia. Palette: #431407, #FB923C, #7C3AED. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "late-summer.webp"
+    },
+    {
+      "id": "college-gaming",
+      "name": "Campus Life",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Campus Life. Art direction: A welcoming campus-season atmosphere with organized space, energetic student styling, and adaptable product or service storytelling. Palette: #0F172A, #2563EB, #FBBF24. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "college-gaming.webp"
+    },
+    {
+      "id": "back-to-dorm",
+      "name": "Back to Dorm",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Back to Dorm. Art direction: Compact-room transformation with smart organization, cozy lighting, and clear product utility. Palette: #312E81, #8B5CF6, #FFFFFF. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "back-to-dorm.webp"
+    },
+    {
+      "id": "creator-workstation",
+      "name": "Professional Focus",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Professional Focus. Art direction: A polished professional setting with organized forms, natural materials, and calm purposeful lighting; only show tools relevant to the chosen offering. Palette: #082F49, #06B6D4, #F8FAFC. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "creator-workstation.webp"
+    },
+    {
+      "id": "end-of-summer",
+      "name": "End of Summer",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: End of Summer. Art direction: Warm final-summer atmosphere with amber light, calm evening depth, and a polished seasonal transition. Palette: #7C2D12, #FDBA74, #312E81. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "end-of-summer.webp"
+    },
+    {
+      "id": "labor-day",
+      "name": "Labor Day · Classic Weekend",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Labor Day · Classic Weekend. Art direction: Confident end-of-summer event treatment with restrained patriotic color and clean product prominence. Palette: #1E3A8A, #DC2626, #FFFFFF. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "labor-day.webp"
+    },
+    {
+      "id": "labor-day-last-light",
+      "name": "Labor Day · Last Light of Summer",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Labor Day · Last Light of Summer. Art direction: Golden-hour amber fading into violet, soft natural textures, and a relaxed seasonal transition. Palette: #FFF7ED, #FB923C, #6D28D9. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "labor-day-last-light.webp"
+    },
+    {
+      "id": "labor-day-fresh-start",
+      "name": "Labor Day · Fresh Routine",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Labor Day · Fresh Routine. Art direction: Organized teal and cream composition with clean shapes and a purposeful fresh-start atmosphere. Palette: #F0FDFA, #0F766E, #1E293B. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "labor-day-fresh-start.webp"
+    },
+    {
+      "id": "labor-day-weekend-edit",
+      "name": "Labor Day · Weekend Essentials",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Labor Day · Weekend Essentials. Art direction: Warm neutral editorial arrangement with navy and terracotta accents and clear space for verified offer copy. Palette: #FAF7F2, #1E3A8A, #C2410C. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "labor-day-weekend-edit.webp"
+    },
+    {
+      "id": "fall-launch",
+      "name": "Fall Launch",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Fall Launch. Art direction: Warm autumn launch with amber leaves, deep orange light, and refined new-season momentum. Palette: #431407, #EA580C, #FBBF24. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fall-launch.webp"
+    },
+    {
+      "id": "back-to-gaming",
+      "name": "Back to Routine",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Back to Routine. Art direction: A calm return-to-routine composition with warm autumn accents, balanced space, and purposeful everyday energy. Palette: #111827, #EA580C, #D4AF37. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "back-to-gaming.webp"
+    },
+    {
+      "id": "new-tech-season",
+      "name": "New Season Discovery",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: New Season Discovery. Art direction: A crisp new-season reveal with fresh blue accents, modern editorial structure, and welcoming discovery cues. Palette: #020617, #0EA5E9, #FFFFFF. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "new-tech-season.webp"
+    },
+    {
+      "id": "productivity-refresh",
+      "name": "Productivity Refresh",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Productivity Refresh. Art direction: Organized fall reset with calm teal accents, clear hierarchy, and efficient workspace energy. Palette: #0F172A, #14B8A6, #F8FAFC. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "productivity-refresh.webp"
+    },
+    {
+      "id": "football-season",
+      "name": "Football Season",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Football Season. Art direction: Stadium-inspired light, field geometry, and game-day energy without using protected team marks. Palette: #052E16, #FBBF24, #FFFFFF. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "football-season.webp"
+    },
+    {
+      "id": "halloween",
+      "name": "Halloween",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Halloween. Art direction: Dark seasonal atmosphere with orange glow, purple fog, and tasteful spooky accents around a readable product. Palette: #111111, #F97316, #7C3AED. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "halloween.webp"
+    },
+    {
+      "id": "october-sale",
+      "name": "October Sale",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: October Sale. Art direction: Rich crimson and burnt-orange sale styling with strong approved-offer hierarchy. Palette: #450A0A, #B91C1C, #F59E0B. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "october-sale.webp"
+    },
+    {
+      "id": "fall-gaming",
+      "name": "Autumn Comfort",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Autumn Comfort. Art direction: Cozy autumn textures with warm wood, amber accents, and sophisticated seasonal depth. Palette: #431407, #92400E, #F59E0B. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "fall-gaming.webp"
+    },
+    {
+      "id": "spooky-builds",
+      "name": "Halloween · Playful Magic",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Halloween · Playful Magic. Art direction: Playful seasonal styling with illustrated stars, purple shadows, soft orange light, and friendly rather than frightening details. Palette: #09090B, #7C3AED, #F97316. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "spooky-builds.webp"
+    },
+    {
+      "id": "creator-after-dark",
+      "name": "After Hours",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: After Hours. Art direction: An elegant evening atmosphere with cinematic violet accents, soft ambient light, and sophisticated editorial spacing. Palette: #09090B, #A855F7, #22D3EE. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "creator-after-dark.webp"
+    },
+    {
+      "id": "harvest-upgrade",
+      "name": "Harvest Upgrade",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Harvest Upgrade. Art direction: Warm harvest textures, golden light, and a premium seasonal upgrade story. Palette: #3F1D0B, #D97706, #FDE68A. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "harvest-upgrade.webp"
+    },
+    {
+      "id": "black-friday",
+      "name": "Black Friday · Bold Contrast",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Black Friday · Bold Contrast. Art direction: Maximum-impact retail event with black space, gold highlights, orange urgency, and strict approved-offer use. Palette: #000000, #FBBF24, #F97316. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "black-friday.webp"
+    },
+    {
+      "id": "black-friday-minimal",
+      "name": "Black Friday · Minimal Edit",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Black Friday · Minimal Edit. Art direction: White-space-led retail layout with sharp black typography zones and one red accent. Display only approved offer details. Palette: #FAFAFA, #18181B, #DC2626. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "black-friday-minimal.webp"
+    },
+    {
+      "id": "black-friday-premium",
+      "name": "Black Friday · Premium Gold",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Black Friday · Premium Gold. Art direction: Matte black and warm gold editorial styling, gallery lighting, and restrained space for verified promotions. Palette: #18181B, #D4AF37, #FEF3C7. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "black-friday-premium.webp"
+    },
+    {
+      "id": "black-friday-color",
+      "name": "Black Friday · Color Pop",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Black Friday · Color Pop. Art direction: Bold violet and lime color blocks with playful pink accents and clear hierarchy; never invent discounts or deadlines. Palette: #2E1065, #D9F99D, #F472B6. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "black-friday-color.webp"
+    },
+    {
+      "id": "cyber-monday",
+      "name": "Cyber Monday",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Cyber Monday. Art direction: Modern online-shopping event with cyan and violet accents, bold readable hierarchy, and space only for approved offers; no assumed technology products. Palette: #0F172A, #22D3EE, #8B5CF6. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "cyber-monday.webp"
+    },
+    {
+      "id": "veterans-day",
+      "name": "Veterans Day",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Veterans Day. Art direction: Respectful military-inspired palette with disciplined structure and restrained patriotic accents. Palette: #1F2937, #4D7C0F, #B91C1C. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "veterans-day.webp"
+    },
+    {
+      "id": "thanksgiving",
+      "name": "Thanksgiving",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Thanksgiving. Art direction: Warm harvest atmosphere with amber light, rich texture, and a refined gratitude-centered seasonal mood. Palette: #431407, #EA580C, #FBBF24. Main subject: a sculptural ceramic table lamp. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "thanksgiving.webp"
+    },
+    {
+      "id": "holiday-preview",
+      "name": "Holiday Preview",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Holiday Preview. Art direction: Early holiday anticipation with refined red, green, and gold accents and clean gift-ready presentation. Palette: #052E16, #DC2626, #FBBF24. Main subject: a folded silk scarf with a simple cuff bracelet. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "holiday-preview.webp"
+    },
+    {
+      "id": "gift-early",
+      "name": "Gift Early",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Gift Early. Art direction: Organized early-gifting direction with premium wrapping cues, calm urgency, and clear product focus. Palette: #172554, #DC2626, #FDE68A. Main subject: an unbranded amber glass fragrance bottle. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "gift-early.webp"
+    },
+    {
+      "id": "holiday-sale",
+      "name": "Holiday Sale",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Holiday Sale. Art direction: Festive retail atmosphere with evergreen, red, and gold accents plus clear approved-sale hierarchy. Palette: #052E16, #DC2626, #FBBF24. Main subject: a hand-crafted leather weekender bag. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "holiday-sale.webp"
+    },
+    {
+      "id": "christmas-gaming",
+      "name": "Christmas · Classic Warmth",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Christmas · Classic Warmth. Art direction: Warm evergreen and deep red styling, soft golden light, and tasteful Christmas details suitable for gifts or seasonal experiences. Palette: #450A0A, #DC2626, #D4AF37. Main subject: an ivory tea cup and saucer. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "christmas-gaming.webp"
+    },
+    {
+      "id": "christmas-winter-white",
+      "name": "Christmas · Winter White",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Christmas · Winter White. Art direction: Airy white-on-white winter composition with soft silver accents and subtle paper snowflakes. Palette: #FFFFFF, #CBD5E1, #A78BFA. Main subject: a small brushed-silver wireless speaker. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "christmas-winter-white.webp"
+    },
+    {
+      "id": "christmas-playful",
+      "name": "Christmas · Merry and Bright",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Christmas · Merry and Bright. Art direction: Playful paper ornaments, bright festive color blocks, and a cheerful uncluttered composition. Palette: #FDF2F8, #DC2626, #16A34A. Main subject: a pair of unbranded white trainers. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "christmas-playful.webp"
+    },
+    {
+      "id": "christmas-luxe",
+      "name": "Christmas · Midnight Gold",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Christmas · Midnight Gold. Art direction: Midnight navy, delicate gold ribbon, and warm spot lighting with elegant seasonal restraint. Palette: #0F172A, #D4AF37, #FFFBEB. Main subject: a matte terracotta planter. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "christmas-luxe.webp"
+    },
+    {
+      "id": "new-years-eve",
+      "name": "New Year's Eve",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: New Year's Eve. Art direction: Midnight countdown atmosphere with elegant gold and silver light, celebratory depth, and premium polish. Palette: #0F172A, #FBBF24, #E2E8F0. Main subject: an elegant unbranded wristwatch. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "new-years-eve.webp"
+    },
+    {
+      "id": "winter-gaming",
+      "name": "Winter Calm",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Winter Calm. Art direction: Deep-blue winter atmosphere with soft crystalline light, cozy contrast, and uncluttered editorial styling. Palette: #082F49, #7DD3FC, #FFFFFF. Main subject: a linen-bound notebook and fountain pen. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "winter-gaming.webp"
+    },
+    {
+      "id": "gift-guide",
+      "name": "Gift Guide",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Gift Guide. Art direction: Curated gift-guide layout with organized product hierarchy, elegant ribbon cues, and clean editorial spacing. Palette: #052E16, #B91C1C, #D4AF37. Main subject: a ribbed glass vase. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "gift-guide.webp"
+    },
+    {
+      "id": "year-end-upgrade",
+      "name": "Year-End Upgrade",
+      "prompt": "Use case: ads-marketing. Create ONE exquisite landscape 3:2 editorial choice-card photograph for EvokeLoop Creative Studio. Full bleed, premium production, central focal area readable in a wide thumbnail, tasteful negative space. No text, letters, numerals, labels, logos, watermark, UI, borders or contact sheet. This is an inspiration image, not a generated-model output claim. Theme: Year-End Upgrade. Art direction: Confident year-end transformation with premium violet and gold light and forward-looking product energy. Palette: #111827, #8B5CF6, #FBBF24. Main subject: a sculptural wooden chair. Build a distinctive editorial set that expresses this exact theme; no generic placeholder image. Any typography or offer areas mentioned in the direction must be left blank. Do not depict discounts or claims.",
+      "file": "year-end-upgrade.webp"
+    }
+  ]
+}
