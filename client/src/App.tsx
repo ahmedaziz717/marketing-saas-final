@@ -19,6 +19,7 @@ import WorkspaceApp from "./pages/WorkspaceApp";
 import BrandWorkspacePage from "./pages/BrandWorkspacePage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
+import CreativeConfiguratorPage from "./pages/CreativeConfiguratorPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
 import SettingsPage from "./pages/SettingsPage";
 import InvitePage from "./pages/InvitePage";
@@ -75,6 +76,10 @@ function Router() {
       <Route path="/app/creatives">
         <StageAppsPage />
       </Route>
+      <Route
+        path="/app/creatives/configurator"
+        component={CreativeConfiguratorPage}
+      />
       <Route path="/app/creatives/overview" component={CreativesPage} />
       <Route path="/app/creatives/workflows">
         <CreativeWorkflowsPage />
@@ -126,7 +131,10 @@ function Router() {
         component={LegacyPublishingPage}
       />
       <Route path="/app/advertising/meta" component={AdvertisingPage} />
-      <Route path="/app/optimize/intelligence" component={OptimizationIntelligencePage} />
+      <Route
+        path="/app/optimize/intelligence"
+        component={OptimizationIntelligencePage}
+      />
       <Route path="/app/analytics" component={AnalyticsPage} />
       <Route path="/app/analytics/advertising" component={AnalyticsPage} />
       <Route path="/app/analytics/social" component={AnalyticsPage} />

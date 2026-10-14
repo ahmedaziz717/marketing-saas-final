@@ -4,6 +4,7 @@ import { VideoStudio } from "@/components/VideoStudio";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
   Image,
+  SlidersHorizontal,
   Clapperboard,
   Megaphone,
   MessageSquare,
@@ -33,6 +34,13 @@ import {
 import { editablePublication, type Channel } from "@shared/channels";
 
 const creationChoices = [
+  {
+    path: "configurator",
+    title: "Creative Configurator",
+    icon: SlidersHorizontal,
+    description:
+      "A new visual studio. Configure images and videos with guided choices, model filters and live credit quotes.",
+  },
   {
     path: "images",
     title: "Image creator",
@@ -194,7 +202,12 @@ function Studio() {
           <div className="studio-app-grid">
             {creationChoices.map(choice => {
               const { path, title, icon: Icon, description } = choice;
-              const assetApp = ["images", "video", "ugc-video"].includes(path);
+              const assetApp = [
+                "images",
+                "video",
+                "ugc-video",
+                "configurator",
+              ].includes(path);
               const allowed =
                 path === "plans" || (assetApp ? canCreate : canCompose);
               const query = new URLSearchParams();
