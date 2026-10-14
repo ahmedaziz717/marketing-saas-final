@@ -143,6 +143,14 @@ it("offers an incoming video only to the supported organic flow", () => {
       }) as HTMLButtonElement
     ).disabled
   ).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Choose another asset" }));
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Select Meta Ads",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(false);
 });
 it("omits expired channels and prevents choosing a read-only channel", () => {
   api.accounts[0].expired = true;

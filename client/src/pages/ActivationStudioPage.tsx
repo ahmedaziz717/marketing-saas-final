@@ -107,7 +107,7 @@ function ActivationStudio() {
         </p>
       ) : (
         <>
-          {assetKey && (
+          {assetKey && (!currentChannel || missingAsset) && (
             <div className="activation-source-banner">
               {initialAsset?.mediaType === "image" && (
                 <img src={initialAsset.url} alt={initialAsset.name} />
@@ -135,11 +135,11 @@ function ActivationStudio() {
                     >
                       Open asset in Library
                     </Link>
-                    <button type="button" onClick={() => setAssetKey("")}>
-                      Choose another asset
-                    </button>
                   </>
                 )}
+                <button type="button" onClick={() => setAssetKey("")}>
+                  Choose another asset
+                </button>
               </div>
             </div>
           )}
