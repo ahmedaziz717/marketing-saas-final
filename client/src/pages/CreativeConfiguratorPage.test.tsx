@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   org: 1,
   route: vi.fn(),
   drafts: [] as any[],
+  history: [] as any[],
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({
@@ -37,7 +38,9 @@ vi.mock("@/components/WorkspaceGate", () => ({
   WorkspaceGate: ({ children }: any) => children,
 }));
 vi.mock("@/components/LifestylePersonPicker", () => ({
-  LifestylePersonPicker: () => <div>People library picker</div>,
+  PersonPortrait: ({ person }: any) => (
+    <div role="img" aria-label={person.name} />
+  ),
 }));
 vi.mock("@/components/VideoReferencePicker", () => ({
   VideoReferencePicker: () => null,
@@ -59,11 +62,18 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
       creativeBuilder: { options: { invalidate: vi.fn() } },
-      video: { list: { invalidate: vi.fn() } },
+      video: {
+        list: { invalidate: vi.fn() },
+        catalogImages: { invalidate: vi.fn() },
+      },
       assetLibrary: { studioList: { invalidate: vi.fn() } },
       models: { credits: { invalidate: vi.fn() } },
     }),
     creativeBuilder: {
+      studioHistory: {
+        useQuery: () => ({ data: api.history, refetch: vi.fn() }),
+      },
+      people: { useQuery: () => ({ data: [] }) },
       options: {
         useQuery: () => ({
           data: {
@@ -94,7 +104,12 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     models: {
-      catalog: {
+      studioEstimate: {
+        useQuery: () => ({
+          data: { credits: 31, assumptions: "Estimate for selected settings" },
+        }),
+      },
+      studioCatalog: {
         useQuery: () => ({
           data: [
             DEFAULT_IMAGE_MODEL,
@@ -115,7 +130,28 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     assetLibrary: { studioList: { useQuery: () => ({ data: [] }) } },
+    catalogSources: {
+      previewProductPage: {
+        useMutation: () => ({ reset: vi.fn(), mutateAsync: vi.fn() }),
+      },
+      addEntries: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    },
     video: {
+      catalogImages: {
+        useQuery: () => ({
+          data: {
+            items: [
+              {
+                key: "product_image:2",
+                name: "Studio lamp",
+                detail: "Photo 1",
+                url: "/lamp.png",
+              },
+            ],
+            nextOffset: null,
+          },
+        }),
+      },
       list: { useQuery: () => ({ data: [] }) },
       options: { useQuery: () => ({ data: { ready: true } }) },
       save: { useMutation: () => ({ mutateAsync: api.videoSave }) },
@@ -134,6 +170,7 @@ beforeEach(() => {
   api.role = "owner";
   api.org = 1;
   api.drafts = [];
+  api.history = [];
   api.save.mockResolvedValue({ briefId: 1, updatedAtMs: 123 });
   api.generate.mockResolvedValue({ status: "queued" });
 });
@@ -170,12 +207,12 @@ it("compares at most three models and never invokes generation", () => {
 });
 it("duplicates a build, preserves its snapshot, highlights changes, and swaps without overwriting a cloud draft", async () => {
   open();
-  fireEvent.change(screen.getByLabelText("Configuration name"), {
+  fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "Original build" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Duplicate & compare" }));
   expect(
-    (screen.getByLabelText("Configuration name") as HTMLInputElement).value
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Original build · Alternative");
   section(/Look & Feel Make it yours/);
   fireEvent.click(
@@ -191,7 +228,7 @@ it("duplicates a build, preserves its snapshot, highlights changes, and swaps wi
   expect(dialog.queryByRole("rowheader", { name: "Theme" })).toBeNull();
   fireEvent.click(dialog.getByRole("button", { name: "Swap builds" }));
   expect(
-    (screen.getByLabelText("Configuration name") as HTMLInputElement).value
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Original build");
   const stored = JSON.parse(
     localStorage.getItem("el-configurator-v1:10:1:comparison")!
@@ -224,20 +261,20 @@ function section(name: RegExp) {
 }
 it("preserves each type's name and setup when switching Image/Video", () => {
   open();
-  fireEvent.change(screen.getByLabelText("Configuration name"), {
+  fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "My image" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
-  fireEvent.change(screen.getByLabelText("Configuration name"), {
+  fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "My film" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
   expect(
-    (screen.getByLabelText("Configuration name") as HTMLInputElement).value
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("My image");
   fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
   expect(
-    (screen.getByLabelText("Configuration name") as HTMLInputElement).value
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("My film");
   expect(api.generate).not.toHaveBeenCalled();
 });
@@ -247,13 +284,13 @@ it("explains the people dependency and unlocks its picker only for people scenes
   fireEvent.click(
     screen.getByRole("button", { name: /People Needs people scene/ })
   );
-  expect(screen.queryByText("People library picker")).toBeNull();
+  expect(screen.queryByRole("group", { name: "People gender" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /Choose a scene/ }));
   fireEvent.click(
     screen.getByRole("button", { name: "Select Lifestyle · with people" })
   );
   fireEvent.click(screen.getByRole("button", { name: "People" }));
-  expect(screen.getByText("People library picker")).toBeTruthy();
+  expect(screen.getByRole("group", { name: "People gender" })).toBeTruthy();
 });
 it("saves a real workspace draft without invoking generation", async () => {
   open();
@@ -297,7 +334,7 @@ it("does not reuse another workspace's local draft", () => {
   localStorage.setItem("el-configurator-v1:10:2", JSON.stringify(config));
   open();
   expect(
-    (screen.getByLabelText("Configuration name") as HTMLInputElement).value
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Untitled creative");
 });
 it("disables generation for incomplete source selection even if a cached quote exists", () => {
@@ -320,5 +357,71 @@ it("opens model details without changing selection or spending credits", () => {
   expect(
     within(screen.getByRole("dialog")).getByText("Reference images")
   ).toBeTruthy();
+  expect(api.generate).not.toHaveBeenCalled();
+});
+
+it("keeps an estimated credit total visible before required sources are selected", () => {
+  open();
+  expect(screen.getAllByText("≈ 31 credits").length).toBeGreaterThan(0);
+  expect(screen.queryByText(/Complete setup for quote/i)).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Generate images",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+});
+it("renders selected catalog source photos and titles in video builds", () => {
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video.imageKeys = ["product_image:2"];
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  const sources = within(
+    screen.getByRole("region", { name: "Selected sources" })
+  );
+  expect(sources.getByText("Studio lamp")).toBeTruthy();
+  expect(
+    (
+      sources.getByRole("img", { name: "Studio lamp" }) as HTMLImageElement
+    ).getAttribute("src")
+  ).toBe("/lamp.png");
+  expect(screen.queryByText(/Catalog reference 1/)).toBeNull();
+});
+
+it("previews a generated version without changing settings or generating, and reuses only on explicit action", () => {
+  const trial = newConfiguration().image;
+  trial.name = "Previous lamp";
+  api.history = [
+    {
+      id: 8,
+      title: "Previous lamp square",
+      url: "/prior-lamp.png",
+      createdAtMs: 1791979200000,
+      status: "pending",
+      setup: trial,
+    },
+  ];
+  open();
+  const name = screen.getByRole("textbox", { name: "Creative name" });
+  fireEvent.change(name, { target: { value: "Keep my current draft" } });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Preview Previous lamp square" })
+  );
+  expect(
+    screen
+      .getByRole("img", { name: "Previous lamp square" })
+      .getAttribute("src")
+  ).toBe("/prior-lamp.png");
+  expect((name as HTMLInputElement).value).toBe("Keep my current draft");
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.generate).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use these settings as a new draft" })
+  );
+  expect((name as HTMLInputElement).value).toBe("Previous lamp · new version");
+  expect(api.save).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
 });

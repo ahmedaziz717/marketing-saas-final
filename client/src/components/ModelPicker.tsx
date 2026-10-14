@@ -1,3 +1,4 @@
+import { ModelSettingTiles } from "./configurator/ModelSettingTiles";
 import { useState } from "react";
 import { Search, ChevronDown, Check, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -236,12 +237,14 @@ export function ModelSettings({
   options = {},
   onChange,
   disabled = false,
+  presentation = "fields",
 }: {
   organizationId?: number | null;
   modelId?: string;
   options?: ModelOptions;
   onChange: (value: ModelOptions) => void;
   disabled?: boolean;
+  presentation?: "fields" | "tiles";
 }) {
   const catalog = trpc.models.catalog.useQuery(
     { organizationId: organizationId! },
@@ -349,21 +352,41 @@ export function ModelSettings({
           </button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        {fields
-          .filter(([key]) => primary.has(key))
-          .map(([k, p]) => render(k, p))}
-      </div>
+      {presentation === "tiles" ? (
+        <ModelSettingTiles
+          fields={fields.filter(([key]) => primary.has(key))}
+          options={options}
+          values={values}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {fields
+            .filter(([key]) => primary.has(key))
+            .map(([k, p]) => render(k, p))}
+        </div>
+      )}
       {fields.some(([k]) => !primary.has(k)) && (
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer text-xs text-muted-foreground">
             More model settings
           </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {fields
-              .filter(([key]) => !primary.has(key))
-              .map(([k, p]) => render(k, p))}
-          </div>
+          {presentation === "tiles" ? (
+            <ModelSettingTiles
+              fields={fields.filter(([key]) => !primary.has(key))}
+              options={options}
+              values={values}
+              onChange={onChange}
+              disabled={disabled}
+            />
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {fields
+                .filter(([key]) => !primary.has(key))
+                .map(([k, p]) => render(k, p))}
+            </div>
+          )}
         </details>
       )}
     </div>

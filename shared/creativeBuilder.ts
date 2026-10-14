@@ -341,6 +341,10 @@ export const creativeSetupSchema = z
         description: z.string().trim().max(3000).default(""),
       })
       .optional(),
+    sourceAssetKeys: z
+      .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
+      .max(9)
+      .optional(),
     referenceAssetIds: z.array(z.number().int().positive()).max(3).optional(),
     productMode: z.enum(["separate", "together"]),
     shot: z.enum([
@@ -399,6 +403,14 @@ export const creativeSetupSchema = z
       ctx.addIssue({
         code: "custom",
         message: "Choose a promotion or catalog items, not both.",
+      });
+    if (
+      new Set(setup.sourceAssetKeys ?? []).size !==
+      (setup.sourceAssetKeys ?? []).length
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Source images must be unique.",
       });
     const people = selectedPeople(setup);
     if (setup.person && setup.people !== undefined)
@@ -526,10 +538,17 @@ export function defaultCreativeSetup(
     },
   };
 }
+export function isReferenceCreative(setup: CreativeSetup) {
+  return (
+    setup.promotionMode !== "platform" &&
+    !setup.products.length &&
+    !!setup.sourceAssetKeys?.length
+  );
+}
 export function outputCount(setup: CreativeSetup) {
   return (
     setup.formatIds.length *
-    (setup.promotionMode === "platform"
+    (setup.promotionMode === "platform" || isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -543,7 +562,7 @@ export function creativeImageOutputs(setup: CreativeSetup) {
     .filter(Boolean)
     .sort((a, b) => b.width * b.height - a.width * a.height);
   const groups =
-    setup.promotionMode === "platform"
+    setup.promotionMode === "platform" || isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -554,8 +573,12 @@ export function creativeImageOutputs(setup: CreativeSetup) {
 }
 export function generationSetupIssues(setup: CreativeSetup) {
   const issues: string[] = [];
-  if (setup.promotionMode !== "platform" && !setup.products.length)
-    issues.push("Select a catalog item, or choose a business promotion.");
+  if (
+    setup.promotionMode !== "platform" &&
+    !setup.products.length &&
+    !isReferenceCreative(setup)
+  )
+    issues.push("Select a catalog item, image asset, or business promotion.");
   if (
     setup.promotionMode === "platform" &&
     setup.promotion &&

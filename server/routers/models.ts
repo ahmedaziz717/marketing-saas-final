@@ -18,9 +18,11 @@ import {
 import {
   generationModel,
   generationModels,
+  modelDefaults,
   modelOptionsSchema,
 } from "../../shared/modelCatalog";
 import {
+  resolveModel,
   compatibleRoutes,
   adminModelActionQuote,
   defaultModelRate,
@@ -47,6 +49,7 @@ import {
   textActionRate,
   type TextAction,
 } from "../../shared/textActionEstimate";
+import { studioPlanningEstimate } from "../lib/studioEstimate";
 const scope = z.object({ organizationId: z.number().int().positive() });
 async function authorized(userId: number, organizationId: number) {
   await requireOrganizationRole(userId, organizationId, [
@@ -59,6 +62,64 @@ async function authorized(userId: number, organizationId: number) {
   return libraryDatabase();
 }
 export const modelsRouter = router({
+  studioCatalog: protectedProcedure
+    .input(scope)
+    .query(async ({ ctx, input }) => {
+      const db = await authorized(ctx.user.id, input.organizationId);
+      const [catalog, rates, policy] = await Promise.all([
+        publicModelCatalog(db),
+        db.select().from(providerRates),
+        getCreditPolicy(db),
+      ]);
+      return catalog
+        .filter(c => c.enabled)
+        .map(c => {
+          if (!c.available) return c;
+          const model = generationModel(c.routeId)!;
+          const base =
+            rates.find(
+              r =>
+                r.provider === model.provider && r.model === model.providerModel
+            )?.config ?? defaultModelRate(model);
+          try {
+            const estimate = studioPlanningEstimate(
+              model,
+              {
+                ...base,
+                billingMode: "cost",
+                markupPercent: base.markupPercent ?? policy.markupPercent,
+                creditValueMicros: policy.creditValueMicros,
+              },
+              modelDefaults(model),
+              [{ width: 1024, height: 1024 }]
+            );
+            return { ...c, estimatedCredits: estimate.credits };
+          } catch {
+            return { ...c, estimatedCredits: null };
+          }
+        });
+    }),
+  studioEstimate: protectedProcedure
+    .input(
+      scope.extend({
+        modelId: z.string().max(240),
+        kind: z.enum(["image", "video"]),
+        options: modelOptionsSchema.default({}),
+        outputs: z.array(imageOutputSizeSchema).min(1).max(144),
+        sourceSeconds: z.number().positive().max(120).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await authorized(ctx.user.id, input.organizationId);
+      const model = await resolveModel(db, input.modelId, input.kind);
+      return studioPlanningEstimate(
+        model,
+        await modelRate(db, model, input.options),
+        input.options,
+        input.outputs,
+        input.sourceSeconds
+      );
+    }),
   nodeQuote: protectedProcedure
     .input(scope.extend({ node: workflowNodeSchema }))
     .query(async ({ ctx, input }) => ({
