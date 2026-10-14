@@ -476,3 +476,106 @@ it("keeps the destination URL separate for paid ads", () => {
   saveDraft();
   expect(api.save.mock.calls[0][0].content.link).toBe("https://example.com/ad");
 });
+
+it("keeps a Studio social draft intact across steps and saves timing without approving or sending", () => {
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="facebook"
+      initialAssetKey="asset:1"
+    />
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Select Our Page" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue to creative" }));
+  fireEvent.change(caption(), {
+    target: { value: "Our new collection is here." },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Choose timing" }));
+  fireEvent.change(screen.getByLabelText("Time zone"), {
+    target: { value: "UTC" },
+  });
+  fireEvent.change(screen.getByLabelText("Publish date and time"), {
+    target: { value: "2099-06-15T12:30" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /3 Creative & copy/ }));
+  expect(caption().value).toBe("Our new collection is here.");
+  fireEvent.click(screen.getByRole("button", { name: /5 Review/ }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save & review delivery" })
+  );
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      connectionId: "page",
+      assetKey: "asset:1",
+      timezone: "UTC",
+      scheduledAtMs: new Date("2099-06-15T12:30:00Z").getTime(),
+      content: expect.objectContaining({
+        message: "Our new collection is here.",
+      }),
+    })
+  );
+  expect(api.review).not.toHaveBeenCalled();
+  expect(api.queue).not.toHaveBeenCalled();
+});
+
+it("disables read-only Studio accounts and omits expired connections", () => {
+  api.accounts.push({
+    ...api.accounts[0],
+    id: "read",
+    name: "Read only Page",
+    details: { capabilities: ["read"] },
+  });
+  api.accounts.push({
+    ...api.accounts[0],
+    id: "expired",
+    name: "Expired Page",
+    expired: true,
+  });
+  render(<PublicationComposer {...baseProps} studio />);
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Select Read only Page",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(
+    screen.queryByRole("button", { name: "Select Expired Page" })
+  ).toBeNull();
+});
+
+it("uses edited Studio timing for existing drafts and blocks dates in the past", () => {
+  render(<PublicationComposer {...baseProps} studio item={deliveryItem()} />);
+  fireEvent.click(screen.getByRole("button", { name: /4 Timing/ }));
+  fireEvent.change(screen.getByLabelText("Publish date and time"), {
+    target: { value: "2000-01-01T12:00" },
+  });
+  saveDraft();
+  expect(api.save).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select After confirmation" })
+  );
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ scheduledAtMs: null })
+  );
+});
+
+it("does not discard the selected ad image when its selected format tile is clicked again", () => {
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="meta_ads"
+      initialAssetKey="asset:1"
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Continue to creative" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Single image" }));
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ assetKey: "asset:1" })
+  );
+});

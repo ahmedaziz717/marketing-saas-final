@@ -215,20 +215,19 @@ export function StudioPreview({
                       ? "Approve"
                       : "Submit for approval"}
               </button>
-              <button
-                type="button"
+              <Link
                 className="cfg-secondary"
-                disabled
-                title="The Activate configurator is coming next. No publishing occurs here."
+                href={`/app/activate/studio?asset=${encodeURIComponent(selected.key)}`}
               >
                 Activate / Publish
-              </button>
+              </Link>
             </div>
             <p className="cfg-help">
               {selectedAsset?.state === "approved"
                 ? "Approved in Asset Library. Approval does not publish your creative."
                 : "Saved automatically in Asset Library → Drafts. Approval is optional until you are ready."}{" "}
-              Activate / Publish will open the next configurator when available.
+              Activation Studio will guide you through destinations, copy,
+              timing and delivery approval.
             </p>
             {actionError && <p role="alert">{actionError}</p>}
             <Link

@@ -50,6 +50,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Create",
     aliases: ["/app/plans", "/app/briefs"],
     children: [
+      { label: "Creative Studio", path: "/app/creatives/studio" },
       { label: "Apps", path: "/app/creatives", exact: true },
       { label: "Workflows", path: "/app/creatives/workflows" },
       { label: "Drafts", path: "/app/creatives/drafts" },
@@ -63,6 +64,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Activate",
     aliases: ["/app/social", "/app/publishing", "/app/activate", "/app/email"],
     children: [
+      { label: "Activation Studio", path: "/app/activate/studio" },
       { label: "Apps", path: "/app/activate/apps" },
       { label: "Workflows", path: "/app/activate/workflows" },
       { label: "Advertising", path: "/app/advertising", exact: true },
@@ -170,6 +172,8 @@ export function workspacePageLabel(location: string, search = "") {
   if (location === "/app/roadmap") return "Settings / Product roadmap";
   const editor = (
     {
+      studio: "Creative Studio",
+      configurator: "Creative Studio",
       images: "Image creator",
       video:
         new URLSearchParams(search).get("type") === "ugc"

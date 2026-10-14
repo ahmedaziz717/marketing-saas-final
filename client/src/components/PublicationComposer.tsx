@@ -1,3 +1,13 @@
+import { StudioCard } from "./configurator/StudioCard";
+import {
+  CalendarDays,
+  Clock3,
+  Image,
+  Layers,
+  RectangleVertical,
+  Building2,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { SavedCopyTags } from "./CopyTags";
 import { AdCampaignPicker } from "./AdCampaignPicker";
 import { CampaignPlanSelect } from "./CampaignPlanSelect";
@@ -38,6 +48,7 @@ import {
   linkSchema,
   dateInZone,
   localScheduleToUtc,
+  validTimezone,
   statusLabel,
   editablePublication,
   type Channel,
@@ -71,7 +82,37 @@ export function PublicationStatus({
     </span>
   );
 }
+function ComposerSurface({
+  studio,
+  stage,
+  onClose,
+  children,
+}: {
+  studio: boolean;
+  stage: "create" | "activate";
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (studio) return <div className="activation-composer">{children}</div>;
+  return (
+    <Dialog
+      open
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        data-workflow={stage === "create" ? "Create" : "Activate"}
+        className="publication-composer flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-4xl [&>*]:min-w-0"
+      >
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
 export function PublicationComposer({
+  studio = false,
+  onChangeChannel,
   item,
   stage = "create",
   initialPlanId,
@@ -84,6 +125,8 @@ export function PublicationComposer({
   onClose,
   onSaved,
 }: {
+  studio?: boolean;
+  onChangeChannel?: () => void;
   item?: Publication;
   stage?: "create" | "activate";
   initialPlanId?: number;
@@ -107,11 +150,14 @@ export function PublicationComposer({
   const [id] = useState(() => item?.id ?? crypto.randomUUID());
   const channel = item?.channel ?? initialChannel;
   const adWizard = channel === "meta_ads" && composing;
+  const wizard = adWizard || studio;
   const CopyToolsContainer = channel === "facebook" ? "details" : "div";
-  const [step, setStep] = useState<"setup" | "creative" | "preview">("setup");
+  const [step, setStep] = useState<
+    "setup" | "creative" | "delivery" | "preview"
+  >("setup");
   const [platform, setPlatform] = useState("meta_ads");
   const scrollBody = useRef<HTMLDivElement>(null);
-  function goToStep(next: "setup" | "creative" | "preview") {
+  function goToStep(next: "setup" | "creative" | "delivery" | "preview") {
     setStep(next);
     if (scrollBody.current) scrollBody.current.scrollTop = 0;
   }
@@ -272,6 +318,41 @@ export function PublicationComposer({
   function submit(next?: "activate") {
     nextAction.current = next;
     try {
+      if (studio && next && channel === "meta_ads") {
+        const account = connectedAccounts.find(c => c.id === connectionId);
+        if (!account?.details.capabilities.includes("publish")) {
+          goToStep("setup");
+          throw new Error("Choose an ad account with publishing permission.");
+        }
+        if (!content.adSetId) {
+          goToStep("setup");
+          throw new Error(
+            "Choose a campaign and ad set before reviewing delivery."
+          );
+        }
+        if (
+          !copyAssetKeys.length ||
+          copyAssetKeys.some(
+            key =>
+              !assets.data?.some(
+                a =>
+                  a.key === key &&
+                  a.state === "approved" &&
+                  a.purpose === "finished" &&
+                  a.mediaType === "image"
+              )
+          )
+        ) {
+          goToStep("creative");
+          throw new Error("Choose approved image assets for this ad.");
+        }
+        if (!content.message.trim() || !normalizeDestinationUrl(content.link)) {
+          goToStep("creative");
+          throw new Error(
+            "Add primary text and a valid destination URL before reviewing delivery."
+          );
+        }
+      }
       if (channel === "facebook") {
         const issues = Object.entries(socialErrors).filter(
           ([field]) =>
@@ -283,18 +364,23 @@ export function PublicationComposer({
         );
         if (issues.length) {
           setShowErrors(true);
+          if (studio)
+            goToStep(issues[0][0] === "destination" ? "setup" : "creative");
           focusIssue(issues[0][0]);
           return;
         }
       }
-      const at =
-        stage === "create"
+      const at = studio
+        ? local
+          ? localScheduleToUtc(local, timezone)
+          : null
+        : stage === "create"
           ? (item?.scheduledAtMs ??
             (local ? localScheduleToUtc(local, timezone) : null))
           : local
             ? localScheduleToUtc(local, timezone)
             : null;
-      if (stage === "activate" && at && at <= Date.now())
+      if ((stage === "activate" || studio) && at && at <= Date.now())
         throw new Error(
           "Choose a future date, or clear the schedule to use Publish now."
         );
@@ -347,68 +433,174 @@ export function PublicationComposer({
     }
   }
   return (
-    <Dialog
-      open
-      onOpenChange={open => {
-        if (!open && !save.isPending) onClose();
+    <ComposerSurface
+      studio={studio}
+      stage={stage}
+      onClose={() => {
+        if (!save.isPending) onClose();
       }}
     >
-      <DialogContent
-        data-workflow={stage === "create" ? "Create" : "Activate"}
-        className="publication-composer flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-4xl [&>*]:min-w-0"
-      >
-        <DialogHeader className="border-b px-5 py-5 pr-12 text-left sm:px-6">
-          <DialogTitle>
-            {stage === "activate"
-              ? "Delivery settings"
-              : `${item ? "Edit" : "Create"} ${channel === "facebook" ? "social post" : "ad"}`}
-          </DialogTitle>
-          <DialogDescription>
-            {stage === "create"
-              ? channel === "meta_ads"
-                ? "Choose where your ad runs, build the creative, then preview it."
-                : "Write your caption, add optional media, then choose when to publish."
-              : "Choose the destination and timing for this content, then review and approve delivery."}
-          </DialogDescription>
-        </DialogHeader>
-        {adWizard && (
-          <nav
-            aria-label="Ad creation steps"
-            className="grid grid-cols-3 gap-2 border-b bg-muted/30 px-4 py-3"
-          >
-            {(
-              [
+      {studio ? (
+        <div className="activation-context">
+          <span>
+            {channelNames[channel]} ·{" "}
+            {channel === "meta_ads" ? "Paid advertising" : "Organic social"}
+          </span>
+          <Link href="/app/publishing">Open calendar</Link>
+        </div>
+      ) : (
+        <>
+          <DialogHeader className="border-b px-5 py-5 pr-12 text-left sm:px-6">
+            <DialogTitle>
+              {stage === "activate"
+                ? "Delivery settings"
+                : `${item ? "Edit" : "Create"} ${channel === "facebook" ? "social post" : "ad"}`}
+            </DialogTitle>
+            <DialogDescription>
+              {stage === "create"
+                ? channel === "meta_ads"
+                  ? "Choose where your ad runs, build the creative, then preview it."
+                  : "Write your caption, add optional media, then choose when to publish."
+                : "Choose the destination and timing for this content, then review and approve delivery."}
+            </DialogDescription>
+          </DialogHeader>
+        </>
+      )}
+      {wizard && (
+        <nav
+          aria-label={studio ? "Activation steps" : "Ad creation steps"}
+          className={
+            studio
+              ? "activation-steps"
+              : "grid grid-cols-3 gap-2 border-b bg-muted/30 px-4 py-3"
+          }
+        >
+          {studio && (
+            <button type="button" onClick={onChangeChannel}>
+              <span>1</span>Channel
+            </button>
+          )}
+          {(studio
+            ? ([
+                [
+                  "setup",
+                  channel === "meta_ads" ? "Account & campaign" : "Page",
+                ],
+                ["creative", "Creative & copy"],
+                ["delivery", "Timing"],
+                ["preview", "Review"],
+              ] as const)
+            : ([
                 ["setup", "Account & targeting"],
                 ["creative", "Creative"],
                 ["preview", "Preview"],
-              ] as const
-            ).map(([value, label], i) => (
-              <button
-                type="button"
-                key={value}
-                aria-current={step === value ? "step" : undefined}
-                onClick={() => goToStep(value)}
-                className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs sm:text-sm ${step === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                <span className="shrink-0 rounded-full border border-current/30 px-1.5 text-xs">
-                  {i + 1}
-                </span>
-                <span>{label}</span>
-              </button>
-            ))}
-          </nav>
+              ] as const)
+          ).map(([value, label], i) => (
+            <button
+              type="button"
+              key={value}
+              aria-current={step === value ? "step" : undefined}
+              onClick={() => goToStep(value)}
+              className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs sm:text-sm ${step === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              <span className="shrink-0 rounded-full border border-current/30 px-1.5 text-xs">
+                {i + (studio ? 2 : 1)}
+              </span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className={studio ? "activation-workspace" : undefined}>
+        {studio && (
+          <aside className="activation-preview">
+            <ContentPreview
+              channel={channel}
+              content={content}
+              asset={selectedAsset}
+              assets={assets.data ?? []}
+            />
+            <div className="activation-summary">
+              <h3>Your activation</h3>
+              <dl>
+                <dt>Channel</dt>
+                <dd>{channelNames[channel]}</dd>
+                <dt>Account</dt>
+                <dd>
+                  {connectedAccounts.find(c => c.id === connectionId)?.name ||
+                    "Choose an account"}
+                </dd>
+                <dt>Creative</dt>
+                <dd>
+                  {copyAssetKeys.length
+                    ? `${copyAssetKeys.length} approved asset${copyAssetKeys.length === 1 ? "" : "s"} selected`
+                    : channel === "facebook"
+                      ? "Text or website preview"
+                      : "Choose your images"}
+                </dd>
+                <dt>Timing</dt>
+                <dd>
+                  {local
+                    ? `${local.replace("T", " · ")} · ${timezone}`
+                    : "After final confirmation"}
+                </dd>
+              </dl>
+              <p>
+                {channel === "meta_ads"
+                  ? "Ads are delivered to Meta paused. Launch and budgets remain under your control."
+                  : "You will review and confirm before anything is posted."}
+              </p>
+            </div>
+          </aside>
         )}
         <div
           ref={scrollBody}
-          className="min-h-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6"
+          className={
+            studio
+              ? "activation-fields"
+              : "min-h-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6"
+          }
         >
           <fieldset
             className="publication-fields grid min-w-0 grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2"
             disabled={save.isPending}
           >
-            {(!adWizard || step === "setup") && (
+            {studio && (
+              <div className="sm:col-span-2 activation-section-title">
+                <h2>
+                  {
+                    {
+                      setup:
+                        channel === "meta_ads"
+                          ? "Choose your account & campaign"
+                          : "Choose your Facebook Page",
+                      creative: "Make it ready for your audience",
+                      delivery: "Choose your timing",
+                      preview: "Review your activation",
+                    }[step]
+                  }
+                </h2>
+                <p>
+                  {
+                    {
+                      setup:
+                        channel === "meta_ads"
+                          ? "Available connections from this workspace. Campaigns show Active by default."
+                          : "Choose a connected Page with publishing permission.",
+                      creative:
+                        "Pair approved media with the right copy and format.",
+                      delivery:
+                        "Pick a time now. Delivery still requires a separate final confirmation.",
+                      preview:
+                        "Save your draft, then review approval and delivery.",
+                    }[step]
+                  }
+                </p>
+              </div>
+            )}
+            {(!wizard || step === "setup") && (
               <>
-                {channel === "meta_ads" && (
+                {channel === "meta_ads" && !studio && (
                   <div className="space-y-2">
                     <Label htmlFor="pub-ad-platform">Advertising channel</Label>
                     <select
@@ -434,7 +626,7 @@ export function PublicationComposer({
                 )}
                 <div
                   className={
-                    channel === "meta_ads"
+                    channel === "meta_ads" && !studio
                       ? "space-y-2"
                       : "sm:col-span-2 space-y-2"
                   }
@@ -448,40 +640,87 @@ export function PublicationComposer({
                       an account.
                     </p>
                   )}
-                  <select
-                    id="pub-destination"
-                    className={channelInput}
-                    value={connectionId}
-                    aria-invalid={showErrors && !!socialErrors.destination}
-                    disabled={connections.isLoading}
-                    onChange={e => {
-                      setConnection(e.target.value);
-                      setContent(c => ({
-                        ...c,
-                        adSetId: "",
-                        metaCampaignId: "",
-                      }));
-                    }}
-                  >
-                    <option value="">
-                      {connections.isLoading
-                        ? "Loading connected accounts…"
-                        : "Select a connected account"}
-                    </option>
-                    {selectedAccountUnavailable && (
-                      <option value={connectionId} disabled>
-                        Previously selected account (unavailable)
-                      </option>
-                    )}
-                    {connectedAccounts.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} · {channelNames[c.channel]}
-                        {c.details.capabilities.includes("publish")
-                          ? ""
-                          : " (read only)"}
-                      </option>
-                    ))}
-                  </select>
+                  {studio ? (
+                    <div
+                      id="pub-destination"
+                      className="cfg-card-grid activation-account-grid"
+                      tabIndex={-1}
+                    >
+                      {connections.isLoading && (
+                        <p role="status">Loading connected accounts…</p>
+                      )}
+                      {connectedAccounts.map(c => (
+                        <StudioCard
+                          key={c.id}
+                          title={c.name}
+                          description={
+                            c.details.pageName
+                              ? `${c.details.pageName} · ${c.details.currency || channelNames[channel]}`
+                              : channelNames[channel]
+                          }
+                          badge={
+                            c.details.capabilities.includes("publish")
+                              ? "Connected"
+                              : "Read only"
+                          }
+                          selected={connectionId === c.id}
+                          disabled={!c.details.capabilities.includes("publish")}
+                          media={
+                            <div className="activation-choice-symbol">
+                              <Building2 size={38} />
+                              <span>{c.name.slice(0, 2).toUpperCase()}</span>
+                            </div>
+                          }
+                          onSelect={() => {
+                            if (connectionId === c.id) return;
+                            setConnection(c.id);
+                            setContent(c => ({
+                              ...c,
+                              adSetId: "",
+                              metaCampaignId: "",
+                            }));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        id="pub-destination"
+                        className={channelInput}
+                        value={connectionId}
+                        aria-invalid={showErrors && !!socialErrors.destination}
+                        disabled={connections.isLoading}
+                        onChange={e => {
+                          setConnection(e.target.value);
+                          setContent(c => ({
+                            ...c,
+                            adSetId: "",
+                            metaCampaignId: "",
+                          }));
+                        }}
+                      >
+                        <option value="">
+                          {connections.isLoading
+                            ? "Loading connected accounts…"
+                            : "Select a connected account"}
+                        </option>
+                        {selectedAccountUnavailable && (
+                          <option value={connectionId} disabled>
+                            Previously selected account (unavailable)
+                          </option>
+                        )}
+                        {connectedAccounts.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} · {channelNames[c.channel]}
+                            {c.details.capabilities.includes("publish")
+                              ? ""
+                              : " (read only)"}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   {connections.error ? (
                     <p role="alert" className="mt-2 text-sm">
                       Connected accounts could not be loaded.{" "}
@@ -545,7 +784,7 @@ export function PublicationComposer({
                   )}
               </>
             )}
-            {composing && (!adWizard || step === "creative") && (
+            {composing && (!wizard || step === "creative") && (
               <>
                 {channel === "facebook" && (
                   <SocialPostFields
@@ -604,7 +843,69 @@ export function PublicationComposer({
                       ? "Photo or video (optional)"
                       : "Approved finished asset"}
                   </p>
-                  {channel === "meta_ads" && (
+                  {channel === "meta_ads" && studio && (
+                    <div className="cfg-card-grid activation-format-grid">
+                      {(
+                        [
+                          [
+                            "single",
+                            "Single image",
+                            "One image with up to five copy options",
+                            Image,
+                          ],
+                          [
+                            "placement",
+                            "Placement images",
+                            "Square 1:1 · Portrait 4:5 · Vertical 9:16",
+                            RectangleVertical,
+                          ],
+                          [
+                            "carousel",
+                            "Carousel",
+                            "Tell a story with 2–10 image cards",
+                            Layers,
+                          ],
+                        ] as const
+                      ).map(([value, title, description, Icon]) => (
+                        <StudioCard
+                          key={value}
+                          title={title}
+                          description={description}
+                          media={
+                            <div className="activation-choice-symbol">
+                              <Icon size={42} />
+                            </div>
+                          }
+                          selected={
+                            (placement
+                              ? "placement"
+                              : carousel
+                                ? "carousel"
+                                : "single") === value
+                          }
+                          onSelect={() => {
+                            if (
+                              (placement
+                                ? "placement"
+                                : carousel
+                                  ? "carousel"
+                                  : "single") === value
+                            )
+                              return;
+                            setCarousel(value === "carousel");
+                            setPlacement(value === "placement");
+                            setAsset("");
+                            setContent(c => ({
+                              ...c,
+                              carouselAssetKeys: undefined,
+                              placementAssetKeys: undefined,
+                            }));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {channel === "meta_ads" && !studio && (
                     <select
                       aria-label="Ad format"
                       className={channelInput + " mb-3"}
@@ -1002,67 +1303,69 @@ export function PublicationComposer({
                 )}
               </>
             )}
-            {composing && channel === "facebook" && (
-              <details className="sm:col-span-2 rounded-xl border p-4 space-y-4">
-                <summary className="cursor-pointer text-sm font-medium">
-                  Post organization (optional)
-                </summary>
-                <p className="text-xs text-muted-foreground">
-                  For your workspace only. These details do not appear on
-                  Facebook.
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor="pub-title">Internal title (optional)</Label>
-                  <input
-                    id="pub-title"
-                    className={channelInput}
-                    maxLength={180}
-                    value={
-                      content.title === "Untitled post" ? "" : content.title
+            {composing &&
+              channel === "facebook" &&
+              (!studio || step === "creative") && (
+                <details className="sm:col-span-2 rounded-xl border p-4 space-y-4">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Post organization (optional)
+                  </summary>
+                  <p className="text-xs text-muted-foreground">
+                    For your workspace only. These details do not appear on
+                    Facebook.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="pub-title">Internal title (optional)</Label>
+                    <input
+                      id="pub-title"
+                      className={channelInput}
+                      maxLength={180}
+                      value={
+                        content.title === "Untitled post" ? "" : content.title
+                      }
+                      placeholder="Automatically named from your caption"
+                      onChange={e => setField("title", e.target.value)}
+                    />
+                  </div>
+                  <CampaignPlanSelect
+                    value={content.campaignPlanId}
+                    onChange={(planId, plan) =>
+                      setContent(c => ({
+                        ...c,
+                        campaignPlanId: planId,
+                        promotion: {
+                          audience:
+                            c.promotion?.audience ||
+                            plan?.audience?.slice(0, 2000) ||
+                            "",
+                          goal:
+                            c.promotion?.goal ||
+                            plan?.creativeDirection?.slice(0, 2000) ||
+                            "",
+                          offer:
+                            c.promotion?.offer ||
+                            plan?.offer?.slice(0, 2000) ||
+                            "",
+                        },
+                        link: c.link || plan?.destinationUrl || "",
+                      }))
                     }
-                    placeholder="Automatically named from your caption"
-                    onChange={e => setField("title", e.target.value)}
                   />
-                </div>
-                <CampaignPlanSelect
-                  value={content.campaignPlanId}
-                  onChange={(planId, plan) =>
-                    setContent(c => ({
-                      ...c,
-                      campaignPlanId: planId,
-                      promotion: {
-                        audience:
-                          c.promotion?.audience ||
-                          plan?.audience?.slice(0, 2000) ||
-                          "",
-                        goal:
-                          c.promotion?.goal ||
-                          plan?.creativeDirection?.slice(0, 2000) ||
-                          "",
-                        offer:
-                          c.promotion?.offer ||
-                          plan?.offer?.slice(0, 2000) ||
-                          "",
-                      },
-                      link: c.link || plan?.destinationUrl || "",
-                    }))
-                  }
-                />
-                <div className="space-y-2">
-                  <Label htmlFor="pub-campaign-label">
-                    Campaign label (optional)
-                  </Label>
-                  <input
-                    id="pub-campaign-label"
-                    className={channelInput}
-                    maxLength={180}
-                    value={content.campaignLabel}
-                    onChange={e => setField("campaignLabel", e.target.value)}
-                  />
-                </div>
-              </details>
-            )}
-            {(!adWizard || step === "preview") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="pub-campaign-label">
+                      Campaign label (optional)
+                    </Label>
+                    <input
+                      id="pub-campaign-label"
+                      className={channelInput}
+                      maxLength={180}
+                      value={content.campaignLabel}
+                      onChange={e => setField("campaignLabel", e.target.value)}
+                    />
+                  </div>
+                </details>
+              )}
+            {!studio && (!wizard || step === "preview") && (
               <ContentPreview
                 channel={channel}
                 content={content}
@@ -1103,8 +1406,42 @@ export function PublicationComposer({
                 </Link>
               </p>
             )}
-            {stage === "activate" && (
+            {((stage === "activate" && !studio) ||
+              (studio && step === "delivery")) && (
               <>
+                {studio && (
+                  <div className="cfg-card-grid activation-timing-grid sm:col-span-2">
+                    <StudioCard
+                      title="After confirmation"
+                      description="Keep this ready to deliver when you decide."
+                      selected={!local}
+                      onSelect={() => setLocal("")}
+                      media={
+                        <div className="activation-choice-symbol">
+                          <Clock3 size={42} />
+                        </div>
+                      }
+                    />
+                    <StudioCard
+                      title="Schedule for later"
+                      description="Choose a specific date, time and time zone."
+                      selected={!!local}
+                      onSelect={() => {
+                        if (local) return;
+                        if (!validTimezone(timezone)) {
+                          toast.error("Enter a valid time zone first.");
+                          return;
+                        }
+                        setLocal(dateInZone(Date.now() + 86400000, timezone));
+                      }}
+                      media={
+                        <div className="activation-choice-symbol">
+                          <CalendarDays size={42} />
+                        </div>
+                      }
+                    />
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="pub-date">Publish date and time</Label>
                   <input
@@ -1145,9 +1482,24 @@ export function PublicationComposer({
                 </div>
               </>
             )}
+            {studio && step === "preview" && (
+              <div className="sm:col-span-2 activation-review-note">
+                <h3>Ready for review</h3>
+                <p>
+                  {local
+                    ? `Requested delivery: ${local.replace("T", " at ")} (${timezone}).`
+                    : "No scheduled time. Delivery will wait for your confirmation."}
+                </p>
+                <p>
+                  Saving creates a draft in your calendar. The next screen keeps
+                  asset approval, publication approval, and delivery
+                  confirmation separate.
+                </p>
+              </div>
+            )}
             {composing &&
               channel === "meta_ads" &&
-              (!adWizard || step === "creative") && (
+              (!wizard || step === "creative") && (
                 <div className="sm:col-span-2">
                   <Label htmlFor="pub-campaign-label">
                     Campaign label (optional)
@@ -1169,66 +1521,79 @@ export function PublicationComposer({
             </p>
           )}
         </div>
-        <div className="flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal">
-          {showErrors && Object.keys(socialErrors).length > 0 && (
-            <p role="alert" className="w-full text-sm text-destructive">
-              {Object.values(socialErrors)[0]}
-            </p>
-          )}
-          <Button variant="outline" disabled={save.isPending} onClick={onClose}>
-            Cancel
-          </Button>
+      </div>
+      <div className="flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal">
+        {showErrors && Object.keys(socialErrors).length > 0 && (
+          <p role="alert" className="w-full text-sm text-destructive">
+            {Object.values(socialErrors)[0]}
+          </p>
+        )}
+        <Button variant="outline" disabled={save.isPending} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="outline"
+          disabled={
+            save.isPending || (channel === "meta_ads" && !content.title.trim())
+          }
+          onClick={() => submit()}
+        >
+          {save.isPending
+            ? "Saving..."
+            : stage === "activate"
+              ? "Save delivery settings"
+              : "Save draft"}
+        </Button>
+        {wizard && step !== "preview" && (
           <Button
-            variant="outline"
+            onClick={() =>
+              goToStep(
+                step === "setup"
+                  ? "creative"
+                  : step === "creative" && studio
+                    ? "delivery"
+                    : "preview"
+              )
+            }
+          >
+            {step === "setup"
+              ? "Continue to creative"
+              : step === "creative" && studio
+                ? "Choose timing"
+                : studio
+                  ? "Review"
+                  : "Preview ad"}
+          </Button>
+        )}
+        {stage === "create" && (!wizard || step === "preview") && (
+          <Button
             disabled={
               save.isPending ||
               (channel === "meta_ads" && !content.title.trim())
             }
-            onClick={() => submit()}
+            onClick={() => submit("activate")}
           >
-            {save.isPending
-              ? "Saving..."
-              : stage === "activate"
-                ? "Save delivery settings"
-                : "Save draft"}
-          </Button>
-          {adWizard && step !== "preview" && (
-            <Button
-              onClick={() =>
-                goToStep(step === "setup" ? "creative" : "preview")
-              }
-            >
-              {step === "setup" ? "Continue to creative" : "Preview ad"}
-            </Button>
-          )}
-          {stage === "create" && (!adWizard || step === "preview") && (
-            <Button
-              disabled={
-                save.isPending ||
-                (channel === "meta_ads" && !content.title.trim())
-              }
-              onClick={() => submit("activate")}
-            >
-              {channel === "facebook"
+            {studio
+              ? "Save & review delivery"
+              : channel === "facebook"
                 ? "Save & continue"
                 : "Save & continue to Activate"}
-            </Button>
-          )}
-        </div>
-        {mediaOpen && (
-          <StudioMediaDialog
-            planId={content.campaignPlanId}
-            onClose={() => setMediaOpen(false)}
-            onChoose={key => {
-              setMediaOpen(false);
-              setPickerOpen(true);
-              void assets.refetch();
-              if (!carousel && !placement) setAsset(key);
-            }}
-          />
+          </Button>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+      {mediaOpen && (
+        <StudioMediaDialog
+          planId={content.campaignPlanId}
+          onClose={() => setMediaOpen(false)}
+          onChoose={key => {
+            setMediaOpen(false);
+            setPickerOpen(true);
+            void assets.refetch();
+            if (!carousel && !placement) setAsset(key);
+          }}
+        />
+      )}
+    </ComposerSurface>
   );
 }
 export function PublicationDetails({
