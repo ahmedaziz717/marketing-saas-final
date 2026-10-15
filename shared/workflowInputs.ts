@@ -73,6 +73,12 @@ export const appFieldSchema = z.object({
   defaultValue: z.string().max(10000).default(""),
   ai: z.boolean().default(false),
   aiInstructions: z.string().max(3000).default(""),
+  studio: z
+    .object({
+      section: z.enum(["setup", "direction", "content"]).optional(),
+      category: z.string().trim().max(60).optional(),
+    })
+    .optional(),
   visibleWhen: z
     .object({ fieldId: z.string().max(80), equals: z.string().max(200) })
     .optional(),

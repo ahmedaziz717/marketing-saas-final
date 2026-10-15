@@ -17,6 +17,11 @@ import {
 } from "@shared/workflowInputs";
 import { Button } from "./ui/button";
 import { WorkflowInputControl } from "./WorkflowInputControl";
+import { WorkflowAppStudio } from "./WorkflowAppStudio";
+import {
+  workflowFieldPlacement,
+  workflowStudioSections,
+} from "@shared/workflowStudio";
 import { performanceField } from "@shared/workflowPerformanceInputs";
 
 export function WorkflowFormEditor({
@@ -25,16 +30,19 @@ export function WorkflowFormEditor({
   organizationId,
   preview = false,
   fieldId,
+  appName = "App preview",
 }: {
   graph: WorkflowGraph;
   onChange: (g: WorkflowGraph) => void;
   organizationId: number;
   preview?: boolean;
   fieldId?: string;
+  appName?: string;
 }) {
   const [kind, setKind] = useState<AppField["kind"]>("theme");
   const [selected, setSelected] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
+  const [page, setPage] = useState("");
   const [direction, setDirection] = useState("");
   const [count, setCount] = useState(5);
   const [proposals, setProposals] = useState<InputChoice[]>([]);
@@ -44,6 +52,13 @@ export function WorkflowFormEditor({
   );
   const node = fields.find(n => n.id === (fieldId ?? selected)) ?? fields[0];
   const f = node?.config.field;
+  const automaticPlacement =
+    node && f
+      ? workflowFieldPlacement({
+          ...node,
+          config: { ...node.config, field: { ...f, studio: undefined } },
+        })
+      : undefined;
   const update = (patch: Partial<AppField>) => {
     if (!node || !f) return;
     onChange({
@@ -62,55 +77,28 @@ export function WorkflowFormEditor({
       ),
     });
   };
-  const current = Object.fromEntries(
-    fields.map(n => [n.id, values[n.id] ?? n.config.field!.defaultValue])
-  );
   if (preview)
     return (
-      <section className="wf-form-preview">
-        <h2>App preview</h2>
-        <p>This preview does not run the workflow or spend credits.</p>
-        {fields.length ? (
-          fields.map(n => {
-            const field = n.config.field!;
-            if (
-              field.visibleWhen &&
-              current[field.visibleWhen.fieldId] !== field.visibleWhen.equals
-            )
-              return null;
-            return (
-              <div className="wf-form-field" key={n.id}>
-                <label>
-                  {n.title}
-                  {field.required ? " *" : ""}
-                </label>
-                <WorkflowInputControl
-                  field={field}
-                  title={n.title}
-                  value={current[n.id]}
-                  organizationId={organizationId}
-                  preview
-                  onChange={v => setValues(old => ({ ...old, [n.id]: v }))}
-                />
-              </div>
-            );
-          })
-        ) : (
-          <p>
-            Add fields in App form to preview them here. Existing text and image
-            steps remain available in the published App.
-          </p>
-        )}
-      </section>
+      <WorkflowAppStudio
+        graph={graph}
+        organizationId={organizationId}
+        title={appName}
+        preview
+        values={values}
+        onChange={(id, value) => setValues(old => ({ ...old, [id]: value }))}
+        page={page}
+        onPageChange={setPage}
+      />
     );
+
   return (
     <section className={`wf-form-editor ${fieldId ? "wf-form-inspector" : ""}`}>
       {!fieldId && (
         <aside>
           <h2>App form</h2>
           <p>
-            Choose what users provide. Connect each field to the steps that need
-            it.
+            Choose what users provide and group fields into Studio sections and
+            category tabs. Connect each field to the steps that need it.
           </p>
           <select
             aria-label="New field type"
@@ -162,7 +150,14 @@ export function WorkflowFormEditor({
                 }}
               >
                 {n.title}
-                <small>{inputLabels[n.config.field!.kind]}</small>
+                <small>
+                  {
+                    workflowStudioSections.find(
+                      s => s.id === workflowFieldPlacement(n).section
+                    )?.title
+                  }{" "}
+                  / {workflowFieldPlacement(n).category}
+                </small>
               </button>
               <button
                 aria-label={`Move ${n.title} up`}
@@ -199,6 +194,54 @@ export function WorkflowFormEditor({
               }
             />
           </label>
+          <label>
+            Studio section
+            <select
+              value={f.studio?.section ?? ""}
+              onChange={e =>
+                update({
+                  studio: {
+                    ...f.studio,
+                    section: (e.target.value || undefined) as NonNullable<
+                      AppField["studio"]
+                    >["section"],
+                  },
+                })
+              }
+            >
+              <option value="">
+                Automatic (
+                {
+                  workflowStudioSections.find(
+                    s => s.id === automaticPlacement?.section
+                  )?.title
+                }
+                )
+              </option>
+              {workflowStudioSections.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Category tab
+            <input
+              value={f.studio?.category ?? ""}
+              maxLength={60}
+              placeholder={automaticPlacement?.category}
+              onChange={e =>
+                update({ studio: { ...f.studio, category: e.target.value } })
+              }
+            />
+          </label>
+          <p>
+            Leave the category blank for automatic grouping. Use the same
+            category name to show related fields together. Field order also sets
+            the category order within each section. Review & run and Results are
+            included automatically.
+          </p>
           <label>
             Help text
             <input

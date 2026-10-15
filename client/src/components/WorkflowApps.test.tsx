@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkflowValue } from "@shared/creativeWorkflow";
 import { copyEvidenceWorkflowTemplate } from "@shared/workflowPerformanceInputs";
@@ -9,12 +16,22 @@ const api = vi.hoisted(() => ({
   apps: [] as any[],
   runs: [] as any[],
   run: vi.fn(),
+  quote: vi.fn(),
+  stop: vi.fn(),
+  refresh: vi.fn(),
 }));
 vi.mock("./WorkflowAutomationControls", () => ({
   WorkflowAutomationControls: () => null,
 }));
 vi.mock("./WorkflowInputControl", () => ({
-  WorkflowInputControl: () => <div>Account and date form</div>,
+  WorkflowInputControl: ({ title, value, onChange, field }: any) => (
+    <textarea
+      aria-label={title}
+      value={value}
+      disabled={field.locked}
+      onChange={e => onChange(e.target.value)}
+    />
+  ),
 }));
 vi.mock("./WorkflowRunReview", () => ({ WorkflowRunReview: () => null }));
 vi.mock("@/lib/trpc", () => ({
@@ -22,14 +39,18 @@ vi.mock("@/lib/trpc", () => ({
     workflows: {
       listApps: { useQuery: () => ({ data: api.apps }) },
       getApp: { useQuery: () => ({ data: api.app }) },
-      get: { useQuery: () => ({ data: { runs: api.runs } }) },
-      quote: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      get: {
+        useQuery: () => ({ data: { runs: api.runs }, refetch: api.refresh }),
+      },
+      quote: { useMutation: () => ({ mutateAsync: api.quote }) },
       run: { useMutation: () => ({ mutateAsync: api.run }) },
-      stop: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      stop: { useMutation: () => ({ mutateAsync: api.stop }) },
     },
     assetLibrary: { studioList: { useQuery: () => ({ data: [] }) } },
   },
 }));
+import { newWorkflowNode } from "@shared/creativeWorkflow";
+import { appFieldSchema } from "@shared/workflowInputs";
 import { WorkflowApps, WorkflowAppRunner } from "./WorkflowApps";
 
 function savedRun(outputs: WorkflowValue[]) {
@@ -64,6 +85,9 @@ beforeEach(() => {
     description: "Compare copy styles",
     graph: copyEvidenceWorkflowTemplate(),
   };
+  api.quote.mockResolvedValue({ credits: 4 });
+  api.run.mockResolvedValue({ id: "new-run" });
+  api.refresh.mockResolvedValue({});
   api.runs = [];
   api.apps = [];
 });
@@ -200,6 +224,7 @@ it("renders a completed published copy report as evidence tables without rerunni
     savedRun([{ type: "data", name: "Copy report", data }]),
   ];
   const { container } = openApp();
+  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(
     screen.getByRole("heading", { name: "Copy evidence report" })
   ).toBeTruthy();
@@ -213,7 +238,9 @@ it("renders a completed published copy report as evidence tables without rerunni
   expect(screen.getByText(/Not estimable/)).toBeTruthy();
   expect(screen.queryByText("Other version result")).toBeNull();
   expect(container.querySelector(".wf-app-results pre")).toBeNull();
-  expect(container.querySelector(".wf-app-run-layout-report")).toBeTruthy();
+  expect(screen.getByRole("region", { name: "App results" }).hidden).toBe(
+    false
+  );
   expect(api.run).not.toHaveBeenCalled();
 });
 
@@ -241,6 +268,7 @@ it("preserves the formatted optimizer report for existing published Apps", () =>
     ]),
   ];
   const { container } = openApp();
+  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("More comparable ads are needed.")).toBeTruthy();
   expect(screen.getByText(/Confidence not estimable/)).toBeTruthy();
   expect(container.querySelector(".wf-app-results pre")).toBeNull();
@@ -276,6 +304,7 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
     ]),
   ];
   const { container } = openApp();
+  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("Generated copy")).toBeTruthy();
   expect(
     screen.getByRole("img", { name: "Generated image" }).getAttribute("src")
@@ -287,5 +316,218 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
     screen.getByRole("link", { name: "Draft post →" }).getAttribute("href")
   ).toBe("/app/publishing?publication=publication-1");
   expect(screen.getByText(/"customMetric": 7/)).toBeTruthy();
-  expect(container.querySelector(".wf-app-run-layout-report")).toBeNull();
+  expect(screen.getByRole("region", { name: "App results" }).hidden).toBe(
+    false
+  );
+});
+
+function formApp() {
+  const channel = newWorkflowNode("app_input", "channel");
+  channel.title = "Destination";
+  channel.config.field = appFieldSchema.parse({
+    kind: "choice",
+    source: "custom",
+    defaultValue: "organic",
+    locked: true,
+    options: [{ id: "organic", label: "Organic" }],
+    studio: { section: "setup", category: "Destination" },
+  });
+  const audience = newWorkflowNode("app_input", "audience");
+  audience.title = "Audience";
+  audience.config.field = appFieldSchema.parse({
+    kind: "audience",
+    required: true,
+  });
+  const copy = newWorkflowNode("app_input", "copy");
+  copy.title = "Caption";
+  copy.config.field = appFieldSchema.parse({
+    kind: "caption",
+    defaultValue: "A useful starting point",
+  });
+  const hidden = newWorkflowNode("app_input", "hidden");
+  hidden.title = "Ad budget";
+  hidden.config.field = appFieldSchema.parse({
+    kind: "number",
+    required: true,
+    visibleWhen: { fieldId: "channel", equals: "paid" },
+  });
+  api.app.graph = {
+    nodes: [
+      channel,
+      audience,
+      copy,
+      hidden,
+      newWorkflowNode("output", "report"),
+    ],
+    edges: [],
+  };
+}
+function reviewApp() {
+  fireEvent.click(screen.getByRole("button", { name: /^Review & run Check/ }));
+}
+it("validates in the correct Studio category, preserves inputs, and runs the exact reviewed version and credit quote", async () => {
+  formApp();
+  openApp();
+  expect(
+    screen
+      .getByRole("navigation", { name: "App Studio sections" })
+      .querySelectorAll("button")
+  ).toHaveLength(5);
+  expect(
+    (screen.getByLabelText("Destination") as HTMLTextAreaElement).disabled
+  ).toBe(true);
+  expect(screen.queryByLabelText("Ad budget")).toBeNull();
+  reviewApp();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  expect(screen.getByRole("alert").textContent).toContain("Audience:");
+  expect(screen.getByRole("textbox", { name: "Audience" })).toBeTruthy();
+  expect(api.quote).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Audience"), {
+    target: { value: "Independent founders" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByRole("textbox", { name: "Caption" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Caption"), {
+    target: { value: "Reviewed caption" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  expect((screen.getByLabelText("Audience") as HTMLTextAreaElement).value).toBe(
+    "Independent founders"
+  );
+  reviewApp();
+  expect(
+    within(screen.getByRole("region", { name: "Review App inputs" })).getByText(
+      "Reviewed caption"
+    )
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  await screen.findByRole("button", { name: "Confirm & run App" });
+  expect(api.run).not.toHaveBeenCalled();
+  const quoted = api.quote.mock.calls[0][0];
+  expect(quoted).toMatchObject({
+    organizationId: 1,
+    id: "workflow-1",
+    revision: 1,
+    appVersionId: "app-v1",
+  });
+  expect(quoted.inputs).toContainEqual({ id: "channel", value: "organic" });
+  fireEvent.click(screen.getByRole("button", { name: "Confirm & run App" }));
+  await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
+  expect(api.run.mock.calls[0][0]).toEqual({
+    ...quoted,
+    quotedCredits: 4,
+    requestId: expect.any(String),
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("region", { name: "App results" })).toBeTruthy()
+  );
+  expect(api.refresh).toHaveBeenCalled();
+});
+it("invalidates an estimate after an edit and accepts a zero-credit quote", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Creators";
+  api.quote.mockResolvedValue({ credits: 0 });
+  openApp();
+  reviewApp();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  await screen.findByRole("button", { name: "Confirm & run App" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit Content: Copy" }));
+  fireEvent.change(screen.getByLabelText("Caption"), {
+    target: { value: "Changed after estimate" },
+  });
+  reviewApp();
+  expect(
+    screen.queryByRole("button", { name: "Confirm & run App" })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Confirm & run App" })
+  );
+  await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
+  expect(api.run.mock.calls[0][0]).toMatchObject({
+    quotedCredits: 0,
+    inputs: expect.arrayContaining([
+      { id: "copy", value: "Changed after estimate" },
+    ]),
+  });
+});
+it("shows run failures without losing reviewed inputs and reuses the request identifier on retry", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Creators";
+  api.run.mockRejectedValueOnce(new Error("Connection interrupted"));
+  openApp();
+  reviewApp();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Confirm & run App" })
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toBe("Connection interrupted")
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Confirm & run App" }));
+  await waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
+  expect(api.run.mock.calls[1][0]).toEqual(api.run.mock.calls[0][0]);
+});
+it("keeps an active run in Results and exposes stopping without another run", async () => {
+  api.runs = [{ ...savedRun([]), status: "running" }];
+  openApp();
+  reviewApp();
+  expect(
+    screen.queryByRole("button", { name: "Review credits & run" })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "View run progress" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Stop after current step" })
+  );
+  await waitFor(() =>
+    expect(api.stop).toHaveBeenCalledWith({
+      organizationId: 1,
+      id: "saved-run",
+    })
+  );
+  expect(api.run).not.toHaveBeenCalled();
+});
+it("supports legacy text and image inputs without republishing", async () => {
+  const text = newWorkflowNode("text", "brief");
+  text.title = "Campaign brief";
+  text.config.text = "Original brief";
+  const image = newWorkflowNode("image", "image");
+  image.title = "Reference image";
+  api.app.graph = { nodes: [text, image], edges: [] };
+  openApp();
+  fireEvent.change(screen.getByLabelText("Campaign brief"), {
+    target: { value: "Updated legacy brief" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(
+    screen.getByRole("combobox", { name: "Reference image" })
+  ).toBeTruthy();
+  reviewApp();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  await screen.findByRole("button", { name: "Confirm & run App" });
+  expect(api.quote.mock.calls[0][0].inputs).toEqual([
+    { id: "brief", text: "Updated legacy brief" },
+    { id: "image", imageKey: undefined },
+  ]);
+});
+it("resets inputs and credit confirmation when opening another App version", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Default audience";
+  const rendered = openApp();
+  reviewApp();
+  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  await screen.findByRole("button", { name: "Confirm & run App" });
+  rendered.rerender(
+    <WorkflowAppRunner
+      id="app-v2"
+      organizationId={1}
+      role="owner"
+      onBack={vi.fn()}
+    />
+  );
+  reviewApp();
+  expect(
+    screen.queryByRole("button", { name: "Confirm & run App" })
+  ).toBeNull();
+  expect(api.run).not.toHaveBeenCalled();
 });

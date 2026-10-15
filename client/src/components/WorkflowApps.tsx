@@ -1,8 +1,14 @@
-import { isWorkflowReport, WorkflowDataResult } from "./WorkflowDataResult";
+import { WorkflowDataResult } from "./WorkflowDataResult";
 import { WorkflowAutomationControls } from "./WorkflowAutomationControls";
-import { WorkflowInputControl } from "./WorkflowInputControl";
-import { fieldValueProblem, fieldPrompt } from "@shared/workflowInputs";
-import { useState } from "react";
+import { WorkflowAppStudio } from "./WorkflowAppStudio";
+import {
+  workflowAppFields,
+  workflowFieldValue,
+  workflowFieldPlacement,
+  workflowVisibleFields,
+} from "@shared/workflowStudio";
+import { fieldValueProblem } from "@shared/workflowInputs";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
 import { AppWindow, ArrowRight, Workflow } from "lucide-react";
 import { toast } from "sonner";
@@ -12,13 +18,6 @@ import type { WorkflowFamily } from "@shared/creativeWorkflow";
 import { Button } from "./ui/button";
 import { WorkflowRunReview } from "./WorkflowRunReview";
 import { workflowRunStatusLabel } from "@shared/workflowRunActivity";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
 
 export function WorkflowApps({
   organizationId,
@@ -126,7 +125,22 @@ export function WorkflowApps({
   );
 }
 
-export function WorkflowAppRunner({
+export function WorkflowAppRunner(props: {
+  organizationId: number;
+  id: string;
+  role: string;
+  onBack: () => void;
+}) {
+  // A new published version has a different input contract and run history.
+  return (
+    <WorkflowAppRunnerSession
+      key={`${props.organizationId}:${props.id}`}
+      {...props}
+    />
+  );
+}
+
+function WorkflowAppRunnerSession({
   organizationId,
   id,
   role,
@@ -138,14 +152,15 @@ export function WorkflowAppRunner({
   onBack: () => void;
 }) {
   const app = trpc.workflows.getApp.useQuery({ organizationId, id });
-  const assets = trpc.assetLibrary.studioList.useQuery({ organizationId });
   const detail = trpc.workflows.get.useQuery(
     { organizationId, id: app.data?.workflowId ?? "" },
     { enabled: !!app.data, refetchInterval: 3000 }
   );
-  const [values, setValues] = useState<
-    Record<string, { text?: string; imageKey?: string; value?: string }>
-  >({});
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [page, setPage] = useState("");
+  const [problem, setProblem] = useState("");
+  const inputRevision = useRef(0);
+  const submitting = useRef(false);
   const [review, setReview] = useState<{
     credits: number;
     requestId: string;
@@ -168,221 +183,183 @@ export function WorkflowAppRunner({
     );
   if (!app.data) return <p>Opening App…</p>;
   const item = app.data,
-    section = workflowSections[item.family],
-    fields = item.graph.nodes.filter(n =>
-      ["text", "image", "app_input"].includes(n.type)
-    );
-  const input = (): Array<{
-    id: string;
-    value?: string;
-    text?: string;
-    imageKey?: string;
-  }> =>
-    fields.map(n => ({
-      id: n.id,
-      ...(n.config.field
-        ? {
-            value: n.config.field.locked
-              ? n.config.field.defaultValue
-              : (values[n.id]?.value ?? n.config.field.defaultValue),
-          }
-        : n.type === "image"
-          ? {
-              imageKey:
-                values[n.id]?.imageKey ?? n.config.imageKey ?? undefined,
-            }
-          : { text: values[n.id]?.text ?? n.config.text }),
-    }));
-  const runs = detail.data?.runs.filter(r => r.appVersionId === id) ?? [],
-    active = runs.find(r => ["queued", "running"].includes(r.status)),
-    latest = active ?? runs[0];
+    section = workflowSections[item.family];
+  const fields = workflowAppFields(item.graph);
+  const runs = detail.data?.runs.filter(r => r.appVersionId === id) ?? [];
+  const active = runs.find(r => ["queued", "running"].includes(r.status));
+  const latest = active ?? runs[0];
   const output =
     latest?.graph.nodes
       .filter(n => n.type === "output")
       .flatMap(n => latest.steps[n.id]?.outputs ?? []) ?? [];
-  const hasReport = output.some(
-    value => value.type === "data" && isWorkflowReport(value.data)
-  );
+  const changeValue = (fieldId: string, value: string) => {
+    inputRevision.current++;
+    setValues(v => ({ ...v, [fieldId]: value }));
+    setReview(null);
+    setProblem("");
+  };
+  const estimate = async () => {
+    if (submitting.current || active) return;
+    setProblem("");
+    for (const n of workflowVisibleFields(item.graph, values)) {
+      const error =
+        n.config.field &&
+        fieldValueProblem(n.config.field, workflowFieldValue(n, values));
+      if (error) {
+        setProblem(`${n.title}: ${error}`);
+        setPage(workflowFieldPlacement(n).page);
+        return;
+      }
+    }
+    submitting.current = true;
+    const revision = inputRevision.current;
+    const inputs = fields.map(n => ({
+      id: n.id,
+      ...(n.config.field
+        ? { value: workflowFieldValue(n, values) }
+        : n.type === "image"
+          ? { imageKey: workflowFieldValue(n, values) || undefined }
+          : { text: workflowFieldValue(n, values) }),
+    }));
+    try {
+      const q = await quote.mutateAsync({
+        organizationId,
+        id: item.workflowId,
+        revision: item.workflowRevision,
+        appVersionId: id,
+        inputs,
+      });
+      if (revision !== inputRevision.current) return;
+      setReview({ credits: q.credits, requestId: crypto.randomUUID(), inputs });
+      setPage("review");
+    } catch (e) {
+      setProblem((e as Error).message);
+    } finally {
+      submitting.current = false;
+    }
+  };
+  const confirm = async () => {
+    if (!review || submitting.current || active) return;
+    submitting.current = true;
+    setProblem("");
+    try {
+      await run.mutateAsync({
+        organizationId,
+        id: item.workflowId,
+        revision: item.workflowRevision,
+        appVersionId: id,
+        inputs: review.inputs,
+        requestId: review.requestId,
+        quotedCredits: review.credits,
+      });
+      setReview(null);
+      setPage("results");
+      toast.success("App run started");
+      await detail.refetch();
+    } catch (e) {
+      setProblem((e as Error).message);
+    } finally {
+      submitting.current = false;
+    }
+  };
   return (
-    <div className="wf-app-runner" data-family={item.family}>
-      <Button variant="ghost" onClick={onBack}>
-        ← {section.name} Apps
-      </Button>
-      <header>
-        <span className="wf-eyebrow">
-          {section.name.toUpperCase()} / APP · VERSION {item.version}
-        </span>
-        <h1>{item.name}</h1>
-        <p>{item.description}</p>
-        <Link href={`${section.path}?workflow=${item.workflowId}`}>
-          <Workflow size={15} /> Open workflow
-        </Link>
-      </header>
-      <WorkflowAutomationControls
-        organizationId={organizationId}
-        appVersionId={id}
-        role={role}
-      />
-      <div
-        className={`wf-app-run-layout${hasReport ? " wf-app-run-layout-report" : ""}`}
-      >
-        <section className="wf-app-form">
-          <h2>Inputs</h2>
-          {fields.length ? (
-            fields
-              .filter(n => {
-                const c = n.config.field?.visibleWhen;
-                if (!c) return true;
-                const parent = fields.find(x => x.id === c.fieldId);
-                return (
-                  (parent?.config.field?.locked
-                    ? parent.config.field.defaultValue
-                    : (values[c.fieldId]?.value ??
-                      parent?.config.field?.defaultValue)) === c.equals
-                );
-              })
-              .map(n => (
-                <div className="wf-form-field" key={n.id}>
-                  <label>
-                    {n.title}
-                    {n.config.field?.required ? " *" : ""}
-                  </label>
-                  {n.config.field ? (
-                    <WorkflowInputControl
-                      field={n.config.field}
-                      title={n.title}
-                      value={values[n.id]?.value ?? n.config.field.defaultValue}
-                      onChange={value =>
-                        setValues(v => ({ ...v, [n.id]: { value } }))
-                      }
-                      organizationId={organizationId}
-                      context={JSON.stringify(
-                        fields.map(x => ({
-                          label: x.title,
-                          value: x.config.field
-                            ? fieldPrompt(
-                                x.config.field,
-                                values[x.id]?.value ??
-                                  x.config.field.defaultValue
-                              )
-                            : (values[x.id]?.text ?? x.config.text),
-                        }))
-                      )}
-                      productIds={fields
-                        .filter(x => x.config.field?.kind === "product")
-                        .map(x =>
-                          Number(
-                            values[x.id]?.value ?? x.config.field?.defaultValue
-                          )
-                        )
-                        .filter(Boolean)}
-                      imageKeys={fields
-                        .filter(
-                          x =>
-                            x.config.field?.kind === "asset" ||
-                            x.type === "image"
-                        )
-                        .map(
-                          x =>
-                            values[x.id]?.value ??
-                            values[x.id]?.imageKey ??
-                            x.config.field?.defaultValue ??
-                            x.config.imageKey ??
-                            ""
-                        )
-                        .filter(Boolean)}
-                    />
-                  ) : n.type === "image" ? (
-                    <select
-                      value={values[n.id]?.imageKey ?? n.config.imageKey ?? ""}
-                      onChange={e =>
-                        setValues(v => ({
-                          ...v,
-                          [n.id]: { imageKey: e.target.value },
-                        }))
-                      }
-                    >
-                      <option value="">Choose an image</option>
-                      {assets.data
-                        ?.filter(a => a.mediaType === "image")
-                        .map(a => (
-                          <option value={a.key} key={a.key}>
-                            {a.name}
-                            {a.width && a.height
-                              ? ` · ${a.width} × ${a.height}`
-                              : ""}
-                          </option>
-                        ))}
-                    </select>
-                  ) : (
-                    <textarea
-                      rows={5}
-                      maxLength={10000}
-                      value={values[n.id]?.text ?? n.config.text}
-                      onChange={e =>
-                        setValues(v => ({
-                          ...v,
-                          [n.id]: { text: e.target.value },
-                        }))
-                      }
-                    />
-                  )}
-                </div>
-              ))
-          ) : (
+    <WorkflowAppStudio
+      graph={item.graph}
+      organizationId={organizationId}
+      title={item.name}
+      description={item.description}
+      header={
+        <div className="cfg-back">
+          <button type="button" onClick={onBack}>
+            ← {section.name} Apps
+          </button>
+          <span>· v{item.version}</span>
+          <Link href={`${section.path}?workflow=${item.workflowId}`}>
+            <Workflow size={13} /> Open workflow
+          </Link>
+        </div>
+      }
+      values={values}
+      onChange={changeValue}
+      page={page}
+      onPageChange={setPage}
+      busy={quote.isPending || run.isPending}
+      status={
+        latest ? `${workflowRunStatusLabel(latest)} · View results` : undefined
+      }
+      error={problem}
+      review={
+        <>
+          <div className="wf-studio-run" aria-live="polite">
             <p>
-              This App uses its published configuration. Open the workflow to
-              change its accounts, dates, or process and publish a new version.
+              Uses this published version and your inputs. Delivery steps can
+              queue approved publications; ad activation requires its own
+              review.
             </p>
-          )}
-          <Button
-            disabled={!!active || quote.isPending || run.isPending}
-            onClick={async () => {
-              try {
-                const inputs = input();
-                for (const n of fields) {
-                  const f = n.config.field;
-                  if (!f) continue;
-                  const c = f.visibleWhen;
-                  if (
-                    c &&
-                    inputs.find(x => x.id === c.fieldId)?.value !== c.equals
-                  )
-                    continue;
-                  const problem = fieldValueProblem(
-                    f,
-                    inputs.find(x => x.id === n.id)?.value ?? ""
-                  );
-                  if (problem) throw new Error(`${n.title}: ${problem}`);
-                }
-                const q = await quote.mutateAsync({
-                  organizationId,
-                  id: item.workflowId,
-                  revision: item.workflowRevision,
-                  appVersionId: id,
-                  inputs,
-                });
-                setReview({
-                  credits: q.credits,
-                  requestId: crypto.randomUUID(),
-                  inputs,
-                });
-              } catch (e) {
-                toast.error((e as Error).message);
-              }
-            }}
-          >
-            {quote.isPending ? "Estimating…" : "Run App"}
-          </Button>
-        </section>
+            {active ? (
+              <>
+                <p>A run is already in progress.</p>
+                <button
+                  type="button"
+                  className="cfg-primary"
+                  onClick={() => setPage("results")}
+                >
+                  View run progress
+                </button>
+              </>
+            ) : review ? (
+              <>
+                <div className="wf-studio-credit">
+                  <strong>{review.credits}</strong>
+                  <span>estimated AI credits</span>
+                </div>
+                <p>
+                  Changing any input clears this estimate so you can review the
+                  updated cost.
+                </p>
+                <button
+                  type="button"
+                  className="cfg-primary"
+                  disabled={run.isPending}
+                  onClick={confirm}
+                >
+                  {run.isPending ? "Starting…" : "Confirm & run App"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="cfg-primary"
+                disabled={quote.isPending || run.isPending}
+                onClick={estimate}
+              >
+                {quote.isPending
+                  ? "Checking inputs & estimating…"
+                  : "Review credits & run"}
+              </button>
+            )}
+          </div>
+          <WorkflowAutomationControls
+            organizationId={organizationId}
+            appVersionId={id}
+            role={role}
+          />
+        </>
+      }
+      results={
         <section className="wf-app-results">
-          <h2>
+          <h3>
             Latest result{" "}
             {latest && <span>· {workflowRunStatusLabel(latest)}</span>}
-          </h2>
+          </h3>
+          {detail.error && <p role="alert">{detail.error.message}</p>}
           {latest?.error && <p role="alert">{latest.error}</p>}
           {!latest && (
-            <p>Run this App to see its outputs and review any actions.</p>
+            <p>
+              {detail.isLoading
+                ? "Loading run history…"
+                : "Run this App to see its outputs and review any actions."}
+            </p>
           )}
           <WorkflowRunReview
             organizationId={organizationId}
@@ -420,53 +397,13 @@ export function WorkflowAppRunner({
                 }
               }}
             >
-              Stop after current step
+              {active.stopRequested
+                ? "Stopping after current step…"
+                : "Stop after current step"}
             </Button>
           )}
         </section>
-      </div>
-      <Dialog
-        open={!!review}
-        onOpenChange={open => !open && !run.isPending && setReview(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Run {item.name}?</DialogTitle>
-            <DialogDescription>
-              Uses the published version and the inputs shown. Delivery steps
-              can queue approved publications; ad activation requires its own
-              review.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="wf-credit-total">
-            <strong>{review?.credits}</strong>
-            <span>estimated AI credits</span>
-          </div>
-          <Button
-            disabled={run.isPending}
-            onClick={async () => {
-              if (!review) return;
-              try {
-                await run.mutateAsync({
-                  organizationId,
-                  id: item.workflowId,
-                  revision: item.workflowRevision,
-                  appVersionId: id,
-                  inputs: review.inputs,
-                  requestId: review.requestId,
-                  quotedCredits: review.credits,
-                });
-                setReview(null);
-                await detail.refetch();
-              } catch (e) {
-                toast.error((e as Error).message);
-              }
-            }}
-          >
-            Confirm run
-          </Button>
-        </DialogContent>
-      </Dialog>
-    </div>
+      }
+    />
   );
 }
