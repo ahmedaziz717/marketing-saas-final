@@ -1,3 +1,5 @@
+import { copyDirectionSchema } from "./copyDirection";
+import { metaCallToActionSchema } from "./metaCallToAction";
 import { copyTagsSchema } from "./copyTaxonomy";
 import { z } from "zod";
 
@@ -95,15 +97,14 @@ export const linkSchema = z
   }, "Use an HTTP or HTTPS destination URL.");
 export const contentSchema = z.object({
   copyTags: copyTagsSchema.optional(),
+  copyDirection: copyDirectionSchema.optional(),
   campaignPlanId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().max(5000).default(""),
   link: linkSchema.default(""),
   headline: z.string().trim().max(200).default(""),
   description: z.string().trim().max(300).default(""),
-  callToAction: z
-    .enum(["SHOP_NOW", "LEARN_MORE", "SIGN_UP", "GET_OFFER"])
-    .default("LEARN_MORE"),
+  callToAction: metaCallToActionSchema.default("LEARN_MORE"),
   placementAssetKeys: z
     .object({
       square: z

@@ -1,8 +1,9 @@
 import { ActionCredits } from "./ActionCredits";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { MoreHorizontal, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import {
   adCopyFields,
+  canGenerateAssetCopy,
   copyContentFromSets,
   copyFieldLabels,
   copyFieldLimits,
@@ -28,17 +29,33 @@ export function AdTextOptionsEditor({
   organizationId,
   assetKeys,
   promotion,
+  copyDirection,
+  callToAction,
   value,
   onChange,
+  studioCategory,
 }: {
+  studioCategory?: "setup" | AdCopyField;
   organizationId: number;
   assetKeys: string[];
   promotion?: PublicationContent["promotion"];
+  copyDirection?: PublicationContent["copyDirection"];
+  callToAction?: PublicationContent["callToAction"];
   value: CopyContent;
   onChange: (value: CopyContent) => void;
 }) {
+  const uid = useId();
+  const fieldId = (field: AdCopyField, index: number) =>
+    studioCategory
+      ? `${uid}-${field}-${index}`
+      : index === 0
+        ? `pub-${field}`
+        : `pub-${field}-${index}`;
   const [direction, setDirection] = useState("");
   const [active, setActive] = useState<AdCopyField>("message");
+  const shownField =
+    studioCategory && studioCategory !== "setup" ? studioCategory : active;
+  const canGenerate = canGenerateAssetCopy({ assetKeys, promotion, direction });
   const [undo, setUndo] = useState<{
     before: CopyContent;
     after: string;
@@ -51,13 +68,21 @@ export function AdTextOptionsEditor({
     description: value.description,
     textVariants: value.textVariants,
   };
-  const context = JSON.stringify({ organizationId, assetKeys, promotion });
+  const context = JSON.stringify({
+    organizationId,
+    assetKeys,
+    promotion,
+    copyDirection,
+    callToAction,
+  });
   const generator = useAssetCopy(
     {
       organizationId,
       channel: "meta_ads",
       assetKeys,
       promotion,
+      copyDirection,
+      callToAction,
       direction,
       currentOptions: options,
     },
@@ -93,7 +118,7 @@ export function AdTextOptionsEditor({
         <Button
           type="button"
           variant="outline"
-          disabled={!assetKeys.length || busy}
+          disabled={!canGenerate || busy}
           onClick={() => generator.generate()}
         >
           <Sparkles className="size-4" />
@@ -122,32 +147,34 @@ export function AdTextOptionsEditor({
         />
       </details>
       <p className="text-xs text-muted-foreground">
-        {assetKeys.length
+        {canGenerate
           ? "Regenerate any option, or use its ⋯ menu for the full set."
-          : "Select an approved image to generate copy, or write your own."}
+          : "Add your setup or select an approved image to generate copy, or write your own."}
       </p>
       <Tabs
-        value={active}
+        value={shownField}
         onValueChange={field => setActive(field as AdCopyField)}
       >
-        <TabsList className="grid h-auto w-full grid-cols-3">
-          {adCopyFields.map(field => (
-            <TabsTrigger
-              key={field}
-              value={field}
-              className="flex-col gap-0.5 px-1 py-2 text-xs sm:text-sm"
-            >
-              {field === "message"
-                ? "Primary text"
-                : field === "headline"
-                  ? "Headlines"
-                  : "Descriptions"}
-              <span className="text-xs text-muted-foreground">
-                {options.filter(o => o[field].trim()).length}/5
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {!studioCategory && (
+          <TabsList className="grid h-auto w-full grid-cols-3">
+            {adCopyFields.map(field => (
+              <TabsTrigger
+                key={field}
+                value={field}
+                className="flex-col gap-0.5 px-1 py-2 text-xs sm:text-sm"
+              >
+                {field === "message"
+                  ? "Primary text"
+                  : field === "headline"
+                    ? "Headlines"
+                    : "Descriptions"}
+                <span className="text-xs text-muted-foreground">
+                  {options.filter(o => o[field].trim()).length}/5
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
         {adCopyFields.map(field => {
           const variantKey = copyVariantKeys[field];
           const values = [
@@ -159,7 +186,7 @@ export function AdTextOptionsEditor({
               key={field}
               value={field}
               forceMount
-              hidden={active !== field}
+              hidden={shownField !== field || studioCategory === "setup"}
               className="space-y-3 mt-4"
             >
               {values.map((text, index) => {
@@ -175,9 +202,7 @@ export function AdTextOptionsEditor({
                   >
                     <div className="flex flex-wrap justify-between items-center gap-2">
                       <label
-                        htmlFor={
-                          index === 0 ? `pub-${field}` : `pub-${field}-${index}`
-                        }
+                        htmlFor={fieldId(field, index)}
                         className="text-sm font-medium"
                       >
                         {label(field, index)}
@@ -188,7 +213,7 @@ export function AdTextOptionsEditor({
                           size="sm"
                           variant="ghost"
                           aria-label={`Regenerate ${label(field, index).toLowerCase()}`}
-                          disabled={!assetKeys.length || busy}
+                          disabled={!canGenerate || busy}
                           onClick={() => generator.generate({ index, field })}
                         >
                           <RefreshCw
@@ -211,7 +236,7 @@ export function AdTextOptionsEditor({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              disabled={!assetKeys.length}
+                              disabled={!canGenerate}
                               onSelect={() =>
                                 generator.generate({ index, field: "set" })
                               }
@@ -248,9 +273,7 @@ export function AdTextOptionsEditor({
                       </div>
                     </div>
                     <textarea
-                      id={
-                        index === 0 ? `pub-${field}` : `pub-${field}-${index}`
-                      }
+                      id={fieldId(field, index)}
                       aria-label={label(field, index)}
                       className={
                         channelInput +
@@ -316,7 +339,7 @@ export function AdTextOptionsEditor({
       <p className="text-xs text-muted-foreground" aria-live="polite">
         {busy
           ? "Creating fresh copy. Your edits will be kept if you change anything while it generates."
-          : "AI uses your images and brand context. Review all copy before approval. Meta may combine options and may not show every description."}
+          : "AI uses your setup, brand context, and selected images when available. Review all copy before approval. Meta may combine options and may not show every description."}
       </p>
     </section>
   );

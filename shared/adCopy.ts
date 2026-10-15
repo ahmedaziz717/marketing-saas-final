@@ -1,3 +1,5 @@
+import { copyDirectionSchema } from "./copyDirection";
+import { metaCallToActionSchema } from "./metaCallToAction";
 import { z } from "zod";
 import {
   channelSchema,
@@ -40,9 +42,10 @@ export type CopyRegeneration = z.infer<typeof copyRegenerationSchema>;
 export const assetCopyRequestSchema = scopeSchema
   .extend({
     channel: channelSchema.default("meta_ads"),
+    copyDirection: copyDirectionSchema.optional(),
+    callToAction: metaCallToActionSchema.optional(),
     assetKeys: z
       .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
-      .min(1)
       .max(10),
     direction: z.string().trim().max(2000).default(""),
     promotion: z
@@ -56,6 +59,13 @@ export const assetCopyRequestSchema = scopeSchema
     regeneration: copyRegenerationSchema.optional(),
   })
   .superRefine((value, ctx) => {
+    if (!canGenerateAssetCopy(value))
+      ctx.addIssue({
+        code: "custom",
+        path: ["promotion"],
+        message:
+          "Choose an image or add an offer, audience, goal, or AI direction first.",
+      });
     if (value.regeneration && !value.currentOptions[value.regeneration.index])
       ctx.addIssue({
         code: "custom",
@@ -122,4 +132,17 @@ export function replaceCopyOption(
     }
   }
   return next;
+}
+
+/** Generation can start with approved images or an explicit creative brief. */
+export function canGenerateAssetCopy(input: {
+  assetKeys: readonly string[];
+  promotion?: PublicationContent["promotion"];
+  direction?: string;
+}) {
+  return (
+    input.assetKeys.length > 0 ||
+    !!input.direction?.trim() ||
+    Object.values(input.promotion ?? {}).some(value => value.trim().length > 0)
+  );
 }

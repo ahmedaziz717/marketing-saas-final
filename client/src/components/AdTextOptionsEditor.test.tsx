@@ -43,14 +43,25 @@ function setup(
   const query = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
-  function Harness({ assetKey = "asset:1" }: { assetKey?: string }) {
+  function Harness({
+    assetKey = "asset:1",
+    copyDirection,
+    promotion,
+  }: {
+    assetKey?: string;
+    copyDirection?: { messaging_style?: string[] };
+    promotion?: { offer: string; audience: string; goal: string };
+  }) {
     const [value, setValue] = useState(initial);
     return (
       <trpc.Provider client={client} queryClient={query}>
         <QueryClientProvider client={query}>
           <AdTextOptionsEditor
             organizationId={1}
-            assetKeys={[assetKey]}
+            assetKeys={assetKey ? [assetKey] : []}
+            copyDirection={copyDirection}
+            promotion={promotion}
+            callToAction="SIGN_UP"
             value={value}
             onChange={setValue}
           />
@@ -171,4 +182,37 @@ it("keeps copy on failure and prevents duplicate generation requests", async () 
   });
   expect(current()).toEqual(initial);
   expect(toast.error).toHaveBeenCalled();
+});
+
+it("passes the selected copy direction and setup without an image and discards results if that direction changes", async () => {
+  const view = setup();
+  const promotion = {
+    offer: "Directory membership",
+    audience: "Tutors",
+    goal: "Signups",
+  };
+  view.rerender(
+    <view.Harness
+      assetKey=""
+      promotion={promotion}
+      copyDirection={{ messaging_style: ["educational"] }}
+    />
+  );
+  await click("Generate 5 copy sets");
+  expect(requests[0].input).toMatchObject({
+    assetKeys: [],
+    promotion,
+    callToAction: "SIGN_UP",
+    copyDirection: { messaging_style: ["educational"] },
+  });
+  view.rerender(
+    <view.Harness
+      assetKey=""
+      promotion={promotion}
+      copyDirection={{ messaging_style: ["playful"] }}
+    />
+  );
+  await respond(options);
+  expect(current().message).toBe("");
+  expect(toast.info).toHaveBeenCalledOnce();
 });

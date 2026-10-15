@@ -1,6 +1,7 @@
 import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { useAssetCopy } from "@/hooks/useAssetCopy";
+import { canGenerateAssetCopy } from "@shared/adCopy";
 import type { CopySet } from "@shared/adCopy";
 import { Button } from "./ui/button";
 import { channelInput } from "./ChannelConnections";
@@ -11,23 +12,36 @@ export function AdCopyAssistant({
   channel = "meta_ads",
   assetKeys,
   promotion,
+  copyDirection,
+  callToAction,
   onUse,
 }: {
   organizationId: number;
   channel?: "facebook" | "meta_ads";
   assetKeys: string[];
   promotion?: PublicationContent["promotion"];
+  copyDirection?: PublicationContent["copyDirection"];
+  callToAction?: PublicationContent["callToAction"];
   onUse: (copy: Copy) => void;
 }) {
   const [direction, setDirection] = useState("");
   const [options, setOptions] = useState<Copy[]>([]);
   const [source, setSource] = useState("");
-  const key = JSON.stringify({ organizationId, assetKeys, promotion, channel });
+  const key = JSON.stringify({
+    organizationId,
+    assetKeys,
+    promotion,
+    channel,
+    copyDirection,
+    callToAction,
+  });
   const generate = useAssetCopy(
     {
       organizationId,
       assetKeys,
       promotion,
+      copyDirection,
+      callToAction,
       channel,
       direction,
       currentOptions: source === key ? options : [],
@@ -45,7 +59,7 @@ export function AdCopyAssistant({
   );
   return (
     <div className="rounded-xl border p-4 space-y-3">
-      <h3 className="font-semibold">Create copy from selected images</h3>
+      <h3 className="font-semibold">Generate copy from your setup</h3>
       <label className="block text-sm">
         Optional direction
         <textarea
@@ -59,7 +73,10 @@ export function AdCopyAssistant({
       <Button
         type="button"
         variant="outline"
-        disabled={!assetKeys.length || generate.isPending}
+        disabled={
+          !canGenerateAssetCopy({ assetKeys, promotion, direction }) ||
+          generate.isPending
+        }
         onClick={() => generate.generate()}
       >
         {generate.isPending
@@ -75,8 +92,8 @@ export function AdCopyAssistant({
         />
       </Button>
       <p className="text-xs text-muted-foreground">
-        Uses the actual selected images and saved business/brand context. Review
-        facts and claims before using a suggestion.
+        Uses your setup, saved brand context, and selected images when
+        available. Review facts and claims before using a suggestion.
       </p>
       {source === key &&
         options.map((o, i) => (
