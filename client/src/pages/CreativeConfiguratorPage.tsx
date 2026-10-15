@@ -1,3 +1,7 @@
+import {
+  useStudioNavigation,
+  scrollStudioChoices,
+} from "@/components/configurator/studioNavigation";
 import { StudioSections } from "@/components/configurator/StudioSections";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
@@ -128,6 +132,7 @@ export default function CreativeConfiguratorPage() {
   );
 }
 function Configurator() {
+  const studioRoot = useStudioNavigation();
   const { organizationId, membership } = useWorkspace();
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -524,6 +529,7 @@ function Configurator() {
     setMaker("all");
     setCapability("all");
     setMaxCredits("");
+    scrollStudioChoices(studioRoot.current);
   }
   function chooseCategory(id: string) {
     setCategory(id);
@@ -532,6 +538,7 @@ function Configurator() {
     setMaker("all");
     setCapability("all");
     setMaxCredits("");
+    scrollStudioChoices(studioRoot.current);
   }
   function chooseModel(m: NonNullable<typeof models.data>[number]) {
     const def = generationModel(m.routeId)!;
@@ -1590,7 +1597,7 @@ function Configurator() {
       </div>
     );
   return (
-    <div className="cfg-root">
+    <div className="cfg-root" ref={studioRoot}>
       <div className="cfg-heading">
         <div>
           <Link href="/app/creatives" className="cfg-back">
@@ -1623,128 +1630,126 @@ function Configurator() {
         </div>
       </div>
       <fieldset disabled={busy} className="cfg-workspace">
-        <div className="cfg-stage">
-          <StudioPreview
-            key={config.kind + ":" + (savedImage?.briefId ?? "new")}
-            organizationId={organizationId!}
-            role={membership?.role ?? ""}
-            jobId={pendingImageJob}
-            onSettled={() => {
-              setPendingImageJob(null);
-              void utils.assetLibrary.studioList.invalidate();
-              void utils.models.credits.invalidate();
-            }}
-            kind={config.kind}
-            briefId={savedImage?.briefId}
-            assets={assets.data ?? []}
-            videos={videos.data ?? []}
-            reuse={trial => {
-              setSavedImage(null);
-              setSavedVideo(null);
-              update({
-                ...configRef.current,
-                ...(trial.imageSetup
-                  ? {
-                      kind: "image",
-                      image: {
-                        ...trial.imageSetup,
-                        name:
-                          trial.imageSetup.name.slice(0, 140) +
-                          " · new version",
-                      },
-                    }
-                  : {}),
-                ...(trial.videoSetup
-                  ? {
-                      kind: "video",
-                      video: {
-                        ...trial.videoSetup,
-                        title:
-                          trial.videoSetup.title.slice(0, 140) +
-                          " · new version",
-                      },
-                    }
-                  : {}),
-              });
-              toast.success(
-                "Settings loaded into a new draft. Review them before generating."
-              );
-            }}
-          >
-            <div
-              className="cfg-preview"
-              style={{ background: theme.palette[0] }}
-            >
-              {preview ? (
-                <img src={preview} alt="Selected source reference" />
-              ) : (
-                <ChoiceArt
-                  name={theme.name}
-                  type={scene === "people" ? "people" : config.kind}
-                  palette={theme.palette}
-                />
-              )}
-              <span className="cfg-preview-label">
-                {preview ? "Source reference" : "Visual inspiration"}
-              </span>
-              <div className="cfg-preview-caption">
-                <span>
-                  {isImage ? "STILL / " : "MOTION / "}
-                  {theme.name}
+        <StudioPreview
+          key={config.kind + ":" + (savedImage?.briefId ?? "new")}
+          summary={
+            <>
+              <div className="cfg-build-top">
+                <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
+                <span className="cfg-draft-status">
+                  {storageOk
+                    ? "Remembered in this browser"
+                    : "Browser storage unavailable · save a draft"}
                 </span>
-                <strong>
-                  {isImage
-                    ? image.copy.headline || "Your story starts here."
-                    : video.title}
-                </strong>
               </div>
-            </div>
-          </StudioPreview>
-          <div className="cfg-build">
-            <div className="cfg-build-top">
-              <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
-              <span className="cfg-draft-status">
-                {storageOk
-                  ? "Remembered in this browser"
-                  : "Browser storage unavailable · save a draft"}
-              </span>
-            </div>
-            <Field title="Creative name">
-              <input
-                aria-label="Creative name"
-                value={isImage ? image.name : video.title}
-                maxLength={160}
-                onChange={e =>
-                  isImage
-                    ? updateImage({ name: e.target.value })
-                    : updateVideo({ title: e.target.value })
-                }
-              />
-            </Field>
-            <div className="cfg-summary">
-              {summary.map(s => (
-                <button key={s.title} onClick={() => go(s.section, s.category)}>
-                  <span>{s.title}</span>
-                  <strong>{s.value}</strong>
-                  <ChevronRight size={13} />
+              <Field title="Creative name">
+                <input
+                  aria-label="Creative name"
+                  value={isImage ? image.name : video.title}
+                  maxLength={160}
+                  onChange={e =>
+                    isImage
+                      ? updateImage({ name: e.target.value })
+                      : updateVideo({ title: e.target.value })
+                  }
+                />
+              </Field>
+              <div className="cfg-summary">
+                {summary.map(s => (
+                  <button
+                    key={s.title}
+                    onClick={() => go(s.section, s.category)}
+                  >
+                    <span>{s.title}</span>
+                    <strong>{s.value}</strong>
+                    <ChevronRight size={13} />
+                  </button>
+                ))}
+              </div>
+              <div className="cfg-estimate">
+                <span>
+                  <small>Generation total</small>
+                  <strong>{quoteLabel}</strong>
+                  <small aria-live="polite">{creditDetail}</small>
+                </span>
+                <button
+                  className="cfg-primary"
+                  onClick={() => go("output", "review")}
+                >
+                  Review configuration <ArrowRight size={16} />
                 </button>
-              ))}
-            </div>
-            <div className="cfg-estimate">
+              </div>
+            </>
+          }
+          organizationId={organizationId!}
+          role={membership?.role ?? ""}
+          jobId={pendingImageJob}
+          onSettled={() => {
+            setPendingImageJob(null);
+            void utils.assetLibrary.studioList.invalidate();
+            void utils.models.credits.invalidate();
+          }}
+          kind={config.kind}
+          briefId={savedImage?.briefId}
+          assets={assets.data ?? []}
+          videos={videos.data ?? []}
+          reuse={trial => {
+            setSavedImage(null);
+            setSavedVideo(null);
+            update({
+              ...configRef.current,
+              ...(trial.imageSetup
+                ? {
+                    kind: "image",
+                    image: {
+                      ...trial.imageSetup,
+                      name:
+                        trial.imageSetup.name.slice(0, 140) + " · new version",
+                    },
+                  }
+                : {}),
+              ...(trial.videoSetup
+                ? {
+                    kind: "video",
+                    video: {
+                      ...trial.videoSetup,
+                      title:
+                        trial.videoSetup.title.slice(0, 140) + " · new version",
+                    },
+                  }
+                : {}),
+            });
+            toast.success(
+              "Settings loaded into a new draft. Review them before generating."
+            );
+          }}
+        >
+          <div className="cfg-preview" style={{ background: theme.palette[0] }}>
+            {preview ? (
+              <img src={preview} alt="Selected source reference" />
+            ) : (
+              <ChoiceArt
+                name={theme.name}
+                type={scene === "people" ? "people" : config.kind}
+                palette={theme.palette}
+              />
+            )}
+            <span className="cfg-preview-label">
+              {preview ? "Source reference" : "Visual inspiration"}
+            </span>
+            <div className="cfg-preview-caption">
               <span>
-                <small>Generation total</small>
-                <strong>{quoteLabel}</strong>
-                <small aria-live="polite">{creditDetail}</small>
+                {isImage ? "STILL / " : "MOTION / "}
+                {theme.name}
               </span>
-              <button
-                className="cfg-primary"
-                onClick={() => go("output", "review")}
-              >
-                Review configuration <ArrowRight size={16} />
-              </button>
+              <strong>
+                {isImage
+                  ? image.copy.headline || "Your story starts here."
+                  : video.title}
+              </strong>
             </div>
           </div>
-        </div>
+        </StudioPreview>
         <StudioSections
           label="Studio sections"
           current={section}

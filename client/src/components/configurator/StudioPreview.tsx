@@ -33,6 +33,7 @@ export function StudioPreview({
   assets,
   videos,
   children,
+  summary,
   reuse,
 }: {
   organizationId: number;
@@ -50,6 +51,7 @@ export function StudioPreview({
     createdAtMs: number;
   }>;
   children: ReactNode;
+  summary: ReactNode;
   reuse: (trial: {
     imageSetup?: CreativeSetup | null;
     videoSetup?: VideoSetup | null;
@@ -165,28 +167,116 @@ export function StudioPreview({
           })
           .slice(0, 24);
   return (
-    <div className="cfg-preview-gallery">
-      {!!jobId && (
-        <p role="status" className="cfg-generation-status">
-          Creating your images… You can stay here; finished versions will appear
-          below automatically.
-        </p>
-      )}
-      {(generationError || job.error?.message) && (
-        <p role="alert">{generationError || job.error?.message}</p>
-      )}
-      {selected ? (
-        <div className="cfg-result-preview">
-          {kind === "image" ? (
-            <img src={selected.url} alt={selected.title} />
-          ) : (
-            <video
-              key={selected.key}
-              src={selected.url}
-              controls
-              preload="metadata"
-            />
+    <div className="cfg-stage">
+      <div className="cfg-preview-gallery">
+        {!!jobId && (
+          <p role="status" className="cfg-generation-status">
+            Creating your images… You can stay here; finished versions will
+            appear below automatically.
+          </p>
+        )}
+        {(generationError || job.error?.message) && (
+          <p role="alert">{generationError || job.error?.message}</p>
+        )}
+        {selected ? (
+          <div className="cfg-result-preview">
+            {kind === "image" ? (
+              <img src={selected.url} alt={selected.title} />
+            ) : (
+              <video
+                key={selected.key}
+                src={selected.url}
+                controls
+                preload="metadata"
+              />
+            )}
+          </div>
+        ) : (
+          children
+        )}
+        <div className="cfg-trials-heading">
+          <strong>
+            {kind === "image" && briefId && !all
+              ? "Versions of this creative"
+              : "Recent creations"}
+          </strong>
+          {kind === "image" && briefId && (
+            <button
+              type="button"
+              onClick={() => {
+                setAll(!all);
+                setSelected(null);
+              }}
+            >
+              {all ? "This creative" : "All recent"}
+            </button>
           )}
+          {kind === "image" && (
+            <button
+              type="button"
+              aria-label="Refresh previous versions"
+              disabled={history.isFetching}
+              onClick={() => history.refetch()}
+            >
+              <RefreshCw size={14} />
+            </button>
+          )}
+        </div>
+        <div className="cfg-trials" aria-label="Previous generated versions">
+          <button
+            type="button"
+            aria-pressed={!selected}
+            className="cfg-trial cfg-trial-current"
+            onClick={() => setSelected(null)}
+          >
+            <ImagePlus size={22} />
+            <span>Current setup</span>
+          </button>
+          {trials.map(item => (
+            <button
+              type="button"
+              key={item.key}
+              className="cfg-trial"
+              aria-label={"Preview " + item.title}
+              aria-pressed={selected?.key === item.key}
+              onClick={() => setSelected(item)}
+              title={
+                item.title + " · " + new Date(item.createdAtMs).toLocaleString()
+              }
+            >
+              {kind === "image" ? (
+                <img src={item.url} alt="" loading="lazy" />
+              ) : (
+                <span className="cfg-trial-video">
+                  <video src={item.url + "#t=0.1"} muted preload="metadata" />
+                  <Film size={16} />
+                </span>
+              )}
+              <span>{item.title}</span>
+              <small>{new Date(item.createdAtMs).toLocaleDateString()}</small>
+            </button>
+          ))}
+        </div>
+        {history.error && kind === "image" ? (
+          <p className="cfg-help">
+            Previous images could not load. Refresh to try again.
+          </p>
+        ) : (
+          !trials.length && (
+            <p className="cfg-help">
+              {history.isLoading && kind === "image"
+                ? "Loading previous images…"
+                : "Your generated versions will appear here."}
+            </p>
+          )
+        )}
+        <Link href="/app/creatives/drafts" className="cfg-history-link">
+          View all creative work →
+        </Link>
+      </div>
+      <div className="cfg-build">
+        {summary}
+        {selected && (
           <div className="cfg-result-details">
             <strong>{selected.title}</strong>
             <small>
@@ -226,113 +316,33 @@ export function StudioPreview({
               {selectedAsset?.state === "approved"
                 ? "Approved in Asset Library. Approval does not publish your creative."
                 : "Saved automatically in Asset Library → Drafts. Approval is optional until you are ready."}{" "}
-              Activation Studio will guide you through destinations, copy,
-              timing and delivery approval.
+              Continue in Activation Studio when ready.
             </p>
             {actionError && <p role="alert">{actionError}</p>}
-            <Link
-              href={
-                selectedAsset && selectedAsset.state !== "draft"
-                  ? libraryAssetLink(selected.key, selectedAsset.state)
-                  : `/app/library?view=drafts&asset=${encodeURIComponent(selected.key)}`
-              }
-            >
-              View in Asset Library
-            </Link>
-            <button
-              type="button"
-              disabled={!selected.imageSetup && !selected.videoSetup}
-              onClick={() => {
-                reuse(selected);
-                setSelected(null);
-              }}
-            >
-              Use these settings as a new draft
-            </button>
+            <div className="cfg-result-secondary">
+              <Link
+                href={
+                  selectedAsset && selectedAsset.state !== "draft"
+                    ? libraryAssetLink(selected.key, selectedAsset.state)
+                    : `/app/library?view=drafts&asset=${encodeURIComponent(selected.key)}`
+                }
+              >
+                View in Asset Library
+              </Link>
+              <button
+                type="button"
+                disabled={!selected.imageSetup && !selected.videoSetup}
+                onClick={() => {
+                  reuse(selected);
+                  setSelected(null);
+                }}
+              >
+                Use these settings as a new draft
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        children
-      )}
-      <div className="cfg-trials-heading">
-        <strong>
-          {kind === "image" && briefId && !all
-            ? "Versions of this creative"
-            : "Recent creations"}
-        </strong>
-        {kind === "image" && briefId && (
-          <button
-            type="button"
-            onClick={() => {
-              setAll(!all);
-              setSelected(null);
-            }}
-          >
-            {all ? "This creative" : "All recent"}
-          </button>
-        )}
-        {kind === "image" && (
-          <button
-            type="button"
-            aria-label="Refresh previous versions"
-            disabled={history.isFetching}
-            onClick={() => history.refetch()}
-          >
-            <RefreshCw size={14} />
-          </button>
         )}
       </div>
-      <div className="cfg-trials" aria-label="Previous generated versions">
-        <button
-          type="button"
-          aria-pressed={!selected}
-          className="cfg-trial cfg-trial-current"
-          onClick={() => setSelected(null)}
-        >
-          <ImagePlus size={22} />
-          <span>Current setup</span>
-        </button>
-        {trials.map(item => (
-          <button
-            type="button"
-            key={item.key}
-            className="cfg-trial"
-            aria-label={"Preview " + item.title}
-            aria-pressed={selected?.key === item.key}
-            onClick={() => setSelected(item)}
-            title={
-              item.title + " · " + new Date(item.createdAtMs).toLocaleString()
-            }
-          >
-            {kind === "image" ? (
-              <img src={item.url} alt="" loading="lazy" />
-            ) : (
-              <span className="cfg-trial-video">
-                <video src={item.url + "#t=0.1"} muted preload="metadata" />
-                <Film size={16} />
-              </span>
-            )}
-            <span>{item.title}</span>
-            <small>{new Date(item.createdAtMs).toLocaleDateString()}</small>
-          </button>
-        ))}
-      </div>
-      {history.error && kind === "image" ? (
-        <p className="cfg-help">
-          Previous images could not load. Refresh to try again.
-        </p>
-      ) : (
-        !trials.length && (
-          <p className="cfg-help">
-            {history.isLoading && kind === "image"
-              ? "Loading previous images…"
-              : "Your generated versions will appear here."}
-          </p>
-        )
-      )}
-      <Link href="/app/creatives/drafts" className="cfg-history-link">
-        View all creative work →
-      </Link>
     </div>
   );
 }
