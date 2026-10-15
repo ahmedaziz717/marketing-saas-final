@@ -488,18 +488,19 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   );
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Select Our Page" }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue to creative" }));
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Caption" }));
   fireEvent.change(caption(), {
     target: { value: "Our new collection is here." },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Choose timing" }));
+  fireEvent.click(screen.getByRole("button", { name: /Timing Plan delivery/ }));
   fireEvent.change(screen.getByLabelText("Time zone"), {
     target: { value: "UTC" },
   });
   fireEvent.change(screen.getByLabelText("Publish date and time"), {
     target: { value: "2099-06-15T12:30" },
   });
-  fireEvent.click(screen.getByRole("button", { name: /Creative & copy/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
   expect(caption().value).toBe("Our new collection is here.");
   fireEvent.click(
     screen.getByRole("button", { name: /Review Ready to approve/ })
@@ -574,10 +575,48 @@ it("does not discard the selected ad image when its selected format tile is clic
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: "Continue to creative" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /Creative Assets & format/ })
+  );
   fireEvent.click(screen.getByRole("button", { name: "Select Single image" }));
   saveDraft();
   expect(api.save).toHaveBeenCalledWith(
     expect.objectContaining({ assetKey: "asset:1" })
   );
+});
+
+it("saves copy direction and the selected Meta CTA, preserves them across sections and never publishes", () => {
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="meta_ads"
+      initialAssetKey="asset:1"
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Copy direction" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
+  fireEvent.click(screen.getByRole("button", { name: "Link & CTA" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Subscribe" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /Creative Assets & format/ })
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  expect(
+    screen
+      .getByRole("button", { name: "Select Subscribe" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      content: expect.objectContaining({
+        callToAction: "SUBSCRIBE",
+        copyDirection: { messaging_style: ["playful"] },
+      }),
+    })
+  );
+  expect(api.queue).not.toHaveBeenCalled();
+  expect(api.review).not.toHaveBeenCalled();
 });
