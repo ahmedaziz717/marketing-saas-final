@@ -94,6 +94,8 @@ import {
   organizationMemberships,
   brandKits,
   brandAssets,
+  products,
+  productImages,
 } from "../drizzle/schema";
 import {
   creativeWorkflows,
@@ -190,7 +192,7 @@ beforeAll(async () => {
         storageKey: `org-${organizationId}/photo.png`,
         url: "https://example.test/photo.png",
         mimeType: "image/png",
-        status: "pending",
+        status: "approved",
         uploadedByUserId: ownerId,
         createdAtMs: now,
       })
@@ -1125,3 +1127,215 @@ it("rejects foreign catalog inputs and validates conditional fields", async () =
     owner.publishApp({ organizationId: org, id: saved.id, revision: 2 })
   ).rejects.toThrow(/Visibility/);
 });
+
+it("persists media controls in App versions and carries selected facts with an image through generation", async () => {
+  const { appFieldSchema } = await import("../shared/workflowInputs");
+  const { product, photo } = await mediaFixture();
+  const graph = pipeline();
+  graph.nodes[1].config.field = appFieldSchema.parse({
+    kind: "asset",
+    required: true,
+    media: { allowUpload: true, price: "never", description: "never" },
+  });
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Product image App",
+    graph,
+  });
+  const app = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  expect(app.graph.nodes[1].config.field?.media?.allowUpload).toBe(true);
+  const value = JSON.stringify({
+    imageKey: `product_image:${photo.id}`,
+    productId: product.id,
+    featuredSpecKeys: ["Capacity"],
+    includePrice: true,
+    includeDescription: true,
+    includeLink: false,
+  });
+  const input = {
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    appVersionId: app.id,
+    inputs: [{ id: "source", value }],
+  };
+  const quote = await owner.quote(input);
+  await owner.run({
+    ...input,
+    requestId: randomUUID(),
+    quotedCredits: quote.credits,
+  });
+  await finish();
+  const result = (await owner.get({ organizationId: org, id: saved.id }))
+    .runs[0];
+  expect(result.status).toBe("completed");
+  const image = result.steps.source.outputs?.find(v => v.type === "image");
+  expect(image).toMatchObject({
+    type: "image",
+    key: `product_image:${photo.id}`,
+  });
+  const prompt = state.image.mock.calls[0][0].prompt;
+  expect(prompt).toContain('"Capacity":"400 ml"');
+  expect(prompt).toContain("Do not show a price");
+  expect(prompt).not.toContain("29.00");
+  expect(prompt).not.toContain("Steel");
+  expect(prompt).not.toContain("A reusable travel mug");
+  expect(state.image.mock.calls[0][0].originalImages.length).toBe(1);
+  await expect(
+    owner.quote({
+      ...input,
+      inputs: [
+        { id: "source", value: value.replace('"Capacity"', '"Invented"') },
+      ],
+    })
+  ).rejects.toThrow(/bullet/);
+  await expect(
+    owner.quote({
+      ...input,
+      inputs: [
+        {
+          id: "source",
+          value: JSON.stringify({
+            productId: product.id + 100,
+            imageKey: `product_image:${photo.id}`,
+          }),
+        },
+      ],
+    })
+  ).rejects.toThrow(/belonging/);
+  const choices = await owner.mediaChoices({
+    organizationId: org,
+    kind: "asset",
+    selectedValue: value,
+  });
+  expect(
+    choices.products.some(
+      p =>
+        p.id === product.id &&
+        p.images.some(i => i.key === `product_image:${photo.id}`)
+    )
+  ).toBe(true);
+  expect(choices.assets.every(a => a.state === "approved")).toBe(true);
+  await state.db
+    .update(brandAssets)
+    .set({ status: "pending" })
+    .where(eq(brandAssets.id, assetId));
+  await expect(
+    owner.quote({
+      ...input,
+      inputs: [{ id: "source", value: `asset:${assetId}` }],
+    })
+  ).rejects.toThrow(/approved/);
+  await state.db
+    .update(brandAssets)
+    .set({ status: "approved" })
+    .where(eq(brandAssets.id, assetId));
+  graph.nodes[1].config.field.media!.productImages = false;
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: "Product image App",
+    graph,
+  });
+  const v2 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 2,
+  });
+  await expect(
+    owner.quote({ ...input, revision: 2, appVersionId: v2.id })
+  ).rejects.toThrow(/allowed/);
+  expect(
+    (await owner.getApp({ organizationId: org, id: app.id })).graph.nodes[1]
+      .config.field?.media?.productImages
+  ).toBe(true);
+});
+
+it("product fields emit an owned image and selected priced content, and hidden images contribute nothing", async () => {
+  const { appFieldSchema } = await import("../shared/workflowInputs");
+  const { product, photo } = await mediaFixture();
+  const graph = textGraph("");
+  graph.nodes[0].type = "app_input";
+  graph.nodes[0].config.field = appFieldSchema.parse({
+    kind: "product",
+    defaultValue: JSON.stringify({
+      productId: product.id,
+      imageKey: `product_image:${photo.id}`,
+      featuredSpecKeys: ["Material"],
+      includePrice: true,
+    }),
+    media: {},
+  });
+  await queue(graph);
+  await finish();
+  const run = (await state.db.select().from(creativeWorkflowRuns))[0];
+  expect(run.steps.output.outputs).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        type: "image",
+        key: `product_image:${photo.id}`,
+      }),
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining('"price":"29.00"'),
+      }),
+    ])
+  );
+  const hidden = newWorkflowNode("image", "hidden");
+  hidden.config.field = appFieldSchema.parse({
+    kind: "asset",
+    required: true,
+    visibleWhen: { fieldId: graph.nodes[0].id, equals: "unmatched" },
+  });
+  graph.nodes.push(hidden);
+  graph.edges.push({
+    id: "hidden-output",
+    source: "hidden",
+    target: "output",
+    port: "result",
+  });
+  const second = await queue(graph);
+  await finish();
+  const detail = (await owner.get({ organizationId: org, id: second.saved.id }))
+    .runs[0];
+  expect(detail.status).toBe("completed");
+  expect(detail.steps.hidden.outputs).toEqual([]);
+});
+
+async function mediaFixture() {
+  const [product] = await state.db
+    .insert(products)
+    .values({
+      organizationId: org,
+      name: "Travel mug",
+      dedupeKey: randomUUID(),
+      productUrl: "https://store.example/mug",
+      description: "A reusable travel mug.",
+      price: "29.00",
+      currency: "USD",
+      specifications: { Capacity: "400 ml", Material: "Steel" },
+      provenance: {},
+      status: "approved",
+      createdAtMs: Date.now(),
+      updatedAtMs: Date.now(),
+    })
+    .returning();
+  const [photo] = await state.db
+    .insert(productImages)
+    .values({
+      organizationId: org,
+      productId: product.id,
+      sourceUrl: "https://store.example/mug.png",
+      storageKey: `org-${org}/mug.png`,
+      url: "https://store.example/mug.png",
+      isPrimary: 1,
+      createdAtMs: Date.now(),
+    })
+    .returning();
+  return { product, photo };
+}

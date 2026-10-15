@@ -1,3 +1,4 @@
+import { readVideoCatalogImage } from "./videoCatalog";
 import { optimizationStep } from "./optimizationWorkflow";
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
@@ -98,13 +99,34 @@ export async function executeWorkflowBusinessStep(
       code: "BAD_REQUEST",
       message: "Nested workflow input does not match its declared type.",
     });
-  if (node.type === "app_input")
+  if (node.type === "app_input") {
+    const ref = node.config.imageKey
+      ? run.references.find(r => r.key === node.config.imageKey)
+      : undefined;
+    const media = ref
+      ? ref.key.startsWith("product_image:")
+        ? (await readVideoCatalogImage(db, run.organizationId, ref.key)).choice
+        : await readLibraryAsset(db, run.organizationId, ref.key)
+      : undefined;
     return complete([
       ...input,
+      ...(ref && media
+        ? [
+            {
+              type: "image" as const,
+              key: ref.key,
+              url: media.url,
+              name: ref.name,
+              fingerprint: ref.fingerprint,
+              context: node.config.text || undefined,
+            },
+          ]
+        : []),
       ...(node.config.text
         ? [{ type: "text" as const, text: node.config.text }]
         : []),
     ]);
+  }
   if (node.type === "review") {
     const hash = stableHash(input);
     if (step.approvedByUserId && step.reviewHash === hash)

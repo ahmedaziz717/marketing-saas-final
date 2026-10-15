@@ -1,3 +1,4 @@
+import { withWorkflowMediaFields } from "../../shared/workflowMedia";
 import { withPerformanceInputs } from "../../shared/workflowPerformanceInputs";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -42,7 +43,10 @@ export async function getWorkflowApp(
       code: "NOT_FOUND",
       message: "This App version is unavailable in this workspace.",
     });
-  return { ...row.app, graph: withPerformanceInputs(row.app.graph, false) };
+  return {
+    ...row.app,
+    graph: withWorkflowMediaFields(withPerformanceInputs(row.app.graph, false)),
+  };
 }
 
 /** Expand pinned versions on the server. Clients never submit executable App snapshots. */

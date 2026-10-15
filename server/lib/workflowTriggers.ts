@@ -63,7 +63,7 @@ export async function fireWorkflowTrigger(
     db,
     trigger.organizationId,
     graph.nodes
-      .filter(n => n.type === "image" && n.config.imageKey)
+      .filter(n => ["image", "app_input"].includes(n.type) && n.config.imageKey)
       .map(n => n.config.imageKey!)
   );
   const receiptId = stableHash({ triggerId, eventKey });

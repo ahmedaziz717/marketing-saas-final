@@ -1,3 +1,4 @@
+import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { useEffect, type ReactNode } from "react";
 import {
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
 import type { WorkflowGraph, WorkflowNode } from "@shared/creativeWorkflow";
 import {
   fieldChoices,
+  parseWorkflowMediaSelection,
   fieldPrompt,
   isChoiceField,
   parsePerformanceInput,
@@ -119,13 +121,29 @@ export function WorkflowAppStudio({
     }))
   );
   const productIds = fields
-    .filter(n => n.config.field?.kind === "product")
-    .map(n => Number(value(n)))
-    .filter(Boolean);
+    .filter(n => ["asset", "product"].includes(n.config.field?.kind ?? ""))
+    .map(
+      n =>
+        parseWorkflowMediaSelection(
+          value(n),
+          n.config.field?.kind === "product" ? "product" : "asset"
+        )?.productId
+    )
+    .filter((id): id is number => !!id);
   const imageKeys = fields
-    .filter(n => n.config.field?.kind === "asset" || n.type === "image")
-    .map(value)
-    .filter(Boolean);
+    .filter(
+      n =>
+        ["asset", "product"].includes(n.config.field?.kind ?? "") ||
+        n.type === "image"
+    )
+    .map(
+      n =>
+        parseWorkflowMediaSelection(
+          value(n),
+          n.config.field?.kind === "product" ? "product" : "asset"
+        )?.imageKey
+    )
+    .filter((key): key is string => !!key);
   const summarize = (node: WorkflowNode) => {
     const raw = value(node),
       field = node.config.field;
@@ -142,9 +160,18 @@ export function WorkflowAppStudio({
         ? `Selected account · ${request.range.since} to ${request.range.until}`
         : "Choose an account and dates";
     }
-    if (field?.kind === "asset" || node.type === "image")
+    if (field?.kind === "asset" || field?.kind === "product")
+      return (
+        <WorkflowMediaControl
+          field={field}
+          value={raw}
+          onChange={() => {}}
+          organizationId={organizationId}
+          summary
+        />
+      );
+    if (node.type === "image")
       return assets.data?.find(a => a.key === raw)?.name ?? "Selected image";
-    if (field?.kind === "product") return `Catalog item #${raw}`;
     return raw;
   };
   return (

@@ -1,7 +1,6 @@
+import { resolveWorkflowMedia } from "./workflowMedia";
 import { getConnection } from "./channelConnections";
-import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { products } from "../../drizzle/schema";
 import type { WorkflowGraph } from "../../shared/creativeWorkflow";
 import {
   parsePerformanceInput,
@@ -27,7 +26,7 @@ export async function resolveWorkflowInputs(
   );
   for (const n of graph.nodes) {
     const f = n.config.field;
-    if (n.type !== "app_input" || !f) continue;
+    if (!["app_input", "image"].includes(n.type) || !f) continue;
     // A nested optimizer receives typed evidence from its caller, not a standalone form.
     if (
       f.kind === "performance_data" &&
@@ -72,37 +71,19 @@ export async function resolveWorkflowInputs(
       continue;
     }
     n.config.text = "";
-    if (!value) continue;
-    if (f.kind === "asset") {
-      n.type = "image";
-      n.config.imageKey = value;
+    n.config.imageKey = null;
+    if (!value) {
+      // An optional or hidden image contributes no value, not a missing-image error.
+      if (n.type === "image") n.type = "app_input";
       continue;
     }
     let text = fieldPrompt(f, value);
-    if (f.kind === "product") {
-      const [product] = await db
-        .select()
-        .from(products)
-        .where(
-          and(
-            eq(products.id, Number(value)),
-            eq(products.organizationId, organizationId)
-          )
-        );
-      if (!product)
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `${n.title}: This catalog item is unavailable in this workspace.`,
-        });
-      text = JSON.stringify({
-        name: product.name,
-        description: product.description,
-        specifications: product.specifications,
-        productUrl: product.productUrl,
-        serviceDetails: product.serviceDetails,
-      });
+    if (f.kind === "asset" || f.kind === "product") {
+      const resolved = await resolveWorkflowMedia(db, organizationId, f, value);
+      n.config.imageKey = resolved.imageKey;
+      text = resolved.text;
     }
-    n.config.text = `${n.title}: ${text}`;
+    n.config.text = text ? `${n.title}: ${text}` : "";
     for (const e of graph.edges.filter(e => e.source === n.id)) {
       const target = graph.nodes.find(t => t.id === e.target);
       if (target?.type === "meta_ad" && f.kind === "headline")

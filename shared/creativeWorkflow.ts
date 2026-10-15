@@ -543,6 +543,7 @@ export type WorkflowValue =
       url: string;
       name: string;
       fingerprint: string;
+      context?: string;
     };
 export type WorkflowStep = {
   status: "pending" | "running" | "waiting" | "completed" | "failed" | "reused";
