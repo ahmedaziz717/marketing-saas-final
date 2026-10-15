@@ -1,3 +1,4 @@
+import { withWorkflowMediaFields } from "@shared/workflowMedia";
 import { WorkflowInputControl } from "@/components/WorkflowInputControl";
 import { fieldValueProblem } from "@shared/workflowInputs";
 import { WorkflowFormEditor } from "@/components/WorkflowFormEditor";
@@ -135,7 +136,7 @@ function WorkflowLibrary({
         family,
         graph:
           businessWorkflowTemplate(template ?? "") ??
-          workflowTemplate(template ?? ""),
+          withWorkflowMediaFields(workflowTemplate(template ?? "")),
       });
       onOpen(item.id);
     } catch (e) {

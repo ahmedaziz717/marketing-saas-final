@@ -1,3 +1,4 @@
+import { workflowMediaChoices } from "../lib/workflowMedia";
 import { workflowImageReferences } from "../lib/creativeWorkflows";
 import { readGenerationSource } from "../lib/creativeImages";
 import {
@@ -84,6 +85,12 @@ async function runnable(
     if (node.config.field) {
       if (!node.config.field.locked && field.value !== undefined)
         node.config.fieldValue = field.value;
+      else if (
+        !node.config.field.locked &&
+        node.type === "image" &&
+        field.imageKey
+      )
+        node.config.fieldValue = field.imageKey;
       continue;
     }
     if (node.type === "image" && field.imageKey)
@@ -101,6 +108,30 @@ async function runnable(
   };
 }
 export const workflowsRouter = router({
+  mediaChoices: protectedProcedure
+    .input(
+      scope.extend({
+        search: z.string().max(300).default(""),
+        offset: z.number().int().min(0).default(0),
+        selectedValue: z.string().max(10000).default(""),
+        kind: z.enum(["asset", "product"]),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { membership } = await requireOrganizationRole(
+        ctx.user.id,
+        input.organizationId,
+        [...workflowRoles]
+      );
+      return {
+        ...(await workflowMediaChoices(
+          await libraryDatabase(),
+          input.organizationId,
+          input
+        )),
+        role: membership.role,
+      };
+    }),
   assistInput: protectedProcedure
     .input(
       scope.extend({
@@ -264,7 +295,10 @@ export const workflowsRouter = router({
           const f = n.config.field;
           if (!f) continue;
           let problem: string | null = null;
-          if (n.type !== "app_input")
+          if (
+            n.type !== "app_input" &&
+            !(n.type === "image" && f.kind === "asset")
+          )
             problem = "Only App input steps can define form fields.";
           else if (!workflow.graph.edges.some(e => e.source === n.id))
             problem = "Connect this field to a workflow step.";

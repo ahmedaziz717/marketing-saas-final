@@ -1,3 +1,4 @@
+import { workflowContentText } from "../../shared/workflowMedia";
 import { ChannelGraphError } from "../lib/channelGraph";
 import { retryDelay } from "../lib/optimizationIngestion";
 import { randomUUID } from "node:crypto";
@@ -235,15 +236,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         message:
           "Credit pricing changed before this step started. Review a new run estimate.",
       });
-    const text = [
-      ...workflowInputs(run.graph, run.steps, node, "text")
-        .filter(
-          (v): v is Extract<WorkflowValue, { type: "text" }> =>
-            v.type === "text"
-        )
-        .map(v => v.text),
-      node.config.text,
-    ]
+    const text = [...workflowContentText(input), node.config.text]
       .filter(Boolean)
       .join("\n\n");
     if (text.length > (node.type === "generate_video" ? 10000 : 24000))
@@ -393,6 +386,7 @@ async function executeStep(
         url: (await value).url,
         name: ref.name,
         fingerprint: ref.fingerprint,
+        ...(node.config.text ? { context: node.config.text } : {}),
       },
     ];
   }

@@ -8,6 +8,7 @@ import {
 } from "@shared/creativeWorkflow";
 import {
   appFieldSchema,
+  workflowMediaOptions,
   inputKinds,
   inputLabels,
   systemInputChoices,
@@ -48,7 +49,7 @@ export function WorkflowFormEditor({
   const [proposals, setProposals] = useState<InputChoice[]>([]);
   const assist = trpc.workflows.assistInput.useMutation();
   const fields = graph.nodes.filter(
-    n => n.type === "app_input" && n.config.field
+    n => ["app_input", "image"].includes(n.type) && n.config.field
   );
   const node = fields.find(n => n.id === (fieldId ?? selected)) ?? fields[0];
   const f = node?.config.field;
@@ -269,6 +270,102 @@ export function WorkflowFormEditor({
               Lock default value
             </label>
           </div>
+          {(f.kind === "asset" || f.kind === "product") && (
+            <div className="wf-media-settings">
+              <h3>Image sources & product content</h3>
+              <p>
+                These settings belong to this workflow field and are included in
+                every published App version.
+              </p>
+              {f.kind === "asset" &&
+                (
+                  [
+                    ["productImages", "Allow product images"],
+                    ["approvedAssets", "Allow approved assets"],
+                    ["allowUpload", "Offer image upload"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key}>
+                    <input
+                      type="checkbox"
+                      checked={workflowMediaOptions(f)[key]}
+                      disabled={
+                        key === "allowUpload" &&
+                        !workflowMediaOptions(f).approvedAssets
+                      }
+                      onChange={e => {
+                        const media = {
+                          ...workflowMediaOptions(f),
+                          [key]: e.target.checked,
+                        };
+                        if (!media.productImages && !media.approvedAssets) {
+                          toast.error(
+                            "Keep at least one image source available."
+                          );
+                          return;
+                        }
+                        if (!media.approvedAssets) media.allowUpload = false;
+                        update({ media, defaultValue: "" });
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              {f.kind === "asset" && (
+                <p>
+                  Uploads use the Asset Library approval process. Approved
+                  uploads can be selected as reference images.
+                </p>
+              )}
+              <label>
+                Feature bullets
+                <select
+                  value={workflowMediaOptions(f).bullets}
+                  onChange={e =>
+                    update({
+                      media: {
+                        ...workflowMediaOptions(f),
+                        bullets: e.target.value as "choose" | "all" | "none",
+                      },
+                    })
+                  }
+                >
+                  <option value="choose">User chooses bullets</option>
+                  <option value="all">Feature all catalog bullets</option>
+                  <option value="none">Do not feature bullets</option>
+                </select>
+              </label>
+              {(
+                [
+                  ["price", "Price"],
+                  ["description", "Description"],
+                  ["link", "Product link"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key}>
+                  {label}
+                  <select
+                    value={workflowMediaOptions(f)[key]}
+                    onChange={e =>
+                      update({
+                        media: {
+                          ...workflowMediaOptions(f),
+                          [key]: e.target.value as
+                            | "choose"
+                            | "always"
+                            | "never",
+                        },
+                      })
+                    }
+                  >
+                    <option value="choose">User chooses</option>
+                    <option value="always">Always include</option>
+                    <option value="never">Never include</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          )}
           {isChoiceField(f) && (
             <>
               <label>
@@ -587,12 +684,14 @@ export function WorkflowFormEditor({
                 workflowNodes[n.type].inputs.length
             )
             .map(n => {
-              const port = workflowNodes[n.type].inputs.find(
+              const ports = workflowNodes[n.type].inputs.filter(
                 p =>
-                  p.type === (f.kind === "asset" ? "image" : "text") ||
-                  p.type === "any"
+                  p.type === "any" ||
+                  (f.kind === "product"
+                    ? ["text", "image"].includes(p.type)
+                    : p.type === (f.kind === "asset" ? "image" : "text"))
               );
-              if (!port) return null;
+              if (!ports.length) return null;
               const connected = graph.edges.some(
                 e => e.source === node.id && e.target === n.id
               );
@@ -607,12 +706,12 @@ export function WorkflowFormEditor({
                         edges: e.target.checked
                           ? [
                               ...graph.edges,
-                              {
+                              ...ports.map(port => ({
                                 id: crypto.randomUUID(),
                                 source: node.id,
                                 target: n.id,
                                 port: port.id,
-                              },
+                              })),
                             ]
                           : graph.edges.filter(
                               edge =>

@@ -1,3 +1,7 @@
+import {
+  withWorkflowMediaFields,
+  workflowContentText,
+} from "../../shared/workflowMedia";
 import { withPerformanceInputs } from "../../shared/workflowPerformanceInputs";
 import { prepareImageRequest } from "./imageRequest";
 import { readGenerationSource } from "./creativeImages";
@@ -85,7 +89,10 @@ export async function getWorkflow(
       code: "NOT_FOUND",
       message: "Workflow not found in this workspace.",
     });
-  return { ...row, graph: withPerformanceInputs(row.graph) };
+  return {
+    ...row,
+    graph: withWorkflowMediaFields(withPerformanceInputs(row.graph)),
+  };
 }
 export function workflowVideoSetup(
   node: WorkflowNode,
@@ -129,15 +136,7 @@ export async function workflowNodeCredits(
     )
     .map(v => v.key);
   const text =
-    [
-      ...input
-        .filter(
-          (v): v is Extract<WorkflowValue, { type: "text" }> =>
-            v.type === "text"
-        )
-        .map(v => v.text),
-      node.config.text,
-    ]
+    [...workflowContentText(input), node.config.text]
       .filter(Boolean)
       .join("\n\n") || "Workflow generation";
   if (node.type === "generate_video") {
@@ -257,7 +256,10 @@ export async function prepareWorkflowRun(
   // Capture source fingerprints before considering cached upstream results.
   const references: Awaited<ReturnType<typeof workflowImageReferences>> = [];
   for (const node of graph.nodes.filter(
-    n => selected.has(n.id) && n.type === "image"
+    n =>
+      selected.has(n.id) &&
+      ["image", "app_input"].includes(n.type) &&
+      n.config.imageKey
   )) {
     references.push(
       ...(await workflowImageReferences(db, organizationId, [
@@ -330,7 +332,7 @@ export async function prepareWorkflowRun(
         .filter(n => ancestors.has(n.id))
         .flatMap(n =>
           [
-            n.type === "image" ? n.config.imageKey : null,
+            ["image", "app_input"].includes(n.type) ? n.config.imageKey : null,
             n.config.sourceVideoKey,
           ].filter(Boolean)
         );

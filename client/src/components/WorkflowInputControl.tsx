@@ -1,3 +1,4 @@
+import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowPerformanceInput } from "./WorkflowPerformanceInput";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -32,16 +33,7 @@ export function WorkflowInputControl({
   productIds?: number[];
   imageKeys?: string[];
 }) {
-  const [search, setSearch] = useState("");
   const [proposals, setProposals] = useState<InputChoice[]>([]);
-  const products = trpc.catalog.overview.useQuery(
-    { organizationId, search },
-    { enabled: field.kind === "product" }
-  );
-  const assets = trpc.assetLibrary.studioList.useQuery(
-    { organizationId },
-    { enabled: field.kind === "asset" }
-  );
   const assist = trpc.workflows.assistInput.useMutation();
   const disabled = field.locked;
   const options = fieldChoices(field);
@@ -106,58 +98,14 @@ export function WorkflowInputControl({
             </small>
           )}
         </>
-      ) : field.kind === "product" ? (
-        <>
-          <input
-            aria-label="Search catalog"
-            placeholder="Search products, services or plans…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <select
-            aria-label={title}
-            disabled={disabled}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-          >
-            <option value="">Choose a catalog item</option>
-            {value &&
-              !products.data?.products.some(p => String(p.id) === value) && (
-                <option value={value}>Selected catalog item #{value}</option>
-              )}
-            {products.data?.products.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          {products.error && (
-            <small role="alert">{products.error.message}</small>
-          )}
-          {products.data?.hasMore && (
-            <small>Refine your search to find more items.</small>
-          )}
-        </>
-      ) : field.kind === "asset" ? (
-        <>
-          <select
-            aria-label={title}
-            disabled={disabled}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-          >
-            <option value="">Choose a reference image</option>
-            {assets.data
-              ?.filter(a => a.mediaType === "image")
-              .map(a => (
-                <option value={a.key} key={a.key}>
-                  {a.name}
-                  {a.width && a.height ? ` · ${a.width} × ${a.height}` : ""}
-                </option>
-              ))}
-          </select>
-          {assets.error && <small role="alert">{assets.error.message}</small>}
-        </>
+      ) : field.kind === "product" || field.kind === "asset" ? (
+        <WorkflowMediaControl
+          field={field}
+          value={value}
+          onChange={onChange}
+          organizationId={organizationId}
+          preview={preview}
+        />
       ) : field.kind === "number" || field.kind === "url" ? (
         <input
           aria-label={title}

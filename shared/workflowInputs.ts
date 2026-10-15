@@ -61,6 +61,41 @@ export const choiceSchema = z.object({
   label: z.string().min(1).max(160),
   direction: z.string().max(2000).default(""),
 });
+const contentControl = z.enum(["choose", "always", "never"]);
+export const workflowMediaOptionsSchema = z
+  .object({
+    productImages: z.boolean().default(true),
+    approvedAssets: z.boolean().default(true),
+    allowUpload: z.boolean().default(false),
+    bullets: z.enum(["choose", "all", "none"]).default("choose"),
+    price: contentControl.default("choose"),
+    description: contentControl.default("choose"),
+    link: contentControl.default("choose"),
+  })
+  .refine(
+    options => options.productImages || options.approvedAssets,
+    "Enable at least one image source."
+  );
+export const workflowMediaSelectionSchema = z
+  .object({
+    productId: z.number().int().positive().max(2147483647).optional(),
+    imageKey: z
+      .string()
+      .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
+      .refine(
+        value => Number(value.split(":")[1]) <= 2147483647,
+        "Invalid image reference"
+      )
+      .optional(),
+    featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20).default([]),
+    includePrice: z.boolean().default(false),
+    includeDescription: z.boolean().default(true),
+    includeLink: z.boolean().default(false),
+  })
+  .strict();
+export type WorkflowMediaSelection = z.infer<
+  typeof workflowMediaSelectionSchema
+>;
 export const appFieldSchema = z.object({
   kind: z.enum(inputKinds),
   help: z.string().max(600).default(""),
@@ -73,6 +108,7 @@ export const appFieldSchema = z.object({
   defaultValue: z.string().max(10000).default(""),
   ai: z.boolean().default(false),
   aiInstructions: z.string().max(3000).default(""),
+  media: workflowMediaOptionsSchema.optional(),
   studio: z
     .object({
       section: z.enum(["setup", "direction", "content"]).optional(),
@@ -85,6 +121,46 @@ export const appFieldSchema = z.object({
 });
 export type AppField = z.infer<typeof appFieldSchema>;
 export type InputChoice = z.infer<typeof choiceSchema>;
+export const workflowMediaOptions = (field: AppField) =>
+  workflowMediaOptionsSchema.parse(field.media ?? {});
+export function parseWorkflowMediaSelection(
+  value: string,
+  kind: "product" | "asset"
+) {
+  if (kind === "product" && /^[1-9][0-9]*$/.test(value))
+    return workflowMediaSelectionSchema.safeParse({ productId: Number(value) })
+      .data;
+  if (
+    kind === "asset" &&
+    /^(asset|creative|product_image):[1-9][0-9]*$/.test(value)
+  )
+    return workflowMediaSelectionSchema.safeParse({ imageKey: value }).data;
+  try {
+    return workflowMediaSelectionSchema.safeParse(JSON.parse(value)).data;
+  } catch {
+    return undefined;
+  }
+}
+export function workflowProductContent(
+  field: AppField,
+  selection: WorkflowMediaSelection,
+  specs: Record<string, string>
+) {
+  const options = workflowMediaOptions(field);
+  const flag = (mode: "choose" | "always" | "never", value: boolean) =>
+    mode === "always" || (mode === "choose" && value);
+  return {
+    featuredSpecKeys:
+      options.bullets === "all"
+        ? Object.keys(specs).filter(k => specs[k]?.trim())
+        : options.bullets === "none"
+          ? []
+          : Array.from(new Set(selection.featuredSpecKeys)),
+    includePrice: flag(options.price, selection.includePrice),
+    includeDescription: flag(options.description, selection.includeDescription),
+    includeLink: flag(options.link, selection.includeLink),
+  };
+}
 export const sizeChoices = [
   {
     id: "1:1",
@@ -190,16 +266,50 @@ export function fieldValueProblem(
   }
   if (field.kind === "number" && !Number.isFinite(Number(value)))
     return "Enter a number.";
-  if (field.kind === "product" && !/^[1-9][0-9]*$/.test(value))
-    return "Choose a catalog item.";
-  if (
-    field.kind === "asset" &&
-    !/^(asset|creative|product_image):[1-9][0-9]*$/.test(value)
-  )
-    return "Choose an image.";
+  if (field.kind === "product" || field.kind === "asset") {
+    const selected = parseWorkflowMediaSelection(value, field.kind);
+    if (
+      !selected ||
+      (field.kind === "product" ? !selected.productId : !selected.imageKey)
+    )
+      return field.kind === "product"
+        ? "Choose a catalog item."
+        : "Choose an image.";
+    const options = workflowMediaOptions(field);
+    if (
+      field.kind === "asset" &&
+      selected.imageKey &&
+      (selected.imageKey.startsWith("product_image:")
+        ? !options.productImages
+        : !options.approvedAssets)
+    )
+      return "Choose an image source allowed by this workflow.";
+    if (
+      selected.featuredSpecKeys.length !==
+      new Set(selected.featuredSpecKeys).size
+    )
+      return "Choose each bullet only once.";
+  }
   return null;
 }
 export function fieldPrompt(field: AppField, value: string) {
+  if (field.kind === "product" || field.kind === "asset") {
+    const selected = parseWorkflowMediaSelection(value, field.kind);
+    if (!selected) return "Choose an image or product";
+    const options = workflowMediaOptions(field);
+    const content = workflowProductContent(field, selected, {});
+    return [
+      selected.productId ? "Selected catalog product" : "Selected image",
+      options.bullets === "all"
+        ? "All catalog bullets"
+        : content.featuredSpecKeys.length
+          ? `Bullets: ${content.featuredSpecKeys.join(", ")}`
+          : "No feature bullets",
+      content.includePrice ? "Show price" : "No price",
+      content.includeDescription ? "Description allowed" : "No description",
+      content.includeLink ? "Product link allowed" : "No product link",
+    ].join(" · ");
+  }
   if (field.kind === "performance_data") {
     const selected = parsePerformanceInput(value);
     return selected

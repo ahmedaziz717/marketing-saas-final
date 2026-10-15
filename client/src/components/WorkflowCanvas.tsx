@@ -321,6 +321,11 @@ export function WorkflowCanvas({
       Math.round(x + (graph.nodes.length % 3) * 45),
       Math.round(y + (graph.nodes.length % 3) * 45)
     );
+    if (type === "image")
+      node.config.field = appFieldSchema.parse({
+        kind: "asset",
+        required: true,
+      });
     if (fieldKind) {
       node.title = inputLabels[fieldKind];
       node.config.field =

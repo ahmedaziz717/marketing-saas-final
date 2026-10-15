@@ -50,3 +50,41 @@ describe("App form contracts", () => {
     expect(workflowImageSize("1.91:1")).toEqual({ width: 1200, height: 628 });
   });
 });
+
+it("validates structured media and respects workflow-owned content controls", async () => {
+  const { workflowProductContent, parseWorkflowMediaSelection } = await import(
+    "../shared/workflowInputs"
+  );
+  const field = appFieldSchema.parse({
+    kind: "asset",
+    media: {
+      productImages: false,
+      price: "never",
+      description: "never",
+      link: "always",
+      bullets: "none",
+    },
+  });
+  expect(fieldValueProblem(field, "product_image:22")).toMatch(/allowed/);
+  expect(
+    fieldValueProblem(field, '{"imageKey":"asset:3","price":"invented"}')
+  ).toMatch(/image/);
+  expect(
+    fieldValueProblem(appFieldSchema.parse({ kind: "product" }), "42")
+  ).toBeNull();
+  expect(
+    workflowProductContent(
+      field,
+      parseWorkflowMediaSelection(
+        '{"imageKey":"asset:3","includePrice":true,"includeDescription":true,"featuredSpecKeys":["Power"]}',
+        "asset"
+      )!,
+      { Power: "100W" }
+    )
+  ).toEqual({
+    featuredSpecKeys: [],
+    includePrice: false,
+    includeDescription: false,
+    includeLink: true,
+  });
+});
