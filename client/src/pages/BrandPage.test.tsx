@@ -45,6 +45,7 @@ vi.mock("@/lib/trpc", async () => {
   const React = await import("react");
   return {
     trpc: {
+      models: { credits: { useQuery: () => ({ data: { textEstimate: 1 } }) } },
       useUtils: () => ({
         brand: {
           get: { invalidate: async () => {} },

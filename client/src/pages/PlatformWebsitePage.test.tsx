@@ -72,13 +72,18 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import PlatformWebsitePage from "./PlatformWebsitePage";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 afterEach(() => {
   cleanup();
   state.role = "user";
   vi.clearAllMocks();
 });
 it("does not fetch public inbox or identity for a customer workspace owner", () => {
-  render(<PlatformWebsitePage />);
+  render(
+    <ThemeProvider>
+      <PlatformWebsitePage />
+    </ThemeProvider>
+  );
   expect(
     screen.getByText("Platform administrator access required")
   ).toBeTruthy();
@@ -87,7 +92,11 @@ it("does not fetch public inbox or identity for a customer workspace owner", () 
 });
 it("resets disclosure confirmation when operator details change", () => {
   state.role = "admin";
-  render(<PlatformWebsitePage />);
+  render(
+    <ThemeProvider>
+      <PlatformWebsitePage />
+    </ThemeProvider>
+  );
   const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
   expect(checkbox.checked).toBe(true);
   fireEvent.change(screen.getByLabelText("Legal operating company"), {
@@ -107,7 +116,11 @@ it("resets disclosure confirmation when operator details change", () => {
 });
 it("keeps request handling distinct from destructive data deletion", () => {
   state.role = "admin";
-  render(<PlatformWebsitePage />);
+  render(
+    <ThemeProvider>
+      <PlatformWebsitePage />
+    </ThemeProvider>
+  );
   fireEvent.click(
     screen.getByRole("button", { name: "Public requests inbox" })
   );

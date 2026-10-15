@@ -32,6 +32,8 @@ const bundle = await build({
   write: false,
   format: "iife",
   platform: "browser",
+  // Styles are loaded from the production CSS bundle below.
+  loader: { ".css": "empty" },
   jsx: "automatic",
   define: { "process.env.NODE_ENV": '"production"' },
   alias: {

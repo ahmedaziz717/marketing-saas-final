@@ -635,6 +635,7 @@ function WorkflowEditor({
           onChange={setGraph}
           organizationId={organizationId}
           preview={editorView === "preview"}
+          appName={name}
         />
       ) : (
         <WorkflowCanvas
@@ -860,9 +861,10 @@ function WorkflowEditor({
                 : "Publish as an App"}
             </DialogTitle>
             <DialogDescription>
-              Your team can run a simple App or reuse this version as a step in
-              another workflow. Future workflow edits are drafts until you
-              publish a new version.
+              Your team gets a Studio with section and category tabs, a review
+              step, and results. Preview the layout in the Preview tab. You can
+              also reuse this version as a step in another workflow. Future
+              workflow edits are drafts until you publish a new version.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
