@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { canGenerateAssetCopy } from "@shared/adCopy";
 import type {
   AssetCopyRequest,
   CopyRegeneration,
@@ -44,7 +45,7 @@ export function useAssetCopy(
     isPending: mutation.isPending,
     target: mutation.variables?.regeneration,
     generate: (regeneration?: CopyRegeneration) => {
-      if (pending.current || !input.assetKeys.length) return;
+      if (pending.current || !canGenerateAssetCopy(input)) return;
       pending.current = true;
       mutation.mutate({ ...input, regeneration });
     },

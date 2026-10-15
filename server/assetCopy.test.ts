@@ -141,3 +141,30 @@ it("validates regeneration indexes and keeps organic generation at three caption
       .options
   ).toHaveLength(3);
 });
+
+it("generates from a brief without an image and includes taxonomy direction and CTA without treating selections as verified claims", async () => {
+  const setup = assetCopyRequestSchema.parse({
+    organizationId: 1,
+    assetKeys: [],
+    promotion: {
+      offer: "Directory memberships",
+      audience: "Tutors",
+      goal: "Signups",
+    },
+    copyDirection: { messaging_style: ["educational"], offer: ["free_trial"] },
+    callToAction: "SIGN_UP",
+  });
+  response({ options });
+  expect(
+    (await generateAssetCopy(setup, { brand: "Directory" }, [])).options
+  ).toHaveLength(5);
+  const request = JSON.stringify(llm.mock.calls[0][0].messages);
+  expect(request).toContain("Educational");
+  expect(request).toContain("Free trial");
+  expect(request).toContain("Sign up");
+  expect(request).toContain("NOT verified facts");
+  expect(
+    assetCopyRequestSchema.safeParse({ organizationId: 1, assetKeys: [] })
+      .success
+  ).toBe(false);
+});

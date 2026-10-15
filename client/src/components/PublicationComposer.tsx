@@ -1,3 +1,10 @@
+import { metaWebsiteCallToActions } from "@shared/metaCallToAction";
+import { scrollStudioChoices } from "./configurator/studioNavigation";
+import { ActivationComposerStudio } from "./activation/ActivationComposerStudio";
+import type {
+  ActivationEntry,
+  ActivationSection,
+} from "./activation/ActivationNavigation";
 import { StudioSections } from "./configurator/StudioSections";
 import { StudioCard } from "./configurator/StudioCard";
 import {
@@ -116,6 +123,8 @@ function ComposerSurface({
 export function PublicationComposer({
   studio = false,
   onChangeChannel,
+  studioEntry,
+  studioActive = true,
   item,
   stage = "create",
   initialPlanId,
@@ -130,6 +139,8 @@ export function PublicationComposer({
 }: {
   studio?: boolean;
   onChangeChannel?: () => void;
+  studioEntry?: ActivationEntry;
+  studioActive?: boolean;
   item?: Publication;
   stage?: "create" | "activate";
   initialPlanId?: number;
@@ -157,18 +168,25 @@ export function PublicationComposer({
   const adWizard = channel === "meta_ads" && composing;
   const wizard = adWizard || studio;
   const CopyToolsContainer = channel === "facebook" ? "details" : "div";
-  const [step, setStep] = useState<
-    "setup" | "creative" | "delivery" | "preview"
-  >("setup");
+  const [step, setStep] = useState<ActivationSection>("setup");
+  const [validationEntry, setValidationEntry] = useState<ActivationEntry>();
+  useEffect(() => {
+    if (studioEntry && studioActive) {
+      setStep(studioEntry.section);
+      setValidationEntry(undefined);
+    }
+  }, [studioEntry, studioActive]);
   const [platform, setPlatform] = useState("meta_ads");
   const scrollBody = useRef<HTMLDivElement>(null);
-  function goToStep(next: "setup" | "creative" | "delivery" | "preview") {
+  function goToStep(next: ActivationSection, category?: string) {
     setStep(next);
+    setValidationEntry(previous =>
+      category
+        ? { section: next, category, visit: (previous?.visit ?? 0) + 1 }
+        : undefined
+    );
     if (studio) {
-      scrollBody.current?.scrollIntoView({
-        block: "start",
-        behavior: "smooth",
-      });
+      scrollStudioChoices(scrollBody.current);
     } else if (scrollBody.current) scrollBody.current.scrollTop = 0;
   }
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -332,11 +350,11 @@ export function PublicationComposer({
       if (studio && next && channel === "meta_ads") {
         const account = connectedAccounts.find(c => c.id === connectionId);
         if (!account?.details.capabilities.includes("publish")) {
-          goToStep("setup");
+          goToStep("setup", "account");
           throw new Error("Choose an ad account with publishing permission.");
         }
         if (!content.adSetId) {
-          goToStep("setup");
+          goToStep("setup", "campaign");
           throw new Error(
             "Choose a campaign and ad set before reviewing delivery."
           );
@@ -354,11 +372,11 @@ export function PublicationComposer({
               )
           )
         ) {
-          goToStep("creative");
+          goToStep("creative", "assets");
           throw new Error("Choose approved image assets for this ad.");
         }
         if (!content.message.trim() || !normalizeDestinationUrl(content.link)) {
-          goToStep("creative");
+          goToStep("copy", !content.message.trim() ? "message" : "link");
           throw new Error(
             "Add primary text and a valid destination URL before reviewing delivery."
           );
@@ -376,7 +394,18 @@ export function PublicationComposer({
         if (issues.length) {
           setShowErrors(true);
           if (studio)
-            goToStep(issues[0][0] === "destination" ? "setup" : "creative");
+            goToStep(
+              issues[0][0] === "destination"
+                ? "setup"
+                : issues[0][0] === "asset"
+                  ? "creative"
+                  : "copy",
+              issues[0][0] === "destination"
+                ? "account"
+                : issues[0][0] === "asset"
+                  ? "assets"
+                  : "message"
+            );
           focusIssue(issues[0][0]);
           return;
         }
@@ -443,6 +472,59 @@ export function PublicationComposer({
       toast.error(e instanceof Error ? e.message : "Check the selected time.");
     }
   }
+  if (studio && organizationId)
+    return (
+      <ActivationComposerStudio
+        organizationId={organizationId}
+        role={membership?.role ?? ""}
+        channel={channel}
+        section={step}
+        onSection={goToStep}
+        onChangeChannel={onChangeChannel}
+        entry={validationEntry ?? studioEntry}
+        active={studioActive}
+        accounts={connectedAccounts}
+        connectionsLoading={connections.isLoading}
+        connectionsError={!!connections.error}
+        retryConnections={() => void connections.refetch()}
+        connectionId={connectionId}
+        setConnection={setConnection}
+        assets={assets.data ?? []}
+        assetsLoading={assets.isLoading}
+        assetsError={!!assets.error}
+        retryAssets={() => void assets.refetch()}
+        assetKey={assetKey}
+        setAsset={setAsset}
+        content={content}
+        setContent={setContent}
+        format={placement ? "placement" : carousel ? "carousel" : "single"}
+        setFormat={value => {
+          if (
+            value ===
+            (placement ? "placement" : carousel ? "carousel" : "single")
+          )
+            return;
+          setPlacement(value === "placement");
+          setCarousel(value === "carousel");
+          setAsset("");
+          setContent(previous => ({
+            ...previous,
+            placementAssetKeys: undefined,
+            carouselAssetKeys: undefined,
+          }));
+        }}
+        local={local}
+        setLocal={setLocal}
+        timezone={timezone}
+        setTimezone={setTimezone}
+        brandDefaults={businessBrand.data?.businessProfile ?? undefined}
+        pending={save.isPending}
+        errors={showErrors ? socialErrors : {}}
+        onSave={submit}
+        onClose={onClose}
+        scrollBody={scrollBody}
+      />
+    );
   return (
     <ComposerSurface
       studio={studio}
@@ -611,6 +693,7 @@ export function PublicationComposer({
                           ? "Choose your account & campaign"
                           : "Choose your Facebook Page",
                       creative: "Make it ready for your audience",
+                      copy: "Write your copy",
                       delivery: "Choose your timing",
                       preview: "Review your activation",
                     }[step]
@@ -625,6 +708,7 @@ export function PublicationComposer({
                           : "Choose a connected Page with publishing permission.",
                       creative:
                         "Pair approved media with the right copy and format.",
+                      copy: "Write or generate copy from your setup.",
                       delivery:
                         "Pick a time now. Delivery still requires a separate final confirmation.",
                       preview:
@@ -1226,6 +1310,12 @@ export function PublicationComposer({
                             organizationId={organizationId}
                             assetKeys={copyAssetKeys}
                             promotion={content.promotion}
+                            copyDirection={content.copyDirection}
+                            callToAction={
+                              channel === "meta_ads"
+                                ? content.callToAction
+                                : undefined
+                            }
                             value={content}
                             onChange={copy =>
                               setContent(c => ({ ...c, ...copy }))
@@ -1237,6 +1327,12 @@ export function PublicationComposer({
                             channel={channel}
                             assetKeys={copyAssetKeys}
                             promotion={content.promotion}
+                            copyDirection={content.copyDirection}
+                            callToAction={
+                              channel === "meta_ads"
+                                ? content.callToAction
+                                : undefined
+                            }
                             onUse={copy =>
                               setContent(c => ({
                                 ...c,
@@ -1316,13 +1412,11 @@ export function PublicationComposer({
                         value={content.callToAction}
                         onChange={e => setField("callToAction", e.target.value)}
                       >
-                        {["LEARN_MORE", "SHOP_NOW", "SIGN_UP", "GET_OFFER"].map(
-                          c => (
-                            <option key={c} value={c}>
-                              {statusLabel(c.toLowerCase())}
-                            </option>
-                          )
-                        )}
+                        {metaWebsiteCallToActions.map(option => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     {!multipleTextOptions && (

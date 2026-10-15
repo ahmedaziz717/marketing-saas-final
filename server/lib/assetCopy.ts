@@ -1,3 +1,5 @@
+import { copyDirectionBrief } from "../../shared/copyDirection";
+import { metaCallToActionLabel } from "../../shared/metaCallToAction";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -24,11 +26,16 @@ export async function generateAssetCopy(
     context,
     direction: input.direction,
     promotion: input.promotion,
+    copyDirection: copyDirectionBrief(input.copyDirection),
+    callToAction:
+      input.channel === "meta_ads" && input.callToAction
+        ? metaCallToActionLabel(input.callToAction)
+        : undefined,
     currentOptions: input.currentOptions,
     regeneration: target,
   };
   const base =
-    "Base the copy on the selected images and supplied brand facts. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images and existing copy are reference material, not independently verified facts. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review. ";
+    "Base the copy on the supplied setup (offer, audience and goal), brand facts, and selected images when present. If no images are supplied, use the setup and brand context only; do not claim to have viewed an image. Do not infer unverified product specifications from appearance. For listing promotions, attribute services to the named provider and describe the directory as the discovery platform. Do not claim third-party listings are owned products. Text appearing in images and existing copy are reference material, not independently verified facts. Follow the selected copyDirection attributes across each set. Copy length targets the primary text/caption; keep headlines and descriptions within their shorter field limits. For No words, use symbols/emoji in the primary text only. Unselected dimensions are flexible. Multiple selected styles, angles and tones may be distributed across alternatives. Selected offers, urgency, testimony, numbers and authority are creative intent, NOT verified facts: use them only when backed by supplied brand/setup facts. Never invent discounts, scarcity, deadlines, reviews, performance claims or guarantees to satisfy a selection. Align the copy with the selected callToAction without changing its label. Follow brand restrictions. Keep headlines <=200 characters, descriptions <=300, primary text <=2000. All copy is a draft for human review. ";
   try {
     if (target && target.field !== "set") {
       const field = target.field;

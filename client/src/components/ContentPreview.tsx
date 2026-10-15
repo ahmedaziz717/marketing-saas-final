@@ -1,3 +1,4 @@
+import { metaCallToActionLabel } from "@shared/metaCallToAction";
 import type { PublicationContent, Channel } from "@shared/channels";
 import type { LibraryAsset } from "@shared/assetLibrary";
 export function ContentPreview({
@@ -85,9 +86,11 @@ export function ContentPreview({
             {content.headline || "Your headline"}
           </p>
           <p className="mt-1 break-words text-sm">{content.description}</p>
-          <span className="mt-3 inline-block rounded-lg border px-3 py-1 text-sm">
-            {content.callToAction.toLowerCase().replaceAll("_", " ")}
-          </span>
+          {content.callToAction !== "NO_BUTTON" && (
+            <span className="mt-3 inline-block rounded-lg border px-3 py-1 text-sm">
+              {metaCallToActionLabel(content.callToAction)}
+            </span>
+          )}
         </div>
       )}
     </section>

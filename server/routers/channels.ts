@@ -669,8 +669,8 @@ export const channelsRouter = router({
         organizationId: input.organizationId,
         actorUserId: ctx.user.id,
         action: "publication.copy_drafted",
-        entityType: "asset",
-        entityId: input.assetKeys[0],
+        entityType: input.assetKeys.length ? "asset" : "organization",
+        entityId: input.assetKeys[0] ?? String(input.organizationId),
         payload: {
           assetKeys: input.assetKeys,
           optionCount: drafts.options.length,

@@ -12,6 +12,8 @@ export function StudioSections<T extends string>({
     title: string;
     subtitle: string;
     icon: LucideIcon;
+    disabled?: boolean;
+    disabledReason?: string;
   }[];
   current: T;
   onSelect: (id: T) => void;
@@ -25,6 +27,8 @@ export function StudioSections<T extends string>({
             type="button"
             key={item.id}
             aria-current={current === item.id ? "step" : undefined}
+            disabled={item.disabled}
+            title={item.disabled ? item.disabledReason : undefined}
             onClick={() => onSelect(item.id)}
           >
             <Icon size={22} />
