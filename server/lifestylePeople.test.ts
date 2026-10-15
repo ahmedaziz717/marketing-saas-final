@@ -160,4 +160,6 @@ it("ships all 400 new portraits as individually extractable, nonidentical images
     }
   }
   expect(hashes.size).toBe(400);
-}, 30_000);
+  // Full-library extraction shares CPU with the rest of CI. Keep all 400
+  // integrity checks while allowing slower runners to finish the work.
+}, 90_000);
