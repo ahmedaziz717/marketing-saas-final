@@ -1,5 +1,20 @@
 import { CalendarDays, ClipboardCheck, Image, Radio, Type } from "lucide-react";
 import { StudioSections } from "../configurator/StudioSections";
+import { useEffect, useRef } from "react";
+import { copyDimensions, copyTaxonomy } from "@shared/copyTaxonomy";
+
+export const copyDirectionCategories = copyDimensions.map(id => ({
+  id,
+  title: id === "offer" ? "Offer framing" : copyTaxonomy[id].label,
+}));
+
+export function normalizeCopyCategory(category: string) {
+  return category === "direction"
+    ? "messaging_style"
+    : category === "setup"
+      ? "brief"
+      : category;
+}
 export type ActivationSection =
   | "setup"
   | "creative"
@@ -74,8 +89,24 @@ export function ActivationCategories({
   current: string;
   onSelect: (id: string) => void;
 }) {
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = container.current;
+    const active = node?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!node || !active) return;
+    const bounds = node.getBoundingClientRect();
+    const target = active.getBoundingClientRect();
+    const delta =
+      target.left < bounds.left
+        ? target.left - bounds.left
+        : target.right > bounds.right
+          ? target.right - bounds.right
+          : 0;
+    if (delta) node.scrollBy?.({ left: delta, behavior: "auto" });
+  }, [current]);
   return (
     <div
+      ref={container}
       className="cfg-categories"
       role="group"
       aria-label="Section categories"

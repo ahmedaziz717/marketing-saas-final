@@ -98,6 +98,7 @@ export const linkSchema = z
 export const contentSchema = z.object({
   copyTags: copyTagsSchema.optional(),
   copyDirection: copyDirectionSchema.optional(),
+  copyInstructions: z.string().max(2000).optional(),
   campaignPlanId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().max(5000).default(""),

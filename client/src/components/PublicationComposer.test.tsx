@@ -14,6 +14,7 @@ import type { Publication } from "./PublicationComposer";
 const api = vi.hoisted(() => ({
   save: vi.fn(),
   plan: undefined as any,
+  brand: undefined as any,
   accounts: [] as any[],
   role: "owner",
   liveSocial: true,
@@ -33,7 +34,7 @@ vi.mock("@/lib/trpc", () => ({
         history: { invalidate: vi.fn() },
       },
     }),
-    brand: { get: { useQuery: () => ({ data: undefined }) } },
+    brand: { get: { useQuery: () => ({ data: api.brand }) } },
     channels: {
       connections: {
         useQuery: () => ({
@@ -149,6 +150,7 @@ function legacy(content: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   api.plan = undefined;
+  api.brand = undefined;
   api.role = "owner";
   api.liveSocial = true;
   api.accounts = [
@@ -601,12 +603,22 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
   expect(
     copyCategories
       .getAllByRole("button")
-      .slice(0, 2)
+      .slice(0, 9)
       .map(button => button.textContent)
-  ).toEqual(["Copy direction", "Copy"]);
+  ).toEqual([
+    "Messaging style",
+    "Messaging angle",
+    "Emotional tone",
+    "Benefits vs. features",
+    "Urgency",
+    "Offer framing",
+    "Specificity",
+    "Copy length",
+    "Brief",
+  ]);
   expect(
     copyCategories
-      .getByRole("button", { name: "Copy direction" })
+      .getByRole("button", { name: "Messaging style" })
       .getAttribute("aria-pressed")
   ).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
@@ -632,4 +644,84 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
   );
   expect(api.queue).not.toHaveBeenCalled();
   expect(api.review).not.toHaveBeenCalled();
+});
+
+it("navigates copy categories, filters selected tiles, and saves the brief without overwriting user inputs", () => {
+  api.brand = {
+    businessProfile: {
+      audiences: "Brand audience",
+      goals: "Drive sales",
+      primaryOffer: "Brand offer",
+    },
+  };
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="meta_ads"
+      initialAssetKey="asset:1"
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  expect(screen.queryByRole("group", { name: "Copy attributes" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
+  fireEvent.click(screen.getByRole("button", { name: "Selected (1)" }));
+  expect(
+    screen.queryByRole("button", { name: "Select Provocative" })
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Next: Messaging angle" })
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Previous: Messaging style" })
+  );
+  expect(
+    screen
+      .getByRole("button", { name: "Select Playful" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Let AI choose" }));
+  expect(
+    screen
+      .getByRole("button", { name: "AI chooses ✓" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Brief" }));
+  fireEvent.change(screen.getByLabelText("Audience"), {
+    target: { value: "My audience" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Fill from brand" }));
+  expect((screen.getByLabelText("Audience") as HTMLTextAreaElement).value).toBe(
+    "My audience"
+  );
+  expect((screen.getByLabelText("Goal") as HTMLTextAreaElement).value).toBe(
+    "Drive sales"
+  );
+  fireEvent.change(
+    screen.getByLabelText("Additional instructions (optional)"),
+    { target: { value: "Use only verified claims." } }
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Next: Primary text" }));
+  fireEvent.click(screen.getByRole("button", { name: "Previous: Brief" }));
+  expect(
+    (
+      screen.getByLabelText(
+        "Additional instructions (optional)"
+      ) as HTMLTextAreaElement
+    ).value
+  ).toBe("Use only verified claims.");
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      content: expect.objectContaining({
+        copyInstructions: "Use only verified claims.",
+        promotion: {
+          audience: "My audience",
+          goal: "Drive sales",
+          offer: "Brand offer",
+        },
+      }),
+    })
+  );
+  expect(api.queue).not.toHaveBeenCalled();
 });

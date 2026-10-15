@@ -13,6 +13,7 @@ import {
 import { canSubmitAsset } from "@shared/assetLibrary";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { StudioGeneration } from "./StudioGeneration";
+import { StudioImagePreview } from "./StudioImagePreview";
 
 type Trial = {
   key: string;
@@ -195,7 +196,11 @@ export function StudioPreview({
         ) : selected ? (
           <div className="cfg-result-preview">
             {kind === "image" ? (
-              <img src={selected.url} alt={selected.title} />
+              <StudioImagePreview
+                key={selected.key}
+                url={selected.url}
+                title={selected.title}
+              />
             ) : (
               <video
                 key={selected.key}

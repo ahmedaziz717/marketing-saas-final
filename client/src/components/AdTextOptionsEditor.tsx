@@ -1,5 +1,6 @@
 import { ActionCredits } from "./ActionCredits";
 import { useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import {
   adCopyFields,
@@ -34,7 +35,13 @@ export function AdTextOptionsEditor({
   value,
   onChange,
   studioCategory,
+  generationTarget,
+  instructions,
+  onGenerated,
 }: {
+  generationTarget?: HTMLElement | null;
+  instructions?: string;
+  onGenerated?: () => void;
   studioCategory?: "setup" | AdCopyField;
   organizationId: number;
   assetKeys: string[];
@@ -51,7 +58,9 @@ export function AdTextOptionsEditor({
       : index === 0
         ? `pub-${field}`
         : `pub-${field}-${index}`;
-  const [direction, setDirection] = useState("");
+  const [localDirection, setDirection] = useState("");
+  const direction = instructions ?? localDirection;
+  const studio = generationTarget !== undefined;
   const [active, setActive] = useState<AdCopyField>("message");
   const shownField =
     studioCategory && studioCategory !== "setup" ? studioCategory : active;
@@ -92,6 +101,7 @@ export function AdTextOptionsEditor({
         : copyContentFromSets(generated);
       setUndo({ before: snapshot, after: JSON.stringify(next), context });
       onChange(next);
+      if (!target) onGenerated?.();
     }
   );
   const canUndo =
@@ -102,55 +112,72 @@ export function AdTextOptionsEditor({
   const busy = generator.isPending;
   const label = (field: AdCopyField, index: number) =>
     `${copyFieldLabels[field]} option ${index + 1}`;
+  const generationControls = (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h3 className="font-semibold">
+          {studio ? "Generate copy" : "Ad copy"}
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          {studio
+            ? "Uses your brief, brand, selected creative, and direction choices."
+            : "Five primary texts, five headlines, and five descriptions."}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={!canGenerate || busy}
+        onClick={() => generator.generate()}
+      >
+        <Sparkles className="size-4" />
+        {busy && !generator.target
+          ? "Generating 5 copy sets…"
+          : studio
+            ? hasCopy
+              ? "Regenerate all"
+              : "Generate copy"
+            : hasCopy
+              ? "Regenerate all 5 sets"
+              : "Generate 5 copy sets"}{" "}
+        <ActionCredits
+          organizationId={organizationId}
+          operation="channels.draftAssetCopy"
+        />
+      </Button>
+    </div>
+  );
   return (
     <section
       className="rounded-xl border p-4 space-y-4 min-w-0"
       aria-label="Ad copy options"
       aria-busy={busy}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold">Ad copy</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Five primary texts, five headlines, and five descriptions.
+      {studio
+        ? generationTarget && createPortal(generationControls, generationTarget)
+        : generationControls}
+      {!studio && (
+        <>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground">
+              Optional AI direction
+            </summary>
+            <textarea
+              aria-label="AI copy direction"
+              className={channelInput + " mt-2"}
+              value={direction}
+              onChange={e => setDirection(e.target.value)}
+              maxLength={2000}
+              placeholder="For example: focus on everyday elegance with a warm, concise voice."
+            />
+          </details>
+          <p className="text-xs text-muted-foreground">
+            {canGenerate
+              ? "Regenerate any option, or use its ⋯ menu for the full set."
+              : "Add your setup or select an approved image to generate copy, or write your own."}
           </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canGenerate || busy}
-          onClick={() => generator.generate()}
-        >
-          <Sparkles className="size-4" />
-          {busy && !generator.target
-            ? "Generating 5 copy sets…"
-            : hasCopy
-              ? "Regenerate all 5 sets"
-              : "Generate 5 copy sets"}{" "}
-          <ActionCredits
-            organizationId={organizationId}
-            operation="channels.draftAssetCopy"
-          />
-        </Button>
-      </div>
-      <details className="text-sm">
-        <summary className="cursor-pointer text-muted-foreground">
-          Optional AI direction
-        </summary>
-        <textarea
-          aria-label="AI copy direction"
-          className={channelInput + " mt-2"}
-          value={direction}
-          onChange={e => setDirection(e.target.value)}
-          maxLength={2000}
-          placeholder="For example: focus on everyday elegance with a warm, concise voice."
-        />
-      </details>
-      <p className="text-xs text-muted-foreground">
-        {canGenerate
-          ? "Regenerate any option, or use its ⋯ menu for the full set."
-          : "Add your setup or select an approved image to generate copy, or write your own."}
-      </p>
+        </>
+      )}
       <Tabs
         value={shownField}
         onValueChange={field => setActive(field as AdCopyField)}
@@ -339,7 +366,7 @@ export function AdTextOptionsEditor({
       <p className="text-xs text-muted-foreground" aria-live="polite">
         {busy
           ? "Creating fresh copy. Your edits will be kept if you change anything while it generates."
-          : "AI uses your setup, brand context, and selected images when available. Review all copy before approval. Meta may combine options and may not show every description."}
+          : "AI uses your brief, brand context, and selected images when available. Review all copy before approval. Meta may combine options and may not show every description."}
       </p>
     </section>
   );

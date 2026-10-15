@@ -83,6 +83,46 @@
   height: auto;
   white-space: normal;
 }
+.activation-copy-toolbar {
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 12px;
+  background: var(--cfg-soft);
+}
+.activation-copy-generate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.activation-copy-generate > button {
+  order: 2;
+  flex-shrink: 0;
+}
+.activation-copy-generate > p {
+  max-width: 600px;
+}
+.activation-copy-instructions {
+  margin-top: 18px;
+}
+.activation-direction-heading .cfg-secondary {
+  margin-top: 10px;
+}
+.activation-direction-heading .cfg-secondary[aria-pressed="true"] {
+  color: var(--cfg-violet);
+  border-color: var(--cfg-violet);
+  background: var(--cfg-soft);
+}
+@media (max-width: 600px) {
+  .activation-copy-generate {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .activation-copy-toolbar button {
+    white-space: normal;
+  }
+}
 .activation-summary h3,
 .activation-review-note h3 {
   font-size: 16px;

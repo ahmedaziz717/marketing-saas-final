@@ -47,7 +47,13 @@ function setup(
     assetKey = "asset:1",
     copyDirection,
     promotion,
+    generationTarget,
+    instructions,
+    onGenerated,
   }: {
+    generationTarget?: HTMLElement | null;
+    instructions?: string;
+    onGenerated?: () => void;
     assetKey?: string;
     copyDirection?: { messaging_style?: string[] };
     promotion?: { offer: string; audience: string; goal: string };
@@ -57,6 +63,9 @@ function setup(
       <trpc.Provider client={client} queryClient={query}>
         <QueryClientProvider client={query}>
           <AdTextOptionsEditor
+            generationTarget={generationTarget}
+            instructions={instructions}
+            onGenerated={onGenerated}
             organizationId={1}
             assetKeys={assetKey ? [assetKey] : []}
             copyDirection={copyDirection}
@@ -215,4 +224,54 @@ it("passes the selected copy direction and setup without an image and discards r
   await respond(options);
   expect(current().message).toBe("");
   expect(toast.info).toHaveBeenCalledOnce();
+});
+
+it("uses one Studio generation control and includes brief instructions while retaining individual regeneration", async () => {
+  const view = setup();
+  const toolbar = document.createElement("div");
+  document.body.appendChild(toolbar);
+  const onGenerated = vi.fn();
+  try {
+    view.rerender(
+      <view.Harness
+        generationTarget={toolbar}
+        instructions="Only verified claims"
+        onGenerated={onGenerated}
+        promotion={{
+          offer: "New collection",
+          audience: "Designers",
+          goal: "Sales",
+        }}
+        copyDirection={{ messaging_style: ["playful"] }}
+      />
+    );
+    expect(
+      screen.getAllByRole("button", { name: "Generate copy" })
+    ).toHaveLength(1);
+    expect(screen.queryByLabelText("AI copy direction")).toBeNull();
+    await click("Generate copy");
+    expect(requests.at(-1)!.input).toMatchObject({
+      direction: "Only verified claims",
+      promotion: {
+        offer: "New collection",
+        audience: "Designers",
+        goal: "Sales",
+      },
+      copyDirection: { messaging_style: ["playful"] },
+      callToAction: "SIGN_UP",
+    });
+    await respond(options);
+    expect(onGenerated).toHaveBeenCalledTimes(1);
+    await click("Regenerate primary text option 1");
+    await respond([{ ...options[0], message: "Updated text" }]);
+    expect(current().message).toBe("Updated text");
+    expect(current().headline).toBe("Headline 1");
+    expect(onGenerated).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getAllByRole("button", { name: "Regenerate all" })
+    ).toHaveLength(1);
+  } finally {
+    view.unmount();
+    toolbar.remove();
+  }
 });
