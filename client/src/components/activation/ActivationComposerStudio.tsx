@@ -1,6 +1,6 @@
+import { StudioCopyComposer } from "./StudioCopyComposer";
 import { scrollStudioChoices } from "../configurator/studioNavigation";
 import { CopyDirectionTiles } from "./CopyDirectionTiles";
-import { MetaCallToActionTiles } from "./MetaCallToActionTiles";
 import {
   useEffect,
   useId,
@@ -25,16 +25,11 @@ import type {
 import { channelNames } from "@shared/channels";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { placementSlots, type PlacementSlot } from "@shared/metaPlacements";
-import { replaceSocialCaption } from "@shared/socialPost";
-import type { AdCopyField } from "@shared/adCopy";
 import { copyDimensions, type CopyDimension } from "@shared/copyTaxonomy";
 import { StudioCard } from "../configurator/StudioCard";
 import { ContentPreview } from "../ContentPreview";
 import { AdCampaignPicker } from "../AdCampaignPicker";
 import { CampaignPlanSelect } from "../CampaignPlanSelect";
-import { SocialPostFields } from "../SocialPostFields";
-import { AdTextOptionsEditor } from "../AdTextOptionsEditor";
-import { AdCopyAssistant } from "../AdCopyAssistant";
 import { StudioAssetTiles } from "./StudioAssetTiles";
 import {
   ActivationCategories,
@@ -85,7 +80,6 @@ type Props = {
 };
 export function ActivationComposerStudio(p: Props) {
   const uid = useId();
-  const [copyToolbar, setCopyToolbar] = useState<HTMLDivElement | null>(null);
   const [categories, setCategories] = useState<
     Record<ActivationSection, string>
   >({
@@ -116,7 +110,6 @@ export function ActivationComposerStudio(p: Props) {
     : undefined;
   const account = p.accounts.find(a => a.id === p.connectionId);
   const meta = p.channel === "meta_ads";
-  const multiple = meta && p.format === "single";
   const keys =
     p.format === "placement"
       ? Object.values(p.content.placementAssetKeys ?? {}).filter(
@@ -170,14 +163,7 @@ export function ActivationComposerStudio(p: Props) {
           ? [
               ...copyDirectionCategories,
               { id: "brief", title: "Brief" },
-              { id: "message", title: meta ? "Primary text" : "Caption" },
-              ...(meta
-                ? [
-                    { id: "headline", title: "Headlines" },
-                    { id: "description", title: "Descriptions" },
-                    { id: "link", title: "Link & CTA" },
-                  ]
-                : []),
+              { id: "compose", title: "Compose" },
             ]
           : p.section === "delivery"
             ? [{ id: "schedule", title: "Delivery time" }]
@@ -222,7 +208,10 @@ export function ActivationComposerStudio(p: Props) {
   return (
     <div className="activation-composer">
       <fieldset disabled={p.pending} className="cfg-workspace">
-        <div className="cfg-stage activation-preview">
+        <div
+          className="cfg-stage activation-preview"
+          hidden={p.section === "copy" && category === "compose"}
+        >
           <ContentPreview
             channel={p.channel}
             content={p.content}
@@ -315,9 +304,6 @@ export function ActivationComposerStudio(p: Props) {
               <h2>{heading}</h2>
             </div>
           </div>
-          {p.section === "copy" && (
-            <div className="activation-copy-toolbar" ref={setCopyToolbar} />
-          )}
           {p.section === "setup" && (
             <>
               {category === "account" && (
@@ -677,7 +663,7 @@ export function ActivationComposerStudio(p: Props) {
                   <p className="activation-help">
                     Describe what you are promoting, who it is for, and the
                     result you want. Fill from brand only completes blank
-                    fields; Generate copy writes the text.
+                    fields. Continue to Compose to create and edit your copy.
                   </p>
                   <div className="activation-form-grid">
                     {(
@@ -750,136 +736,26 @@ export function ActivationComposerStudio(p: Props) {
                   </label>
                 </div>
               )}
-              {multiple && (
-                <div
-                  hidden={
-                    !["message", "headline", "description"].includes(category)
-                  }
-                >
-                  <AdTextOptionsEditor
-                    studioCategory={
-                      (["setup", "message", "headline", "description"].includes(
-                        category
-                      )
-                        ? category
-                        : "setup") as "setup" | AdCopyField
-                    }
-                    generationTarget={copyToolbar}
-                    instructions={p.content.copyInstructions ?? ""}
-                    onGenerated={() => chooseCategory("message")}
-                    organizationId={p.organizationId}
-                    assetKeys={copyImages}
-                    promotion={p.content.promotion}
-                    copyDirection={p.content.copyDirection}
-                    callToAction={meta ? p.content.callToAction : undefined}
-                    value={p.content}
-                    onChange={copy =>
-                      p.setContent(previous => ({ ...previous, ...copy }))
-                    }
-                  />
-                </div>
-              )}
-              {!multiple && (
-                <div hidden={category !== "message"}>
-                  <AdCopyAssistant
-                    generationTarget={copyToolbar}
-                    instructions={p.content.copyInstructions ?? ""}
-                    onGenerated={() => chooseCategory("message")}
-                    organizationId={p.organizationId}
-                    channel={p.channel}
-                    assetKeys={copyImages}
-                    promotion={p.content.promotion}
-                    copyDirection={p.content.copyDirection}
-                    callToAction={meta ? p.content.callToAction : undefined}
-                    onUse={copy =>
-                      p.setContent(previous => ({
-                        ...previous,
-                        ...copy,
-                        message: meta
-                          ? copy.message
-                          : replaceSocialCaption(
-                              previous.message,
-                              copy.message
-                            ),
-                        textVariants: undefined,
-                      }))
-                    }
-                  />
-                  <p className="activation-help">
-                    Choose one suggestion to use.{" "}
-                    {meta
-                      ? "This format sends one primary text, headline and description."
-                      : "Facebook publishes one caption per post."}
-                  </p>
-                </div>
-              )}
-              {!meta && category === "message" && (
-                <SocialPostFields
-                  content={p.content}
+              {category === "compose" && (
+                <StudioCopyComposer
+                  organizationId={p.organizationId}
+                  channel={p.channel}
+                  assetKeys={copyImages}
                   hasMedia={!!p.assetKey}
+                  content={p.content}
                   onChange={p.setContent}
                   errors={p.errors}
+                  onEditChoices={() => chooseCategory("messaging_style")}
+                  onEditBrief={() => chooseCategory("brief")}
+                  preview={
+                    <ContentPreview
+                      channel={p.channel}
+                      content={p.content}
+                      asset={selectedAsset}
+                      assets={p.assets}
+                    />
+                  }
                 />
-              )}
-              {meta &&
-                !multiple &&
-                (["message", "headline", "description"] as string[]).includes(
-                  category
-                ) && (
-                  <label className="cfg-field">
-                    <span>
-                      {category === "message"
-                        ? "Primary ad text"
-                        : category === "headline"
-                          ? "Headline"
-                          : "Description"}
-                    </span>
-                    <textarea
-                      id={`${uid}-${category}`}
-                      rows={category === "message" ? 5 : 3}
-                      maxLength={
-                        category === "message"
-                          ? 5000
-                          : category === "headline"
-                            ? 200
-                            : 300
-                      }
-                      value={p.content[category as AdCopyField]}
-                      onChange={e =>
-                        field(category as AdCopyField, e.target.value)
-                      }
-                    />
-                    <small>
-                      One option for this format. Switch to Single image for up
-                      to five alternatives per field.
-                    </small>
-                  </label>
-                )}
-              {meta && category === "description" && (
-                <p className="activation-help">
-                  Meta uses Description for supporting copy. It has no separate
-                  subheadline field; text already in your image stays part of
-                  the creative.
-                </p>
-              )}
-              {meta && category === "link" && (
-                <div className="activation-form-grid">
-                  <label className="cfg-field">
-                    <span>Destination URL</span>
-                    <input
-                      type="url"
-                      placeholder="https://"
-                      value={p.content.link}
-                      onChange={e => field("link", e.target.value)}
-                    />
-                  </label>
-                  <div className="activation-span">
-                    <MetaCallToActionTiles
-                      value={p.content.callToAction}
-                      onChange={value => field("callToAction", value)}
-                    />
-                  </div>
-                </div>
               )}
             </>
           )}
@@ -949,7 +825,7 @@ export function ActivationComposerStudio(p: Props) {
                   ? "Ads will be created paused."
                   : "Your post is published only after final confirmation."}
               </p>
-              {multiple && (
+              {meta && p.format === "single" && (
                 <p>
                   {1 +
                     (p.content.textVariants?.messages.filter(Boolean).length ??
@@ -1001,7 +877,11 @@ export function ActivationComposerStudio(p: Props) {
               }
             >
               {p.section === "copy"
-                ? "Next"
+                ? nextCategory?.id === "compose"
+                  ? "Continue to compose"
+                  : nextCategory
+                    ? "Next"
+                    : "Continue to timing"
                 : nextCategory
                   ? `Continue to ${nextCategory.title.toLowerCase()}`
                   : `Continue to ${nextSection?.title.toLowerCase()}`}

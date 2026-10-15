@@ -13,7 +13,9 @@ export function normalizeCopyCategory(category: string) {
     ? "messaging_style"
     : category === "setup"
       ? "brief"
-      : category;
+      : ["message", "headline", "description", "link"].includes(category)
+        ? "compose"
+        : category;
 }
 export type ActivationSection =
   | "setup"

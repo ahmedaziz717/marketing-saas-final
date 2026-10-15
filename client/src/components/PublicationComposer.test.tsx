@@ -35,7 +35,11 @@ vi.mock("@/lib/trpc", () => ({
       },
     }),
     brand: { get: { useQuery: () => ({ data: api.brand }) } },
+    models: { credits: { useQuery: () => ({ data: { textEstimate: 1 } }) } },
     channels: {
+      draftAssetCopy: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
       connections: {
         useQuery: () => ({
           data: { items: api.accounts, liveSocial: api.liveSocial },
@@ -491,7 +495,7 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Select Our Page" }));
   fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Caption" }));
+  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
   fireEvent.change(caption(), {
     target: { value: "Our new collection is here." },
   });
@@ -622,7 +626,8 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
       .getAttribute("aria-pressed")
   ).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
-  fireEvent.click(screen.getByRole("button", { name: "Link & CTA" }));
+  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
+  fireEvent.click(screen.getByText("Call to action: LEARN MORE"));
   fireEvent.click(screen.getByRole("button", { name: "Select Subscribe" }));
   fireEvent.click(
     screen.getByRole("button", { name: /Creative Assets & format/ })
@@ -686,6 +691,9 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
       .getByRole("button", { name: "AI chooses ✓" })
       .getAttribute("aria-pressed")
   ).toBe("true");
+  expect(
+    screen.queryByRole("button", { name: /Create copy with AI/ })
+  ).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Brief" }));
   fireEvent.change(screen.getByLabelText("Audience"), {
     target: { value: "My audience" },
@@ -701,7 +709,7 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
     screen.getByLabelText("Additional instructions (optional)"),
     { target: { value: "Use only verified claims." } }
   );
-  fireEvent.click(screen.getByRole("button", { name: "Next: Primary text" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next: Compose" }));
   fireEvent.click(screen.getByRole("button", { name: "Previous: Brief" }));
   expect(
     (
