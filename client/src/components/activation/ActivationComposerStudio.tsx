@@ -87,7 +87,7 @@ export function ActivationComposerStudio(p: Props) {
   >({
     setup: "account",
     creative: p.channel === "meta_ads" ? "format" : "assets",
-    copy: "setup",
+    copy: "direction",
     delivery: "schedule",
     preview: "summary",
   });
@@ -155,8 +155,8 @@ export function ActivationComposerStudio(p: Props) {
           ]
         : p.section === "copy"
           ? [
-              { id: "setup", title: "Setup & AI" },
               { id: "direction", title: "Copy direction" },
+              { id: "setup", title: "Copy" },
               { id: "message", title: meta ? "Primary text" : "Caption" },
               ...(meta
                 ? [

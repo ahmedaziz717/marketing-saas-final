@@ -595,7 +595,20 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
     />
   );
   fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Copy direction" }));
+  const copyCategories = within(
+    screen.getByRole("group", { name: "Section categories" })
+  );
+  expect(
+    copyCategories
+      .getAllByRole("button")
+      .slice(0, 2)
+      .map(button => button.textContent)
+  ).toEqual(["Copy direction", "Copy"]);
+  expect(
+    copyCategories
+      .getByRole("button", { name: "Copy direction" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
   fireEvent.click(screen.getByRole("button", { name: "Link & CTA" }));
   fireEvent.click(screen.getByRole("button", { name: "Select Subscribe" }));
