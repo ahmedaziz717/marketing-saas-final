@@ -99,6 +99,18 @@ export const contentSchema = z.object({
   copyTags: copyTagsSchema.optional(),
   copyDirection: copyDirectionSchema.optional(),
   copyInstructions: z.string().max(2000).optional(),
+  copyGenerationContext: z.string().max(64).optional(),
+  // Draft suggestions are separate from textVariants sent to Meta.
+  copyAlternatives: z
+    .array(
+      z.object({
+        message: z.string().max(5000),
+        headline: z.string().max(200),
+        description: z.string().max(300),
+      })
+    )
+    .max(4)
+    .optional(),
   campaignPlanId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().max(5000).default(""),
