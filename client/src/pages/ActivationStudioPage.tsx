@@ -15,7 +15,6 @@ import {
   CalendarDays,
   Megaphone,
   MessageCircle,
-  Send,
 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -24,7 +23,6 @@ import { StudioCard } from "@/components/configurator/StudioCard";
 import {
   PublicationComposer,
   PublicationDetails,
-  PublicationStatus,
   type Publication,
 } from "@/components/PublicationComposer";
 import {
@@ -43,22 +41,42 @@ function ActivationStudio() {
   const studioRoot = useStudioNavigation();
   const { organizationId, membership } = useWorkspace();
   const params = new URLSearchParams(useSearch());
-  const [channel, setChannel] = useState<Channel | null>(null);
+  const initialChannel = ["facebook", "meta_ads"].includes(
+    params.get("channel") ?? ""
+  )
+    ? (params.get("channel") as Channel)
+    : null;
+  const [channel, setChannel] = useState<Channel | null>(initialChannel);
   const [assetKey, setAssetKey] = useState(params.get("asset") ?? "");
   const [publicationId, setPublicationId] = useState(
     params.get("publication") ?? ""
   );
-  const [view, setView] = useState<"edit" | "saved" | "review">(
-    publicationId ? "saved" : "edit"
-  );
+  const [view, setView] = useState<"edit" | "review">("edit");
   const [changeChannel, setChangeChannel] = useState(false);
-  const [showChannels, setShowChannels] = useState(!publicationId);
+  const [editVisit, setEditVisit] = useState(0);
+  const [showChannels, setShowChannels] = useState(
+    !publicationId && !initialChannel
+  );
   const [studioEntry, setStudioEntry] = useState<ActivationEntry>({
-    section: "setup",
-    category: "account",
+    section: (["setup", "creative", "copy", "delivery", "preview"].includes(
+      params.get("section") ?? ""
+    )
+      ? params.get("section")
+      : publicationId
+        ? "copy"
+        : "setup") as ActivationSection,
+    category:
+      params.get("category") ??
+      (params.get("section") && params.get("section") !== "copy"
+        ? undefined
+        : publicationId
+          ? "compose"
+          : "account"),
     visit: 0,
   });
-  const [visitedChannels, setVisitedChannels] = useState<Channel[]>([]);
+  const [visitedChannels, setVisitedChannels] = useState<Channel[]>(
+    initialChannel && !publicationId ? [initialChannel] : []
+  );
   const [savedDrafts, setSavedDrafts] = useState<
     Partial<Record<Channel, Publication>>
   >({});
@@ -71,12 +89,16 @@ function ActivationStudio() {
   });
   const publication = trpc.publishing.get.useQuery(
     { ...scope, id: publicationId },
-    { enabled: !!organizationId && !!publicationId }
+    {
+      enabled: !!organizationId && !!publicationId,
+      refetchInterval: view === "review" ? 3000 : false,
+    }
   );
   useEffect(() => {
     if (publicationId && publication.data?.id === publicationId) {
       const item = publication.data;
       setSavedDrafts(previous => ({ ...previous, [item.channel]: item }));
+      if (!editablePublication(item.state)) setView("review");
     }
   }, [publicationId, publication.data]);
   const canCompose = ["owner", "admin", "creator", "publisher"].includes(
@@ -96,6 +118,9 @@ function ActivationStudio() {
   const missingAsset =
     !!assetKey && !assets.isLoading && !assets.error && !initialAsset;
   const currentChannel = channel ?? publication.data?.channel;
+  const currentRecord =
+    (currentChannel ? savedDrafts[currentChannel] : undefined) ??
+    publication.data;
   // Keep each channel's in-progress composer mounted while browsing destinations.
   // Account/campaign selections never leak from paid ads into organic posts.
   const draftChannels = Array.from(
@@ -126,6 +151,11 @@ function ActivationStudio() {
     setVisitedChannels([]);
     setSavedDrafts({});
     setShowChannels(true);
+    setStudioEntry(previous => ({
+      section: "setup",
+      category: "account",
+      visit: previous.visit + 1,
+    }));
     setView("edit");
   }
   return (
@@ -225,34 +255,49 @@ function ActivationStudio() {
               </button>
             </p>
           )}
-          {publicationId && publication.data && view !== "edit" ? (
-            <section className="cfg-body activation-saved">
-              <div className="activation-choice-symbol">
-                <Send size={40} />
-              </div>
-              <h2>{publication.data.content.title}</h2>
-              <PublicationStatus item={publication.data} />
-              <p>
-                Your activation is saved in the calendar. Review it before
-                approving or confirming delivery.
-              </p>
-              <div className="cfg-actions">
-                {editablePublication(publication.data.state) && (
-                  <button onClick={() => setView("edit")}>
-                    Continue editing
+          {publicationId && currentRecord && view !== "edit" ? (
+            <>
+              <ActivationSections
+                current="preview"
+                onSelect={section => {
+                  if (
+                    section !== "preview" &&
+                    editablePublication(currentRecord.state)
+                  ) {
+                    setStudioEntry(previous => ({
+                      section,
+                      category: section === "copy" ? "compose" : undefined,
+                      visit: previous.visit + 1,
+                    }));
+                    setEditVisit(value => value + 1);
+                    setView("edit");
+                  }
+                }}
+              />
+              <section className="cfg-body activation-saved">
+                <PublicationDetails
+                  inline
+                  item={currentRecord}
+                  onClose={() => {}}
+                  onEdit={() => {
+                    setStudioEntry(previous => ({
+                      section: "delivery",
+                      visit: previous.visit + 1,
+                    }));
+                    setEditVisit(value => value + 1);
+                    setView("edit");
+                  }}
+                />
+                <div className="cfg-actions">
+                  <Link className="cfg-secondary" href="/app/publishing">
+                    View calendar
+                  </Link>
+                  <button onClick={() => setChangeChannel(true)}>
+                    Start another activation
                   </button>
-                )}
-                <button
-                  className="cfg-primary"
-                  onClick={() => setView("review")}
-                >
-                  Review approval & delivery
-                </button>
-                <button onClick={() => setChangeChannel(true)}>
-                  Start another activation
-                </button>
-              </div>
-            </section>
+                </div>
+              </section>
+            </>
           ) : showChannels ? (
             <>
               <ActivationSections
@@ -398,7 +443,7 @@ function ActivationStudio() {
                 }
               >
                 <PublicationComposer
-                  key={`${organizationId}:${draftChannel}:${item ? `${item.id}:${item.revision}` : "new"}`}
+                  key={`${organizationId}:${draftChannel}:${editVisit}`}
                   studio
                   studioEntry={studioEntry}
                   studioActive={
@@ -407,6 +452,11 @@ function ActivationStudio() {
                     currentChannel === draftChannel
                   }
                   initialChannel={draftChannel}
+                  initialPlanId={Number(params.get("plan")) || undefined}
+                  initialConnectionId={params.get("connection") ?? undefined}
+                  initialAdSetId={params.get("adset") ?? undefined}
+                  initialTime={params.get("time") ?? undefined}
+                  initialTimezone={params.get("timezone") ?? undefined}
                   initialAssetKey={assetKey || undefined}
                   item={item}
                   onChangeChannel={() => {
@@ -414,21 +464,19 @@ function ActivationStudio() {
                     scrollStudioChoices(studioRoot.current);
                   }}
                   onClose={() => setChangeChannel(true)}
-                  onSaved={(id, next) => {
+                  onSaved={(id, next, savedChannel, record) => {
                     setPublicationId(id);
-                    setView(next ? "review" : "saved");
+                    if (record)
+                      setSavedDrafts(previous => ({
+                        ...previous,
+                        [savedChannel ?? draftChannel]: record,
+                      }));
+                    if (next) setView("review");
                   }}
                 />
               </div>
             );
           })}
-          {publication.data && view === "review" && (
-            <PublicationDetails
-              item={publication.data}
-              onClose={() => setView("saved")}
-              onEdit={() => setView("edit")}
-            />
-          )}
         </>
       )}
       {changeChannel && (
@@ -462,10 +510,11 @@ function ActivationStudio() {
   );
 }
 export default function ActivationStudioPage() {
+  const search = useSearch();
   const { organizationId } = useWorkspace();
   return (
     <WorkspaceGate>
-      <ActivationStudio key={organizationId} />
+      <ActivationStudio key={`${organizationId}:${search}`} />
     </WorkspaceGate>
   );
 }

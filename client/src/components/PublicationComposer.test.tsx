@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -13,6 +14,9 @@ import type { Publication } from "./PublicationComposer";
 
 const api = vi.hoisted(() => ({
   save: vi.fn(),
+  saveOptions: {} as any,
+  reviewAsync: vi.fn(),
+  submitAsync: vi.fn(),
   plan: undefined as any,
   brand: undefined as any,
   accounts: [] as any[],
@@ -42,7 +46,11 @@ vi.mock("@/lib/trpc", () => ({
       },
       connections: {
         useQuery: () => ({
-          data: { items: api.accounts, liveSocial: api.liveSocial },
+          data: {
+            items: api.accounts,
+            liveSocial: api.liveSocial,
+            liveAds: api.liveSocial,
+          },
         }),
       },
     },
@@ -71,10 +79,27 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     publishing: {
-      save: { useMutation: () => ({ mutate: api.save, isPending: false }) },
-      review: { useMutation: () => ({ mutate: api.review, isPending: false }) },
+      save: {
+        useMutation: (options: any) => {
+          api.saveOptions = options;
+          return { mutate: api.save, isPending: false };
+        },
+      },
+      review: {
+        useMutation: () => ({
+          mutate: api.review,
+          mutateAsync: api.reviewAsync,
+          isPending: false,
+        }),
+      },
       queue: { useMutation: () => ({ mutate: api.queue, isPending: false }) },
-      submit: { useMutation: () => ({ mutate: api.submit, isPending: false }) },
+      submit: {
+        useMutation: () => ({
+          mutate: api.submit,
+          mutateAsync: api.submitAsync,
+          isPending: false,
+        }),
+      },
       history: { useQuery: () => ({ data: [] }) },
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       retry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -157,6 +182,10 @@ beforeEach(() => {
   api.brand = undefined;
   api.role = "owner";
   api.liveSocial = true;
+  api.reviewAsync
+    .mockReset()
+    .mockResolvedValue({ success: true, liveEnabled: true });
+  api.submitAsync.mockReset().mockResolvedValue({ success: true });
   api.accounts = [
     {
       id: "page",
@@ -509,11 +538,9 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
   expect(caption().value).toBe("Our new collection is here.");
   fireEvent.click(
-    screen.getByRole("button", { name: /Review Ready to approve/ })
+    screen.getByRole("button", { name: /Review & activate Confirm delivery/ })
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Save & review delivery" })
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
   expect(api.save).toHaveBeenCalledWith(
     expect.objectContaining({
       connectionId: "page",
@@ -732,4 +759,194 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
     })
   );
   expect(api.queue).not.toHaveBeenCalled();
+});
+
+async function completeSave(revision = 1) {
+  const request = api.save.mock.calls.at(-1)![0];
+  await act(async () => {
+    await api.saveOptions.onSuccess({
+      ...deliveryItem(),
+      ...request,
+      revision,
+      state: "draft",
+      result: null,
+    });
+  });
+}
+it("keeps the Studio on Compose after saving and uses the saved revision on subsequent saves", async () => {
+  const onSaved = vi.fn();
+  render(
+    <PublicationComposer
+      {...baseProps}
+      onSaved={onSaved}
+      studio
+      initialChannel="facebook"
+      initialAssetKey="asset:1"
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
+  fireEvent.change(caption(), { target: { value: "First draft" } });
+  saveDraft();
+  await completeSave(1);
+  expect(screen.getByRole("heading", { name: "Compose" })).toBeTruthy();
+  expect(screen.getByText("Saved", { exact: true })).toBeTruthy();
+  fireEvent.change(caption(), { target: { value: "Edited draft" } });
+  expect(screen.getByText("Unsaved changes", { exact: true })).toBeTruthy();
+  saveDraft();
+  expect(api.save.mock.calls.at(-1)![0].revision).toBe(1);
+  await completeSave(2);
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+  expect(onSaved.mock.calls.at(-1)![1]).toBeUndefined();
+});
+it("saves the reviewed version and publishes once from Studio with the new revision", async () => {
+  const onSaved = vi.fn();
+  render(
+    <PublicationComposer
+      {...baseProps}
+      onSaved={onSaved}
+      studio
+      item={deliveryItem({ scheduledAtMs: null })}
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  const publish = screen.getByRole("button", {
+    name: "Publish now",
+  });
+  fireEvent.click(publish);
+  fireEvent.click(publish);
+  expect(api.save).toHaveBeenCalledOnce();
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+  await completeSave(3);
+  expect(api.reviewAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      revision: 3,
+      decision: "approved",
+      delivery: { confirm: true, mode: "live" },
+    })
+  );
+  expect(api.reviewAsync).toHaveBeenCalledOnce();
+  expect(onSaved).toHaveBeenCalledWith(
+    expect.any(String),
+    "activate",
+    "facebook",
+    expect.objectContaining({ revision: 4, state: "scheduled" })
+  );
+});
+it("uses test mode explicitly and sends creator drafts for approval instead of publishing", async () => {
+  api.liveSocial = false;
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      item={deliveryItem()}
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save test schedule" }));
+  await completeSave(3);
+  expect(api.reviewAsync.mock.calls[0][0].delivery.mode).toBe("test");
+  cleanup();
+  api.reviewAsync.mockClear();
+  api.role = "creator";
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      item={deliveryItem()}
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+  await completeSave(3);
+  expect(api.submitAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ revision: 3 })
+  );
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+});
+it("keeps the saved draft and shows an inline error when activation fails", async () => {
+  api.reviewAsync.mockRejectedValue(
+    new Error("Publishing availability changed")
+  );
+  const onSaved = vi.fn();
+  render(
+    <PublicationComposer
+      {...baseProps}
+      onSaved={onSaved}
+      studio
+      item={deliveryItem()}
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+  await completeSave(3);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Publishing availability changed"
+  );
+  expect(onSaved.mock.calls.at(-1)![1]).toBeUndefined();
+  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+  expect(api.save.mock.calls.at(-1)![0].revision).toBe(3);
+});
+it("renders delivery status inside Studio without the old review dialog", () => {
+  render(
+    <PublicationDetails
+      inline
+      item={deliveryItem({ state: "scheduled" })}
+      onClose={vi.fn()}
+      onEdit={vi.fn()}
+    />
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.getByRole("region", { name: "Activation status" })
+  ).toBeTruthy();
+  expect(screen.getByRole("region", { name: "Content preview" })).toBeTruthy();
+});
+it("creates a Meta ad paused through the same confirmed Studio delivery action", async () => {
+  api.accounts = [
+    {
+      id: "ad",
+      channel: "meta_ads",
+      name: "Ad account",
+      status: "connected",
+      expired: false,
+      details: { capabilities: ["publish"] },
+    },
+  ];
+  const item = deliveryItem({
+    channel: "meta_ads",
+    connectionId: "ad",
+    assetKey: "asset:1",
+    scheduledAtMs: null,
+    content: contentSchema.parse({
+      title: "Ad",
+      message: "Primary text",
+      headline: "Headline",
+      link: "https://example.com",
+      adSetId: "123",
+    }),
+  });
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      item={item}
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  expect(
+    screen.getByText(
+      /This creates your ad in Meta with its status set to paused/
+    )
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Create paused ad" }));
+  await completeSave(3);
+  expect(api.reviewAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      revision: 3,
+      decision: "approved",
+      delivery: { confirm: true, mode: "live" },
+    })
+  );
 });

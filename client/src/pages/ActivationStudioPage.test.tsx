@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 const api = vi.hoisted(() => ({
+  publication: null as any,
   accounts: [] as any[],
   assets: [] as any[],
   role: "owner",
@@ -28,7 +29,7 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     assetLibrary: { list: { useQuery: () => ({ data: api.assets }) } },
-    publishing: { get: { useQuery: () => ({ data: null }) } },
+    publishing: { get: { useQuery: () => ({ data: api.publication }) } },
   },
 }));
 vi.mock("@/components/PublicationComposer", () => ({
@@ -44,6 +45,19 @@ vi.mock("@/components/PublicationComposer", () => ({
         </label>
         <button onClick={props.onChangeChannel}>Channel</button>
         <button onClick={props.onClose}>Cancel</button>
+        <button
+          onClick={() =>
+            props.onSaved("saved-id", undefined, props.initialChannel, {
+              id: "saved-id",
+              revision: 1,
+              channel: props.initialChannel,
+              state: "draft",
+              content: { title: "Saved" },
+            })
+          }
+        >
+          Save mock draft
+        </button>
       </>
     );
   },
@@ -62,6 +76,7 @@ function setup(query = "") {
 beforeEach(() => {
   vi.clearAllMocks();
   api.role = "owner";
+  api.publication = null;
   api.accounts = [
     {
       id: "ad",
@@ -240,4 +255,52 @@ it("still confirms explicitly discarding unsaved drafts", () => {
   fireEvent.click(screen.getByRole("button", { name: "Start new activation" }));
   expect(screen.queryByText("Composer ready")).toBeNull();
   expect(screen.getByRole("button", { name: "Select Meta Ads" })).toBeTruthy();
+});
+it("preselects a channel and preserves incoming account, ad set and timing context", () => {
+  setup(
+    "?channel=meta_ads&connection=ad&adset=set-2&plan=7&time=2099-01-01T12:00&timezone=UTC"
+  );
+  expect(api.composer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      initialChannel: "meta_ads",
+      initialConnectionId: "ad",
+      initialAdSetId: "set-2",
+      initialPlanId: 7,
+      initialTime: "2099-01-01T12:00",
+      initialTimezone: "UTC",
+    })
+  );
+});
+it("opens saved posts in Compose with their content instead of mounting an empty draft first", () => {
+  api.publication = {
+    id: "saved-id",
+    revision: 3,
+    channel: "facebook",
+    state: "draft",
+    content: { title: "Existing" },
+  };
+  setup("?channel=facebook&publication=saved-id");
+  expect(
+    api.composer.mock.calls.every(([props]) => props.item?.id === "saved-id")
+  ).toBe(true);
+  expect(api.composer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      studioEntry: expect.objectContaining({
+        section: "copy",
+        category: "compose",
+      }),
+    })
+  );
+});
+it("saving stays in the same mounted editor and preserves local input", () => {
+  setup("?channel=facebook");
+  fireEvent.change(screen.getByLabelText("Draft text"), {
+    target: { value: "Keep my position and text" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save mock draft" }));
+  expect(screen.getByLabelText("Draft text")).toHaveProperty(
+    "value",
+    "Keep my position and text"
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
 });

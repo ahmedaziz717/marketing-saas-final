@@ -1,9 +1,9 @@
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { MetaChangeDialog } from "@/components/MetaChangeDialog";
-import { PublicationComposer } from "@/components/PublicationComposer";
+import { studioContentHref } from "@shared/contentWorkflow";
 import type { MetaChange } from "@shared/metaManagement";
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,11 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
     campaignId?: string;
   } | null>(null);
   const [adSet, setAdSet] = useState("");
-  const [compose, setCompose] = useState<string | null>(null);
+  const [, navigate] = useLocation();
+  const setCompose = (adset: string) =>
+    navigate(
+      studioContentHref("meta_ads", { connection: connectionId, adset })
+    );
   const [view, setView] = useState<"campaigns" | "adsets" | "ads">("campaigns"),
     [campaign, setCampaign] = useState("");
   const [status, setStatus] = useState<AdBrowseFilters["status"]>("active");
@@ -123,18 +127,6 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
           onClose={() => setChange(null)}
           onSaved={() => {
             void query.refetch();
-          }}
-        />
-      )}
-      {compose !== null && (
-        <PublicationComposer
-          initialChannel="meta_ads"
-          initialConnectionId={connectionId}
-          initialAdSetId={compose}
-          onClose={() => setCompose(null)}
-          onSaved={() => {
-            setCompose(null);
-            window.location.assign("/app/publishing");
           }}
         />
       )}
@@ -456,7 +448,7 @@ function Advertising() {
                 budgets, targeting, and delivery settings below.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/app/creatives/ads?new=1">
+                <Link href="/app/activate/studio?channel=meta_ads">
                   <Button>Create an ad</Button>
                 </Link>
                 <Link href="/app/advertising/meta/legacy">

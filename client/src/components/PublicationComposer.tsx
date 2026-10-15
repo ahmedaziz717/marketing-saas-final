@@ -151,7 +151,12 @@ export function PublicationComposer({
   initialTime?: string;
   initialTimezone?: string;
   onClose: () => void;
-  onSaved: (id: string, next?: "activate", channel?: Channel) => void;
+  onSaved: (
+    id: string,
+    next?: "activate",
+    channel?: Channel,
+    record?: Publication
+  ) => void;
 }) {
   const { organizationId, membership } = useWorkspace();
   const fieldPrefix = useId();
@@ -164,6 +169,17 @@ export function PublicationComposer({
   );
   const utils = trpc.useUtils();
   const [id] = useState(() => item?.id ?? crypto.randomUUID());
+  const revision = useRef(item?.revision ?? 0);
+  const [savedSnapshot, setSavedSnapshot] = useState("");
+  const [activationError, setActivationError] = useState("");
+  const [activationPending, setActivationPending] = useState(false);
+  const activationLock = useRef(false);
+  const canPublish = ["owner", "admin", "publisher"].includes(
+    membership?.role ?? ""
+  );
+  const approveStudio = trpc.publishing.review.useMutation();
+  const submitStudio = trpc.publishing.submit.useMutation();
+
   const channel = item?.channel ?? initialChannel;
   const adWizard = channel === "meta_ads" && composing;
   const wizard = adWizard || studio;
@@ -255,16 +271,99 @@ export function PublicationComposer({
   const assets = trpc.assetLibrary.list.useQuery(scope, {
     enabled: !!organizationId,
   });
+  const draftSnapshot = JSON.stringify({
+    content,
+    assetKey,
+    connectionId,
+    local,
+    timezone,
+  });
+  const savedInput = useRef("");
+  const liveDelivery =
+    channel === "facebook"
+      ? connections.data?.liveSocial
+      : connections.data?.liveAds;
+  const activationLabel = !canPublish
+    ? "Submit for approval"
+    : liveDelivery === undefined
+      ? "Checking delivery…"
+      : !liveDelivery
+        ? "Save test schedule"
+        : channel === "facebook"
+          ? local
+            ? "Schedule post"
+            : "Publish now"
+          : local
+            ? "Schedule ad creation"
+            : "Create paused ad";
   const save = trpc.publishing.save.useMutation({
     onSuccess: async result => {
+      revision.current = result.revision;
+      setSavedSnapshot(savedInput.current);
+      let record = result;
+      let completed = false;
+      if (studio && nextAction.current) {
+        try {
+          const version = {
+            ...scope,
+            id: result.id,
+            revision: result.revision,
+          };
+          if (canPublish) {
+            const response = await approveStudio.mutateAsync({
+              ...version,
+              decision: "approved",
+              note: "",
+              delivery: { confirm: true, mode: liveDelivery ? "live" : "test" },
+            });
+            record = {
+              ...result,
+              revision: result.revision + 1,
+              state: "scheduled",
+              result: {
+                ...result.result,
+                deliveryMode: response.liveEnabled ? "live" : "test",
+              },
+            };
+          } else {
+            await submitStudio.mutateAsync(version);
+            record = {
+              ...result,
+              revision: result.revision + 1,
+              state: "needs_review",
+            };
+          }
+          revision.current = record.revision;
+          completed = true;
+        } catch (error) {
+          setActivationError(
+            error instanceof Error
+              ? error.message
+              : "Delivery could not be confirmed. Your draft is saved."
+          );
+        }
+      }
       await Promise.all([
         utils.publishing.list.invalidate(),
         utils.publishing.get.invalidate(),
       ]);
-      toast.success("Draft saved. Nothing has been scheduled or published.");
-      onSaved(result.id, nextAction.current, result.channel);
+      setActivationPending(false);
+      activationLock.current = false;
+      if (!nextAction.current)
+        toast.success("Draft saved. Nothing has been scheduled or published.");
+      onSaved(
+        result.id,
+        studio ? (completed ? "activate" : undefined) : nextAction.current,
+        result.channel,
+        record
+      );
     },
-    onError: e => toast.error(e.message),
+    onError: e => {
+      setActivationPending(false);
+      activationLock.current = false;
+      setActivationError(e.message);
+      toast.error(e.message);
+    },
   });
   const initialPlan = trpc.briefs.get.useQuery(
     { ...scope, briefId: initialPlanId ?? 1 },
@@ -345,7 +444,10 @@ export function PublicationComposer({
     element?.focus({ preventScroll: true });
   }
   function submit(next?: "activate") {
+    if ((studio && activationLock.current) || save.isPending) return;
+    if (studio && next && canPublish && liveDelivery === undefined) return;
     nextAction.current = next;
+    setActivationError("");
     try {
       if (studio && next && channel === "meta_ads") {
         const account = connectedAccounts.find(c => c.id === connectionId);
@@ -424,10 +526,13 @@ export function PublicationComposer({
         throw new Error(
           "Choose a future date, or clear the schedule to use Publish now."
         );
+      savedInput.current = draftSnapshot;
+      activationLock.current = studio;
+      setActivationPending(!!next);
       save.mutate({
         ...scope,
         id,
-        revision: item?.revision ?? 0,
+        revision: revision.current,
         channel,
         connectionId: connectionId || null,
         assetKey: assetKey || null,
@@ -518,7 +623,18 @@ export function PublicationComposer({
         timezone={timezone}
         setTimezone={setTimezone}
         brandDefaults={businessBrand.data?.businessProfile ?? undefined}
-        pending={save.isPending}
+        pending={save.isPending || activationPending}
+        saveStatus={
+          savedSnapshot
+            ? savedSnapshot === draftSnapshot
+              ? "Saved"
+              : "Unsaved changes"
+            : ""
+        }
+        activationLabel={activationLabel}
+        activationUnavailable={canPublish && liveDelivery === undefined}
+        activationError={activationError}
+        liveDelivery={liveDelivery}
         errors={showErrors ? socialErrors : {}}
         onSave={submit}
         onClose={onClose}
@@ -1748,12 +1864,47 @@ export function PublicationComposer({
     </ComposerSurface>
   );
 }
+function PublicationDetailsSurface({
+  inline,
+  children,
+  busy,
+  onClose,
+}: {
+  inline?: boolean;
+  children: ReactNode;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  if (inline)
+    return (
+      <section
+        className="studio-delivery-record space-y-4"
+        aria-label="Activation status"
+      >
+        {children}
+      </section>
+    );
+  return (
+    <Dialog
+      open
+      onOpenChange={open => {
+        if (!open && !busy) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
 export function PublicationDetails({
+  inline = false,
   item,
   onClose,
   onEdit,
 }: {
   item: Publication;
+  inline?: boolean;
   onClose: () => void;
   onEdit: () => void;
 }) {
@@ -1909,23 +2060,33 @@ export function PublicationDetails({
           ? "Time selected — not scheduled"
           : "Publish timing"
         : "Selected publishing time";
+  const ConfirmHeader = inline ? "div" : DialogHeader;
+  const ConfirmTitle = inline ? "h3" : DialogTitle;
+  const ConfirmDescription = inline ? "p" : DialogDescription;
   return (
-    <Dialog
-      open
-      onOpenChange={open => {
-        if (!open && !busy) onClose();
-      }}
-    >
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader className="pr-8">
-          <DialogTitle className="break-words">
-            {item.content.title}
-          </DialogTitle>
-          <DialogDescription>
-            {channelNames[item.channel]} publication. Approval applies to this
-            caption, asset version, destination and schedule.
-          </DialogDescription>
-        </DialogHeader>
+    <PublicationDetailsSurface inline={inline} busy={busy} onClose={onClose}>
+      <div className="studio-delivery-content space-y-4">
+        {inline ? (
+          <>
+            <h2>{item.content.title}</h2>
+            <ContentPreview
+              channel={item.channel}
+              content={item.content}
+              asset={reviewAssets.data?.find(
+                asset => asset.key === item.assetKey
+              )}
+              assets={reviewAssets.data ?? []}
+            />
+          </>
+        ) : (
+          <DialogHeader className="pr-8">
+            <DialogTitle>{item.content.title}</DialogTitle>
+            <DialogDescription>
+              {channelNames[item.channel]} publication. Approval applies to this
+              caption, asset version, destination and schedule.
+            </DialogDescription>
+          </DialogHeader>
+        )}
         <PublicationStatus item={item} />
         <p className="text-sm">
           {social ? "Facebook Page" : "Destination"}: {destinationName}
@@ -2141,20 +2302,19 @@ export function PublicationDetails({
             </Button>
           )}
         {confirmDelivery && (
-          <Dialog
-            open
-            onOpenChange={open => {
-              if (!open && !busy) setConfirmDelivery(null);
-            }}
+          <PublicationDetailsSurface
+            inline={inline}
+            busy={busy}
+            onClose={() => setConfirmDelivery(null)}
           >
-            <DialogContent className="max-h-[90dvh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
+            <div className="rounded-xl border p-4 space-y-4">
+              <ConfirmHeader>
+                <ConfirmTitle>
                   {confirmDelivery === "approve"
                     ? approvalLabel
                     : deliveryLabel}
-                </DialogTitle>
-                <DialogDescription>
+                </ConfirmTitle>
+                <ConfirmDescription>
                   {live
                     ? social
                       ? hasTime
@@ -2162,8 +2322,8 @@ export function PublicationDetails({
                         : "This will publish the post to the Facebook Page below as soon as it is processed."
                       : "Create this approved ad in Meta with its status set to paused?"
                     : "Save this as a test schedule? No content will be sent."}
-                </DialogDescription>
-              </DialogHeader>
+                </ConfirmDescription>
+              </ConfirmHeader>
               <dl className="space-y-3 rounded-xl border bg-muted/40 p-4 text-sm">
                 <div>
                   <dt className="text-muted-foreground">
@@ -2220,8 +2380,8 @@ export function PublicationDetails({
                     : deliveryLabel}
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+            </div>
+          </PublicationDetailsSurface>
         )}
         {canPublish && reviewable && (
           <details className="rounded-xl border p-3">
@@ -2354,7 +2514,7 @@ export function PublicationDetails({
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </PublicationDetailsSurface>
   );
 }

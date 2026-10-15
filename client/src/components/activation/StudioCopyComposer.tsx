@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, type ReactNode } from "react";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import type { Channel, PublicationContent } from "@shared/channels";
 import {
@@ -36,6 +36,7 @@ export function StudioCopyComposer({
   onEditChoices,
   onEditBrief,
   preview,
+  onBusyChange,
 }: {
   organizationId: number;
   channel: Channel;
@@ -47,6 +48,7 @@ export function StudioCopyComposer({
   onEditChoices: () => void;
   onEditBrief: () => void;
   preview: ReactNode;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const meta = channel === "meta_ads";
   const choices = copyDirectionBrief(content.copyDirection);
@@ -112,6 +114,20 @@ export function StudioCopyComposer({
     }
   });
   const busy = generator.isPending;
+  const [elapsed, setElapsed] = useState(0);
+  useLayoutEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    if (!busy) return;
+    setElapsed(0);
+    const started = Date.now();
+    const timer = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      1000
+    );
+    return () => window.clearInterval(timer);
+  }, [busy]);
   const canGenerate = canGenerateAssetCopy(input);
   const hasCopy = !!(
     content.message.trim() ||
@@ -228,13 +244,60 @@ export function StudioCopyComposer({
           a complete version replaces them with the displayed copy.
         </p>
       )}
-      <p className="studio-copy-status" role="status">
-        {busy
-          ? "Writing your copy… Your fields and preview will update when it is ready."
-          : notice}
-      </p>
+      {busy ? (
+        <div className="studio-generation-progress" role="status">
+          <div className="studio-generation-orbit">
+            <Sparkles size={26} />
+          </div>
+          <div>
+            <strong>
+              {generator.target
+                ? "Updating your copy…"
+                : meta
+                  ? "Creating your ad copy…"
+                  : "Creating your post copy…"}
+            </strong>
+            <p>
+              Using your brief, brand, and selected direction. Your copy will
+              appear in the fields below.
+            </p>
+            <small>
+              {elapsed}s elapsed · You can move between Studio steps while we
+              work.
+            </small>
+          </div>
+          <div className="studio-generation-track">
+            <span />
+          </div>
+        </div>
+      ) : generator.error ? (
+        <div className="studio-generation-error" role="alert">
+          <strong>Copy wasn’t updated</strong>
+          <p>{generator.error}</p>
+          <button
+            type="button"
+            className="cfg-secondary"
+            onClick={() => generator.generate()}
+          >
+            Try again
+          </button>
+        </div>
+      ) : notice ? (
+        <p className="studio-copy-ready" role="status">
+          <strong>Copy ready.</strong> {notice}
+        </p>
+      ) : null}
       <div className="studio-copy-layout">
-        <div className="studio-copy-fields">
+        <div
+          className={`studio-copy-fields ${busy ? "is-generating" : notice ? "is-ready" : ""}`}
+        >
+          {busy && !hasCopy && (
+            <div className="studio-copy-skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
           {meta ? (
             fields.map(field => (
               <div key={field} className="studio-copy-field">

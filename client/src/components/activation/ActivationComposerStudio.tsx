@@ -73,6 +73,11 @@ type Props = {
   setTimezone: (value: string) => void;
   brandDefaults?: { audiences?: string; goals?: string; primaryOffer?: string };
   pending: boolean;
+  saveStatus?: string;
+  activationLabel?: string;
+  activationUnavailable?: boolean;
+  activationError?: string;
+  liveDelivery?: boolean;
   errors: Record<string, string>;
   onSave: (review?: "activate") => void;
   onClose: () => void;
@@ -80,6 +85,7 @@ type Props = {
 };
 export function ActivationComposerStudio(p: Props) {
   const uid = useId();
+  const [copyBusy, setCopyBusy] = useState(false);
   const [categories, setCategories] = useState<
     Record<ActivationSection, string>
   >({
@@ -210,7 +216,10 @@ export function ActivationComposerStudio(p: Props) {
       <fieldset disabled={p.pending} className="cfg-workspace">
         <div
           className="cfg-stage activation-preview"
-          hidden={p.section === "copy" && category === "compose"}
+          hidden={
+            (p.section === "copy" && category === "compose") ||
+            p.section === "preview"
+          }
         >
           <ContentPreview
             channel={p.channel}
@@ -287,6 +296,21 @@ export function ActivationComposerStudio(p: Props) {
           </div>
         </div>
         <ActivationSections current={p.section} onSelect={p.onSection} />
+        {copyBusy && !(p.section === "copy" && category === "compose") && (
+          <div className="studio-background-copy" role="status">
+            <span className="studio-small-spinner" /> Copy is generating. It
+            will be ready in Compose.
+            <button
+              type="button"
+              onClick={() => {
+                setCategories(previous => ({ ...previous, copy: "compose" }));
+                p.onSection("copy");
+              }}
+            >
+              View progress
+            </button>
+          </div>
+        )}
         <div className="cfg-body activation-fields" ref={p.scrollBody}>
           <ActivationCategories
             items={items}
@@ -736,29 +760,30 @@ export function ActivationComposerStudio(p: Props) {
                   </label>
                 </div>
               )}
-              {category === "compose" && (
-                <StudioCopyComposer
-                  organizationId={p.organizationId}
-                  channel={p.channel}
-                  assetKeys={copyImages}
-                  hasMedia={!!p.assetKey}
-                  content={p.content}
-                  onChange={p.setContent}
-                  errors={p.errors}
-                  onEditChoices={() => chooseCategory("messaging_style")}
-                  onEditBrief={() => chooseCategory("brief")}
-                  preview={
-                    <ContentPreview
-                      channel={p.channel}
-                      content={p.content}
-                      asset={selectedAsset}
-                      assets={p.assets}
-                    />
-                  }
-                />
-              )}
             </>
           )}
+          <div hidden={p.section !== "copy" || category !== "compose"}>
+            <StudioCopyComposer
+              onBusyChange={setCopyBusy}
+              organizationId={p.organizationId}
+              channel={p.channel}
+              assetKeys={copyImages}
+              hasMedia={!!p.assetKey}
+              content={p.content}
+              onChange={p.setContent}
+              errors={p.errors}
+              onEditChoices={() => chooseCategory("messaging_style")}
+              onEditBrief={() => chooseCategory("brief")}
+              preview={
+                <ContentPreview
+                  channel={p.channel}
+                  content={p.content}
+                  asset={selectedAsset}
+                  assets={p.assets}
+                />
+              }
+            />
+          </div>
           {p.section === "delivery" && (
             <>
               <div className="cfg-card-grid activation-timing-grid">
@@ -812,36 +837,96 @@ export function ActivationComposerStudio(p: Props) {
             </>
           )}
           {p.section === "preview" && (
-            <div className="activation-review-note">
-              <h3>Ready for review</h3>
-              <p>
-                {p.local
-                  ? `Requested delivery: ${p.local.replace("T", " at ")} (${p.timezone}).`
-                  : "Delivery will wait for your confirmation."}
-              </p>
-              <p>
-                Save your draft, then review approval and delivery.{" "}
-                {meta
-                  ? "Ads will be created paused."
-                  : "Your post is published only after final confirmation."}
-              </p>
-              {meta && p.format === "single" && (
-                <p>
-                  {1 +
-                    (p.content.textVariants?.messages.filter(Boolean).length ??
-                      0)}{" "}
-                  primary text option(s),{" "}
-                  {1 +
-                    (p.content.textVariants?.headlines.filter(Boolean).length ??
-                      0)}{" "}
-                  headline option(s),{" "}
-                  {1 +
-                    (p.content.textVariants?.descriptions.filter(Boolean)
-                      .length ?? 0)}{" "}
-                  description option(s).
-                </p>
-              )}
+            <div className="studio-activation-review">
+              <div className="studio-copy-layout">
+                <div className="studio-review-preview">
+                  <ContentPreview
+                    channel={p.channel}
+                    content={p.content}
+                    asset={selectedAsset}
+                    assets={p.assets}
+                  />
+                </div>
+                <div className="studio-review-summary">
+                  <h3>Confirm your activation</h3>
+                  {[
+                    {
+                      title: "Destination",
+                      value: `${channelNames[p.channel]} · ${account?.name || "Choose an account"}`,
+                      section: "setup",
+                      category: "account",
+                    },
+                    {
+                      title: "Creative",
+                      value: keys.length
+                        ? `${keys.length} approved asset${keys.length === 1 ? "" : "s"}`
+                        : meta
+                          ? "Choose an approved creative"
+                          : "Text or website post",
+                      section: "creative",
+                      category: "assets",
+                    },
+                    {
+                      title: "Copy",
+                      value: p.content.message
+                        ? "Copy added — shown in preview"
+                        : "No caption added",
+                      section: "copy",
+                      category: "compose",
+                    },
+                    {
+                      title: "Timing",
+                      value: p.local
+                        ? `${p.local.replace("T", " · ")} (${p.timezone})`
+                        : "Now, after you confirm",
+                      section: "delivery",
+                      category: "schedule",
+                    },
+                  ].map(row => (
+                    <div key={row.title}>
+                      <div>
+                        <strong>{row.title}</strong>
+                        <p>{row.value}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategories(previous => ({
+                            ...previous,
+                            [row.section]: row.category,
+                          }));
+                          p.onSection(row.section as ActivationSection);
+                        }}
+                      >
+                        Edit {row.title.toLowerCase()}
+                      </button>
+                    </div>
+                  ))}
+                  <p>
+                    {!["owner", "admin", "publisher"].includes(p.role)
+                      ? "A publisher will review your post or ad before delivery."
+                      : p.liveDelivery === false
+                        ? "Test mode: this saves a test schedule. Nothing will be sent."
+                        : meta
+                          ? "This creates your ad in Meta with its status set to paused."
+                          : p.local
+                            ? "Confirming schedules this post to publish automatically at the selected time."
+                            : "Confirming publishes this post to the selected Facebook Page as soon as it is processed."}
+                  </p>
+                  {p.content.textVariants && (
+                    <p>
+                      Additional saved ad text options are included. Meta may
+                      combine them with the main copy.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
+          )}
+          {p.activationError && (
+            <p role="alert" className="studio-generation-error">
+              {p.activationError}
+            </p>
           )}
           {Object.entries(p.errors).map(([key, error]) => (
             <p key={key} role="alert" className="text-destructive mt-3">
@@ -853,7 +938,10 @@ export function ActivationComposerStudio(p: Props) {
           <button type="button" onClick={p.onClose}>
             Cancel
           </button>
-          <button type="button" onClick={() => p.onSave()}>
+          <span className="studio-save-status" role="status">
+            {copyBusy ? "Copy generating · save when ready" : p.saveStatus}
+          </span>
+          <button type="button" disabled={copyBusy} onClick={() => p.onSave()}>
             {p.pending ? "Saving…" : "Save draft"}
           </button>
           {(previousCategory || previousSection) && (
@@ -890,9 +978,12 @@ export function ActivationComposerStudio(p: Props) {
             <button
               type="button"
               className="cfg-primary"
+              disabled={copyBusy || p.activationUnavailable}
               onClick={() => p.onSave("activate")}
             >
-              Save & review delivery
+              {p.pending
+                ? "Confirming…"
+                : (p.activationLabel ?? "Confirm activation")}
             </button>
           )}
         </div>

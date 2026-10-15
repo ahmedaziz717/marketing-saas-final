@@ -181,7 +181,7 @@ function SocialMedia() {
                 approve the final Facebook post.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/app/creatives/social?new=1">
+                <Link href="/app/activate/studio?channel=facebook">
                   <Button>New Facebook post</Button>
                 </Link>
                 <Button variant="outline" onClick={() => setTab("calendar")}>

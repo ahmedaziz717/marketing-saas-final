@@ -50,8 +50,8 @@ export const activationSections = [
   },
   {
     id: "preview",
-    title: "Review",
-    subtitle: "Ready to approve",
+    title: "Review & activate",
+    subtitle: "Confirm delivery",
     icon: ClipboardCheck,
   },
 ] as const;

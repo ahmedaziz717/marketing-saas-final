@@ -184,10 +184,10 @@ it("offers six working apps, honest roadmap labels, and shared campaign context"
   ).toBe("/app/creatives/images?plan=7");
   expect(
     screen.getByRole("link", { name: "Social composer" }).getAttribute("href")
-  ).toContain("social?new=1&plan=7");
+  ).toContain("/app/activate/studio?channel=facebook&plan=7");
   expect(
     screen.getByRole("link", { name: "Ad builder" }).getAttribute("href")
-  ).toContain("ads?new=1&plan=7");
+  ).toContain("/app/activate/studio?channel=meta_ads&plan=7");
   expect(
     screen.getByRole("link", { name: "Product video" }).getAttribute("href")
   ).toBe("/app/creatives/video?plan=7");

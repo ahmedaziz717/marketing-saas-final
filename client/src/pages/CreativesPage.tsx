@@ -117,6 +117,20 @@ function Studio() {
     canCompose &&
     ((params.has("new") && ["social", "ads"].includes(mode ?? "")) ||
       (!!editing.data && editablePublication(editing.data.state)));
+  if (["social", "ads"].includes(mode ?? ""))
+    return (
+      <Redirect
+        to={studioContentHref(channel, {
+          id: editId ?? undefined,
+          asset: params.get("asset") ?? undefined,
+          plan: planId,
+          connection: params.get("connection") ?? undefined,
+          adset: params.get("adset") ?? undefined,
+          time: params.get("time") ?? undefined,
+          timezone: params.get("timezone") ?? undefined,
+        })}
+      />
+    );
   return (
     <>
       <PageHeader
