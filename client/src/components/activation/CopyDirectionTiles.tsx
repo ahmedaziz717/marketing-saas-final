@@ -12,50 +12,79 @@ import { copyDirectionArt } from "./copyDirectionArt";
 export function CopyDirectionTiles({
   value = {},
   onChange,
+  dimension: categoryDimension,
 }: {
   value?: CopyDirection;
   onChange: (value: CopyDirection) => void;
+  dimension?: CopyDimension;
 }) {
-  const [dimension, setDimension] = useState<CopyDimension>("messaging_style");
+  const [localDimension, setDimension] =
+    useState<CopyDimension>("messaging_style");
+  const dimension = categoryDimension ?? localDimension;
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "selected">("all");
   const spec = copyTaxonomy[dimension];
   const selected = value[dimension] ?? [];
-  const selections = copyDimensions.flatMap(key =>
-    copyTaxonomy[key].values
-      .filter(item => value[key]?.includes(item.id))
-      .map(item => ({ ...item, dimension: key }))
+  const selections = (categoryDimension ? [dimension] : copyDimensions).flatMap(
+    key =>
+      copyTaxonomy[key].values
+        .filter(item => value[key]?.includes(item.id))
+        .map(item => ({ ...item, dimension: key }))
   );
-  const rows = spec.values.filter(item =>
-    `${item.label} ${item.description}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase())
+  const rows = spec.values.filter(
+    item =>
+      (filter === "all" || selected.includes(item.id)) &&
+      `${item.label} ${item.description}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase())
   );
   return (
     <section className="activation-copy-direction" aria-label="Copy direction">
       <p className="activation-help">
-        Shape the message with the same attributes used in Optimization. Leave
-        any category open for AI to choose. These choices guide new copy; they
-        do not rewrite existing text.
+        Choose how the message should sound, or leave this category for AI to
+        choose. Your choices guide new copy without changing existing text.
       </p>
+      {!categoryDimension && (
+        <div
+          className="cfg-filter-tabs activation-dimension-tabs"
+          role="group"
+          aria-label="Copy attributes"
+        >
+          {copyDimensions.map(key => (
+            <button
+              type="button"
+              key={key}
+              aria-pressed={dimension === key}
+              onClick={() => {
+                setDimension(key);
+                setSearch("");
+              }}
+            >
+              {copyTaxonomy[key].label}
+              {!!value[key]?.length && <span>{value[key]!.length}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className="cfg-filter-tabs activation-dimension-tabs"
         role="group"
-        aria-label="Copy attributes"
+        aria-label={`Filter ${spec.label.toLowerCase()} choices`}
       >
-        {copyDimensions.map(key => (
-          <button
-            type="button"
-            key={key}
-            aria-pressed={dimension === key}
-            onClick={() => {
-              setDimension(key);
-              setSearch("");
-            }}
-          >
-            {copyTaxonomy[key].label}
-            {!!value[key]?.length && <span>{value[key]!.length}</span>}
-          </button>
-        ))}
+        <button
+          type="button"
+          aria-pressed={filter === "all"}
+          onClick={() => setFilter("all")}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          aria-pressed={filter === "selected"}
+          onClick={() => setFilter("selected")}
+        >
+          Selected ({selected.length})
+        </button>
       </div>
       {selections.length > 0 && (
         <div
@@ -76,18 +105,31 @@ export function CopyDirectionTiles({
               <X size={12} />
             </button>
           ))}
-          <button type="button" onClick={() => onChange({})}>
-            Clear all
-          </button>
+          {!categoryDimension && (
+            <button type="button" onClick={() => onChange({})}>
+              Clear all
+            </button>
+          )}
         </div>
       )}
       <div className="activation-direction-heading">
         <div>
-          <h3>{spec.label}</h3>
+          {!categoryDimension && <h3>{spec.label}</h3>}
           <p>
             {spec.question}{" "}
             {spec.multiple ? "Choose one or more." : "Choose one."}
           </p>
+          <button
+            className="cfg-secondary"
+            type="button"
+            aria-pressed={!selected.length}
+            onClick={() => {
+              onChange({ ...value, [dimension]: [] });
+              setFilter("all");
+            }}
+          >
+            {!selected.length ? "AI chooses ✓" : "Let AI choose"}
+          </button>
         </div>
         <label className="cfg-search">
           <Search size={16} />
@@ -109,8 +151,8 @@ export function CopyDirectionTiles({
         dimension === "offer" ||
         dimension === "specificity") && (
         <p className="activation-help">
-          Add the real offer, deadline or supporting facts in Copy. Selecting a
-          tile does not create an offer or verify a claim.
+          Add the real offer, deadline or supporting facts in the Brief.
+          Selecting a tile does not create an offer or verify a claim.
         </p>
       )}
       <div className="cfg-card-grid activation-direction-grid">

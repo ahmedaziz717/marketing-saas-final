@@ -27,6 +27,7 @@ import type { LibraryAsset } from "@shared/assetLibrary";
 import { placementSlots, type PlacementSlot } from "@shared/metaPlacements";
 import { replaceSocialCaption } from "@shared/socialPost";
 import type { AdCopyField } from "@shared/adCopy";
+import { copyDimensions, type CopyDimension } from "@shared/copyTaxonomy";
 import { StudioCard } from "../configurator/StudioCard";
 import { ContentPreview } from "../ContentPreview";
 import { AdCampaignPicker } from "../AdCampaignPicker";
@@ -39,6 +40,8 @@ import {
   ActivationCategories,
   ActivationSections,
   activationSections,
+  copyDirectionCategories,
+  normalizeCopyCategory,
   type ActivationEntry,
   type ActivationSection,
 } from "./ActivationNavigation";
@@ -82,12 +85,13 @@ type Props = {
 };
 export function ActivationComposerStudio(p: Props) {
   const uid = useId();
+  const [copyToolbar, setCopyToolbar] = useState<HTMLDivElement | null>(null);
   const [categories, setCategories] = useState<
     Record<ActivationSection, string>
   >({
     setup: "account",
     creative: p.channel === "meta_ads" ? "format" : "assets",
-    copy: "direction",
+    copy: "messaging_style",
     delivery: "schedule",
     preview: "summary",
   });
@@ -97,10 +101,19 @@ export function ActivationComposerStudio(p: Props) {
     if (p.entry.category)
       setCategories(previous => ({
         ...previous,
-        [p.entry!.section]: p.entry!.category!,
+        [p.entry!.section]:
+          p.entry!.section === "copy"
+            ? normalizeCopyCategory(p.entry!.category!)
+            : p.entry!.category!,
       }));
   }, [p.entry, p.active]);
-  const category = categories[p.section];
+  const category =
+    p.section === "copy"
+      ? normalizeCopyCategory(categories.copy)
+      : categories[p.section];
+  const directionCategory = copyDimensions.includes(category as CopyDimension)
+    ? (category as CopyDimension)
+    : undefined;
   const account = p.accounts.find(a => a.id === p.connectionId);
   const meta = p.channel === "meta_ads";
   const multiple = meta && p.format === "single";
@@ -155,8 +168,8 @@ export function ActivationComposerStudio(p: Props) {
           ]
         : p.section === "copy"
           ? [
-              { id: "direction", title: "Copy direction" },
-              { id: "setup", title: "Copy" },
+              ...copyDirectionCategories,
+              { id: "brief", title: "Brief" },
               { id: "message", title: meta ? "Primary text" : "Caption" },
               ...(meta
                 ? [
@@ -183,6 +196,21 @@ export function ActivationComposerStudio(p: Props) {
   const nextCategory = items
     .slice(items.findIndex(item => item.id === category) + 1)
     .find(item => !("disabled" in item && item.disabled));
+  const previousCategory = items
+    .slice(
+      0,
+      items.findIndex(item => item.id === category)
+    )
+    .reverse()
+    .find(item => !("disabled" in item && item.disabled));
+  const previousSection =
+    activationSections[
+      activationSections.findIndex(section => section.id === p.section) - 1
+    ];
+  const goPrevious = () =>
+    previousCategory
+      ? chooseCategory(previousCategory.id)
+      : previousSection && p.onSection(previousSection.id);
   const nextSection =
     activationSections[
       activationSections.findIndex(section => section.id === p.section) + 1
@@ -232,7 +260,7 @@ export function ActivationComposerStudio(p: Props) {
                     ? "Copy added"
                     : "Choose your direction",
                   section: "copy",
-                  category: "direction",
+                  category: "messaging_style",
                 },
                 {
                   title: "Timing",
@@ -287,6 +315,9 @@ export function ActivationComposerStudio(p: Props) {
               <h2>{heading}</h2>
             </div>
           </div>
+          {p.section === "copy" && (
+            <div className="activation-copy-toolbar" ref={setCopyToolbar} />
+          )}
           {p.section === "setup" && (
             <>
               {category === "account" && (
@@ -628,8 +659,10 @@ export function ActivationComposerStudio(p: Props) {
           )}
           {p.section === "copy" && (
             <>
-              {category === "direction" && (
+              {directionCategory && (
                 <CopyDirectionTiles
+                  key={directionCategory}
+                  dimension={directionCategory}
                   value={p.content.copyDirection}
                   onChange={value =>
                     p.setContent(previous => ({
@@ -639,11 +672,12 @@ export function ActivationComposerStudio(p: Props) {
                   }
                 />
               )}
-              {category === "setup" && (
+              {category === "brief" && (
                 <div className="activation-copy-setup">
                   <p className="activation-help">
-                    Describe the offer, audience and goal. AI combines this
-                    setup with your brand and any selected images.
+                    Describe what you are promoting, who it is for, and the
+                    result you want. Fill from brand only completes blank
+                    fields; Generate copy writes the text.
                   </p>
                   <div className="activation-form-grid">
                     {(
@@ -656,6 +690,7 @@ export function ActivationComposerStudio(p: Props) {
                       <label className="cfg-field" key={key}>
                         <span>{title}</span>
                         <textarea
+                          aria-label={title}
                           rows={3}
                           maxLength={2000}
                           value={p.content.promotion?.[key] ?? ""}
@@ -699,17 +734,26 @@ export function ActivationComposerStudio(p: Props) {
                         }))
                       }
                     >
-                      Use brand setup
+                      Fill from brand
                     </button>
                   )}
+                  <label className="cfg-field activation-copy-instructions">
+                    <span>Additional instructions (optional)</span>
+                    <textarea
+                      aria-label="Additional instructions (optional)"
+                      rows={3}
+                      maxLength={2000}
+                      value={p.content.copyInstructions ?? ""}
+                      onChange={e => field("copyInstructions", e.target.value)}
+                      placeholder="Add real offer details, deadlines, supporting facts, or specific instructions."
+                    />
+                  </label>
                 </div>
               )}
               {multiple && (
                 <div
                   hidden={
-                    !["setup", "message", "headline", "description"].includes(
-                      category
-                    )
+                    !["message", "headline", "description"].includes(category)
                   }
                 >
                   <AdTextOptionsEditor
@@ -720,6 +764,9 @@ export function ActivationComposerStudio(p: Props) {
                         ? category
                         : "setup") as "setup" | AdCopyField
                     }
+                    generationTarget={copyToolbar}
+                    instructions={p.content.copyInstructions ?? ""}
+                    onGenerated={() => chooseCategory("message")}
                     organizationId={p.organizationId}
                     assetKeys={copyImages}
                     promotion={p.content.promotion}
@@ -733,8 +780,11 @@ export function ActivationComposerStudio(p: Props) {
                 </div>
               )}
               {!multiple && (
-                <div hidden={category !== "setup"}>
+                <div hidden={category !== "message"}>
                   <AdCopyAssistant
+                    generationTarget={copyToolbar}
+                    instructions={p.content.copyInstructions ?? ""}
+                    onGenerated={() => chooseCategory("message")}
                     organizationId={p.organizationId}
                     channel={p.channel}
                     assetKeys={copyImages}
@@ -930,11 +980,31 @@ export function ActivationComposerStudio(p: Props) {
           <button type="button" onClick={() => p.onSave()}>
             {p.pending ? "Saving…" : "Save draft"}
           </button>
+          {(previousCategory || previousSection) && (
+            <button
+              type="button"
+              onClick={goPrevious}
+              aria-label={`Previous: ${previousCategory?.title ?? previousSection?.title}`}
+            >
+              Previous
+            </button>
+          )}
           {p.section !== "preview" ? (
-            <button type="button" className="cfg-primary" onClick={goNext}>
-              {nextCategory
-                ? `Continue to ${nextCategory.title.toLowerCase()}`
-                : `Continue to ${nextSection?.title.toLowerCase()}`}
+            <button
+              type="button"
+              className="cfg-primary"
+              onClick={goNext}
+              aria-label={
+                p.section === "copy"
+                  ? `Next: ${nextCategory?.title ?? nextSection?.title}`
+                  : undefined
+              }
+            >
+              {p.section === "copy"
+                ? "Next"
+                : nextCategory
+                  ? `Continue to ${nextCategory.title.toLowerCase()}`
+                  : `Continue to ${nextSection?.title.toLowerCase()}`}
             </button>
           ) : (
             <button

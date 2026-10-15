@@ -1,5 +1,6 @@
 import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useAssetCopy } from "@/hooks/useAssetCopy";
 import { canGenerateAssetCopy } from "@shared/adCopy";
 import type { CopySet } from "@shared/adCopy";
@@ -15,7 +16,13 @@ export function AdCopyAssistant({
   copyDirection,
   callToAction,
   onUse,
+  generationTarget,
+  instructions,
+  onGenerated,
 }: {
+  generationTarget?: HTMLElement | null;
+  instructions?: string;
+  onGenerated?: () => void;
   organizationId: number;
   channel?: "facebook" | "meta_ads";
   assetKeys: string[];
@@ -24,7 +31,9 @@ export function AdCopyAssistant({
   callToAction?: PublicationContent["callToAction"];
   onUse: (copy: Copy) => void;
 }) {
-  const [direction, setDirection] = useState("");
+  const [localDirection, setDirection] = useState("");
+  const direction = instructions ?? localDirection;
+  const studio = generationTarget !== undefined;
   const [options, setOptions] = useState<Copy[]>([]);
   const [source, setSource] = useState("");
   const key = JSON.stringify({
@@ -34,6 +43,7 @@ export function AdCopyAssistant({
     channel,
     copyDirection,
     callToAction,
+    direction,
   });
   const generate = useAssetCopy(
     {
@@ -55,21 +65,11 @@ export function AdCopyAssistant({
             )
           : generated
       );
+      if (!target) onGenerated?.();
     }
   );
-  return (
-    <div className="rounded-xl border p-4 space-y-3">
-      <h3 className="font-semibold">Generate copy from your setup</h3>
-      <label className="block text-sm">
-        Optional direction
-        <textarea
-          className={channelInput + " mt-1"}
-          value={direction}
-          onChange={e => setDirection(e.target.value)}
-          maxLength={2000}
-          placeholder="For example: invite education providers to start a listing."
-        />
-      </label>
+  const generationControls = (
+    <div className="activation-copy-generate">
       <Button
         type="button"
         variant="outline"
@@ -81,20 +81,46 @@ export function AdCopyAssistant({
       >
         {generate.isPending
           ? "Creating suggestions…"
-          : channel === "facebook"
-            ? "Generate post copy"
-            : source === key && options.length
-              ? "Regenerate all 5 sets"
-              : "Generate 5 copy sets"}{" "}
+          : studio
+            ? source === key && options.length
+              ? "Regenerate all"
+              : "Generate copy"
+            : channel === "facebook"
+              ? "Generate post copy"
+              : source === key && options.length
+                ? "Regenerate all 5 sets"
+                : "Generate 5 copy sets"}{" "}
         <ActionCredits
           organizationId={organizationId}
           operation="channels.draftAssetCopy"
         />
       </Button>
       <p className="text-xs text-muted-foreground">
-        Uses your setup, saved brand context, and selected images when
-        available. Review facts and claims before using a suggestion.
+        Uses your brief, brand context, direction choices, and selected images
+        when available. Review facts and claims before using a suggestion.
       </p>
+    </div>
+  );
+  return (
+    <div className="rounded-xl border p-4 space-y-3">
+      {!studio && (
+        <>
+          <h3 className="font-semibold">Generate copy from your setup</h3>
+          <label className="block text-sm">
+            Optional direction
+            <textarea
+              className={channelInput + " mt-1"}
+              value={direction}
+              onChange={e => setDirection(e.target.value)}
+              maxLength={2000}
+              placeholder="For example: invite education providers to start a listing."
+            />
+          </label>
+        </>
+      )}
+      {studio
+        ? generationTarget && createPortal(generationControls, generationTarget)
+        : generationControls}
       {source === key &&
         options.map((o, i) => (
           <div className="rounded-lg bg-muted p-3 space-y-2" key={i}>
