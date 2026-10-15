@@ -39,18 +39,28 @@ export function studioContentHref(
     adset?: string;
     time?: string;
     timezone?: string;
+    section?: "setup" | "creative" | "copy" | "delivery" | "preview";
   } = {}
 ) {
   const params = new URLSearchParams(
-    options.id ? { edit: options.id } : { new: "1" }
+    options.id
+      ? {
+          publication: options.id,
+          section: options.section ?? "copy",
+          ...(options.section && options.section !== "copy"
+            ? {}
+            : { category: "compose" }),
+          channel,
+        }
+      : { channel }
   );
   for (const [key, value] of Object.entries(options))
     if (key !== "id" && value != null && value !== "")
       params.set(key, String(value));
-  return `/app/creatives/${channel === "facebook" ? "social" : "ads"}?${params}`;
+  return `/app/activate/studio?${params}`;
 }
 export function activationHref(channel: Channel, id: string) {
-  return `/app/publishing?channel=${channel}&publication=${encodeURIComponent(id)}&configure=1`;
+  return studioContentHref(channel, { id, section: "preview" });
 }
 export function legacyStudioHref(path: string, search: string) {
   const params = new URLSearchParams(search);

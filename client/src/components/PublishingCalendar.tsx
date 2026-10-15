@@ -1,7 +1,7 @@
 import { ActionCredits } from "./ActionCredits";
 import { studioContentHref } from "@shared/contentWorkflow";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
   CalendarDays,
   ChevronLeft,
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { channelInput } from "./ChannelConnections";
 import {
-  PublicationComposer,
   PublicationDetails,
   PublicationStatus,
   type Publication,
@@ -210,7 +209,7 @@ export function PublishingCalendar({
   const [status, setStatus] = useState("all"),
     [search, setSearch] = useState(""),
     [planOpen, setPlanOpen] = useState(false);
-  const [compose, setCompose] = useState<{
+  const [compose] = useState<{
     item?: Publication;
     initialTime?: string;
     initialAssetKey?: string;
@@ -271,7 +270,12 @@ export function PublishingCalendar({
       configured.current !== chosen.id
     ) {
       configured.current = chosen.id;
-      setCompose({ item: chosen });
+      navigate(
+        studioContentHref(chosen.channel, {
+          id: chosen.id,
+          section: "delivery",
+        })
+      );
     }
   }, [chosen, canEdit]);
   const planned = useMemo(
@@ -316,13 +320,6 @@ export function PublishingCalendar({
         anchor &&
       !["cancelled", "rejected"].includes(p.state)
   );
-  const closeCompose = () => {
-    setCompose(null);
-    if (params.has("new") || params.has("asset") || params.has("configure"))
-      navigate(
-        "/app/publishing" + (selected ? "?publication=" + selected : "")
-      );
-  };
   const next = (direction: number) => {
     if (view !== "month") setDate(moveDate(date, direction * 7));
     else {
@@ -688,17 +685,16 @@ export function PublishingCalendar({
         </p>
       )}
       {compose && (
-        <PublicationComposer
-          key={compose.item?.id ?? "new"}
-          {...compose}
-          stage="activate"
-          initialChannel={channel === "all" ? "facebook" : channel}
-          initialTimezone={timezone}
-          onClose={closeCompose}
-          onSaved={id => {
-            closeCompose();
-            setSelected(id);
-          }}
+        <Redirect
+          to={studioContentHref(
+            compose.item?.channel ?? (channel === "all" ? "facebook" : channel),
+            {
+              id: compose.item?.id,
+              asset: compose.initialAssetKey,
+              time: compose.initialTime,
+              timezone,
+            }
+          )}
         />
       )}
       {chosen && !compose && (
@@ -706,7 +702,14 @@ export function PublishingCalendar({
           key={chosen.id}
           item={chosen}
           onClose={() => setSelected(null)}
-          onEdit={() => setCompose({ item: chosen })}
+          onEdit={() =>
+            navigate(
+              studioContentHref(chosen.channel, {
+                id: chosen.id,
+                section: "delivery",
+              })
+            )
+          }
         />
       )}
       {planOpen && <ContentPlanEditor onClose={() => setPlanOpen(false)} />}
