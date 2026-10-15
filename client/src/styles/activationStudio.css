@@ -214,6 +214,7 @@
 .activation-asset-filters .cfg-field {
   flex: 1;
   min-width: 180px;
+  margin-bottom: 0;
 }
 .activation-inline-assets .cfg-card-art img,
 .activation-inline-assets .cfg-card-art video {
