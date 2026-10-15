@@ -109,8 +109,8 @@ export function CopyDirectionTiles({
         dimension === "offer" ||
         dimension === "specificity") && (
         <p className="activation-help">
-          Add the real offer, deadline or supporting facts in Setup & AI.
-          Selecting a tile does not create an offer or verify a claim.
+          Add the real offer, deadline or supporting facts in Copy. Selecting a
+          tile does not create an offer or verify a claim.
         </p>
       )}
       <div className="cfg-card-grid activation-direction-grid">

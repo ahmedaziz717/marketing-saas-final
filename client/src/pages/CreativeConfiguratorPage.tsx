@@ -12,6 +12,8 @@ import {
   ChevronRight,
   CircleHelp,
   Clapperboard,
+  Copy,
+  FolderOpen,
   Image,
   Layers3,
   Loader2,
@@ -1597,7 +1599,7 @@ function Configurator() {
       </div>
     );
   return (
-    <div className="cfg-root" ref={studioRoot}>
+    <div className="cfg-root cfg-creative" ref={studioRoot}>
       <div className="cfg-heading">
         <div>
           <Link href="/app/creatives" className="cfg-back">
@@ -1607,7 +1609,6 @@ function Configurator() {
             <h1>
               Creative Studio<span>Made by you</span>
             </h1>
-            <span className="cfg-pilot">Preview app</span>
           </div>
           <p>
             A little direction. A lot of possibility. Build your next image or
@@ -1615,15 +1616,33 @@ function Configurator() {
           </p>
         </div>
         <div className="cfg-actions">
-          <button disabled={busy} onClick={duplicateForComparison}>
-            {baseline ? "Replace saved comparison" : "Duplicate & compare"}
+          <button
+            disabled={busy}
+            onClick={duplicateForComparison}
+            aria-label={
+              baseline ? "Replace saved comparison" : "Duplicate & compare"
+            }
+          >
+            <Copy size={15} />
+            <span className="cfg-action-label-wide">
+              {baseline ? "Replace comparison" : "Duplicate & compare"}
+            </span>
+            <span className="cfg-action-label-compact" aria-hidden="true">
+              {baseline ? "Replace" : "Compare"}
+            </span>
           </button>
           {baseline && (
             <button disabled={busy} onClick={() => setCompareOpen("builds")}>
               Compare builds
             </button>
           )}
-          <button onClick={() => setDraftsOpen(true)}>Saved drafts</button>
+          <button onClick={() => setDraftsOpen(true)} aria-label="Saved drafts">
+            <FolderOpen size={15} />
+            <span className="cfg-action-label-wide">Saved drafts</span>
+            <span className="cfg-action-label-compact" aria-hidden="true">
+              Drafts
+            </span>
+          </button>
           <button disabled={busy} onClick={saveDraft}>
             <Save size={15} /> Save draft
           </button>
@@ -1684,6 +1703,7 @@ function Configurator() {
           organizationId={organizationId!}
           role={membership?.role ?? ""}
           jobId={pendingImageJob}
+          referenceUrl={preview}
           onSettled={() => {
             setPendingImageJob(null);
             void utils.assetLibrary.studioList.invalidate();
@@ -1821,40 +1841,42 @@ function Configurator() {
           {error}
         </div>
       )}
-      <div className="cfg-bottom">
-        <div>
-          <strong>{quoteLabel}</strong>
-          <span>
-            {busy ? "Working…" : creditDetail}
-            {issues.length ? ` · ${issues.length} items to complete` : ""}
-          </span>
+      {!pendingImageJob && (
+        <div className="cfg-bottom">
+          <div>
+            <strong>{quoteLabel}</strong>
+            <span>
+              {busy ? "Working…" : creditDetail}
+              {issues.length ? ` · ${issues.length} items to complete` : ""}
+            </span>
+          </div>
+          <div className="cfg-actions">
+            <button
+              disabled={busy}
+              onClick={() => {
+                const i = configuratorSections.findIndex(s => s.id === section);
+                go(
+                  configuratorSections[(i + 1) % configuratorSections.length].id
+                );
+              }}
+            >
+              Next section <ChevronRight size={15} />
+            </button>
+            <button
+              className="cfg-primary"
+              disabled={!ready}
+              onClick={() => setConfirm(true)}
+            >
+              {busy ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : (
+                <Sparkles size={16} />
+              )}{" "}
+              Generate {isImage ? "images" : "video"}
+            </button>
+          </div>
         </div>
-        <div className="cfg-actions">
-          <button
-            disabled={busy}
-            onClick={() => {
-              const i = configuratorSections.findIndex(s => s.id === section);
-              go(
-                configuratorSections[(i + 1) % configuratorSections.length].id
-              );
-            }}
-          >
-            Next section <ChevronRight size={15} />
-          </button>
-          <button
-            className="cfg-primary"
-            disabled={!ready}
-            onClick={() => setConfirm(true)}
-          >
-            {busy ? (
-              <Loader2 className="animate-spin" size={16} />
-            ) : (
-              <Sparkles size={16} />
-            )}{" "}
-            Generate {isImage ? "images" : "video"}
-          </button>
-        </div>
-      </div>
+      )}
       {info && (
         <Dialog open onOpenChange={open => !open && setInfo(null)}>
           <DialogContent className="cfg-modal sm:max-w-xl">

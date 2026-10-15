@@ -273,7 +273,7 @@ it("exposes audio and subtitle categories only for video and does not imply subt
 });
 afterEach(cleanup);
 function open() {
-  render(<CreativeConfiguratorPage />);
+  return render(<CreativeConfiguratorPage />);
 }
 function section(name: RegExp) {
   fireEvent.click(screen.getByRole("button", { name }));
@@ -330,7 +330,8 @@ it("requires a valid current quote and explicit confirmation before image genera
     { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
   ];
   localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
-  open();
+  api.job = { id: 12, status: "queued", variants: [] };
+  const view = open();
   fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
   expect(api.generate).not.toHaveBeenCalled();
   fireEvent.click(
@@ -346,6 +347,14 @@ it("requires a valid current quote and explicit confirmation before image genera
       })
     )
   );
+  expect(await screen.findByText("Your images are queued")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Generate images" })).toBeNull();
+  expect(document.querySelector(".cfg-bottom")).toBeNull();
+  expect(screen.queryByRole("progressbar")).toBeNull();
+  api.job = { id: 12, status: "running", variants: [] };
+  view.rerender(<CreativeConfiguratorPage />);
+  expect(screen.getByText("Creating your images")).toBeTruthy();
+  expect(api.generate).toHaveBeenCalledTimes(1);
 });
 it("does not reuse another workspace's local draft", () => {
   const config = newConfiguration();
@@ -532,6 +541,8 @@ it("keeps completed generation in the large preview and requires explicit approv
       screen.getByRole("img", { name: "Fresh creative" }).getAttribute("src")
     ).toBe("/fresh.png")
   );
+  expect(screen.queryByLabelText("Image generation")).toBeNull();
+  expect(screen.getByRole("button", { name: "Generate images" })).toBeTruthy();
   expect(api.route).not.toHaveBeenCalled();
   expect(api.approveLogo).not.toHaveBeenCalled();
   expect(
@@ -572,6 +583,8 @@ it("reports a failed generation in place without navigating or approving", async
       "The provider could not finish"
     )
   );
+  expect(screen.queryByLabelText("Image generation")).toBeNull();
+  expect(screen.getByRole("button", { name: "Generate images" })).toBeTruthy();
   expect(api.route).not.toHaveBeenCalled();
   expect(api.approveLogo).not.toHaveBeenCalled();
 });

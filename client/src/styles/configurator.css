@@ -1709,13 +1709,6 @@
   flex: 1;
   min-width: 140px;
 }
-.cfg-generation-status {
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--cfg-panel);
-  border: 1px solid var(--cfg-line);
-}
-
 /* Both studios share compact navigation and measured sticky offsets. */
 .cfg-root {
   --cfg-shell-height: 0px;
@@ -1901,4 +1894,366 @@
 }
 .cfg-result-secondary a {
   font-size: 12px;
+}
+.cfg-history-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+.cfg-history-footer .cfg-history-link {
+  margin: 0;
+}
+.cfg-history-footer button {
+  color: var(--cfg-violet);
+}
+.cfg-trial-current > span {
+  width: 100%;
+  text-align: center;
+}
+
+/* The waiting state occupies the preview, rather than adding another row above it. */
+.cfg-generation {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 280px;
+  border-radius: 12px;
+  display: grid;
+  grid-template-rows: minmax(80px, 1fr) auto auto;
+  gap: 12px;
+  padding: 18px 18px 20px;
+  background: radial-gradient(
+    ellipse at 50% 10%,
+    #44356c,
+    #242137 60%,
+    #1b1a29
+  );
+  color: #fff;
+}
+.cfg-generation-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.cfg-generation-glow {
+  position: absolute;
+  width: 160px;
+  height: 100px;
+  border-radius: 50%;
+  background: #b4a0ff50;
+  filter: blur(30px);
+  animation: cfg-generation-breathe 4s ease-in-out infinite alternate;
+}
+.cfg-generation-card {
+  position: absolute;
+  width: 72px;
+  height: 84px;
+  border: 1px solid #e5dcff60;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #9782d9, #433363);
+  box-shadow: 0 8px 24px #09061335;
+}
+.cfg-generation-card-back {
+  transform: translate(-32px, 3px) rotate(-14deg);
+  animation: cfg-generation-fan-left 4s ease-in-out infinite alternate;
+  opacity: 0.6;
+}
+.cfg-generation-card-middle {
+  transform: translate(32px, 3px) rotate(14deg);
+  animation: cfg-generation-fan-right 4s ease-in-out infinite alternate;
+  opacity: 0.7;
+}
+.cfg-generation-card-front {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, #eee8ff, #b9a2ee);
+  color: #695294;
+  animation: cfg-generation-float 4s ease-in-out infinite;
+}
+.cfg-generation-card-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+  background: #fff;
+}
+.cfg-generation-sweep {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 25%,
+    #fff9 50%,
+    transparent 75%
+  );
+  transform: translateX(-130%);
+  animation: cfg-generation-sweep 3s ease-in-out infinite;
+}
+.cfg-generation-spark {
+  position: absolute;
+  left: calc(50% + 59px);
+  top: calc(50% - 44px);
+  color: #d5ee84;
+  animation: cfg-generation-breathe 2s ease-in-out infinite alternate;
+}
+.cfg-generation-copy {
+  position: relative;
+  text-align: center;
+}
+.cfg-generation-copy strong {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.cfg-generation-copy p {
+  font-size: 11px;
+  line-height: 1.55;
+  color: #d3cce4;
+  max-width: 33ch;
+  margin: 6px auto 0;
+}
+.cfg-generation-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+.cfg-generation-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: cfg-generation-breathe 1.2s ease-in-out infinite alternate;
+}
+.cfg-generation-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.cfg-generation-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.cfg-generation-meta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 9px;
+  color: #c6bdd9;
+}
+.cfg-generation-meta time {
+  font-variant-numeric: tabular-nums;
+}
+.cfg-generation-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  overflow: hidden;
+  background: #ffffff15;
+}
+.cfg-generation-track span {
+  display: block;
+  height: 100%;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #c7afff,
+    #d5ee84,
+    transparent
+  );
+  animation: cfg-generation-travel 2.6s ease-in-out infinite;
+}
+@keyframes cfg-generation-float {
+  0%,
+  100% {
+    transform: translateY(3px) rotate(3deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}
+@keyframes cfg-generation-fan-left {
+  to {
+    transform: translate(-40px, -3px) rotate(-20deg);
+  }
+}
+@keyframes cfg-generation-fan-right {
+  to {
+    transform: translate(40px, -3px) rotate(20deg);
+  }
+}
+@keyframes cfg-generation-breathe {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cfg-generation-sweep {
+  60%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+@keyframes cfg-generation-travel {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(330%);
+  }
+}
+
+/* Compact, predictable header actions at desktop, tablet and phone widths. */
+.cfg-creative {
+  padding: 16px;
+}
+.cfg-creative .cfg-heading {
+  align-items: center;
+  padding: 6px 0 10px;
+  margin-bottom: 8px;
+}
+.cfg-creative .cfg-heading > div:first-child {
+  min-width: 0;
+}
+.cfg-creative .cfg-heading > .cfg-actions {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+.cfg-creative .cfg-heading .cfg-actions > button {
+  white-space: nowrap;
+}
+.cfg-creative .cfg-heading .cfg-actions > button span {
+  color: inherit;
+  font-size: inherit;
+}
+.cfg-action-label-compact {
+  display: none;
+}
+.cfg-creative .cfg-stage {
+  padding: 14px;
+}
+.cfg-creative .cfg-build {
+  padding: 0 0 0 4px;
+}
+.cfg-creative .cfg-build-top {
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.cfg-creative .cfg-summary {
+  margin: 12px 0;
+  gap: 6px;
+}
+.cfg-creative .cfg-estimate {
+  gap: 10px;
+  padding-top: 10px;
+}
+.cfg-creative .cfg-stage {
+  scroll-margin-top: calc(
+    var(--cfg-shell-height) + var(--cfg-header-height) + 12px
+  );
+}
+.cfg-creative .cfg-bottom {
+  padding: 10px 14px;
+  bottom: max(8px, env(safe-area-inset-bottom));
+}
+@media (max-width: 1100px) {
+  .cfg-creative {
+    padding: 12px;
+  }
+  .cfg-creative .cfg-heading {
+    gap: 12px;
+  }
+  .cfg-creative .cfg-action-label-wide {
+    display: none;
+  }
+  .cfg-creative .cfg-action-label-compact {
+    display: inline;
+  }
+  .cfg-creative .cfg-heading .cfg-actions > button {
+    padding: 8px 10px;
+  }
+  .cfg-creative .cfg-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  .cfg-creative .cfg-build-top .cfg-eyebrow {
+    display: none;
+  }
+  .cfg-creative .cfg-summary button {
+    padding: 8px 20px 8px 9px;
+  }
+  .cfg-creative .cfg-summary svg {
+    top: 22px;
+  }
+  .cfg-creative .cfg-estimate .cfg-primary {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}
+@media (max-width: 700px) {
+  .cfg-creative {
+    padding: 10px;
+  }
+  .cfg-creative .cfg-heading {
+    display: grid;
+    gap: 10px;
+  }
+  .cfg-creative .cfg-heading .cfg-title h1 {
+    font-size: 23px;
+  }
+  .cfg-creative .cfg-heading > .cfg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 0;
+    gap: 6px;
+  }
+  .cfg-creative .cfg-heading .cfg-actions > button {
+    flex: 1 1 auto;
+  }
+  .cfg-creative .cfg-stage {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+  .cfg-creative .cfg-build {
+    padding: 0;
+  }
+  .cfg-creative .cfg-stage {
+    scroll-margin-top: calc(var(--cfg-shell-height) + 8px);
+  }
+  .cfg-generation {
+    height: 250px;
+    padding: 14px 16px 18px;
+    gap: 8px;
+  }
+  .cfg-creative .cfg-bottom {
+    gap: 8px;
+    padding: 9px 10px;
+  }
+  .cfg-creative .cfg-bottom > .cfg-actions {
+    width: auto;
+    margin-left: auto;
+  }
+  .cfg-creative .cfg-bottom > div > strong {
+    font-size: 12px;
+  }
+  .cfg-creative .cfg-bottom .cfg-actions button {
+    padding: 8px;
+    min-height: 40px;
+  }
+}
+@media (max-width: 380px) {
+  .cfg-creative .cfg-bottom > .cfg-actions {
+    width: 100%;
+  }
+  .cfg-creative .cfg-bottom .cfg-actions button {
+    flex: 1;
+  }
 }
