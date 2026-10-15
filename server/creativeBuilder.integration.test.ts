@@ -321,8 +321,13 @@ describe.sequential("persistent creative builder", () => {
       organizationId,
       setup: generationSetup,
     });
+    const quote = await caller.creativeBuilder.quote({
+      organizationId,
+      setup: generationSetup,
+    });
     const request = {
       organizationId,
+      quotedCredits: quote.credits,
       briefId: saved.briefId,
       expectedUpdatedAtMs: saved.updatedAtMs,
       requestId: randomUUID(),
@@ -384,8 +389,13 @@ describe.sequential("persistent creative builder", () => {
       setup: setup(),
     });
     provider.failAt = provider.calls + 2;
+    const quote = await caller.creativeBuilder.quote({
+      organizationId,
+      setup: setup(),
+    });
     const started = await caller.creativeBuilder.generate({
       organizationId,
+      quotedCredits: quote.credits,
       briefId: saved.briefId,
       expectedUpdatedAtMs: saved.updatedAtMs,
       requestId: randomUUID(),
@@ -404,8 +414,13 @@ describe.sequential("persistent creative builder", () => {
       { timeout: 10_000, interval: 30 }
     );
     provider.failAt = 0;
+    const retryQuote = await caller.creativeBuilder.quote({
+      organizationId,
+      setup: setup(),
+    });
     const retry = await caller.creativeBuilder.generate({
       organizationId,
+      quotedCredits: retryQuote.credits,
       briefId: saved.briefId,
       expectedUpdatedAtMs: saved.updatedAtMs,
       requestId: randomUUID(),
