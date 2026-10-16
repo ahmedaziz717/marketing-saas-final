@@ -19,7 +19,8 @@ export function StageToolNavigation({
         href={section.appsPath}
         aria-current={view === "apps" ? "page" : undefined}
       >
-        <AppWindow size={16} aria-hidden="true" /> Apps
+        <AppWindow size={16} aria-hidden="true" />
+        {family === "measure" ? "Workflow apps" : "Apps"}
       </Link>
       <Link
         href={section.path}

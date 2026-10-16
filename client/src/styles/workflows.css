@@ -1251,6 +1251,15 @@
   border: 1px dashed var(--border);
   border-radius: 12px;
 }
+.wf-library[data-family="measure"] .wf-app-empty > svg {
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .wf-library[data-family="measure"] .wf-app-empty {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 .wf-setting-help {
   font-size: 12px;
   line-height: 1.6;

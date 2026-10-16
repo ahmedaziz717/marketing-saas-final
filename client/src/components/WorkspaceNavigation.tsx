@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { settingsSectionForPath } from "@/lib/settingsNavigation";
+import { workspaceStudios } from "@/lib/workspaceStudios";
 import {
   Popover,
   PopoverContent,
@@ -50,7 +51,10 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Create",
     aliases: ["/app/plans", "/app/briefs"],
     children: [
-      { label: "Creative Studio", path: "/app/creatives/studio" },
+      {
+        label: workspaceStudios.create.name,
+        path: workspaceStudios.create.href,
+      },
       { label: "Apps", path: "/app/creatives", exact: true },
       { label: "Workflows", path: "/app/creatives/workflows" },
       { label: "Drafts", path: "/app/creatives/drafts" },
@@ -64,13 +68,12 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Activate",
     aliases: ["/app/social", "/app/publishing", "/app/activate", "/app/email"],
     children: [
-      { label: "Activation Studio", path: "/app/activate/studio" },
+      {
+        label: workspaceStudios.activate.name,
+        path: workspaceStudios.activate.href,
+      },
       { label: "Apps", path: "/app/activate/apps" },
       { label: "Workflows", path: "/app/activate/workflows" },
-      { label: "Advertising", path: "/app/advertising", exact: true },
-      { label: "Meta Ads", path: "/app/advertising/meta" },
-      { label: "Social publishing", path: "/app/social", exact: true },
-      { label: "Facebook", path: "/app/social/facebook" },
       { label: "Calendar", path: "/app/publishing" },
     ],
   },
@@ -81,11 +84,14 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     group: "Measure",
     aliases: ["/app/attribution", "/app/incrementality", "/app/measure"],
     children: [
-      { label: "Apps", path: "/app/measure/apps" },
-      { label: "Workflows", path: "/app/measure/workflows" },
+      {
+        label: workspaceStudios.measure.name,
+        path: workspaceStudios.measure.href,
+      },
       { label: "Dashboard", path: "/app/analytics", analyticsView: "overview" },
       { label: "Saved reports", path: "/app/analytics/reports" },
-      { label: "Insights Studio", path: "/app/analytics/studio" },
+      { label: "Workflow apps", path: "/app/measure/apps" },
+      { label: "Workflows", path: "/app/measure/workflows" },
       {
         label: "Advertising",
         path: "/app/analytics/advertising",
@@ -104,6 +110,11 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     path: "/app/optimize",
     group: "Optimize",
     children: [
+      {
+        label: workspaceStudios.optimize.name,
+        path: workspaceStudios.optimize.href,
+        planned: true,
+      },
       { label: "Apps", path: "/app/optimize/apps" },
       { label: "Workflows", path: "/app/optimize/workflows" },
     ],
@@ -176,6 +187,14 @@ export function workspacePageLabel(location: string, search = "") {
   if (["/app/catalog", "/app/import"].includes(location))
     return "Settings / Catalog & offerings";
   if (location === "/app/roadmap") return "Settings / Product roadmap";
+  // Historic channel links remain usable without duplicating studio navigation.
+  const legacyActivation = [
+    ["/app/advertising/meta", "Meta Ads"],
+    ["/app/advertising", "Advertising"],
+    ["/app/social/facebook", "Facebook"],
+    ["/app/social", "Social publishing"],
+  ].find(([path]) => matchesPath(path, location));
+  if (legacyActivation) return `Activate / ${legacyActivation[1]}`;
   const editor = (
     {
       studio: "Creative Studio",
