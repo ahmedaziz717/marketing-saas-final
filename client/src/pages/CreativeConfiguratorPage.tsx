@@ -2,6 +2,13 @@ import {
   useStudioNavigation,
   scrollStudioChoices,
 } from "@/components/configurator/studioNavigation";
+import { StudioCategories } from "@/components/configurator/StudioCategories";
+import {
+  StudioChoicePicker,
+  studioThemeChoices,
+  studioThemeGroups,
+  studioStyleChoices,
+} from "@/components/configurator/StudioChoicePicker";
 import { StudioSections } from "@/components/configurator/StudioSections";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
@@ -61,11 +68,7 @@ import {
   formatDetails,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
-import {
-  CREATIVE_THEME_GROUPS,
-  CREATIVE_THEME_LIST,
-  getCreativeTheme,
-} from "@shared/creativeThemes";
+import { getCreativeTheme } from "@shared/creativeThemes";
 import {
   generationModel,
   modelDefaults,
@@ -668,17 +671,13 @@ function Configurator() {
   }
   function tabs(items: { id: string; name: string }[]) {
     return (
-      <div className="cfg-family-tabs" role="group" aria-label="Choice groups">
-        {items.map(t => (
-          <button
-            key={t.id}
-            aria-pressed={tab === t.id}
-            onClick={() => setTab(t.id)}
-          >
-            {t.name}
-          </button>
-        ))}
-      </div>
+      <StudioCategories
+        compact
+        label="Choice groups"
+        items={items.map(item => ({ id: item.id, title: item.name }))}
+        current={tab}
+        onSelect={setTab}
+      />
     );
   }
   function cards(
@@ -1072,25 +1071,18 @@ function Configurator() {
     if (category === "theme")
       return (
         <>
-          {tabs([{ id: "all", name: "All themes" }, ...CREATIVE_THEME_GROUPS])}
-          {cards(
-            (tab === "all"
-              ? CREATIVE_THEME_LIST
-              : (CREATIVE_THEME_GROUPS.find(g => g.id === tab)?.themes ?? [])
-            ).map(t => ({
-              id: t.id,
-              title: t.name,
-              description: t.direction,
-              palette: t.palette,
-              detail: t.direction,
-            })),
-            [direction.theme],
-            id =>
+          <StudioChoicePicker
+            title="Theme"
+            choices={studioThemeChoices}
+            groups={studioThemeGroups}
+            selected={[direction.theme]}
+            onSelect={id =>
               updateDirection({
                 theme: id,
                 themePrompt: getCreativeTheme(id).direction,
               })
-          )}
+            }
+          />
           <p className="cfg-help">
             Changing the theme updates visual direction and preserves your
             written copy.
@@ -1098,18 +1090,15 @@ function Configurator() {
         </>
       );
     if (category === "style")
-      return cards(
-        CREATIVE_ART_STYLES.map(s => ({
-          id: s.id,
-          title: s.name,
-          description: s.direction,
-          palette:
-            s.id === "realistic"
-              ? ["#39302b", "#a38d76", "#f1dbba"]
-              : undefined,
-        })),
-        [direction.artStyle],
-        id => updateDirection({ artStyle: id as VideoDirection["artStyle"] })
+      return (
+        <StudioChoicePicker
+          title="Art style"
+          choices={studioStyleChoices}
+          selected={[direction.artStyle]}
+          onSelect={id =>
+            updateDirection({ artStyle: id as VideoDirection["artStyle"] })
+          }
+        />
       );
     if (category === "mood")
       return cards(
@@ -1780,24 +1769,17 @@ function Configurator() {
           onSelect={id => go(id)}
         />
         <div className="cfg-body">
-          <div
-            className="cfg-categories"
-            role="group"
-            aria-label="Section categories"
-          >
-            {categories.map(c => (
-              <button
-                key={c.id}
-                aria-pressed={category === c.id}
-                onClick={() => chooseCategory(c.id)}
-              >
-                {c.title}
-                {c.id === "people" && scene !== "people" && (
-                  <span>Needs people scene</span>
-                )}
-              </button>
-            ))}
-          </div>
+          <StudioCategories
+            items={categories.map(c => ({
+              ...c,
+              hint:
+                c.id === "people" && scene !== "people"
+                  ? "Needs people scene"
+                  : undefined,
+            }))}
+            current={category}
+            onSelect={chooseCategory}
+          />
           <div className="cfg-content-title">
             <div>
               <span className="cfg-eyebrow">{currentSection.title}</span>
@@ -1805,9 +1787,7 @@ function Configurator() {
                 {currentSection.categories.find(c => c.id === category)?.title}
               </h2>
             </div>
-            {["model", "source", "theme", "style", "mood", "format"].includes(
-              category
-            ) && (
+            {["model", "source", "mood", "format"].includes(category) && (
               <label className="cfg-search">
                 <Search size={16} />
                 <input

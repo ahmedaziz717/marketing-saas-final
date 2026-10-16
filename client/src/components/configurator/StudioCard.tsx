@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, type LucideIcon } from "lucide-react";
 import { ChoiceArt } from "./ChoiceArt";
 
 /** One visual language for sources, people and creative choices. */
@@ -14,6 +14,7 @@ export function StudioCard({
   badge,
   children,
   contain = false,
+  icon: Icon,
 }: {
   title: string;
   description?: string;
@@ -25,6 +26,7 @@ export function StudioCard({
   badge?: string;
   children?: ReactNode;
   contain?: boolean;
+  icon?: LucideIcon;
 }) {
   return (
     <article
@@ -51,7 +53,10 @@ export function StudioCard({
           </span>
         </div>
         <div className="cfg-card-copy">
-          <h3>{title}</h3>
+          <h3>
+            {Icon && <Icon size={16} aria-hidden="true" />}
+            {title}
+          </h3>
           {description && <p>{description}</p>}
         </div>
       </button>

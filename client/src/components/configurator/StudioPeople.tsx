@@ -14,6 +14,7 @@ import {
   personReferenceKey,
   type PersonReference,
 } from "@shared/creativeBuilder";
+import { StudioCategories } from "./StudioCategories";
 import { StudioCard } from "./StudioCard";
 
 export function StudioPeople({
@@ -100,26 +101,24 @@ export function StudioPeople({
       : saved.data?.find(p => p.id === ref.assetId)?.name;
   return (
     <div className="cfg-people-browser">
-      <div className="cfg-family-tabs" role="group" aria-label="People gender">
-        {[
-          ["female", "Female"],
-          ["male", "Male"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            aria-pressed={gender === id}
-            onClick={() => {
-              setGender(id);
-              setVisible(24);
-            }}
-          >
-            {label}
-            <small>
-              {LIFESTYLE_PEOPLE.filter(p => p.gender === id).length}
-            </small>
-          </button>
-        ))}
-      </div>
+      <StudioCategories
+        compact
+        label="People gender"
+        current={gender}
+        items={[
+          { id: "female", title: "Female" },
+          { id: "male", title: "Male" },
+        ].map(item => ({
+          ...item,
+          hint: String(
+            LIFESTYLE_PEOPLE.filter(p => p.gender === item.id).length
+          ),
+        }))}
+        onSelect={id => {
+          setGender(id);
+          setVisible(24);
+        }}
+      />
       <div className="cfg-people-filters">
         <label>
           Collection

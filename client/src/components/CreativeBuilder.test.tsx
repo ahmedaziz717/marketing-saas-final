@@ -105,12 +105,14 @@ describe("Creative Builder controls", () => {
   it("searches monthly themes and saves editable main and theme prompt layers", async () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.getByText(/124 themes available/)).toBeTruthy();
-    expect(screen.queryByLabelText("Search creative themes")).toBeNull();
+    expect(screen.queryByLabelText("Search theme choices")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
-    fireEvent.change(screen.getByLabelText("Search creative themes"), {
+    fireEvent.change(screen.getByLabelText("Search theme choices"), {
       target: { value: "Cyber Monday" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Cyber Monday" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select Cyber Monday" })
+    );
     fireEvent.click(screen.getByText("Customize prompts"));
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
@@ -193,7 +195,7 @@ describe("Creative Builder controls", () => {
       savedSetup.copy.headline
     );
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
-    fireEvent.click(screen.getByRole("button", { name: "Holiday" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select Holiday" }));
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       CREATIVE_THEMES.holiday.headline
     );
@@ -237,14 +239,18 @@ describe("Creative Builder controls", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.click(
-      screen.getByRole("button", { name: CREATIVE_THEMES.spotlight.name })
+      screen.getByRole("button", {
+        name: "Select " + CREATIVE_THEMES.spotlight.name,
+      })
     );
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       "My exact headline"
     );
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
     fireEvent.click(
-      screen.getByRole("button", { name: CREATIVE_THEMES.holiday.name })
+      screen.getByRole("button", {
+        name: "Select " + CREATIVE_THEMES.holiday.name,
+      })
     );
     expect((screen.getByLabelText("Headline") as HTMLInputElement).value).toBe(
       CREATIVE_THEMES.holiday.headline

@@ -629,22 +629,17 @@ function Studio({
                   </p>
                 </div>
               </div>
-              <div className="insight-filter-pills" aria-label="Filter metrics">
-                {[
-                  ["all", "All metrics"],
-                  ["meta_ads", "Advertising"],
-                  ["facebook", "Social"],
-                ].map(([id, name]) => (
-                  <button
-                    type="button"
-                    aria-pressed={metricFilter === id}
-                    key={id}
-                    onClick={() => setMetricFilter(id)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+              <StudioCategories
+                compact
+                label="Filter metrics"
+                current={metricFilter}
+                items={[
+                  { id: "all", title: "All metrics" },
+                  { id: "meta_ads", title: "Advertising" },
+                  { id: "facebook", title: "Social" },
+                ]}
+                onSelect={setMetricFilter}
+              />
               <div className="insight-metric-choices">
                 {selectableMetrics
                   .filter(

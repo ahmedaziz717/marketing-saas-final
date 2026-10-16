@@ -53,15 +53,20 @@ it("adds a reusable field, connects it, and previews the same default", () => {
   const g = JSON.parse(screen.getByTestId("graph").textContent!);
   expect(g.nodes[1].config.field.kind).toBe("theme");
   expect(g.edges[0].port).toBe("text");
-  const select = screen.getByRole("combobox", {
-    name: "Theme",
-  }) as HTMLSelectElement;
-  const value = select.options[1].value;
-  fireEvent.change(select, { target: { value } });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select Product Spotlight" })
+  );
   fireEvent.click(screen.getByRole("button", { name: "Toggle preview" }));
   expect(
-    (screen.getByRole("combobox", { name: "Theme" }) as HTMLSelectElement).value
-  ).toBe(value);
+    screen
+      .getByRole("button", { name: "Select Product Spotlight" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    screen
+      .getByRole("img", { name: "Product Spotlight visual inspiration" })
+      .getAttribute("src")
+  ).toBe("/studio-art/spotlight.webp");
   expect(
     screen.getByText("This preview does not run the workflow or spend credits.")
   ).toBeTruthy();

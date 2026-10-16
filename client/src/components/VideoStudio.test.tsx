@@ -135,10 +135,10 @@ it("combines catalog photos and assets, generates an editable prompt, undoes it,
     screen.getByRole("img", { name: "Reference 2: Warm living room" })
   ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
-  fireEvent.change(screen.getByLabelText("Search creative themes"), {
+  fireEvent.change(screen.getByLabelText("Search theme choices"), {
     target: { value: "Holiday" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Holiday" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Holiday" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.change(screen.getByLabelText("Mood"), {
     target: { value: "warm" },

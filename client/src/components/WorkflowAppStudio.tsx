@@ -28,6 +28,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { WorkflowInputControl } from "./WorkflowInputControl";
 import { StudioSections } from "./configurator/StudioSections";
+import { studioCategoryIcon } from "./configurator/studioCategoryIcons";
 import { StudioCategories } from "./configurator/StudioCategories";
 import {
   scrollStudioChoices,
@@ -228,7 +229,13 @@ export function WorkflowAppStudio({
       />
       <div className="cfg-body">
         <StudioCategories
-          items={section?.categories ?? [current]}
+          items={(section?.categories ?? [current]).map(category => ({
+            ...category,
+            icon: studioCategoryIcon(
+              category.fields[0]?.config.field?.kind ?? category.id,
+              category.title
+            ),
+          }))}
           current={current.id}
           onSelect={select}
         />
@@ -256,12 +263,22 @@ export function WorkflowAppStudio({
             </div>
             <fieldset disabled={busy} className="wf-studio-fields">
               {category.fields.map(n => (
-                <div className="wf-form-field" key={n.id}>
-                  <div className="wf-studio-field-label">
-                    {n.title}
-                    {n.config.field?.required && <span>Required</span>}
-                    {n.config.field?.locked && <span>Preset</span>}
-                  </div>
+                <div
+                  className={`wf-form-field${n.config.field && isChoiceField(n.config.field) ? " wf-form-field-visual" : ""}`}
+                  key={n.id}
+                >
+                  {(category.fields.length > 1 ||
+                    n.title !== category.title ||
+                    n.config.field?.required ||
+                    n.config.field?.locked) && (
+                    <div className="wf-studio-field-label">
+                      {(category.fields.length > 1 ||
+                        n.title !== category.title) &&
+                        n.title}
+                      {n.config.field?.required && <span>Required</span>}
+                      {n.config.field?.locked && <span>Preset</span>}
+                    </div>
+                  )}
                   {n.config.field ? (
                     <WorkflowInputControl
                       field={n.config.field}
