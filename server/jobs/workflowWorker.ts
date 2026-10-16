@@ -154,6 +154,10 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         "creator",
       ]);
     const input = workflowInputs(run.graph, run.steps, node);
+    if (!step.startedAtMs) {
+      step.startedAtMs = Date.now();
+      await persist({ steps: run.steps });
+    }
     await validateVideoReferences(db, {
       organizationId: run.organizationId,
       references: run.references,

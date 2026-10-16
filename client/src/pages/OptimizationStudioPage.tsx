@@ -26,6 +26,7 @@ import { OptimizationExperiments } from "@/components/OptimizationExperiments";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { WorkflowConnectionInput } from "@/components/WorkflowConnectionInput";
 import { WorkflowRunReview } from "@/components/WorkflowRunReview";
+import { WorkflowRunProgress } from "@/components/WorkflowRunProgress";
 import {
   defaultOptimizationSettings,
   optimizationStudioGraph,
@@ -816,29 +817,14 @@ function Studio({
                       {latest.error}
                     </p>
                   )}
-                  <ol
-                    className="optimization-progress"
-                    aria-label="Analysis steps"
-                  >
-                    {latest.graph.nodes
-                      .filter(
-                        n => !["start_trigger", "output"].includes(n.type)
-                      )
-                      .map(n => (
-                        <li key={n.id}>
-                          <strong>{n.title}</strong>
-                          <span>
-                            {latest.steps[n.id]?.waitingReason ??
-                              latest.steps[n.id]?.status ??
-                              "pending"}
-                          </span>
-                          {latest.steps[n.id]?.error && (
-                            <p role="alert">{latest.steps[n.id].error}</p>
-                          )}
-                        </li>
-                      ))}
-                  </ol>
+                  <WorkflowRunProgress
+                    run={latest}
+                    refreshError={!!detail.error || !!sourceRun.error}
+                    refreshing={detail.isFetching}
+                    onRefresh={() => detail.refetch()}
+                  />
                   <WorkflowRunReview
+                    hideBackgroundWaits
                     organizationId={organizationId}
                     role={role}
                     run={latest}

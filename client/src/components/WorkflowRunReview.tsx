@@ -20,6 +20,7 @@ export function WorkflowRunReview({
   run,
   onRefresh,
   role,
+  hideBackgroundWaits = false,
 }: {
   organizationId: number;
   run?: {
@@ -31,13 +32,22 @@ export function WorkflowRunReview({
   };
   onRefresh: () => unknown;
   role: string;
+  hideBackgroundWaits?: boolean;
 }) {
   const [reviewId, setReviewId] = useState<string | null>(null);
   const mutation = trpc.workflows.reviewStep.useMutation();
   if (!run || !["queued", "running"].includes(run.status) || run.stopRequested)
     return null;
   const waiting = Object.entries(run.steps).filter(
-    ([, step]) => step.status === "waiting"
+    ([, step]) =>
+      step.status === "waiting" &&
+      (!hideBackgroundWaits ||
+        step.approvalRequiredCredits ||
+        step.publicationId ||
+        step.reviewHash ||
+        step.reviewData ||
+        step.waitingFor === "paused_history" ||
+        step.outputs?.some(v => v.type === "image"))
   );
   if (!waiting.length) return null;
   const node = run.graph.nodes.find(n => n.id === reviewId),

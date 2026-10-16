@@ -331,9 +331,14 @@ it("resumes classification across a full batch and only returns report source-ad
   const first = await classifyHistoryBatch(state.db, org, cid, "800000");
   expect(first.processed).toBe(100);
   expect(first.next).toBe("900099");
+  expect(first.progress.unit).toBe("ads");
+  expect(first.progress.total - first.progress.completed).toBe(1);
+  expect(first.progress.updatedAtMs).toBeGreaterThan(0);
   const last = await classifyHistoryBatch(state.db, org, cid, first.next!);
   expect(last.processed).toBe(1);
   expect(last.next).toBeNull();
+  expect(last.progress.completed).toBe(last.progress.total);
+  expect(last.progress.total).toBe(first.progress.total);
   await state.db.insert(optimizationRecords).values({
     ...original,
     id: randomUUID(),

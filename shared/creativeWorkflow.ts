@@ -556,6 +556,13 @@ export type WorkflowStep = {
   videoJobId?: string;
   historyJobId?: string;
   classificationCursor?: string;
+  /** Saved after completed work, separate from the worker heartbeat. */
+  progress?: {
+    completed: number;
+    total: number;
+    unit: "ads" | "slices";
+    updatedAtMs: number;
+  };
   retryAttempts?: number;
   approvalRequiredCredits?: boolean;
   approvedCredits?: number;
