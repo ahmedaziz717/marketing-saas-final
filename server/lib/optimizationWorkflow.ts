@@ -238,14 +238,18 @@ export async function optimizationStep(
         ...step,
         status: "waiting",
         classificationCursor: batch.next,
-        waitingReason:
-          "Classifying imported evidence; human edits remain authoritative.",
+        progress: batch.progress,
+        waitingReason: `${batch.progress.completed.toLocaleString("en-US")} of ${batch.progress.total.toLocaleString("en-US")} imported ads classified. Reviewed edits are preserved.`,
       };
-    return complete("Classified Meta history", {
-      connectionId: node.config.connectionId,
-      taxonomyVersion: 1,
-      completedAtMs: Date.now(),
-    });
+    return {
+      ...complete("Classified Meta history", {
+        connectionId: node.config.connectionId,
+        taxonomyVersion: 1,
+        completedAtMs: Date.now(),
+      }),
+      progress: batch.progress,
+      waitingReason: undefined,
+    };
   }
   if (node.type === "analyze_history") {
     const query = analysisQuerySchema.parse(

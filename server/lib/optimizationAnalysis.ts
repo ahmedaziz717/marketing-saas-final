@@ -8,7 +8,7 @@ import {
   creativeJobs,
 } from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
-import { and, eq, desc, gte, lte, gt, inArray } from "drizzle-orm";
+import { and, eq, desc, gte, lte, gt, inArray, sql } from "drizzle-orm";
 import {
   optimizationRecords,
   optimizationClassifications,
@@ -764,8 +764,24 @@ export async function classifyHistoryBatch(
     "imported_meta",
     Date.now()
   );
+  // Count against the persisted cursor, including runs created before progress
+  // metadata existed. Never infer completed work from elapsed time.
+  const cursor = page.at(-1)?.remoteId ?? after;
+  const [counts] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      completed: sql<number>`count(*) filter (where ${optimizationRecords.remoteId} <= ${cursor})::int`,
+    })
+    .from(optimizationRecords)
+    .where(and(scope, eq(optimizationRecords.kind, "ad")));
   return {
     processed: page.length,
     next: ads.length > batchSize ? page.at(-1)!.remoteId : null,
+    progress: {
+      completed: counts.completed,
+      total: counts.total,
+      unit: "ads" as const,
+      updatedAtMs: Date.now(),
+    },
   };
 }
