@@ -41,6 +41,12 @@ const tools = {
   ],
   measure: [
     {
+      name: "Insights Studio",
+      description: "Configure reports, schedule delivery, and build your dashboards.",
+      href: "/app/analytics/studio",
+      icon: BarChart3,
+    },
+    {
       name: "Performance overview",
       description: "See your connected-channel results in one place.",
       href: "/app/analytics",

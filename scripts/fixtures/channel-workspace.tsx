@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { ThemeProvider } from "../../client/src/contexts/ThemeContext";
 import { defaultVideoSetup } from "../../shared/videoCreation";
+import {
+  generationModels,
+  DEFAULT_VIDEO_MODEL,
+  modelVideoMode,
+} from "../../shared/modelCatalog";
 import { LifestylePersonPicker } from "../../client/src/components/LifestylePersonPicker";
 import {
   defaultCreativeSetup,
@@ -34,6 +39,8 @@ import PublishingPage from "../../client/src/pages/PublishingPage";
 import SocialMediaPage from "../../client/src/pages/SocialMediaPage";
 import AdvertisingPage from "../../client/src/pages/AdvertisingPage";
 import AnalyticsPage from "../../client/src/pages/AnalyticsPage";
+import MeasureDashboardPage from "../../client/src/pages/MeasureDashboardPage";
+import ActivationStudioPage from "../../client/src/pages/ActivationStudioPage";
 import IntegrationsPage from "../../client/src/pages/IntegrationsPage";
 import { contentSchema, dateInZone } from "../../shared/channels";
 import { Toaster } from "../../client/src/components/ui/sonner";
@@ -209,7 +216,36 @@ const role =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
     "role"
   ) ?? "owner";
+const fixtureModels = [
+  generationModels.find(m => m.id === DEFAULT_VIDEO_MODEL)!,
+  generationModels.find(
+    m => m.kind === "video" && modelVideoMode(m) === "edit"
+  )!,
+  generationModels.find(
+    m => m.kind === "video" && modelVideoMode(m) === "motion"
+  )!,
+  generationModels.find(m => m.kind === "image")!,
+];
 function respond(path: string, input: any) {
+  if (path === "models.catalog")
+    return fixtureModels.map(m => ({
+      ...m,
+      routeId: m.id,
+      enabled: true,
+      available: true,
+      estimatedCredits: 235,
+      estimatedSeconds: 5,
+      reason: null,
+      direct: false,
+    }));
+  if (path === "models.credits")
+    return {
+      remaining: 80,
+      allowance: 100,
+      packageName: "Test",
+      textEstimate: 1,
+      enforced: false,
+    };
   if (path === "video.generate" || path === "video.save") mutations.push(path);
   if (path === "briefs.list")
     return [
@@ -230,6 +266,7 @@ function respond(path: string, input: any) {
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
   if (path === "video.options") return { ready: true, reason: null };
+  if (path === "video.catalogImages") return { items: [], nextOffset: null };
   if (path === "video.list") return [...videoDrafts];
   if (path === "video.get") return videoDrafts.find(job => job.id === input.id);
   if (path === "video.save") {
@@ -366,6 +403,14 @@ function respond(path: string, input: any) {
     };
 
   if (path === "workspace.members" || path === "workspace.invites") return [];
+  if (path === "insights.dashboards" || path === "insights.list") return [];
+  if (path === "insights.options")
+    return {
+      connections: connections.items,
+      members: [],
+      canEdit: true,
+      emailConfigured: false,
+    };
   if (path === "billing.summary")
     return {
       mode: "preview",
@@ -584,7 +629,9 @@ function respond(path: string, input: any) {
       ? studioDraftAssets
       : [];
   if (path === "assetLibrary.list")
-    return ["studio-ad-copy", "studio-post-media"].includes(which)
+    return ["studio-ad-copy", "studio-post-media", "studio-media"].includes(
+      which
+    )
       ? [
           {
             key: "asset:1",
@@ -812,6 +859,18 @@ function ModelPickerFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/activate/studio")
+    return (
+      <DashboardLayout>
+        <ActivationStudioPage />
+      </DashboardLayout>
+    );
+  if (path === "/app/analytics")
+    return (
+      <DashboardLayout>
+        <MeasureDashboardPage />
+      </DashboardLayout>
+    );
   if (path === "/app/model-picker") return <ModelPickerFixture />;
   if (["/login", "/signup", "/reset-password"].includes(path))
     return (
@@ -913,7 +972,22 @@ async function click(name: string) {
 function layout() {
   check(
     document.documentElement.scrollWidth <= innerWidth + 1,
-    "Page has horizontal overflow"
+    "Page has horizontal overflow: " +
+      JSON.stringify(
+        Array.from(document.querySelectorAll<HTMLElement>("body *"))
+          .filter(
+            el =>
+              el.getBoundingClientRect().right > innerWidth + 1 &&
+              el.getBoundingClientRect().width > 0
+          )
+          .slice(-8)
+          .map(el => ({
+            tag: el.tagName,
+            class: el.className,
+            right: el.getBoundingClientRect().right,
+            width: el.getBoundingClientRect().width,
+          }))
+      )
   );
   const d = document.querySelector<HTMLElement>('[role="dialog"]');
   if (d) {
@@ -938,6 +1012,88 @@ function layout() {
       );
     }
   }
+}
+async function pressStudioControl(
+  control: HTMLButtonElement | undefined,
+  label: string
+) {
+  check(control && !control.disabled, label + " is available");
+  control!.scrollIntoView({ block: "center", behavior: "instant" });
+  await pause();
+  const rect = control!.getBoundingClientRect();
+  check(
+    control!.contains(
+      document.elementFromPoint(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+      )
+    ),
+    label + " is reachable"
+  );
+  control!.click();
+  await pause();
+}
+async function studioSection(title: string) {
+  await pressStudioControl(
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Activation sections"] button'
+      )
+    ).find(
+      b =>
+        b.getClientRects().length &&
+        b.querySelector("strong")?.textContent === title
+    ),
+    title
+  );
+}
+async function clickPrefix(title: string) {
+  await pressStudioControl(
+    Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      b => b.getClientRects().length && b.textContent?.trim().startsWith(title)
+    ),
+    title
+  );
+}
+async function fillControl(selector: string, value: string) {
+  const el = document.querySelector<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >(selector)!;
+  check(!!el, selector + " is present");
+  const proto =
+    el instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : el instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+  el.dispatchEvent(
+    new Event(el instanceof HTMLSelectElement ? "change" : "input", {
+      bubbles: true,
+    })
+  );
+  await pause();
+}
+async function chooseVideoModel(mode: "create" | "edit" | "motion") {
+  const model =
+    mode === "create"
+      ? fixtureModels[0]
+      : fixtureModels.find(m => modelVideoMode(m) === mode)!;
+  const label = Array.from(document.querySelectorAll("span")).find(
+    el => el.textContent === "Generation model"
+  )!;
+  await pressStudioControl(
+    label.parentElement!.querySelector<HTMLButtonElement>("button")!,
+    "Choose generation model"
+  );
+  const choice = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+  ).find(
+    el =>
+      el.querySelector("strong")?.textContent === model.name &&
+      el.textContent?.includes(model.variant)
+  );
+  await pressStudioControl(choice, model.name + " " + model.variant);
 }
 (window as any).runChannelRegression = async () => {
   try {
@@ -980,9 +1136,11 @@ function layout() {
         "Weekly view is default"
       );
       await click("New content");
-      check(!!document.getElementById("pub-title"), "Real composer opens");
+      check(
+        !!document.querySelector('[aria-label="Activation sections"]'),
+        "New content opens Activation Studio"
+      );
       layout();
-      await click("Cancel");
       fixtureRouter.navigate("/app/publishing");
       await pause();
       await click("List");
@@ -1061,8 +1219,9 @@ function layout() {
       );
     else if (which === "analytics")
       check(
-        document.body.textContent?.includes("Combined ad spend"),
-        "Cross-channel reporting renders"
+        !!button("Customize") &&
+          !!document.querySelector('a[href="/app/analytics/studio"]'),
+        "Customizable Measure dashboard and report creation render"
       );
     else if (which === "integrations") {
       check(
@@ -1139,85 +1298,70 @@ function layout() {
       check(
         document
           .querySelector("h1")
-          ?.textContent?.includes("Make your next move.") &&
-          document.body.textContent?.includes(
-            "Create. Activate. Measure. Optimize."
-          ),
+          ?.textContent?.includes("What will you make next?") &&
+          document.querySelectorAll(".workspace-loop-card").length === 4,
         "Product stages are visible on Home"
       );
       check(
-        document.body.textContent?.includes(
-          "Automated optimization is on the roadmap."
-        ),
+        document
+          .querySelector('.workspace-loop-card[data-workflow="Optimize"]')
+          ?.textContent?.includes("Planned"),
         "Home does not imply optimization tools are operational"
       );
     }
     if (which === "video-studio") {
       check(
         !!document.querySelector('[aria-label="Video type"]'),
-        "Video creation has Product and UGC routes"
+        "Video creation has Product and Creator routes"
       );
       check(
         !!document.querySelector("#video-prompt"),
         "Video prompt is visible"
       );
-      await click("Edit video");
+      await chooseVideoModel("edit");
       check(
         document.body.textContent?.includes("Source video"),
-        "Edit mode requires source video"
+        "An edit model requires source video"
       );
       check(
-        !Array.from(document.querySelectorAll("label")).some(label =>
-          label.textContent?.startsWith("Aspect ratio")
-        ),
-        "Edit mode hides unsupported ratio controls"
+        button("Generate video")?.disabled,
+        "Generation stays disabled without required source media"
       );
-      await click("Motion control");
+      await chooseVideoModel("motion");
       check(
-        !document.body.textContent?.includes("Generate sound"),
-        "Motion mode hides unsupported sound controls"
+        document.body.textContent?.includes("Motion reference video"),
+        "A motion model exposes its video input"
       );
-      await click("Create video");
+      await chooseVideoModel("create");
       await click("Add images");
+      layout();
       check(
-        !!document.querySelector('[role="dialog"]'),
-        "Reference picker opens accessibly"
+        !!button("Product images") && !!button("Upload"),
+        "Reference picker includes product images and upload"
       );
-      const image = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
-      ).find(button => button.textContent?.includes("Emerald collection hero"));
-      image?.click();
-      await new Promise(resolve => setTimeout(resolve, 30));
+      await click("Image assets");
+      await click("Emerald collection hero");
       await click("Use selected images");
       check(
         !!document.querySelector('img[alt^="Reference 1"]'),
         "Selected reference appears in the video editor"
       );
+      check(
+        !mutations.includes("video.generate"),
+        "Changing models and references never starts paid generation"
+      );
     }
     if (which === "video-ugc") {
       check(
-        !!document.querySelector("#video-prompt"),
-        "UGC uses the video editor"
+        !!document.querySelector("#video-prompt") && !!button("Creator videos"),
+        "Creator video uses the shared editor"
       );
-      check(
-        button("Generation coming soon")?.disabled,
-        "UGC generation is unavailable until its provider is connected"
+      await fillControl(
+        "#video-prompt",
+        "Four people introduce the collection in a bright studio."
       );
-      for (const label of [
-        "Create video",
-        "Edit video",
-        "Extend video",
-        "Motion control",
-        "Save draft",
-      ])
-        check(!!button(label), `UGC has the shared ${label} control`);
-      await click("Edit video");
-      check(
-        document.body.textContent?.includes("Source video"),
-        "UGC edit has a source video picker"
-      );
-      await click("Create video");
       await click("Add images");
+      await click("Image assets");
       await click("Emerald collection hero");
       await click("Use selected images");
       await click("Browse 500 models");
@@ -1225,7 +1369,7 @@ function layout() {
       for (let i = 1; i <= 4; i++) await click(`Woman · Black ${i}`);
       check(
         button("Woman · Black 5")?.disabled,
-        "UGC supports at most four models"
+        "Creator video supports at most four people"
       );
       await click("Use 4 models");
       await click("Save draft");
@@ -1233,34 +1377,38 @@ function layout() {
         videoDrafts[0]?.setup.category === "ugc" &&
           videoDrafts[0]?.setup.people.length === 4 &&
           videoDrafts[0]?.setup.imageKeys[0] === "asset:1",
-        "UGC save keeps category, four models, and references"
+        "Creator draft saves category, people and references"
       );
       await click("Product videos");
       check(
         !button("Browse 500 models"),
-        "Product editor does not show the UGC model picker"
+        "Product editor hides the people picker"
       );
-      await click("UGC videos");
-      // The temporary save toast sits above the final history row on mobile.
+      await click("Creator videos");
       await new Promise(resolve => setTimeout(resolve, 4500));
-      await click("Open Untitled UGC video");
+      await click("Open Untitled creator video");
       await click("Browse 500 models");
       check(
         document.body.textContent?.includes("4 / 4 selected"),
-        "Saved UGC restores its model selection"
+        "Saved creator video restores people"
       );
       await click("Cancel");
       check(
         !!document.querySelector('img[alt^="Reference 1"]'),
-        "Saved UGC restores its image references"
+        "Saved creator video restores references"
       );
       check(
-        videoQuotes.every(setup => setup.category !== "ugc"),
-        "UGC never requests product credit quotes"
+        videoQuotes.some(
+          setup =>
+            setup.category === "ugc" &&
+            setup.people.length === 4 &&
+            setup.modelId === DEFAULT_VIDEO_MODEL
+        ),
+        "Creator quote includes the selected model and people"
       );
       check(
         !mutations.includes("video.generate"),
-        "Saving UGC does not trigger generation"
+        "Saving creator video never starts generation"
       );
       layout();
     }
@@ -1342,48 +1490,46 @@ function layout() {
       layout();
     }
     if (which === "studio-media") {
-      const caption =
-        document.querySelector<HTMLTextAreaElement>("#pub-message")!;
-      Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value"
-      )!.set!.call(caption, "This caption survives media creation.");
-      caption.dispatchEvent(new Event("input", { bubbles: true }));
-      await pause();
-      await click("Create or upload media");
-      layout();
-      check(
-        !!button("Upload assets"),
-        "Uploader is available without leaving the composer"
+      await studioSection("Copy");
+      await click("Compose");
+      await fillControl(
+        "#pub-message",
+        "This caption survives media selection."
       );
-      await click("Generate image");
-      layout();
+      await studioSection("Creative");
       check(
-        !!document.getElementById("saved-creative-setup"),
-        "Uses the shared image builder"
-      );
-      await click("Back to content");
-      layout();
-      check(
-        document.querySelector<HTMLTextAreaElement>("#pub-message")?.value ===
-          "This caption survives media creation.",
-        "Copy is retained across nested media creation"
+        !!document.querySelector('[aria-label="Approved asset library"] img'),
+        "Approved assets render as image tiles"
       );
       check(
-        mutations.length === 0,
-        "Browsing media never starts a paid generation"
+        !document.querySelector('[role="dialog"]'),
+        "Approved assets are inline"
       );
-      await click("Browse approved assets");
       const sizes = document.querySelector<HTMLSelectElement>(
         '[aria-label="Asset dimensions"]'
       )!;
       check(
         sizes.textContent?.includes("9:16 · e.g. 1080 × 1920 px"),
-        "Image filter explains ratio and pixel dimensions"
+        "Asset size filter explains ratio and dimensions"
       );
-      sizes.value = "story";
-      sizes.dispatchEvent(new Event("change", { bubbles: true }));
-      await pause();
+      await fillControl('[aria-label="Asset dimensions"]', "story");
+      check(
+        !button("Select Approved learning directory image"),
+        "Size filter excludes incompatible assets"
+      );
+      await fillControl('[aria-label="Asset dimensions"]', "all");
+      await click("Select Approved learning directory image");
+      await studioSection("Copy");
+      await click("Compose");
+      check(
+        document.querySelector<HTMLTextAreaElement>("#pub-message")?.value ===
+          "This caption survives media selection.",
+        "Copy survives category navigation and asset selection"
+      );
+      check(
+        mutations.length === 0,
+        "Selecting media never starts generation or publishing"
+      );
       layout();
     }
     if (which === "studio-legacy") {
@@ -1406,20 +1552,12 @@ function layout() {
         el.dispatchEvent(new Event("change", { bubbles: true }));
         await pause();
       };
-      const platform =
-        document.querySelector<HTMLSelectElement>("#pub-ad-platform")!;
       check(
-        platform.options.length === 1 &&
-          platform.options[0].textContent?.includes("Meta Ads"),
-        "Only connected ad channels appear first"
+        !!document.querySelector('[aria-label="Activation sections"]'),
+        "Legacy ad link opens Activation Studio"
       );
-      check(
-        platform.compareDocumentPosition(
-          document.getElementById("pub-destination")!
-        ) & Node.DOCUMENT_POSITION_FOLLOWING,
-        "Channel comes before its account"
-      );
-      await select("#pub-destination", adsId);
+      await click("Select Demo ad account");
+      await click("Campaign & ad set");
       check(
         document.querySelector<HTMLSelectElement>(
           '[aria-label="Campaign and ad set status"]'
@@ -1524,126 +1662,100 @@ function layout() {
           "New paused ad set remains selected under its new campaign"
         );
         await select("#pub-meta-campaign", "10");
-        await select("#pub-adset", "11");
-        await select("#pub-destination", "");
         check(
-          !document.getElementById("pub-adset"),
-          "No previous account campaigns leak into an unselected account"
+          document.querySelector<HTMLSelectElement>("#pub-adset")?.value === "",
+          "Switching campaigns clears the previous ad set"
         );
-        await select("#pub-destination", adsId);
-        check(
-          document.querySelector<HTMLSelectElement>("#pub-meta-campaign")
-            ?.value === "",
-          "Account change clears campaign selection"
-        );
-        await select("#pub-meta-campaign", "10");
         await select("#pub-adset", "11");
+        await click("Ad account");
+        check(
+          button("Select Demo ad account")?.getAttribute("aria-pressed") ===
+            "true",
+          "Campaign setup preserves the selected ad account"
+        );
+        await click("Campaign & ad set");
+        check(
+          document.querySelector<HTMLSelectElement>("#pub-adset")?.value ===
+            "11",
+          "Category navigation retains campaign and ad set"
+        );
         layout();
       }
     }
     if (which === "studio-ad-copy") {
-      await click("Continue to creative");
-      await click("Generate 5 copy sets");
+      await click("Select Demo ad account");
+      await studioSection("Copy");
+      await click("Brief");
+      await fillControl(
+        '[aria-label="What are you promoting?"]',
+        "A collection of independent learning opportunities"
+      );
+      await click("Compose");
+      await clickPrefix("Create copy with AI");
       const fields = () =>
-        Array.from(
-          document.querySelectorAll<HTMLTextAreaElement>('textarea[id^="pub-"]')
-        ).map(el => ({ id: el.id, value: el.value }));
+        ["Primary text", "Headline", "Description"].map(
+          label =>
+            document.querySelector<HTMLTextAreaElement>(
+              `textarea[aria-label="${label}"]`
+            )!.value
+        );
       check(
-        fields().length === 15,
-        "All 15 editable fields appear after generation"
+        fields().every(Boolean),
+        "Generated copy populates the three editable ad fields"
       );
-      const original = JSON.stringify(fields());
-      const headlines = document.querySelector<HTMLButtonElement>(
-        '[role="tab"][data-state="inactive"]'
-      )!;
-      headlines.focus();
-      await pause();
-      check(
-        headlines.getAttribute("data-state") === "active",
-        "Headlines tab is keyboard accessible"
-      );
-      const single = document.querySelector<HTMLButtonElement>(
-        '[aria-label="Regenerate headline option 3"]'
-      )!;
-      single.scrollIntoView({ block: "center", behavior: "instant" });
-      single.click();
-      await pause();
+      const original = fields();
+      await clickPrefix("Regenerate headline");
       check(
         copyRequests.at(-1).regeneration.field === "headline" &&
-          copyRequests.at(-1).regeneration.index === 2,
-        "Regenerate requests only the selected field"
-      );
-      const changed = fields().filter(
-        (f, i) => f.value !== JSON.parse(original)[i].value
+          copyRequests.at(-1).regeneration.index === 0,
+        "Regenerate targets the current headline"
       );
       check(
-        changed.length === 1 && changed[0].id === "pub-headline-2",
-        "Only headline 3 changed"
+        fields()[1] !== original[1] &&
+          fields()[0] === original[0] &&
+          fields()[2] === original[2],
+        "Regenerating a headline preserves primary text and description"
       );
-      await click("Undo last generation");
+      await clickPrefix("Regenerate copy");
       check(
-        JSON.stringify(fields()) === original,
-        "Undo restores previous copy"
+        fields().every((value, i) => value !== original[i]),
+        "Full generation replaces all three current fields"
       );
-      const menu = document.querySelector<HTMLButtonElement>(
-        '[aria-label="More actions for headline option 5"]'
+      const alternatives = Array.from(
+        document.querySelectorAll<HTMLDetailsElement>("details")
+      ).find(el =>
+        el
+          .querySelector("summary")
+          ?.textContent?.startsWith("Other AI versions")
       )!;
-      menu.focus();
-      menu.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
-      );
-      await pause();
-      const setAction = Array.from(
-        document.querySelectorAll<HTMLElement>('[role="menuitem"]')
-      ).find(el => el.textContent === "Regenerate full set 5 (all 3 fields)");
-      check(!!setAction, "Full set regeneration is offered in the menu");
-      setAction!.click();
-      await pause();
-      check(
-        fields().filter((f, i) => f.value !== JSON.parse(original)[i].value)
-          .length === 3,
-        "Full set regeneration changes only three fields"
-      );
-      await click("Regenerate all 5 sets");
-      check(
-        fields().length === 15 &&
-          fields().every((f, i) => f.value !== JSON.parse(original)[i].value),
-        "Regenerate all replaces all 15 options"
-      );
+      alternatives.open = true;
+      await click("Apply this version");
       const savedFields = fields();
       await click("Save draft");
       const saved = posts.find(
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
       )!;
       check(
-        saved.content.textVariants.messages.length === 4 &&
-          saved.content.textVariants.headlines.length === 4 &&
-          saved.content.textVariants.descriptions.length === 4,
-        "Draft saves one primary plus four alternatives of every type"
+        saved?.content.copyAlternatives.length === 4,
+        "Draft preserves the other AI versions"
       );
-      const savedCard = Array.from(document.querySelectorAll("article")).find(
-        el => el.querySelector("h3")?.textContent === saved.content.title
-      )!;
-      const editButton = Array.from(
-        savedCard.querySelectorAll<HTMLButtonElement>("button")
-      ).find(el => el.textContent === "Edit content")!;
-      editButton.click();
+      check(
+        !!document.querySelector('[aria-label="Activation sections"]') &&
+          !document.querySelector('[role="dialog"]'),
+        "Saving stays in Activation Studio"
+      );
+      fixtureRouter.navigate(`/app/activate/studio?publication=${saved.id}`);
       await pause();
-      await click("Continue to creative");
       check(
         JSON.stringify(fields()) === JSON.stringify(savedFields),
-        "All copy options survive save and reopen"
+        "Saved primary text, headline and description reopen in Compose"
       );
       check(
         mutations.every(m =>
           ["channels.draftAssetCopy", "publishing.save"].includes(m)
         ),
-        "Generating copy never approves or publishes the ad"
+        "Copy generation and saving never approve or publish"
       );
-      document
-        .querySelector('[aria-label="Ad copy options"]')!
-        .scrollIntoView({ block: "start", behavior: "instant" });
-      await pause();
       layout();
     }
     if (which === "studio-post-media") {
@@ -1658,8 +1770,8 @@ function layout() {
         "Media posts hide website preview field"
       );
       check(
-        caption.getBoundingClientRect().height >= 144,
-        "Caption has a full writing area"
+        caption.rows >= 5 && caption.getBoundingClientRect().height >= 100,
+        "Caption provides at least five visible writing lines"
       );
       await click("Add website link");
       layout();
@@ -1677,140 +1789,98 @@ function layout() {
         "Website action adds URL to caption"
       );
       check(mutations.length === 0, "Editing content never publishes");
-      const body = document.querySelector(
-        ".publication-fields"
-      )!.parentElement!;
-      body.scrollTop = 0;
+      document
+        .querySelector(".activation-fields")!
+        .scrollIntoView({ block: "start", behavior: "instant" });
       await pause();
       layout();
     }
     if (which === "studio-post" || which === "studio-ad") {
-      const destination =
-        document.querySelector<HTMLSelectElement>("#pub-destination")!;
+      const social = which === "studio-post";
+      const accountName = social ? "Second Facebook Page" : "Demo ad account";
       check(
-        !document.getElementById("pub-channel"),
-        "Content mode cannot switch between organic posts and paid ads"
-      );
-      const optionIds = Array.from(destination.options)
-        .map(o => o.value)
-        .filter(Boolean);
-      check(
-        JSON.stringify(optionIds) ===
-          JSON.stringify(
-            which === "studio-post" ? [pageId, secondPageId] : [adsId]
-          ),
-        "Account picker includes only active accounts for the content type"
+        !!document.querySelector('[aria-label="Activation sections"]'),
+        "Legacy creation link opens Activation Studio"
       );
       check(
-        destination.textContent?.includes(
-          which === "studio-post"
-            ? "Demo Facebook Page · Facebook"
-            : "Demo ad account · Meta Ads"
-        ),
-        "Accounts are identified by name and platform"
+        !button("Select Disconnected Page") && !button("Select Expired Page"),
+        "Disconnected and expired accounts are excluded"
       );
-      destination.value = which === "studio-post" ? secondPageId : adsId;
-      destination.dispatchEvent(new Event("change", { bubbles: true }));
-      await pause();
-      check(!document.getElementById("pub-date"), "Timing belongs to Activate");
-      if (which === "studio-ad") await click("Continue to creative");
       check(
-        which === "studio-ad" ||
-          !!document.querySelector('[aria-label="Content preview"]'),
-        "Content has a live preview"
+        social
+          ? !button("Select Demo ad account")
+          : !button("Select Demo Facebook Page"),
+        "Account tiles match the channel"
       );
-      if (which === "studio-post")
-        check(
-          !document.getElementById("pub-headline"),
-          "Post mode has organic fields"
-        );
-      else
-        check(
-          !!document.getElementById("pub-headline") &&
-            !!document.querySelector('[aria-label="Ad format"]'),
-          "Ad mode supports copy and creative formats"
-        );
-      layout();
-      if (which === "studio-ad") await click("Preview ad");
-      if (which === "studio-post") {
-        const caption =
-          document.querySelector<HTMLTextAreaElement>("#pub-message")!;
-        Object.getOwnPropertyDescriptor(
-          HTMLTextAreaElement.prototype,
-          "value"
-        )!.set!.call(caption, "Explore our latest collection.");
-        caption.dispatchEvent(new Event("input", { bubbles: true }));
-        await pause();
-      }
-      await click(
-        which === "studio-post"
-          ? "Save & continue"
-          : "Save & continue to Activate"
+      await click(`Select ${accountName}`);
+      await studioSection("Copy");
+      await click("Compose");
+      await fillControl(
+        social ? "#pub-message" : 'textarea[aria-label="Primary text"]',
+        "Explore our latest collection."
       );
+      check(
+        !!document.querySelector('[aria-label="Content preview"]'),
+        "Compose includes a live content preview"
+      );
+      await click("Save draft");
       const saved = posts.find(
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      )!;
+      check(
+        saved?.state === "draft" &&
+          saved.connectionId === (social ? secondPageId : adsId),
+        "Draft saves the selected account"
       );
       check(
-        saved &&
-          saved.state === "draft" &&
-          saved.connectionId ===
-            (which === "studio-post" ? secondPageId : adsId),
-        "Creation saves the selected account on the draft"
+        !!document.querySelector('[aria-label="Activation sections"]') &&
+          !document.querySelector('[role="dialog"]'),
+        "Saving keeps the cohesive studio experience"
       );
-      check(
-        document.querySelector<HTMLSelectElement>("#pub-destination")?.value ===
-          saved.connectionId,
-        "The chosen account is preserved when continuing to Activate"
+      await studioSection("Timing");
+      await fillControl(
+        'label:has(input[type="datetime-local"]) + label input',
+        "UTC"
       );
-      check(
-        !!document.getElementById("pub-destination") &&
-          !!document.getElementById("pub-date"),
-        "The same record opens in delivery settings"
+      await fillControl(
+        'input[type="datetime-local"]',
+        new Date(now + 7200000).toISOString().slice(0, 16)
       );
-      check(
-        !document.getElementById("pub-message"),
-        "Delivery settings do not duplicate the content editor"
-      );
-      layout();
-      await click("Save delivery settings");
+      await click("Save draft");
+      const updated = posts.find(p => p.id === saved.id)!;
       check(
         posts.filter(p => p.id === saved.id).length === 1 &&
-          saved.revision === 1,
-        "Handoff never copies the content record"
+          updated.revision === 2 &&
+          updated.scheduledAtMs > now,
+        "Timing updates the same saved draft without duplicating it"
       );
       check(
         mutations.every(m => m === "publishing.save"),
-        "Neither saving nor handoff calls approval or publishing"
+        "Saving timing never approves or schedules delivery"
       );
-      check(
-        posts.find(p => p.id === saved.id).revision === 2,
-        "Delivery configuration updates the existing version"
-      );
-      if (which === "studio-post")
+      if (social)
         check(
-          posts.find(p => p.id === saved.id).content.campaignPlanId === 7,
-          "Plan association survives the handoff"
+          updated.content.campaignPlanId === 7,
+          "Campaign association survives studio edits"
         );
+      await studioSection("Review & activate");
+      check(
+        document.body.textContent?.includes(accountName) &&
+          document.body.textContent?.includes("Confirm your activation"),
+        "Final review presents destination and activation together"
+      );
       layout();
     }
     if (which === "studio-post-empty") {
-      const destination =
-        document.querySelector<HTMLSelectElement>("#pub-destination")!;
       check(
-        destination.options.length === 1,
-        "Ad accounts never substitute for missing social accounts"
-      );
-      check(
-        document.body.textContent?.includes(
-          "No Facebook Pages are connected for social publishing."
-        ),
+        document.body.textContent?.includes("No connected accounts available."),
         "Missing social connection is explained"
       );
       check(
-        !!document.querySelector('a[href="/app/settings/integrations"]'),
-        "Social account setup is available"
+        !button("Select Demo ad account") &&
+          !!document.querySelector('a[href="/app/settings/integrations"]'),
+        "Ad accounts cannot substitute for Pages and setup is available"
       );
-      layout();
       await click("Save draft");
       const saved = posts.find(
         p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -1819,11 +1889,11 @@ function layout() {
         saved?.channel === "facebook" &&
           saved.connectionId === null &&
           saved.state === "draft",
-        "A social draft can be saved before connecting an account"
+        "An unconnected social draft can be saved"
       );
       check(
         mutations.length === 1 && mutations[0] === "publishing.save",
-        "Saving an unconnected draft cannot publish"
+        "Unconnected draft cannot publish"
       );
       layout();
     }
@@ -1991,7 +2061,13 @@ function layout() {
         "Roadmap is labeled"
       );
       check(
-        !button("Upgrade") && !button("Activate"),
+        !Array.from(
+          document.querySelectorAll<HTMLButtonElement>("button")
+        ).some(
+          control =>
+            !control.closest('[aria-label="Workspace navigation"]') &&
+            ["Upgrade", "Activate"].includes(control.textContent?.trim() ?? "")
+        ),
         "Unbuilt tools are not paid unlocks"
       );
     }
@@ -2044,9 +2120,9 @@ async function navigationChecks(ten: boolean) {
   if (!mobile)
     check(!!button("Expand sidebar"), "Opening a group keeps the rail compact");
   if (ten) {
-    const last = children("Activate").querySelector<HTMLAnchorElement>(
-      'a[href="/app/advertising/future-3"]'
-    )!;
+    const last = Array.from(
+      children("Activate").querySelectorAll<HTMLAnchorElement>("a")
+    ).at(-1)!;
     check(last, "Ten channels remain accessible");
     last.scrollIntoView({ block: "center" });
     await pause();
@@ -2056,6 +2132,23 @@ async function navigationChecks(ten: boolean) {
       "Last channel reachable"
     );
     return;
+  }
+  if (!mobile) {
+    const trigger = parent("Activate");
+    const firstLink =
+      children("Activate").querySelector<HTMLAnchorElement>("a")!;
+    firstLink.focus();
+    firstLink.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+    await pause();
+    check(
+      trigger.getAttribute("aria-expanded") === "false" &&
+        document.activeElement === trigger,
+      "Escape closes the real browser flyout and restores focus"
+    );
+    trigger.click();
+    await pause();
   }
   children("Activate")
     .querySelector<HTMLAnchorElement>('a[href="/app/social/facebook"]')!

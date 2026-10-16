@@ -113,10 +113,12 @@ it("opens only one submenu at a time and Escape restores focus", () => {
   expect(parent.getAttribute("aria-expanded")).toBe("false");
   expect(router.history).toHaveLength(1);
 });
+// Real Radix portal/focus cleanup takes 35–48s in JSDOM on shared runners.
+// Keep the interaction assertions and allow that measured cleanup to finish.
 it("opens a compact flyout without expanding the rail and closes it after navigation", async () => {
   vi.useFakeTimers();
   const router = setup("/app", true);
-  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  fireEvent.click(screen.getByLabelText("Activate", { selector: "button" }));
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/false"
   );
@@ -134,13 +136,13 @@ it("opens a compact flyout without expanding the rail and closes it after naviga
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/false"
   );
-}, 30000);
+}, 90000);
 it("supports Escape and focus return from the compact flyout", async () => {
-  // Radix restores trigger focus after removing its portal. JSDOM floating
-  // layout/focus cleanup can exceed the default 5s timeout on shared runners.
+  // Use the explicit accessible label to avoid JSDOM computing visibility for
+  // every navigation icon while the real Radix focus/keyboard behavior runs.
   vi.useFakeTimers();
   setup("/app", true);
-  const parent = screen.getByRole("button", { name: "Create" });
+  const parent = screen.getByLabelText("Create", { selector: "button" });
   fireEvent.click(parent);
   await act(async () => {
     fireEvent.keyDown(
@@ -153,7 +155,7 @@ it("supports Escape and focus return from the compact flyout", async () => {
   });
   expect(document.querySelector('[role="dialog"]') === null).toBe(true);
   expect(document.activeElement === parent).toBe(true);
-}, 30000);
+}, 90000);
 it("keeps groups closed after remount even if the legacy preference had them open", () => {
   localStorage.setItem(
     "frame-navigation-groups-v1",

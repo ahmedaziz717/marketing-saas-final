@@ -27,6 +27,8 @@ import InvitePage from "./pages/InvitePage";
 import SocialMediaPage from "./pages/SocialMediaPage";
 import AdvertisingPage from "./pages/AdvertisingPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import MeasureDashboardPage from "./pages/MeasureDashboardPage";
+import InsightsStudioPage from "./pages/InsightsStudioPage";
 import LegacyPublishingPage from "./pages/LegacyPublishingPage";
 import PublishingPage from "./pages/PublishingPage";
 import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
@@ -141,7 +143,9 @@ function Router() {
         path="/app/optimize/intelligence"
         component={OptimizationIntelligencePage}
       />
-      <Route path="/app/analytics" component={AnalyticsPage} />
+      <Route path="/app/analytics" component={MeasureDashboardPage} />
+      <Route path="/app/analytics/reports" component={MeasureDashboardPage} />
+      <Route path="/app/analytics/studio" component={InsightsStudioPage} />
       <Route path="/app/analytics/advertising" component={AnalyticsPage} />
       <Route path="/app/analytics/social" component={AnalyticsPage} />
       <Route path="/app/publishing" component={PublishingPage} />

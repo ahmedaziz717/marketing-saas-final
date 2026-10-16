@@ -1,4 +1,5 @@
 import { processWorkflowTriggers } from "./lib/workflowTriggers";
+import { processNextInsight, scheduleInsights } from "./lib/insights";
 import { processHistoryPage } from "./lib/optimizationIngestion";
 import "dotenv/config";
 import { setTimeout } from "node:timers/promises";
@@ -34,6 +35,17 @@ async function main() {
     liveAdsEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === "true",
   });
   let lastRecovery = 0;
+  const insightsLoop = (async () => {
+    while (!stopping) {
+      try {
+        await scheduleInsights(db);
+        await processNextInsight(db);
+      } catch {
+        console.error("Insights worker iteration failed");
+      }
+      await setTimeout(5000);
+    }
+  })();
   const intelligenceLoop = (async () => {
     while (!stopping) {
       try {
@@ -123,6 +135,7 @@ async function main() {
     }
   }
   await Promise.all([
+    insightsLoop,
     intelligenceLoop,
     catalogLoop,
     publishingLoop,
