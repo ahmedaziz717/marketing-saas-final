@@ -1,4 +1,5 @@
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
+import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
 import { WorkflowPerformanceInput } from "./WorkflowPerformanceInput";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -40,7 +41,16 @@ export function WorkflowInputControl({
   return (
     <div className="wf-input-control">
       {field.help && <p className="wf-field-help">{field.help}</p>}
-      {field.kind === "performance_data" ? (
+      {field.kind === "connection" ? (
+        <WorkflowConnectionInput
+          organizationId={organizationId}
+          value={value}
+          onChange={onChange}
+          channel={field.connectionChannel}
+          disabled={disabled}
+          title={title}
+        />
+      ) : field.kind === "performance_data" ? (
         <WorkflowPerformanceInput
           value={value}
           onChange={onChange}
@@ -128,9 +138,14 @@ export function WorkflowInputControl({
       {field.ai &&
         !field.locked &&
         !isChoiceField(field) &&
-        !["asset", "product", "number", "url", "performance_data"].includes(
-          field.kind
-        ) && (
+        ![
+          "asset",
+          "product",
+          "number",
+          "url",
+          "performance_data",
+          "connection",
+        ].includes(field.kind) && (
           <>
             <Button
               type="button"

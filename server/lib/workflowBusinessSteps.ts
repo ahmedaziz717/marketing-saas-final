@@ -1,4 +1,5 @@
 import { readVideoCatalogImage } from "./videoCatalog";
+import { workflowPublicationAsset } from "./workflowPublicationAsset";
 import { optimizationStep } from "./optimizationWorkflow";
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
@@ -88,6 +89,28 @@ export async function executeWorkflowBusinessStep(
         message: "Nested workflow returned an incompatible result type.",
       });
     return complete(input);
+  }
+  if (node.type === "app_input" && node.config.field?.kind === "connection") {
+    if (!node.config.connectionId) return complete([]);
+    const connection = await getConnection(
+      db,
+      run.organizationId,
+      node.config.connectionId,
+      node.config.field.connectionChannel ?? "facebook"
+    );
+    if (connection.status !== "connected")
+      throw new Error("Reconnect the selected destination.");
+    return complete([
+      {
+        type: "data",
+        name: connection.name,
+        data: {
+          source: "workflow_destination",
+          connectionId: connection.id,
+          channel: connection.channel,
+        },
+      },
+    ]);
   }
   if (
     node.type === "app_input" &&
@@ -408,13 +431,31 @@ export async function executeWorkflowBusinessStep(
         message: "Choose one image for this publication step.",
       });
     const image = images[0];
+    let publicationAssetKey = image?.key;
     if (image) {
-      const asset = await readLibraryAsset(db, run.organizationId, image.key);
+      const asset = await workflowPublicationAsset(
+        db,
+        run.organizationId,
+        run.actorUserId,
+        image
+      );
+      publicationAssetKey = asset.key;
       if (asset.state !== "approved" || asset.purpose !== "finished")
         return waiting(
           step,
           "Approve this image as a finished asset in the Asset Library, then this step will continue.",
-          { outputs: [image], waitingFor: "approval" }
+          {
+            outputs: [
+              {
+                ...image,
+                key: asset.key,
+                url: asset.url,
+                name: asset.name,
+                fingerprint: asset.fingerprint,
+              },
+            ],
+            waitingFor: "approval",
+          }
         );
     }
     if (node.type === "meta_ad" && !image)
@@ -435,7 +476,7 @@ export async function executeWorkflowBusinessStep(
       revision: 0,
       channel: node.type === "meta_ad" ? "meta_ads" : "facebook",
       connectionId: node.config.connectionId!,
-      assetKey: image?.key ?? null,
+      assetKey: publicationAssetKey ?? null,
       scheduledAtMs: node.config.scheduledAtMs ?? null,
       timezone: node.config.timezone ?? "UTC",
       content: contentSchema.parse({

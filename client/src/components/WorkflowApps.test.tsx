@@ -313,8 +313,12 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
     "https://example.com/video.mp4"
   );
   expect(
-    screen.getByRole("link", { name: "Draft post →" }).getAttribute("href")
-  ).toBe("/app/publishing?publication=publication-1");
+    screen
+      .getByRole("link", { name: "Draft post · Open in Activation Studio →" })
+      .getAttribute("href")
+  ).toBe(
+    "/app/activate/studio?publication=publication-1&section=preview&channel=facebook"
+  );
   expect(screen.getByText(/"customMetric": 7/)).toBeTruthy();
   expect(screen.getByRole("region", { name: "App results" }).hidden).toBe(
     false

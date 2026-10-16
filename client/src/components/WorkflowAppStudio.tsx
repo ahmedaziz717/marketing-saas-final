@@ -1,4 +1,5 @@
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
+import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
 import { useEffect, type ReactNode } from "react";
 import {
   ClipboardCheck,
@@ -148,6 +149,17 @@ export function WorkflowAppStudio({
     const raw = value(node),
       field = node.config.field;
     if (!raw) return "Not provided";
+    if (field?.kind === "connection")
+      return (
+        <WorkflowConnectionInput
+          organizationId={organizationId}
+          value={raw}
+          onChange={() => {}}
+          channel={field.connectionChannel}
+          title={node.title}
+          summary
+        />
+      );
     if (field && isChoiceField(field))
       return (
         selectionValues(raw, field.multiple)

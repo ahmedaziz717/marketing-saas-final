@@ -113,7 +113,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
       {
         label: workspaceStudios.optimize.name,
         path: workspaceStudios.optimize.href,
-        planned: true,
+        planned: workspaceStudios.optimize.planned,
       },
       { label: "Apps", path: "/app/optimize/apps" },
       { label: "Workflows", path: "/app/optimize/workflows" },

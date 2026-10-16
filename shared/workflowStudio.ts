@@ -20,7 +20,14 @@ export function workflowFieldPlacement(node: WorkflowNode) {
     node.config.field?.kind ?? (node.type === "image" ? "asset" : "text");
   const section: WorkflowStudioSection =
     node.config.field?.studio?.section ??
-    (["performance_data", "product", "channel", "url", "number"].includes(kind)
+    ([
+      "performance_data",
+      "product",
+      "channel",
+      "connection",
+      "url",
+      "number",
+    ].includes(kind)
       ? "setup"
       : [
             "theme",
@@ -36,6 +43,7 @@ export function workflowFieldPlacement(node: WorkflowNode) {
     node.config.field?.studio?.category?.trim() ||
     ({
       performance_data: "Account & dates",
+      connection: "Destination",
       product: "Product",
       channel: "Destination",
       url: "Destination",

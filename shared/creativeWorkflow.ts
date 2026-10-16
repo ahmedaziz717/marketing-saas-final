@@ -1,4 +1,5 @@
 import { analysisQuerySchema, optimizerSchema } from "./optimization";
+import { optimizationStudioSchema } from "./optimizationStudioSchema";
 import { copyComparisonSchema } from "./copyEvidence";
 import { z } from "zod";
 import { performanceInputSchema, appFieldSchema } from "./workflowInputs";
@@ -281,6 +282,7 @@ export const workflowNodes: Record<
     inputs: [
       { id: "text", name: "Caption", type: "text", multiple: true },
       { id: "image", name: "Image", type: "image" },
+      { id: "destination", name: "Page", type: "data" },
     ],
   },
   meta_ad: {
@@ -293,6 +295,7 @@ export const workflowNodes: Record<
     inputs: [
       { id: "text", name: "Ad copy", type: "text", multiple: true },
       { id: "image", name: "Image", type: "image" },
+      { id: "destination", name: "Ad account", type: "data" },
     ],
   },
   deliver_publication: {
@@ -518,6 +521,7 @@ export const workflowNodeSchema = z.object({
   }),
 });
 export const workflowGraphSchema = z.object({
+  optimizationStudio: optimizationStudioSchema.optional(),
   nodes: z.array(workflowNodeSchema).max(40),
   edges: z
     .array(z.object({ id, source: id, target: id, port: z.string().max(30) }))

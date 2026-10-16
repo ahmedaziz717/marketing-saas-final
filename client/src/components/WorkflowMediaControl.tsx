@@ -63,7 +63,14 @@ export function WorkflowMediaControl({
     search,
     offset,
   });
-  const data = query.data;
+  const data = query.data
+    ? {
+        ...query.data,
+        assets: query.data.assets.filter(
+          a => !options.finishedAssetsOnly || a.purpose === "finished"
+        ),
+      }
+    : undefined;
   const product = data?.products.find(
     p =>
       p.id === selected?.productId ||

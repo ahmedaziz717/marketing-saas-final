@@ -1,4 +1,5 @@
 import { localScheduleToUtc, moveDate } from "./channels";
+import { productSocialWorkflow } from "./productSocialWorkflow";
 import {
   schedulingWorkflowTemplate,
   copyEvidenceWorkflowTemplate,
@@ -60,6 +61,15 @@ export const workflowSections: Record<
   },
 };
 export const businessWorkflowTemplates = [
+  {
+    id: "product-social-post",
+    family: "activate",
+    name: "Product → social post",
+    description:
+      "Choose imagery, product details and copy directions. Generate one caption and prepare a post for Activation Studio.",
+    color: "blue",
+    tags: ["Product images", "Copy directions", "Post draft"],
+  },
   {
     id: "meta-copy-evidence",
     family: "optimize",
@@ -144,6 +154,7 @@ export const businessWorkflowTemplates = [
 ] as const;
 
 export function businessWorkflowTemplate(id: string): WorkflowGraph | null {
+  if (id === "product-social-post") return productSocialWorkflow();
   if (id === "meta-copy-evidence") return copyEvidenceWorkflowTemplate();
   if (id === "meta-scheduling") return schedulingWorkflowTemplate();
   const n = (type: WorkflowNodeType, id: string, x: number, y = 120) =>

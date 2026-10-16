@@ -8,6 +8,7 @@ import {
 const connection = vi.hoisted(() => vi.fn());
 vi.mock("./lib/channelConnections", () => ({ getConnection: connection }));
 import { resolveWorkflowInputs } from "./lib/workflowInputs";
+import { appFieldSchema } from "../shared/workflowInputs";
 const cid = "00000000-0000-4000-8000-000000000099";
 function graph() {
   const input = newWorkflowNode("app_input", "evidence");
@@ -107,6 +108,43 @@ it("rejects unavailable tenant connections and disconnected accounts", async () 
   await expect(resolveWorkflowInputs({} as any, 12, ready)).rejects.toThrow(
     /Reconnect/
   );
+});
+
+it("binds a destination only to the matching publication and rejects hidden, foreign and mismatched inputs", async () => {
+  const input = newWorkflowNode("app_input", "destination");
+  input.config.field = appFieldSchema.parse({
+    kind: "connection",
+    connectionChannel: "facebook",
+    required: true,
+  });
+  input.config.fieldValue = cid;
+  const post = newWorkflowNode("facebook_post", "post");
+  const selected = {
+    nodes: [input, post],
+    edges: [
+      { id: "dest", source: input.id, target: post.id, port: "destination" },
+    ],
+  };
+  const resolved = await resolveWorkflowInputs({} as any, 12, selected);
+  expect(connection).toHaveBeenCalledWith({}, 12, cid, "facebook");
+  expect(resolved.nodes[1].config.connectionId).toBe(cid);
+  expect(selected.nodes[1].config.connectionId).toBeUndefined();
+  expect(resolved.nodes[0].config.text).toBe("");
+  connection.mockRejectedValueOnce(
+    new Error("Connection not found in this workspace.")
+  );
+  await expect(resolveWorkflowInputs({} as any, 12, selected)).rejects.toThrow(
+    /workspace/
+  );
+  selected.nodes[1].type = "meta_ad";
+  await expect(resolveWorkflowInputs({} as any, 12, selected)).rejects.toThrow(
+    /matching publication/
+  );
+  selected.nodes[1].type = "facebook_post";
+  input.config.field.visibleWhen = { fieldId: "brief", equals: "show" };
+  post.config.connectionId = cid;
+  const hidden = await resolveWorkflowInputs({} as any, 12, selected);
+  expect(hidden.nodes[1].config.connectionId).toBeUndefined();
 });
 
 it("inserts a visible fetch exactly once, retains IDs and leaves pinned versions unchanged", () => {

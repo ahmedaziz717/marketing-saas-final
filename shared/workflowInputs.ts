@@ -15,6 +15,7 @@ import { CREATIVE_THEME_GROUPS } from "./creativeThemes";
 import { CREATIVE_ART_STYLES } from "./creativeBuilder";
 
 export const inputKinds = [
+  "connection",
   "performance_data",
   "text",
   "headline",
@@ -36,6 +37,7 @@ export const inputKinds = [
   "number",
 ] as const;
 export const inputLabels: Record<(typeof inputKinds)[number], string> = {
+  connection: "Connected destination",
   performance_data: "Account & date range",
   text: "Text / instructions",
   headline: "Headline",
@@ -66,6 +68,7 @@ export const workflowMediaOptionsSchema = z
   .object({
     productImages: z.boolean().default(true),
     approvedAssets: z.boolean().default(true),
+    finishedAssetsOnly: z.boolean().optional(),
     allowUpload: z.boolean().default(false),
     bullets: z.enum(["choose", "all", "none"]).default("choose"),
     price: contentControl.default("choose"),
@@ -98,6 +101,7 @@ export type WorkflowMediaSelection = z.infer<
 >;
 export const appFieldSchema = z.object({
   kind: z.enum(inputKinds),
+  connectionChannel: z.enum(["facebook", "meta_ads"]).optional(),
   help: z.string().max(600).default(""),
   required: z.boolean().default(false),
   locked: z.boolean().default(false),
@@ -242,6 +246,11 @@ export function fieldValueProblem(
     return "Choose a connected Meta ad account and a valid date range.";
   if (field.required && !value.trim()) return "This field is required.";
   if (!value.trim()) return null;
+  if (
+    field.kind === "connection" &&
+    !z.string().uuid().safeParse(value).success
+  )
+    return "Choose a connected destination.";
   if (field.kind === "headline" && value.length > 200)
     return "Use no more than 200 characters.";
   if (isChoiceField(field)) {
@@ -293,6 +302,8 @@ export function fieldValueProblem(
   return null;
 }
 export function fieldPrompt(field: AppField, value: string) {
+  if (field.kind === "connection")
+    return value ? "Connected destination selected" : "Choose a destination";
   if (field.kind === "product" || field.kind === "asset") {
     const selected = parseWorkflowMediaSelection(value, field.kind);
     if (!selected) return "Choose an image or product";

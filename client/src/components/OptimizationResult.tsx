@@ -30,7 +30,11 @@ export function OptimizationResult({
             ? r.decision === "propose_test"
               ? "Test candidate identified"
               : "Observations · review evidence"
-            : `${r.decision.replaceAll("_", " ")} · ${r.confidence === null ? "Confidence not estimable" : `${Math.round(r.confidence * 100)}% confidence`}`}
+            : r.decision === "propose_test"
+              ? "Test candidate · directional evidence"
+              : r.decision === "unsupported_channel"
+                ? "Unsupported channel"
+                : "Insufficient evidence"}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -39,6 +43,12 @@ export function OptimizationResult({
           : `${r.sourceAdIds.length} source ads`}{" "}
         · Human approval required for production or campaign changes
       </p>
+      {!live && r.decision === "propose_test" && (
+        <p className="text-sm text-muted-foreground">
+          Historical patterns suggest a test. They do not estimate the
+          probability of a future improvement.
+        </p>
+      )}
       {live && data.statisticsVersion !== 2 && (
         <p className="text-sm text-amber-700 dark:text-amber-400">
           This saved result used the previous heuristic. Run the workflow again
@@ -203,7 +213,9 @@ export function OptimizationResult({
         <h4 className="text-sm font-medium">Suggested test</h4>
         {!r.suggestedTests.length && (
           <p className="text-sm mt-2">
-            No schedule change recommended from the available evidence.
+            {live
+              ? "No schedule change recommended from the available evidence."
+              : "No test recommended from the available evidence."}
           </p>
         )}
         {r.suggestedTests.map(t => (

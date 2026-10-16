@@ -47,6 +47,43 @@ export async function resolveWorkflowInputs(
           message: `${n.title}: ${problem}`,
         });
     }
+    if (f.kind === "connection") {
+      const channel = f.connectionChannel ?? "facebook";
+      n.config.text = "";
+      n.config.imageKey = null;
+      delete n.config.connectionId;
+      const destinations = graph.edges.filter(e => e.source === n.id);
+      for (const edge of destinations) {
+        const target = graph.nodes.find(t => t.id === edge.target)!;
+        if (
+          edge.port !== "destination" ||
+          target.type !== (channel === "facebook" ? "facebook_post" : "meta_ad")
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${n.title}: connect this field to a matching publication destination.`,
+          });
+        delete target.config.connectionId;
+      }
+      if (!value) continue;
+      const connection = await getConnection(
+        db,
+        organizationId,
+        value,
+        channel
+      );
+      if (connection.status !== "connected")
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Reconnect the selected destination before running this workflow.",
+        });
+      n.config.connectionId = value;
+      for (const edge of destinations)
+        graph.nodes.find(t => t.id === edge.target)!.config.connectionId =
+          value;
+      continue;
+    }
     if (f.kind === "performance_data") {
       const selected = parsePerformanceInput(value);
       if (!selected)
