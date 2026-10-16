@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -11,9 +11,7 @@ import {
 import { channelConnections } from "../../drizzle/channelSchema";
 import {
   dashboardLayoutSchema,
-  dashboardWidgetSchema,
   insightConfigSchema,
-  insightMetrics,
   nextInsightRun,
 } from "../../shared/insights";
 import { scopeSchema } from "../../shared/channels";
@@ -31,53 +29,12 @@ import {
 } from "../lib/insights";
 import { insightEmailConfigured } from "../lib/insightDelivery";
 import { insightPdf } from "../lib/insightPdf";
+import { saveInsightDashboard, widgetEditSchema } from "../lib/insightWidgets";
 
 const ref = scopeSchema.extend({ id: z.string().uuid() });
 const surface = z.enum(["main", "measure"]);
 const canEdit = (role: string) =>
   (reportEditors as readonly string[]).includes(role);
-async function validateWidgets(
-  db: InsightsDatabase,
-  organizationId: number,
-  widgets: z.infer<typeof dashboardWidgetSchema>[]
-) {
-  if (!widgets.length) return;
-  const reports = await db
-    .select()
-    .from(insightReports)
-    .where(
-      and(
-        eq(insightReports.organizationId, organizationId),
-        eq(insightReports.archived, 0),
-        inArray(
-          insightReports.id,
-          widgets.map(w => w.reportId)
-        )
-      )
-    );
-  const connections = await db
-    .select({ id: channelConnections.id, channel: channelConnections.channel })
-    .from(channelConnections)
-    .where(eq(channelConnections.organizationId, organizationId));
-  for (const w of widgets) {
-    const report = reports.find(r => r.id === w.reportId);
-    const account = connections.find(a => a.id === w.connectionId);
-    if (
-      !report ||
-      (w.kind !== "report" &&
-        (!w.connectionId ||
-          !report.config.connectionIds.includes(w.connectionId) ||
-          !report.config.metrics.includes(w.metric) ||
-          !account ||
-          insightMetrics[w.metric].channel !== account.channel))
-    )
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "A widget no longer matches its saved report. Choose the report and metric again.",
-      });
-  }
-}
 export const insightsRouter = router({
   options: protectedProcedure
     .input(scopeSchema)
@@ -120,7 +77,8 @@ export const insightsRouter = router({
       .where(
         and(
           eq(insightReports.organizationId, input.organizationId),
-          eq(insightReports.archived, 0)
+          eq(insightReports.archived, 0),
+          isNull(insightReports.widgetOwnerUserId)
         )
       )
       .orderBy(desc(insightReports.updatedAtMs))
@@ -274,6 +232,7 @@ export const insightsRouter = router({
         .where(
           and(
             eq(insightReports.id, input.id),
+            isNull(insightReports.widgetOwnerUserId),
             eq(insightReports.organizationId, input.organizationId),
             eq(insightReports.revision, input.revision),
             eq(insightReports.archived, 0)
@@ -363,7 +322,7 @@ export const insightsRouter = router({
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       const db = await libraryDatabase();
-      await reportById(db, input.organizationId, input.id);
+      await reportById(db, input.organizationId, input.id, ctx.user.id);
       return db
         .select({
           id: insightRuns.id,
@@ -402,7 +361,7 @@ export const insightsRouter = router({
       .limit(1);
     if (!run)
       throw new TRPCError({ code: "NOT_FOUND", message: "Run not found." });
-    await reportById(db, input.organizationId, run.reportId);
+    await reportById(db, input.organizationId, run.reportId, ctx.user.id);
     const { deliveryPayload, deliveryLeaseId, leaseId, ...safe } = run;
     return safe;
   }),
@@ -424,7 +383,7 @@ export const insightsRouter = router({
         code: "NOT_FOUND",
         message: "This run has no report to export.",
       });
-    await reportById(db, input.organizationId, run.reportId);
+    await reportById(db, input.organizationId, run.reportId, ctx.user.id);
     return {
       filename: `evokeloop-report-${run.result.range.until}-${run.id.slice(0, 8)}.pdf`,
       base64: (await insightPdf(run)).toString("base64"),
@@ -453,83 +412,69 @@ export const insightsRouter = router({
         id: z.string().uuid().optional(),
         revision: z.number().int().positive().optional(),
         layout: dashboardLayoutSchema,
+        widgetEdits: z.array(widgetEditSchema).max(30).default([]),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
+      return saveInsightDashboard(await libraryDatabase(), ctx.user.id, input);
+    }),
+  refreshWidget: protectedProcedure
+    .input(ref.extend({ revision: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
       const db = await libraryDatabase();
-      await validateWidgets(db, input.organizationId, input.layout.widgets);
-      return withOrganizationTransaction(db, input.organizationId, async tx => {
-        const now = Date.now();
-        if (input.id) {
-          const [row] = await tx
-            .update(insightDashboards)
-            .set({
-              ...input.layout,
-              revision: (input.revision ?? 0) + 1,
-              updatedAtMs: now,
-            })
-            .where(
-              and(
-                eq(insightDashboards.id, input.id),
-                eq(insightDashboards.organizationId, input.organizationId),
-                eq(insightDashboards.userId, ctx.user.id),
-                eq(insightDashboards.revision, input.revision ?? 0),
-                eq(insightDashboards.surface, input.layout.surface)
-              )
-            )
-            .returning();
-          if (!row)
-            throw new TRPCError({
-              code: "CONFLICT",
-              message:
-                "This layout changed in another tab. Reload before saving.",
-            });
-          return row;
-        }
-        const layouts = await tx
-          .select({ id: insightDashboards.id })
-          .from(insightDashboards)
-          .where(
-            and(
-              eq(insightDashboards.organizationId, input.organizationId),
-              eq(insightDashboards.userId, ctx.user.id),
-              eq(insightDashboards.surface, input.layout.surface)
-            )
-          );
-        if (layouts.length >= 20)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "You can save up to 20 layouts per dashboard.",
-          });
-        const [row] = await tx
-          .insert(insightDashboards)
-          .values({
-            ...input.layout,
-            id: randomUUID(),
-            organizationId: input.organizationId,
-            userId: ctx.user.id,
-            createdAtMs: now,
-            updatedAtMs: now,
-          })
-          .returning();
-        return row;
-      });
+      const entity = await reportById(
+        db,
+        input.organizationId,
+        input.id,
+        ctx.user.id
+      );
+      if (entity.widgetOwnerUserId !== ctx.user.id)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Widget not found.",
+        });
+      return enqueueInsight(
+        db,
+        input.organizationId,
+        input.id,
+        ctx.user.id,
+        input.revision,
+        false
+      );
     }),
   deleteDashboard: protectedProcedure
     .input(ref)
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
-      await (await libraryDatabase())
-        .delete(insightDashboards)
-        .where(
-          and(
-            eq(insightDashboards.id, input.id),
-            eq(insightDashboards.organizationId, input.organizationId),
-            eq(insightDashboards.userId, ctx.user.id)
+      const db = await libraryDatabase();
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        const [row] = await tx
+          .delete(insightDashboards)
+          .where(
+            and(
+              eq(insightDashboards.id, input.id),
+              eq(insightDashboards.organizationId, input.organizationId),
+              eq(insightDashboards.userId, ctx.user.id)
+            )
           )
-        );
-      return { ok: true };
+          .returning();
+        if (row?.widgets.length)
+          await tx
+            .update(insightReports)
+            .set({ archived: 1, nextRunAtMs: null, updatedAtMs: Date.now() })
+            .where(
+              and(
+                inArray(
+                  insightReports.id,
+                  row.widgets.map(w => w.reportId)
+                ),
+                eq(insightReports.widgetOwnerUserId, ctx.user.id)
+              )
+            );
+        return { ok: true };
+      });
     }),
   dashboardData: protectedProcedure
     .input(
@@ -546,7 +491,11 @@ export const insightsRouter = router({
           and(
             eq(insightReports.organizationId, input.organizationId),
             eq(insightReports.archived, 0),
-            inArray(insightReports.id, input.reportIds)
+            inArray(insightReports.id, input.reportIds),
+            or(
+              isNull(insightReports.widgetOwnerUserId),
+              eq(insightReports.widgetOwnerUserId, ctx.user.id)
+            )
           )
         );
       const fields = {
@@ -562,7 +511,10 @@ export const insightsRouter = router({
       };
       const scope = and(
         eq(insightRuns.organizationId, input.organizationId),
-        inArray(insightRuns.reportId, input.reportIds)
+        inArray(
+          insightRuns.reportId,
+          reports.map(r => r.id)
+        )
       );
       const [latest, snapshots] = await Promise.all([
         db

@@ -39,7 +39,8 @@ export const reportEditors = [
 export async function reportById(
   db: InsightsDatabase,
   organizationId: number,
-  id: string
+  id: string,
+  viewerUserId?: number
 ) {
   const [row] = await db
     .select()
@@ -52,7 +53,10 @@ export async function reportById(
       )
     )
     .limit(1);
-  if (!row)
+  if (
+    !row ||
+    (row.widgetOwnerUserId !== null && row.widgetOwnerUserId !== viewerUserId)
+  )
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Report not found in this workspace.",
@@ -79,7 +83,8 @@ export async function insightRecipients(
 export async function validateInsightConfig(
   db: InsightsDatabase,
   organizationId: number,
-  config: InsightConfig
+  config: InsightConfig,
+  allowUnusedSources = false
 ) {
   const accounts = await db
     .select({ id: channelConnections.id, channel: channelConnections.channel })
@@ -97,7 +102,10 @@ export async function validateInsightConfig(
       message: "Choose connected accounts belonging to this workspace.",
     });
   for (const a of accounts)
-    if (!config.metrics.some(m => insightMetrics[m].channel === a.channel))
+    if (
+      !allowUnusedSources &&
+      !config.metrics.some(m => insightMetrics[m].channel === a.channel)
+    )
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Select at least one metric for every selected channel.",
@@ -157,7 +165,8 @@ export async function enqueueInsight(
     const report = await reportById(
       tx as unknown as InsightsDatabase,
       organizationId,
-      id
+      id,
+      actor
     );
     await tx
       .select({ id: insightReports.id })
@@ -175,7 +184,8 @@ export async function enqueueInsight(
       .where(
         and(
           eq(insightRuns.reportId, id),
-          inArray(insightRuns.status, ["queued", "running"])
+          inArray(insightRuns.status, ["queued", "running"]),
+          eq(insightRuns.revision, report.revision)
         )
       )
       .limit(1);
@@ -195,7 +205,7 @@ export async function enqueueInsight(
       report,
       Date.now(),
       "manual",
-      notify,
+      report.widgetOwnerUserId === null && notify,
       actor
     );
     await tx.insert(insightRuns).values(values);
@@ -303,13 +313,16 @@ export async function processNextInsight(
   heartbeat.unref();
   try {
     if (run.attempts > 3) throw new Error("interrupted");
-    await requireOrganizationRole(run.actorUserId, run.organizationId, [
-      ...reportEditors,
-    ]);
     const currentReport = await reportById(
       db,
       run.organizationId,
-      run.reportId
+      run.reportId,
+      run.actorUserId
+    );
+    await requireOrganizationRole(
+      run.actorUserId,
+      run.organizationId,
+      currentReport.widgetOwnerUserId === null ? [...reportEditors] : undefined
     );
     if (run.trigger === "scheduled" && !currentReport.config.schedule.enabled) {
       await db

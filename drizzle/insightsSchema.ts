@@ -26,6 +26,11 @@ export const insightReports = appSchema
         .notNull()
         .references(() => users.id),
       config: jsonb("config").$type<InsightConfig>().notNull(),
+      // Non-null for a private dashboard widget's independent reporting entity.
+      widgetOwnerUserId: integer("widgetOwnerUserId").references(
+        () => users.id
+      ),
+      sourceReportId: uuid("sourceReportId"),
       revision: integer("revision").notNull().default(1),
       archived: integer("archived").notNull().default(0),
       nextRunAtMs: bigint("nextRunAtMs", { mode: "number" }),
@@ -40,6 +45,10 @@ export const insightReports = appSchema
         t.updatedAtMs
       ),
       index("insight_reports_due").on(t.archived, t.nextRunAtMs),
+      index("insight_reports_widget_owner").on(
+        t.organizationId,
+        t.widgetOwnerUserId
+      ),
     ]
   )
   .enableRLS();

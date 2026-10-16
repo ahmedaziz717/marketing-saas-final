@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpRight,
   BarChart3,
-  GripVertical,
   LayoutDashboard,
   Plus,
-  RefreshCw,
   Settings2,
   Trash2,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,17 +18,20 @@ import {
 import { trpc } from "@/lib/trpc";
 import {
   insightMetrics,
-  insightNumber,
   scheduleDescription,
+  independentWidgetConfig,
+  type InsightConfig,
   type DashboardWidget,
   type InsightMetric,
 } from "@shared/insights";
-import { InsightChart, InsightMetricCard } from "./InsightReport";
+import { InsightWidget } from "./InsightWidget";
+import {
+  InsightWidgetEditor,
+  ReportComponentPicker,
+} from "./InsightWidgetEditor";
 import { toast } from "sonner";
 import "@/styles/insights.css";
 
-const date = (value: number | null | undefined) =>
-  value ? new Date(value).toLocaleString() : "Not run yet";
 export function InsightsDashboard({
   organizationId,
   surface,
@@ -58,11 +55,21 @@ export function InsightsDashboard({
   const [kind, setKind] = useState<DashboardWidget["kind"]>("report");
   const [accountChoice, setAccountChoice] = useState("");
   const [metric, setMetric] = useState<InsightMetric>("spend");
+  const [selectedMetrics, setSelectedMetrics] = useState<
+    InsightMetric[] | null
+  >(null);
+  const [components, setComponents] = useState<
+    NonNullable<DashboardWidget["components"]>
+  >(["summary", "metrics"]);
+  const [activeWidget, setActiveWidget] = useState<string | null>(null);
+  const [widgetEdits, setWidgetEdits] = useState<
+    Record<string, { config: InsightConfig; revision?: number }>
+  >({});
   const [dragging, setDragging] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const save = trpc.insights.saveDashboard.useMutation();
   const remove = trpc.insights.deleteDashboard.useMutation();
-  const refresh = trpc.insights.run.useMutation();
+  const refresh = trpc.insights.refreshWidget.useMutation();
   const current = layouts.data?.find(l => l.id === id) ?? layouts.data?.[0];
   useEffect(() => {
     if (editing) return;
@@ -72,6 +79,7 @@ export function InsightsDashboard({
         (surface === "main" ? "My main dashboard" : "My Measure dashboard")
     );
     setRevision(current?.revision);
+    setWidgetEdits({});
   }, [current, editing, surface]);
   const data = trpc.insights.dashboardData.useQuery(
     {
@@ -108,9 +116,16 @@ export function InsightsDashboard({
         id: id === "new" ? undefined : current?.id,
         revision,
         layout: { name, surface, widgets },
+        widgetEdits: Object.entries(widgetEdits).map(([widgetId, edit]) => ({
+          widgetId,
+          ...edit,
+        })),
       });
       setId(row.id);
-      await utils.insights.dashboards.invalidate({ organizationId, surface });
+      await Promise.all([
+        utils.insights.dashboards.invalidate({ organizationId, surface }),
+        utils.insights.dashboardData.invalidate(),
+      ]);
       setEditing(false);
       toast.success("Dashboard layout saved");
     } catch (e) {
@@ -126,24 +141,32 @@ export function InsightsDashboard({
       list.splice(to, 0, item);
       return list;
     });
-  const changeWidget = (wid: string, patch: Partial<DashboardWidget>) =>
-    setWidgets(list => list.map(w => (w.id === wid ? { ...w, ...patch } : w)));
+
   const add = () => {
     if (
       !chosenReport ||
       (kind !== "report" && (!chosenAccount || !chosenMetric))
     )
       return;
+    const widgetId = crypto.randomUUID();
+    if (kind === "report" && selectedMetrics) {
+      const config = independentWidgetConfig(chosenReport.config);
+      config.metrics = selectedMetrics;
+      if (!selectedMetrics.includes(config.chartMetric))
+        config.chartMetric = selectedMetrics[0];
+      setWidgetEdits(previous => ({ ...previous, [widgetId]: { config } }));
+    }
     setWidgets(list => [
       ...list,
       {
-        id: crypto.randomUUID(),
+        id: widgetId,
         reportId: chosenReport.id,
         kind,
         connectionId: kind === "report" ? null : chosenAccount!.id,
         metric: chosenMetric ?? chosenReport.config.chartMetric,
         size: kind === "kpi" ? "small" : "medium",
-        height: "standard",
+        height: kind === "kpi" ? "compact" : "standard",
+        components: kind === "report" ? components : undefined,
       },
     ]);
     setAdding(false);
@@ -180,7 +203,7 @@ export function InsightsDashboard({
               ? "Dashboard insights"
               : "Performance dashboard"}
           </h2>
-          <p>Reports, charts, and KPIs that stay connected to their source.</p>
+          <p>Your own widgets, with independent dates, content, and style.</p>
         </div>
         <div className="insight-actions">
           {!editing && !!layouts.data?.length && (
@@ -248,6 +271,7 @@ export function InsightsDashboard({
                 setName("New dashboard layout");
                 setRevision(undefined);
                 setWidgets([]);
+                setWidgetEdits({});
               }}
             >
               New layout
@@ -286,8 +310,9 @@ export function InsightsDashboard({
             )}
           </div>
           <p>
-            Drag widgets or use the arrow buttons to reorder. Choose width and
-            height below each widget. Layouts are saved for your account.
+            Drag widgets or use the arrows to reorder. Edit a tile to choose its
+            content, dates, style, and size. Two compact tiles fit beside one
+            standard; three fit beside one tall.
           </p>
         </div>
       )}
@@ -308,8 +333,8 @@ export function InsightsDashboard({
             <h3>Build a dashboard around what matters.</h3>
             <p>
               Create a report in Insights Studio, then add its summary,
-              individual KPIs, or charts here. Each widget follows the report’s
-              schedule.
+              individual KPIs, or charts here. Each widget has its own settings
+              and refresh schedule.
             </p>
             <div className="insight-actions">
               <Button asChild>
@@ -340,242 +365,52 @@ export function InsightsDashboard({
             </p>
           )}
           <div className="insight-dashboard-grid">
-            {widgets.map((w, index) => {
-              const entry = data.data?.find(d => d.report.id === w.reportId),
-                report = entry?.report,
-                latest = entry?.latest,
-                run = entry?.snapshot ?? latest;
-              const account = run?.result?.accounts.find(
-                a => a.connectionId === w.connectionId
-              );
-              const value = account?.metrics.find(m => m.key === w.metric);
-              const title =
-                w.kind === "report"
-                  ? report?.config.name || "Report"
-                  : insightMetrics[w.metric].label;
-              return (
-                <article
-                  key={w.id}
-                  className="insight-widget"
-                  data-size={w.size}
-                  data-height={w.height}
-                  draggable={editing}
-                  onDragStart={e => {
-                    setDragging(w.id);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragOver={e => {
-                    if (editing) e.preventDefault();
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    const from = widgets.findIndex(x => x.id === dragging);
-                    if (from >= 0 && from !== index) move(from, index);
-                    setDragging(null);
-                  }}
-                >
-                  <header>
-                    <div>
-                      {editing && <GripVertical size={16} aria-hidden="true" />}
-                      <span>
-                        {w.kind === "report"
-                          ? "Report"
-                          : w.kind === "trend"
-                            ? "Trend"
-                            : "Key metric"}
-                      </span>
-                      <h3>{title}</h3>
-                    </div>
-                    {!editing && report && (
-                      <Link
-                        aria-label={`Open ${report.config.name}`}
-                        href={`/app/analytics/studio?id=${report.id}${run ? `&run=${run.id}` : ""}`}
-                      >
-                        <ArrowUpRight size={18} />
-                      </Link>
-                    )}
-                  </header>
-                  <div className="insight-widget-content">
-                    {data.isLoading ? (
-                      <p role="status">Loading report…</p>
-                    ) : !report ? (
-                      <p>
-                        This report was archived or is no longer available.
-                        Remove this widget in Customize.
-                      </p>
-                    ) : !run ? (
-                      <p>
-                        This report has not run yet. Open it in Insights Studio
-                        to generate its first result.
-                      </p>
-                    ) : !run.result ? (
-                      <p role="status">
-                        {["queued", "running"].includes(run.status)
-                          ? "Refreshing this report…"
-                          : run.error || "No result is available."}
-                      </p>
-                    ) : w.kind === "report" ? (
-                      <>
-                        <p className="insight-widget-period">
-                          {run.result.range.since} — {run.result.range.until}
-                        </p>
-                        <ul>
-                          {run.result.findings
-                            .slice(0, w.height === "compact" ? 2 : 4)
-                            .map((f, i) => (
-                              <li key={i}>{f}</li>
-                            ))}
-                        </ul>
-                      </>
-                    ) : !account || !value ? (
-                      <p>
-                        This metric is not in the latest result. Open the report
-                        to review its settings and run it again.
-                      </p>
-                    ) : w.kind === "kpi" ? (
-                      <>
-                        <p className="insight-widget-account">{account.name}</p>
-                        <InsightMetricCard
-                          account={account}
-                          metric={value}
-                          compare={run.config.compare}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <p className="insight-widget-account">{account.name}</p>
-                        <InsightChart account={account} metric={w.metric} />
-                      </>
-                    )}
-                  </div>
-                  {report && (
-                    <footer>
-                      <p>
-                        Data refreshed: {date(run?.finishedAtMs)}{" "}
-                        {latest && (
-                          <span
-                            className="insight-status"
-                            data-status={latest.status}
-                          >
-                            {latest.status}
-                          </span>
-                        )}
-                      </p>
-                      {latest?.error && (
-                        <p className="insight-stale">
-                          Latest run: {latest.error}{" "}
-                          {run?.result
-                            ? "Showing the last available result."
-                            : ""}
-                        </p>
-                      )}
-                      {run && run.revision !== report.revision && (
-                        <p className="insight-stale">
-                          Settings changed since this result. Run the report to
-                          update it.
-                        </p>
-                      )}
-                      <p>
-                        {report.nextRunAtMs
-                          ? `Next: ${new Date(report.nextRunAtMs).toLocaleString(undefined, { timeZone: report.config.timezone })} · ${report.config.timezone}`
-                          : report.scheduleError || "Manual refresh"}
-                      </p>
-                      {options.data?.canEdit && !editing && (
-                        <button
-                          className="insight-text-button"
-                          disabled={
-                            refresh.isPending ||
-                            (!!latest &&
-                              ["queued", "running"].includes(latest.status))
-                          }
-                          onClick={async () => {
-                            try {
-                              await refresh.mutateAsync({
-                                organizationId,
-                                id: report.id,
-                                revision: report.revision,
-                                notify: false,
-                              });
-                              await data.refetch();
-                            } catch (e) {
-                              toast.error(
-                                e instanceof Error
-                                  ? e.message
-                                  : "Refresh failed."
-                              );
-                            }
-                          }}
-                        >
-                          <RefreshCw size={13} />
-                          Refresh report
-                        </button>
-                      )}
-                    </footer>
-                  )}
-                  {editing && (
-                    <div className="insight-widget-controls">
-                      <div className="insight-actions">
-                        <button
-                          aria-label={`Move ${title} earlier`}
-                          disabled={index === 0}
-                          onClick={() => move(index, index - 1)}
-                        >
-                          <ArrowUp size={16} />
-                        </button>
-                        <button
-                          aria-label={`Move ${title} later`}
-                          disabled={index === widgets.length - 1}
-                          onClick={() => move(index, index + 1)}
-                        >
-                          <ArrowDown size={16} />
-                        </button>
-                        <button
-                          aria-label={`Remove ${title}`}
-                          onClick={() =>
-                            setWidgets(list => list.filter(x => x.id !== w.id))
-                          }
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                      <label>
-                        Width
-                        <select
-                          aria-label={`${title} width`}
-                          value={w.size}
-                          onChange={e =>
-                            changeWidget(w.id, {
-                              size: e.target.value as DashboardWidget["size"],
-                            })
-                          }
-                        >
-                          <option value="small">Small</option>
-                          <option value="medium">Medium</option>
-                          <option value="wide">Full width</option>
-                        </select>
-                      </label>
-                      <label>
-                        Height
-                        <select
-                          aria-label={`${title} height`}
-                          value={w.height}
-                          onChange={e =>
-                            changeWidget(w.id, {
-                              height: e.target
-                                .value as DashboardWidget["height"],
-                            })
-                          }
-                        >
-                          <option value="compact">Compact</option>
-                          <option value="standard">Standard</option>
-                          <option value="tall">Tall</option>
-                        </select>
-                      </label>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+            {widgets.map((w, index) => (
+              <InsightWidget
+                key={w.id}
+                widget={w}
+                entry={data.data?.find(d => d.report.id === w.reportId)}
+                loading={data.isLoading}
+                editing={editing}
+                first={index === 0}
+                last={index === widgets.length - 1}
+                refreshing={refresh.isPending}
+                onEdit={() => setActiveWidget(w.id)}
+                onMove={direction => move(index, index + direction)}
+                onRemove={() => {
+                  setWidgets(list => list.filter(x => x.id !== w.id));
+                  setWidgetEdits(edits => {
+                    const next = { ...edits };
+                    delete next[w.id];
+                    return next;
+                  });
+                }}
+                onDrag={() => setDragging(w.id)}
+                onDrop={() => {
+                  const from = widgets.findIndex(x => x.id === dragging);
+                  if (from >= 0 && from !== index) move(from, index);
+                  setDragging(null);
+                }}
+                onRefresh={async () => {
+                  const report = data.data?.find(
+                    d => d.report.id === w.reportId
+                  )?.report;
+                  if (!report) return;
+                  try {
+                    await refresh.mutateAsync({
+                      organizationId,
+                      id: report.id,
+                      revision: report.revision,
+                    });
+                    await data.refetch();
+                  } catch (e) {
+                    toast.error(
+                      e instanceof Error ? e.message : "Refresh failed."
+                    );
+                  }
+                }}
+              />
+            ))}
           </div>
         </>
       )}
@@ -584,8 +419,8 @@ export function InsightsDashboard({
           <DialogHeader>
             <DialogTitle>Add a dashboard widget</DialogTitle>
             <DialogDescription>
-              Choose a saved report. Its filters and schedule will power this
-              widget.
+              Start from a saved report, then choose what to show. This widget
+              will have its own editable settings.
             </DialogDescription>
           </DialogHeader>
           {reports.isLoading ? (
@@ -601,10 +436,12 @@ export function InsightsDashboard({
               <label className="insight-label">
                 Report
                 <select
+                  aria-label="Report"
                   value={chosenReport?.id || ""}
                   onChange={e => {
                     setReportChoice(e.target.value);
                     setAccountChoice("");
+                    setSelectedMetrics(null);
                   }}
                 >
                   {reports.data.map(r => (
@@ -617,21 +454,62 @@ export function InsightsDashboard({
               <label className="insight-label">
                 Widget type
                 <select
+                  aria-label="Widget type"
                   value={kind}
                   onChange={e =>
                     setKind(e.target.value as DashboardWidget["kind"])
                   }
                 >
-                  <option value="report">Report summary</option>
+                  <option value="report">Report components</option>
                   <option value="kpi">Key metric</option>
                   <option value="trend">Trend chart</option>
                 </select>
               </label>
+              {kind === "report" && (
+                <>
+                  <ReportComponentPicker
+                    components={components}
+                    onChange={setComponents}
+                  />
+                  {(components.includes("metrics") ||
+                    components.includes("trends")) && (
+                    <fieldset className="insight-widget-metrics">
+                      <legend>Metrics to include</legend>
+                      {chosenReport?.config.metrics.map(m => (
+                        <label key={m}>
+                          <input
+                            type="checkbox"
+                            checked={(
+                              selectedMetrics ?? chosenReport.config.metrics
+                            ).includes(m)}
+                            onChange={e =>
+                              setSelectedMetrics(
+                                e.target.checked
+                                  ? [
+                                      ...(selectedMetrics ??
+                                        chosenReport.config.metrics),
+                                      m,
+                                    ]
+                                  : (
+                                      selectedMetrics ??
+                                      chosenReport.config.metrics
+                                    ).filter(k => k !== m)
+                              )
+                            }
+                          />
+                          {insightMetrics[m].label}
+                        </label>
+                      ))}
+                    </fieldset>
+                  )}
+                </>
+              )}
               {kind !== "report" && (
                 <>
                   <label className="insight-label">
                     Account / Page
                     <select
+                      aria-label="Account / Page"
                       value={chosenAccount?.id || ""}
                       onChange={e => setAccountChoice(e.target.value)}
                     >
@@ -645,6 +523,7 @@ export function InsightsDashboard({
                   <label className="insight-label">
                     Metric
                     <select
+                      aria-label="Metric"
                       value={chosenMetric || ""}
                       onChange={e => setMetric(e.target.value as InsightMetric)}
                     >
@@ -663,7 +542,12 @@ export function InsightsDashboard({
               </p>
               <Button
                 onClick={add}
-                disabled={!chosenReport || (kind !== "report" && !chosenMetric)}
+                disabled={
+                  !chosenReport ||
+                  (kind !== "report" && !chosenMetric) ||
+                  (kind === "report" &&
+                    (!components.length || selectedMetrics?.length === 0))
+                }
               >
                 Add to layout
               </Button>
@@ -671,6 +555,62 @@ export function InsightsDashboard({
           )}
         </DialogContent>
       </Dialog>
+      {(() => {
+        const widget = widgets.find(w => w.id === activeWidget);
+        const report =
+          widget &&
+          data.data?.find(d => d.report.id === widget.reportId)?.report;
+        if (!widget || !report) return null;
+        return (
+          <InsightWidgetEditor
+            key={widget.id}
+            widget={widget}
+            config={widgetEdits[widget.id]?.config ?? report.config}
+            connections={options.data?.connections ?? []}
+            saving={save.isPending}
+            layoutEditing={editing}
+            onClose={() => setActiveWidget(null)}
+            onSave={async (updated, config) => {
+              const next = widgets.map(w =>
+                w.id === updated.id ? updated : w
+              );
+              const edits = {
+                ...widgetEdits,
+                [updated.id]: {
+                  config: independentWidgetConfig(config),
+                  revision: report.revision,
+                },
+              };
+              if (editing) {
+                setWidgets(next);
+                setWidgetEdits(edits);
+                setActiveWidget(null);
+                return;
+              }
+              const row = await save.mutateAsync({
+                organizationId,
+                id: current?.id,
+                revision: current?.revision,
+                layout: { name, surface, widgets: next },
+                widgetEdits: Object.entries(edits).map(([widgetId, edit]) => ({
+                  widgetId,
+                  ...edit,
+                })),
+              });
+              setId(row.id);
+              await Promise.all([
+                utils.insights.dashboards.invalidate({
+                  organizationId,
+                  surface,
+                }),
+                utils.insights.dashboardData.invalidate(),
+              ]);
+              setActiveWidget(null);
+              toast.success("Widget saved");
+            }}
+          />
+        );
+      })()}
     </section>
   );
 }
