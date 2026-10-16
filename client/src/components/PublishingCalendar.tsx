@@ -471,6 +471,7 @@ export function PublishingCalendar({
           {canEdit && (
             <Button
               variant="outline"
+              className="h-auto max-w-full flex-wrap whitespace-normal py-2"
               disabled={
                 !missing.length ||
                 weekly.length >= (plan.data?.postsPerWeek ?? 2) ||
