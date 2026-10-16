@@ -24,6 +24,10 @@ vi.mock("./lib/higgsfield", async original => ({
 }));
 vi.mock("./storage", async original => ({
   ...(await original<typeof import("./storage")>()),
+  storageGetBase64: async () =>
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).toString(
+      "base64"
+    ),
   storageClient: () => ({
     storage: {
       from: () => ({
@@ -1339,3 +1343,253 @@ async function mediaFixture() {
     .returning();
   return { product, photo };
 }
+
+it("runs the published product-to-social app with selected facts and destination, pauses for image approval, then creates one editable post", async () => {
+  const { productSocialWorkflow } = await import(
+    "../shared/productSocialWorkflow"
+  );
+  const { availableWorkflowResults } = await import(
+    "../shared/workflowResults"
+  );
+  const { readLibraryAsset } = await import("./lib/assetLibrary");
+  const { assetLibraryRouter } = await import("./routers/assetLibrary");
+  const { product, photo } = await mediaFixture();
+  const c = await connection(org, "facebook");
+  const foreign = await connection(otherOrg, "facebook");
+  const graph = productSocialWorkflow();
+  const field = graph.nodes.find(n => n.id === "asset")!.config.field!;
+  field.media!.price = "never";
+  field.media!.description = "never";
+  const saved = await owner.save({
+    organizationId: org,
+    family: "activate",
+    name: "Product social",
+    graph,
+  });
+  const app = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  const inputs = [
+    {
+      id: "asset",
+      value: JSON.stringify({
+        productId: product.id,
+        imageKey: `product_image:${photo.id}`,
+        featuredSpecKeys: ["Capacity"],
+        includePrice: true,
+        includeDescription: true,
+      }),
+    },
+    { id: "destination", value: c.id },
+    { id: "audience", value: "Commuters" },
+    { id: "brief", value: "Introduce our travel mug" },
+    { id: "messaging_style", value: '["direct"]' },
+  ];
+  const request = {
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    appVersionId: app.id,
+    inputs,
+  };
+  await expect(
+    owner.quote({
+      ...request,
+      inputs: inputs.map(v =>
+        v.id === "destination" ? { ...v, value: foreign.id } : v
+      ),
+    })
+  ).rejects.toThrow(/workspace/);
+  await expect(
+    owner.quote({
+      ...request,
+      inputs: inputs.map(v =>
+        v.id === "asset" ? { ...v, value: `asset:${assetId}` } : v
+      ),
+    })
+  ).rejects.toThrow(/finished asset/);
+  const estimate = await owner.quote(request);
+  state.llm.mockResolvedValue({
+    choices: [
+      {
+        message: {
+          content: "Travel mug · 400 ml. Made for your daily routine.",
+        },
+      },
+    ],
+  });
+  const queued = await owner.run({
+    ...request,
+    requestId: randomUUID(),
+    quotedCredits: estimate.credits,
+  });
+  await finish(30);
+  let result = await owner.getRun({
+    organizationId: org,
+    workflowId: saved.id,
+    id: queued.id,
+  });
+  expect(result.steps.post.status).toBe("waiting");
+  expect(result.steps.post.waitingFor).toBe("approval");
+  expect(
+    availableWorkflowResults(result).some(
+      v => v.type === "text" && v.text.includes("400 ml")
+    )
+  ).toBe(true);
+  expect(state.llm).toHaveBeenCalledOnce();
+  const prompt = JSON.stringify(state.llm.mock.calls[0]);
+  expect(prompt).toContain("400 ml");
+  expect(prompt).not.toContain("29.00");
+  expect(prompt).not.toContain("Steel");
+  expect(prompt).not.toContain("A reusable travel mug");
+  expect(prompt).toContain("Commuters");
+  const key =
+    result.steps.post.outputs![0].type === "image"
+      ? result.steps.post.outputs![0].key
+      : "";
+  const asset = await readLibraryAsset(state.db, org, key);
+  expect(asset.state).toBe("needs_review");
+  const [user] = await state.db
+    .select()
+    .from(users)
+    .where(eq(users.id, ownerId));
+  await assetLibraryRouter
+    .createCaller({ user, req: {}, res: {} } as TrpcContext)
+    .review({
+      organizationId: org,
+      key,
+      revision: asset.revision,
+      decision: "approved",
+    });
+  await finish(10);
+  result = await owner.getRun({
+    organizationId: org,
+    workflowId: saved.id,
+    id: queued.id,
+  });
+  expect(result.status).toBe("completed");
+  const drafts = await state.db.select().from(publications);
+  expect(drafts).toHaveLength(1);
+  expect(drafts[0]).toMatchObject({
+    assetKey: key,
+    connectionId: c.id,
+    state: "needs_review",
+    externalId: null,
+  });
+  expect(drafts[0].content.message).toBe(
+    "Travel mug · 400 ml. Made for your daily routine."
+  );
+  expect(
+    availableWorkflowResults(result).some(v => v.type === "publication")
+  ).toBe(true);
+  await expect(
+    outsider.getRun({
+      organizationId: otherOrg,
+      workflowId: saved.id,
+      id: queued.id,
+    })
+  ).rejects.toThrow(/not found/);
+  expect(
+    (await owner.getApp({ organizationId: org, id: app.id })).graph.nodes.find(
+      n => n.id === "asset"
+    )?.config.field?.media?.price
+  ).toBe("never");
+});
+
+it("persists Optimization Studio settings and source-linked experiments with revision and tenant checks", async () => {
+  const {
+    optimizationStudioGraph,
+    defaultOptimizationSettings,
+    readOptimizationStudio,
+  } = await import("../shared/optimizationStudio");
+  const { optimizationStudioSchema, experimentSchema } = await import(
+    "../shared/optimizationStudioSchema"
+  );
+  const c = await connection();
+  vi.stubEnv("OPTIMIZATION_INTELLIGENCE_ENABLED", "true");
+  vi.stubEnv("OPTIMIZATION_TENANT_IDS", String(org));
+  const graph = optimizationStudioGraph(
+    { ...defaultOptimizationSettings(), connectionId: c.id },
+    optimizationStudioSchema.parse({
+      version: 1,
+      objective: "Improve purchase efficiency",
+    })
+  );
+  const saved = await owner.save({
+    organizationId: org,
+    family: "optimize",
+    name: "Evidence plan",
+    graph,
+  });
+  expect(
+    (await owner.list({ organizationId: org, studio: "optimization" })).map(
+      w => w.id
+    )
+  ).toEqual([saved.id]);
+  const request = {
+    organizationId: org,
+    id: saved.id,
+    revision: saved.revision,
+  };
+  const estimate = await owner.quote(request);
+  expect(estimate.credits).toBe(0);
+  const queued = await owner.run({
+    ...request,
+    requestId: randomUUID(),
+    quotedCredits: 0,
+  });
+  await finish(12);
+  const result = await owner.getRun({
+    organizationId: org,
+    workflowId: saved.id,
+    id: queued.id,
+  });
+  expect(result.status).toBe("completed");
+  expect(result.graph.optimizationStudio?.objective).toBe(
+    "Improve purchase efficiency"
+  );
+  expect(result.steps.optimize_headline.outputs?.[0]).toMatchObject({
+    type: "data",
+    data: { decision: "insufficient_evidence" },
+  });
+  const plan = experimentSchema.parse({
+    id: randomUUID(),
+    title: "Exploratory headline test",
+    source: { runId: queued.id, kind: "headline" },
+  });
+  graph.optimizationStudio!.experiments.push(plan);
+  await owner.save({
+    ...request,
+    name: "Evidence plan",
+    graph,
+  });
+  const reopened = await owner.get({ organizationId: org, id: saved.id });
+  expect(readOptimizationStudio(reopened.graph)?.studio.experiments).toEqual([
+    plan,
+  ]);
+  expect(reopened.runs[0].graph.optimizationStudio?.experiments).toEqual([]);
+  await expect(
+    owner.save({ ...request, family: "optimize", name: "Stale", graph })
+  ).rejects.toThrow(/another tab/);
+  graph.optimizationStudio!.experiments[0].source!.runId = randomUUID();
+  await expect(
+    owner.save({
+      ...request,
+      revision: 2,
+      family: "optimize",
+      name: "Foreign evidence",
+      graph,
+    })
+  ).rejects.toThrow(/completed evidence/);
+  await expect(
+    outsider.getRun({
+      organizationId: otherOrg,
+      workflowId: saved.id,
+      id: queued.id,
+    })
+  ).rejects.toThrow(/not found/);
+  expect(state.llm).not.toHaveBeenCalled();
+  expect(state.metaApply).not.toHaveBeenCalled();
+});

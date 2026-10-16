@@ -1307,8 +1307,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(
         document
           .querySelector('.workspace-studio-card[data-workflow="Optimize"]')
-          ?.textContent?.includes("Planned"),
-        "Home does not imply Optimization Studio is operational"
+          ?.textContent?.includes("Optimization Studio"),
+        "Home includes Optimization Studio"
       );
       const studios = document.querySelectorAll<HTMLAnchorElement>(
         ".workspace-studio-card"

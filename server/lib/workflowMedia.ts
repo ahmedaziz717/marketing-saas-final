@@ -154,6 +154,11 @@ export async function resolveWorkflowMedia(
         message: "Choose an image from the selected product.",
       });
     const asset = await readLibraryAsset(db, organizationId, selected.imageKey);
+    if (field.media?.finishedAssetsOnly && asset.purpose !== "finished")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Choose an approved finished asset for this workflow.",
+      });
     if (
       asset.state !== "approved" ||
       asset.mediaType !== "image" ||

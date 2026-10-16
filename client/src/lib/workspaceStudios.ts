@@ -34,7 +34,7 @@ export const workspaceStudios = {
     href: "/app/optimize/studio",
     icon: WandSparkles,
     description:
-      "A future guided workspace to turn performance insights into your next improvements.",
-    planned: true,
+      "Analyze performance, review recommendations, and plan your next controlled experiments.",
+    planned: false,
   },
 };

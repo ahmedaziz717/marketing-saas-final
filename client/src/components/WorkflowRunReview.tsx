@@ -1,4 +1,5 @@
 import { WorkflowSpendApproval } from "./WorkflowAutomationControls";
+import { activationHref } from "@shared/contentWorkflow";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -85,11 +86,15 @@ export function WorkflowRunReview({
               />
             ) : step.publicationId ? (
               <Link
-                href={`/app/publishing?publication=${step.publicationId}`}
+                href={activationHref(
+                  step.outputs?.find(v => v.type === "publication")?.channel ??
+                    "facebook",
+                  step.publicationId
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Review publication ↗
+                Review in Activation Studio ↗
               </Link>
             ) : step.reviewHash || step.reviewData ? (
               <Button
@@ -102,7 +107,7 @@ export function WorkflowRunReview({
               </Button>
             ) : step.outputs?.some(v => v.type === "image") ? (
               <Link
-                href="/app/library?view=needs_review"
+                href={`/app/library?view=needs_review&asset=${encodeURIComponent(step.outputs.flatMap(v => (v.type === "image" ? [v.key] : []))[0])}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

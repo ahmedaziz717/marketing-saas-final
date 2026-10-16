@@ -270,6 +270,28 @@ export function WorkflowFormEditor({
               Lock default value
             </label>
           </div>
+          {f.kind === "connection" && (
+            <label>
+              Destination channel
+              <select
+                value={f.connectionChannel ?? "facebook"}
+                onChange={e =>
+                  update({
+                    connectionChannel: e.target.value as
+                      | "facebook"
+                      | "meta_ads",
+                    defaultValue: "",
+                  })
+                }
+              >
+                <option value="facebook">Facebook Page</option>
+                <option value="meta_ads">Meta ad account</option>
+              </select>
+              <small>
+                Connect this field to the matching post or ad destination port.
+              </small>
+            </label>
+          )}
           {(f.kind === "asset" || f.kind === "product") && (
             <div className="wf-media-settings">
               <h3>Image sources & product content</h3>
@@ -282,13 +304,14 @@ export function WorkflowFormEditor({
                   [
                     ["productImages", "Allow product images"],
                     ["approvedAssets", "Allow approved assets"],
+                    ["finishedAssetsOnly", "Require finished library assets"],
                     ["allowUpload", "Offer image upload"],
                   ] as const
                 ).map(([key, label]) => (
                   <label key={key}>
                     <input
                       type="checkbox"
-                      checked={workflowMediaOptions(f)[key]}
+                      checked={!!workflowMediaOptions(f)[key]}
                       disabled={
                         key === "allowUpload" &&
                         !workflowMediaOptions(f).approvedAssets

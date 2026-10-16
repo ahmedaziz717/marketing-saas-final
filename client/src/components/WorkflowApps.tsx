@@ -1,4 +1,7 @@
 import { WorkflowDataResult } from "./WorkflowDataResult";
+import { StudioImagePreview } from "./configurator/StudioImagePreview";
+import { activationHref } from "@shared/contentWorkflow";
+import { availableWorkflowResults } from "@shared/workflowResults";
 import { WorkflowAutomationControls } from "./WorkflowAutomationControls";
 import { WorkflowAppStudio } from "./WorkflowAppStudio";
 import {
@@ -159,6 +162,7 @@ function WorkflowAppRunnerSession({
   );
   const [values, setValues] = useState<Record<string, string>>({});
   const [page, setPage] = useState("");
+  const [selectedRun, setSelectedRun] = useState("");
   const [problem, setProblem] = useState("");
   const inputRevision = useRef(0);
   const submitting = useRef(false);
@@ -188,11 +192,8 @@ function WorkflowAppRunnerSession({
   const fields = workflowAppFields(item.graph);
   const runs = detail.data?.runs.filter(r => r.appVersionId === id) ?? [];
   const active = runs.find(r => ["queued", "running"].includes(r.status));
-  const latest = active ?? runs[0];
-  const output =
-    latest?.graph.nodes
-      .filter(n => n.type === "output")
-      .flatMap(n => latest.steps[n.id]?.outputs ?? []) ?? [];
+  const latest = runs.find(r => r.id === selectedRun) ?? active ?? runs[0];
+  const output = availableWorkflowResults(latest);
   const changeValue = (fieldId: string, value: string) => {
     inputRevision.current++;
     setValues(v => ({ ...v, [fieldId]: value }));
@@ -254,6 +255,7 @@ function WorkflowAppRunnerSession({
         quotedCredits: review.credits,
       });
       setReview(null);
+      setSelectedRun("");
       setPage("results");
       toast.success("App run started");
       await detail.refetch();
@@ -293,9 +295,16 @@ function WorkflowAppRunnerSession({
         <>
           <div className="wf-studio-run" aria-live="polite">
             <p>
-              Uses this published version and your inputs. Delivery steps can
-              queue approved publications; ad activation requires its own
-              review.
+              {item.graph.nodes.some(
+                n =>
+                  n.type === "deliver_publication" || n.type === "meta_activate"
+              )
+                ? "Uses this published version and your inputs. Delivery waits for approval of the exact publication; ad activation requires a separate review."
+                : item.graph.nodes.some(n =>
+                      ["facebook_post", "meta_ad"].includes(n.type)
+                    )
+                  ? "Creates your copy and post draft. Review finished assets when prompted, then open the result in Activation Studio to edit, approve and publish or schedule."
+                  : "Runs this published version with your chosen inputs. Your outputs appear in Results as each branch completes."}
             </p>
             {active ? (
               <>
@@ -350,9 +359,41 @@ function WorkflowAppRunnerSession({
       results={
         <section className="wf-app-results">
           <h3>
-            Latest result{" "}
+            Run results{" "}
             {latest && <span>· {workflowRunStatusLabel(latest)}</span>}
           </h3>
+          {runs.length > 1 && (
+            <label>
+              Run history{" "}
+              <select
+                aria-label="App run history"
+                value={latest?.id ?? ""}
+                onChange={e => setSelectedRun(e.target.value)}
+              >
+                {runs.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {new Date(r.createdAtMs).toLocaleString()} ·{" "}
+                    {workflowRunStatusLabel(r)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {latest && (
+            <ol className="wf-result-progress" aria-label="Run steps">
+              {latest.graph.nodes
+                .filter(
+                  n =>
+                    !["app_input", "text", "image", "output"].includes(n.type)
+                )
+                .map(n => (
+                  <li key={n.id}>
+                    <strong>{n.title}</strong>
+                    <span>{latest.steps[n.id]?.status ?? "pending"}</span>
+                  </li>
+                ))}
+            </ol>
+          )}
           {detail.error && <p role="alert">{detail.error.message}</p>}
           {latest?.error && <p role="alert">{latest.error}</p>}
           {!latest && (
@@ -371,12 +412,12 @@ function WorkflowAppRunnerSession({
           {output.map((v, i) => (
             <div className="wf-app-output" key={i}>
               {v.type === "image" ? (
-                <img src={v.url} alt={v.name} />
+                <StudioImagePreview url={v.url} title={v.name} />
               ) : v.type === "video" ? (
                 <video src={v.url} controls />
               ) : v.type === "publication" ? (
-                <Link href={`/app/publishing?publication=${v.id}`}>
-                  {v.name} →
+                <Link href={activationHref(v.channel, v.id)}>
+                  {v.name} · Open in Activation Studio →
                 </Link>
               ) : v.type === "data" ? (
                 <WorkflowDataResult data={v.data} />

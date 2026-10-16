@@ -239,3 +239,24 @@
       var(--cfg-sections-height) + var(--cfg-categories-height) + 12px
   );
 }
+
+.wf-result-progress {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+.wf-result-progress li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  background: var(--muted);
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+}
+.wf-result-progress span {
+  color: var(--muted-foreground);
+}

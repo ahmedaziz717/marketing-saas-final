@@ -270,7 +270,8 @@ it("preserves the formatted optimizer report for existing published Apps", () =>
   const { container } = openApp();
   fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("More comparable ads are needed.")).toBeTruthy();
-  expect(screen.getByText(/Confidence not estimable/)).toBeTruthy();
+  expect(screen.getByText("Insufficient evidence")).toBeTruthy();
+  expect(screen.queryByText(/\d+% confidence/)).toBeNull();
   expect(container.querySelector(".wf-app-results pre")).toBeNull();
 });
 
@@ -313,8 +314,12 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
     "https://example.com/video.mp4"
   );
   expect(
-    screen.getByRole("link", { name: "Draft post →" }).getAttribute("href")
-  ).toBe("/app/publishing?publication=publication-1");
+    screen
+      .getByRole("link", { name: "Draft post · Open in Activation Studio →" })
+      .getAttribute("href")
+  ).toBe(
+    "/app/activate/studio?publication=publication-1&section=preview&channel=facebook"
+  );
   expect(screen.getByText(/"customMetric": 7/)).toBeTruthy();
   expect(screen.getByRole("region", { name: "App results" }).hidden).toBe(
     false

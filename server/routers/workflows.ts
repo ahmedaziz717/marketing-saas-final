@@ -11,7 +11,7 @@ import {
 import { marketingJson } from "../lib/marketingDrafts";
 import { brandKits, products } from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { workflowRunOccupiesSlot } from "../../shared/workflowRunActivity";
 import { z } from "zod";
@@ -396,7 +396,12 @@ export const workflowsRouter = router({
       });
     }),
   list: protectedProcedure
-    .input(scope.extend({ family: z.enum(workflowFamilies).optional() }))
+    .input(
+      scope.extend({
+        family: z.enum(workflowFamilies).optional(),
+        studio: z.literal("optimization").optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...workflowRoles,
@@ -414,6 +419,9 @@ export const workflowsRouter = router({
           and(
             eq(creativeWorkflows.organizationId, input.organizationId),
             eq(creativeWorkflows.archived, 0),
+            input.studio
+              ? sql`${creativeWorkflows.graph}->'optimizationStudio' IS NOT NULL`
+              : undefined,
             input.family
               ? eq(creativeWorkflows.family, input.family)
               : undefined
@@ -421,6 +429,32 @@ export const workflowsRouter = router({
         )
         .orderBy(desc(creativeWorkflows.updatedAtMs))
         .limit(250);
+    }),
+  getRun: protectedProcedure
+    .input(reference.extend({ workflowId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...workflowRoles,
+      ]);
+      const [run] = await (
+        await libraryDatabase()
+      )
+        .select()
+        .from(creativeWorkflowRuns)
+        .where(
+          and(
+            eq(creativeWorkflowRuns.id, input.id),
+            eq(creativeWorkflowRuns.organizationId, input.organizationId),
+            eq(creativeWorkflowRuns.workflowId, input.workflowId)
+          )
+        )
+        .limit(1);
+      if (!run)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Run not found in this workspace and workflow.",
+        });
+      return publicWorkflowRun(run);
     }),
   get: protectedProcedure.input(reference).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
@@ -487,6 +521,65 @@ export const workflowsRouter = router({
       const db = await libraryDatabase();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const now = Date.now();
+        if (input.graph.optimizationStudio) {
+          const family =
+            input.family ??
+            (input.id
+              ? (await getWorkflow(tx, input.organizationId, input.id)).family
+              : "create");
+          if (family !== "optimize")
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Optimization Studio plans belong to Optimize workflows.",
+            });
+          const sources = input.graph.optimizationStudio.experiments.flatMap(
+            p => (p.source ? [p.source] : [])
+          );
+          if (sources.length) {
+            const runs = input.id
+              ? await tx
+                  .select()
+                  .from(creativeWorkflowRuns)
+                  .where(
+                    and(
+                      eq(
+                        creativeWorkflowRuns.organizationId,
+                        input.organizationId
+                      ),
+                      eq(creativeWorkflowRuns.workflowId, input.id),
+                      eq(creativeWorkflowRuns.status, "completed"),
+                      inArray(
+                        creativeWorkflowRuns.id,
+                        Array.from(new Set(sources.map(s => s.runId)))
+                      )
+                    )
+                  )
+              : [];
+            if (
+              sources.some(
+                source =>
+                  !runs.some(
+                    run =>
+                      run.id === source.runId &&
+                      Object.values(run.steps).some(step =>
+                        step.outputs?.some(
+                          v =>
+                            v.type === "data" &&
+                            v.data.schemaVersion === 1 &&
+                            v.data.kind === source.kind
+                        )
+                      )
+                  )
+              )
+            )
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message:
+                  "Choose completed evidence from this optimization plan for each experiment.",
+              });
+          }
+        }
         if (input.id) {
           const [saved] = await tx
             .update(creativeWorkflows)

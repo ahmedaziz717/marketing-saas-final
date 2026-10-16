@@ -72,3 +72,19 @@ it("explains incompatible saved results instead of opening a blank report", () =
     /Run the workflow again/
   );
 });
+it("labels historical heuristic recommendations without statistical confidence", () => {
+  render(
+    <OptimizationResult
+      data={{
+        ...base,
+        source: "historical_analysis",
+        decision: "propose_test",
+        confidence: 0.5,
+        suggestedTests: ["Compare two headline approaches."],
+      }}
+    />
+  );
+  expect(screen.getByText(/Test candidate · directional evidence/)).toBeTruthy();
+  expect(screen.getByText(/do not estimate the probability/)).toBeTruthy();
+  expect(screen.queryByText(/50% confidence/)).toBeNull();
+});
