@@ -532,6 +532,20 @@ function Studio({
                   </datalist>
                   <small>Used for reporting dates and scheduled runs.</small>
                 </label>
+                {config.period === "days" && (
+                  <label className="insight-label">
+                    Number of days
+                    <input
+                      type="number"
+                      min={1}
+                      max={366}
+                      value={config.rollingDays ?? 30}
+                      onChange={e =>
+                        update({ rollingDays: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                )}
                 {config.period === "custom" && (
                   <>
                     <label className="insight-label">

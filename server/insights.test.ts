@@ -46,6 +46,7 @@ import {
   metricChange,
   nextInsightRun,
   reportPreviousRange,
+  independentWidgetConfig,
 } from "../shared/insights";
 import { scheduleInsights, processNextInsight } from "./lib/insights";
 import { deliverNextInsight } from "./lib/insightDelivery";
@@ -132,6 +133,23 @@ it("preserves missing-day gaps in trend charts", () => {
     { date: "2026-10-02", value: null },
     { date: "2026-10-03", value: 0 },
   ]);
+});
+it("resolves custom rolling day counts without daylight-saving drift", () => {
+  const config = {
+    ...defaultInsightConfig("America/New_York"),
+    period: "days" as const,
+    rollingDays: 21,
+  };
+  expect(insightRange(config, Date.parse("2026-11-10T12:00:00Z"))).toEqual({
+    since: "2026-10-20",
+    until: "2026-11-09",
+  });
+  expect(
+    insightRange(
+      { ...config, includeToday: true, rollingDays: 1 },
+      Date.parse("2026-11-10T12:00:00Z")
+    )
+  ).toEqual({ since: "2026-11-10", until: "2026-11-10" });
 });
 
 let engine: PGlite,
@@ -577,18 +595,16 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
         })
       ).revision
     ).toBe(1);
-    await state.db
-      .insert(insightRuns)
-      .values({
-        id: randomUUID(),
-        reportId: report.id,
-        organizationId: org,
-        actorUserId: ownerId,
-        revision: 1,
-        config: report.config,
-        trigger: "manual",
-        createdAtMs: Date.now() + 1000,
-      });
+    await state.db.insert(insightRuns).values({
+      id: randomUUID(),
+      reportId: report.id,
+      organizationId: org,
+      actorUserId: ownerId,
+      revision: 1,
+      config: report.config,
+      trigger: "manual",
+      createdAtMs: Date.now() + 1000,
+    });
     const [data] = await owner.dashboardData({
       organizationId: org,
       reportIds: [report.id],
@@ -596,7 +612,7 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
     expect(data.latest?.status).toBe("queued");
     expect(data.snapshot?.id).toBe(run.id);
   });
-  it("saves private layouts, enforces revisions, and resolves widgets through report definitions", async () => {
+  it("saves private independent widgets, enforces revisions, and survives source archival", async () => {
     const { report } = await completed();
     const layout = {
       name: "My KPI view",
@@ -624,7 +640,8 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
       (
         await reviewer.dashboards({ organizationId: org, surface: "measure" })
       )[0].widgets
-    ).toEqual(layout.widgets);
+    ).toEqual(savedLayout.widgets);
+    expect(savedLayout.widgets[0].reportId).not.toBe(report.id);
     await expect(
       owner.saveDashboard({
         organizationId: org,
@@ -644,7 +661,7 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
     ).rejects.toThrow("no longer matches");
     const rows = await reviewer.dashboardData({
       organizationId: org,
-      reportIds: [report.id],
+      reportIds: [savedLayout.widgets[0].reportId],
     });
     expect(rows[0].latest?.result?.accounts).toHaveLength(2);
     await owner.archive({
@@ -655,8 +672,280 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
     expect(
       await reviewer.dashboardData({
         organizationId: org,
-        reportIds: [report.id],
+        reportIds: [savedLayout.widgets[0].reportId],
       })
+    ).toHaveLength(1);
+  });
+  it("edits a widget's period and components without touching its source, siblings, or email delivery", async () => {
+    const { report } = await completed(true);
+    const widget = (id = randomUUID()) => ({
+      id,
+      reportId: report.id,
+      kind: "report" as const,
+      connectionId: null,
+      metric: "spend" as const,
+      size: "medium" as const,
+      height: "standard" as const,
+      components: ["summary", "metrics"] as (
+        | "summary"
+        | "metrics"
+        | "trends"
+      )[],
+    });
+    const layout = await owner.saveDashboard({
+      organizationId: org,
+      layout: {
+        name: "Independent",
+        surface: "measure",
+        widgets: [widget(), widget()],
+      },
+    });
+    expect(new Set(layout.widgets.map(w => w.reportId)).size).toBe(2);
+    const [before] = await owner.dashboardData({
+      organizationId: org,
+      reportIds: [layout.widgets[0].reportId],
+    });
+    expect(before.report.config.delivery.email).toBe(false);
+    const updated = await owner.saveDashboard({
+      organizationId: org,
+      id: layout.id,
+      revision: 1,
+      layout: {
+        ...layout,
+        widgets: layout.widgets.map((w, i) =>
+          i
+            ? w
+            : {
+                ...w,
+                title: "Monthly ROI",
+                height: "tall",
+                components: ["trends"],
+                appearance: { palette: "midnight" },
+              }
+        ),
+      },
+      widgetEdits: [
+        {
+          widgetId: layout.widgets[0].id,
+          revision: 1,
+          config: {
+            ...independentWidgetConfig(report.config),
+            period: "days",
+            rollingDays: 21,
+          },
+        },
+      ],
+    });
+    expect(updated.widgets[0]).toMatchObject({
+      title: "Monthly ROI",
+      components: ["trends"],
+      appearance: { palette: "midnight" },
+    });
+    const [changed, sibling] = await Promise.all(
+      layout.widgets.map(
+        async w =>
+          (
+            await owner.dashboardData({
+              organizationId: org,
+              reportIds: [w.reportId],
+            })
+          )[0]
+      )
+    );
+    expect(changed.report.config).toMatchObject({
+      period: "days",
+      rollingDays: 21,
+      delivery: { email: false },
+    });
+    expect(changed.latest?.status).toBe("queued");
+    expect(changed.snapshot?.result).toEqual(before.snapshot?.result);
+    expect(sibling.report.revision).toBe(1);
+    expect(sibling.report.config.period).toBe("7");
+    expect(await owner.get({ organizationId: org, id: report.id })).toEqual(
+      report
+    );
+    expect(await owner.list({ organizationId: org })).toHaveLength(1);
+    await processNextInsight(state.db);
+    const [after] = await owner.dashboardData({
+      organizationId: org,
+      reportIds: [changed.report.id],
+    });
+    const range = after.latest!.result!.range;
+    expect(
+      (Date.parse(range.until) - Date.parse(range.since)) / 86400000 + 1
+    ).toBe(21);
+    expect(
+      (await owner.runDetail({ organizationId: org, id: after.latest!.id }))
+        .deliveryState
+    ).toBe("disabled");
+    await expect(
+      owner.saveDashboard({
+        organizationId: org,
+        id: layout.id,
+        revision: 1,
+        layout: updated,
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+  it("keeps widget runs and settings private while allowing reviewers to refresh their own data", async () => {
+    const report = await saved();
+    const layout = await reviewer.saveDashboard({
+      organizationId: org,
+      layout: {
+        name: "My metrics",
+        surface: "main",
+        widgets: [
+          {
+            id: randomUUID(),
+            reportId: report.id,
+            kind: "kpi",
+            connectionId: adsId,
+            metric: "roas",
+            size: "small",
+            height: "compact",
+          },
+        ],
+      },
+    });
+    const id = layout.widgets[0].reportId;
+    const [data] = await reviewer.dashboardData({
+      organizationId: org,
+      reportIds: [id],
+    });
+    expect(
+      await owner.dashboardData({ organizationId: org, reportIds: [id] })
     ).toEqual([]);
+    await expect(
+      owner.refreshWidget({ organizationId: org, id, revision: 1 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      owner.runDetail({ organizationId: org, id: data.latest!.id })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await processNextInsight(state.db);
+    expect(
+      (
+        await reviewer.dashboardData({ organizationId: org, reportIds: [id] })
+      )[0].latest?.status
+    ).toBe("completed");
+    await expect(
+      owner.pdf({ organizationId: org, id: data.latest!.id })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      reviewer.refreshWidget({ organizationId: other, id, revision: 1 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Report changes do not flow back into the private widget.
+    await owner.save({
+      organizationId: org,
+      id: report.id,
+      revision: 1,
+      config: { ...report.config, period: "90" },
+    });
+    expect(
+      (
+        await reviewer.dashboardData({ organizationId: org, reportIds: [id] })
+      )[0].report.config.period
+    ).toBe("7");
+  });
+  it("stops a removed widget's jobs and schedule without changing the original report", async () => {
+    const report = await saved();
+    const config = independentWidgetConfig(report.config);
+    config.schedule.enabled = true;
+    const widgetId = randomUUID();
+    const layout = await reviewer.saveDashboard({
+      organizationId: org,
+      layout: {
+        name: "Scheduled",
+        surface: "measure",
+        widgets: [
+          {
+            id: widgetId,
+            reportId: report.id,
+            kind: "report",
+            connectionId: null,
+            metric: "spend",
+            size: "half",
+            height: "standard",
+          },
+        ],
+      },
+      widgetEdits: [{ widgetId, config }],
+    });
+    const [before] = await reviewer.dashboardData({
+      organizationId: org,
+      reportIds: [layout.widgets[0].reportId],
+    });
+    expect(before.report.nextRunAtMs).toBeTypeOf("number");
+    await reviewer.deleteDashboard({ organizationId: org, id: layout.id });
+    await processNextInsight(state.db);
+    expect(state.ads).not.toHaveBeenCalled();
+    const [entity] = await state.db
+      .select()
+      .from(insightReports)
+      .where(eq(insightReports.id, layout.widgets[0].reportId));
+    expect(entity.archived).toBe(1);
+    expect(entity.nextRunAtMs).toBeNull();
+    expect(await owner.get({ organizationId: org, id: report.id })).toEqual(
+      report
+    );
+  });
+  it("migrates existing tiles to separate entities and preserves their snapshots and layout", async () => {
+    const { report, run } = await completed(true);
+    const original = [
+      {
+        id: randomUUID(),
+        reportId: report.id,
+        kind: "trend" as const,
+        connectionId: adsId,
+        metric: "roas" as const,
+        size: "medium" as const,
+        height: "tall" as const,
+      },
+    ];
+    const [layout] = await state.db
+      .insert(insightDashboards)
+      .values({
+        id: randomUUID(),
+        organizationId: org,
+        userId: reviewerId,
+        surface: "measure",
+        name: "Existing layout",
+        widgets: original,
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
+      .returning();
+    const migration = readFileSync(
+      "drizzle/postgres/0017_independent_dashboard_widgets.sql",
+      "utf8"
+    );
+    await engine.exec(migration.slice(migration.indexOf("DO $$")));
+    const [migrated] = await reviewer.dashboards({
+      organizationId: org,
+      surface: "measure",
+    });
+    expect(migrated.id).toBe(layout.id);
+    expect(migrated.revision).toBe(2);
+    expect(migrated.widgets[0]).toEqual({
+      ...original[0],
+      reportId: expect.any(String),
+    });
+    expect(migrated.widgets[0].reportId).not.toBe(report.id);
+    const [tile] = await reviewer.dashboardData({
+      organizationId: org,
+      reportIds: [migrated.widgets[0].reportId],
+    });
+    expect(tile.snapshot?.result).toEqual(run.result);
+    expect(tile.report.config.delivery.email).toBe(false);
+    expect(tile.report.widgetOwnerUserId).toBe(reviewerId);
+    expect(await owner.get({ organizationId: org, id: report.id })).toEqual(
+      report
+    );
+    // Migration replay does not clone an already detached entity.
+    await engine.exec(migration.slice(migration.indexOf("DO $$")));
+    expect(
+      (
+        await reviewer.dashboards({ organizationId: org, surface: "measure" })
+      )[0].widgets[0].reportId
+    ).toBe(tile.report.id);
   });
 });

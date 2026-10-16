@@ -127,6 +127,7 @@ export const reportPeriods = [
   ["14", "Last 14 days"],
   ["30", "Last 30 days"],
   ["90", "Last 90 days"],
+  ["days", "Custom number of days"],
   ["yesterday", "Yesterday"],
   ["this_month", "This month"],
   ["last_month", "Last month"],
@@ -170,6 +171,7 @@ export const insightConfigSchema = z
       ]
     ),
     customRange: rangeSchema,
+    rollingDays: z.number().int().min(1).max(366).optional(),
     includeToday: z.boolean(),
     compare: z.boolean(),
     metrics: z
@@ -263,6 +265,13 @@ export function insightRange(
 ): DateRange {
   if (config.period === "custom") return rangeSchema.parse(config.customRange);
   const today = dateInZone(now, config.timezone).slice(0, 10);
+  if (config.period === "days") {
+    const until = moveDate(today, config.includeToday ? 0 : -1);
+    return rangeSchema.parse({
+      since: moveDate(until, 1 - (config.rollingDays ?? 30)),
+      until,
+    });
+  }
   const range = presetRange(config.period, now, config.timezone);
   if (
     !config.includeToday &&
@@ -394,6 +403,90 @@ export function insightNumber(
         ? `${number}%`
         : number;
 }
+export const widgetPalettes = {
+  canvas: {
+    label: "Canvas",
+    background: "#ffffff",
+    foreground: "#202637",
+    accent: "#7150c5",
+  },
+  lavender: {
+    label: "Lavender",
+    background: "#f0ebfc",
+    foreground: "#30214f",
+    accent: "#7250bd",
+  },
+  ocean: {
+    label: "Ocean",
+    background: "#e5f1fa",
+    foreground: "#193c58",
+    accent: "#166d9c",
+  },
+  sage: {
+    label: "Sage",
+    background: "#e6f2eb",
+    foreground: "#214a38",
+    accent: "#287752",
+  },
+  peach: {
+    label: "Peach",
+    background: "#fff0e4",
+    foreground: "#583326",
+    accent: "#b4532b",
+  },
+  midnight: {
+    label: "Midnight",
+    background: "#202b44",
+    foreground: "#f1f5fc",
+    accent: "#bba6ff",
+  },
+} as const;
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color.");
+export const widgetAppearanceSchema = z.object({
+  palette: z.enum(["canvas", "lavender", "ocean", "sage", "peach", "midnight"]),
+  custom: z
+    .object({ background: hexColor, foreground: hexColor, accent: hexColor })
+    .optional(),
+});
+export type WidgetAppearance = z.infer<typeof widgetAppearanceSchema>;
+export function widgetColors(appearance?: WidgetAppearance) {
+  return appearance?.custom ?? widgetPalettes[appearance?.palette ?? "canvas"];
+}
+export function insightPeriodLabel(
+  config: Pick<InsightConfig, "period" | "rollingDays" | "customRange">
+) {
+  return config.period === "days"
+    ? `Last ${config.rollingDays ?? 30} days`
+    : config.period === "custom"
+      ? `${config.customRange.since} – ${config.customRange.until}`
+      : (reportPeriods.find(p => p[0] === config.period)?.[1] ??
+        "Reporting period");
+}
+export function widgetTitle(
+  widget: Pick<DashboardWidget, "title" | "kind" | "metric">,
+  config?: Pick<InsightConfig, "name">
+) {
+  return (
+    widget.title?.trim() ||
+    (widget.kind === "report"
+      ? config?.name || "Performance summary"
+      : insightMetrics[widget.metric].label)
+  );
+}
+/** A widget owns a copy of its reporting setup. It never inherits email delivery. */
+export function independentWidgetConfig(config: InsightConfig): InsightConfig {
+  const copy = structuredClone(config);
+  copy.delivery = {
+    email: false,
+    recipientUserIds: [],
+    attachPdf: false,
+    notifyFailure: false,
+  };
+  if (copy.period === "custom") copy.schedule.enabled = false;
+  return copy;
+}
 export const dashboardWidgetSchema = z
   .object({
     id: z.string().uuid(),
@@ -401,8 +494,21 @@ export const dashboardWidgetSchema = z
     kind: z.enum(["report", "kpi", "trend"]),
     connectionId: z.string().uuid().nullable(),
     metric: metricSchema,
-    size: z.enum(["small", "medium", "wide"]),
+    size: z.enum(["small", "half", "medium", "wide"]),
     height: z.enum(["compact", "standard", "tall"]),
+    title: z
+      .string()
+      .trim()
+      .max(120)
+      .regex(/^[^\r\n]*$/)
+      .optional(),
+    appearance: widgetAppearanceSchema.optional(),
+    components: z
+      .array(z.enum(["summary", "metrics", "trends", "details"]))
+      .min(1)
+      .max(4)
+      .refine(v => new Set(v).size === v.length)
+      .optional(),
   })
   .refine(
     w => w.kind === "report" || !!w.connectionId,

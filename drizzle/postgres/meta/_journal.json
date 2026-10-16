@@ -120,6 +120,13 @@
       "when": 1792111692501,
       "tag": "0016_insights_studio",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792119293742,
+      "tag": "0017_independent_dashboard_widgets",
+      "breakpoints": true
     }
   ]
 }

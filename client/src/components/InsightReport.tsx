@@ -23,6 +23,7 @@ import {
   insightChartPoints,
   insightMetrics,
   insightNumber,
+  independentWidgetConfig,
   type DashboardWidget,
   type InsightAccount,
   type InsightConfig,
@@ -31,6 +32,7 @@ import {
 } from "@shared/insights";
 import { toast } from "sonner";
 import "@/styles/insights.css";
+import { ReportComponentPicker } from "./InsightWidgetEditor";
 
 export function InsightChart({
   account,
@@ -61,13 +63,16 @@ export function InsightChart({
           <CartesianGrid
             vertical={false}
             strokeDasharray="4 5"
-            stroke="var(--border)"
+            stroke="var(--widget-border, var(--border))"
           />
           <XAxis
             dataKey="date"
             tickFormatter={v => String(v).slice(5)}
             minTickGap={28}
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{
+              fontSize: 11,
+              fill: "var(--widget-muted, var(--muted-foreground))",
+            }}
             tickLine={false}
             axisLine={false}
           />
@@ -76,7 +81,10 @@ export function InsightChart({
             tickFormatter={v =>
               new Intl.NumberFormat("en-US", { notation: "compact" }).format(v)
             }
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{
+              fontSize: 11,
+              fill: "var(--widget-muted, var(--muted-foreground))",
+            }}
             tickLine={false}
             axisLine={false}
           />
@@ -86,17 +94,17 @@ export function InsightChart({
               insightMetrics[metric].label,
             ]}
             contentStyle={{
-              background: "var(--card)",
-              border: "1px solid var(--border)",
+              background: "var(--widget-bg, var(--card))",
+              border: "1px solid var(--widget-border, var(--border))",
               borderRadius: 12,
-              color: "var(--foreground)",
+              color: "var(--widget-fg, var(--foreground))",
             }}
           />
           <Area
             type="linear"
             dataKey="value"
-            stroke="#8464df"
-            fill="#8464df"
+            stroke="var(--widget-accent, #8464df)"
+            fill="var(--widget-accent, #8464df)"
             fillOpacity={0.13}
             strokeWidth={2.5}
             connectNulls={false}
@@ -130,6 +138,17 @@ export function PinInsightDialog({
 }) {
   const [surface, setSurface] = useState<"main" | "measure">("measure");
   const [layoutId, setLayoutId] = useState("");
+  const [components, setComponents] = useState<
+    NonNullable<DashboardWidget["components"]>
+  >(["summary", "metrics"]);
+  const [selectedMetrics, setSelectedMetrics] = useState<
+    InsightMetric[] | null
+  >(null);
+  const report = trpc.insights.get.useQuery(
+    { organizationId, id: reportId },
+    { enabled: !!choice && choice.kind === "report" }
+  );
+  const metrics = selectedMetrics ?? report.data?.config.metrics ?? [];
   const layouts = trpc.insights.dashboards.useQuery(
     { organizationId, surface },
     { enabled: !!choice }
@@ -141,6 +160,13 @@ export function PinInsightDialog({
     const current =
       layouts.data?.find(l => l.id === layoutId) ?? layouts.data?.[0];
     try {
+      const widgetId = crypto.randomUUID();
+      const config = report.data && independentWidgetConfig(report.data.config);
+      if (config) {
+        config.metrics = metrics;
+        if (!metrics.includes(config.chartMetric))
+          config.chartMetric = metrics[0];
+      }
       await save.mutateAsync({
         organizationId,
         id: current?.id,
@@ -153,14 +179,17 @@ export function PinInsightDialog({
           widgets: [
             ...(current?.widgets ?? []),
             {
-              id: crypto.randomUUID(),
+              id: widgetId,
               reportId,
               ...choice,
               size: choice.kind === "kpi" ? "small" : "medium",
-              height: "standard",
+              height: choice.kind === "kpi" ? "compact" : "standard",
+              components: choice.kind === "report" ? components : undefined,
             },
           ],
         },
+        widgetEdits:
+          choice.kind === "report" && config ? [{ widgetId, config }] : [],
       });
       await utils.insights.dashboards.invalidate();
       toast.success("Added to dashboard");
@@ -180,12 +209,50 @@ export function PinInsightDialog({
         <DialogHeader>
           <DialogTitle>Add to dashboard</DialogTitle>
           <DialogDescription>
-            This widget uses the saved report and updates when that report runs.
+            Choose what to show. Your widget gets its own settings, and you can
+            edit its components from the dashboard.
           </DialogDescription>
         </DialogHeader>
+        {choice?.kind === "report" && (
+          <>
+            <ReportComponentPicker
+              components={components}
+              onChange={setComponents}
+            />
+            {(components.includes("metrics") ||
+              components.includes("trends")) && (
+              <fieldset className="insight-widget-metrics">
+                <legend>Metrics to include</legend>
+                {report.data?.config.metrics.map(m => (
+                  <label key={m}>
+                    <input
+                      type="checkbox"
+                      checked={metrics.includes(m)}
+                      onChange={e =>
+                        setSelectedMetrics(
+                          e.target.checked
+                            ? [...metrics, m]
+                            : metrics.filter(k => k !== m)
+                        )
+                      }
+                    />
+                    {insightMetrics[m].label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {report.error && (
+              <p role="alert">
+                Report settings could not be loaded. Close this dialog and try
+                again.
+              </p>
+            )}
+          </>
+        )}
         <label className="insight-label">
           Dashboard
           <select
+            aria-label="Dashboard"
             value={surface}
             onChange={e => {
               setSurface(e.target.value as "main" | "measure");
@@ -200,6 +267,7 @@ export function PinInsightDialog({
           <label className="insight-label">
             Saved layout
             <select
+              aria-label="Saved layout"
               value={layoutId || layouts.data[0].id}
               onChange={e => setLayoutId(e.target.value)}
             >
@@ -216,7 +284,16 @@ export function PinInsightDialog({
         )}
         <Button
           onClick={pin}
-          disabled={save.isPending || layouts.isLoading || !!layouts.error}
+          disabled={
+            save.isPending ||
+            layouts.isLoading ||
+            !!layouts.error ||
+            (choice?.kind === "report" &&
+              (report.isLoading ||
+                !!report.error ||
+                !components.length ||
+                !metrics.length))
+          }
         >
           <Pin size={16} /> {save.isPending ? "Adding…" : "Add widget"}
         </Button>
