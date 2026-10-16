@@ -270,7 +270,8 @@ it("preserves the formatted optimizer report for existing published Apps", () =>
   const { container } = openApp();
   fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("More comparable ads are needed.")).toBeTruthy();
-  expect(screen.getByText(/Confidence not estimable/)).toBeTruthy();
+  expect(screen.getByText("Insufficient evidence")).toBeTruthy();
+  expect(screen.queryByText(/\d+% confidence/)).toBeNull();
   expect(container.querySelector(".wf-app-results pre")).toBeNull();
 });
 
