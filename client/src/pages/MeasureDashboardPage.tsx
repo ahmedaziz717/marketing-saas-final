@@ -185,7 +185,7 @@ function Reports({ organizationId }: { organizationId: number }) {
                     onClick={async () => {
                       if (
                         !window.confirm(
-                          `Archive “${r.config.name}” and stop its schedule? Its dashboard widgets will show it as unavailable.`
+                          `Archive “${r.config.name}” and stop its schedule? Your independent dashboard widgets will keep working.`
                         )
                       )
                         return;

@@ -48,7 +48,8 @@ export function WorkflowApps({
     <section className="wf-apps-section">
       <div className="wf-section-title">
         <h2>
-          Your Apps <span>{apps.length}</span>
+          {family === "measure" ? "Published workflow apps" : "Your Apps"}{" "}
+          <span>{apps.length}</span>
         </h2>
         <span>Published from your workflows</span>
       </div>

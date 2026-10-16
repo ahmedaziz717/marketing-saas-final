@@ -32,7 +32,7 @@ function State() {
   );
 }
 function setup(
-  path = "/app/advertising/meta",
+  path = "/app/activate/studio",
   collapsed = false,
   items = workspaceNavigation
 ) {
@@ -70,9 +70,10 @@ it.each(Object.values(workflowSections))(
   "separates $name Apps from Workflows and highlights the selected destination",
   section => {
     const router = setup(section.appsPath);
+    const appsLabel = section.name === "Measure" ? "Workflow apps" : "Apps";
     fireEvent.click(screen.getByRole("button", { name: section.name }));
     expect(
-      screen.getByRole("link", { name: "Apps" }).getAttribute("aria-current")
+      screen.getByRole("link", { name: appsLabel }).getAttribute("aria-current")
     ).toBe("page");
     const workflow = screen.getByRole("link", {
       name: "Workflows",
@@ -83,7 +84,9 @@ it.each(Object.values(workflowSections))(
     expect(workspacePageLabel(section.path)).toBe(
       `${section.name} / Workflows`
     );
-    expect(workspacePageLabel(section.appsPath)).toBe(`${section.name} / Apps`);
+    expect(workspacePageLabel(section.appsPath)).toBe(
+      `${section.name} / ${appsLabel}`
+    );
   }
 );
 it("starts with every submenu closed, including the current section", () => {
@@ -93,19 +96,28 @@ it("starts with every submenu closed, including the current section", () => {
       .getByRole("button", { name: "Activate" })
       .getAttribute("aria-expanded")
   ).toBe("false");
-  expect(screen.queryByRole("link", { name: "Meta Ads" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Activation Studio" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Activate" }));
   expect(
-    screen.getByRole("link", { name: "Meta Ads" }).getAttribute("aria-current")
+    screen
+      .getByRole("link", { name: "Activation Studio" })
+      .getAttribute("aria-current")
   ).toBe("page");
   expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  for (const name of [
+    "Advertising",
+    "Meta Ads",
+    "Social publishing",
+    "Facebook",
+  ])
+    expect(screen.queryByRole("link", { name })).toBeNull();
 });
 it("opens only one submenu at a time and Escape restores focus", () => {
   const router = setup();
   fireEvent.click(screen.getByRole("button", { name: "Activate" }));
   const parent = screen.getByRole("button", { name: "Create" });
   fireEvent.click(parent);
-  expect(screen.queryByRole("link", { name: "Meta Ads" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Activation Studio" })).toBeNull();
   const link = screen.getByRole("link", { name: "Apps" });
   link.focus();
   fireEvent.keyDown(link, { key: "Escape" });
@@ -127,12 +139,12 @@ it("opens a compact flyout without expanding the rail and closes it after naviga
   ).toBeTruthy();
   await act(async () => {
     fireEvent.click(
-      document.querySelector('[role="dialog"] a[href="/app/advertising/meta"]')!
+      document.querySelector('[role="dialog"] a[href="/app/activate/studio"]')!
     );
     vi.advanceTimersByTime(1);
   });
   expect(document.querySelector('[role="dialog"]') === null).toBe(true);
-  expect(router.history.at(-1)).toBe("/app/advertising/meta");
+  expect(router.history.at(-1)).toBe("/app/activate/studio");
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/false"
   );
@@ -176,6 +188,12 @@ it("preserves date and comparison filters between analytics reports", () => {
     "/app/analytics?tab=social&since=2026-09-01&until=2026-09-20&compare=1&account=page1&channel=facebook"
   );
   fireEvent.click(screen.getByRole("button", { name: "Measure" }));
+  const measureMenu = document.getElementById(
+    screen
+      .getByRole("button", { name: "Measure" })
+      .getAttribute("aria-controls")!
+  );
+  expect(measureMenu?.querySelector("a")?.textContent).toBe("Insights Studio");
   expect(
     screen.getByRole("link", { name: "Social" }).getAttribute("aria-current")
   ).toBe("page");
@@ -197,7 +215,7 @@ it("mobile selection closes the drawer without changing the desktop preference",
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/true"
   );
-  fireEvent.click(screen.getByRole("link", { name: "Meta Ads" }));
+  fireEvent.click(screen.getByRole("link", { name: "Activation Studio" }));
   expect(screen.getByTestId("sidebar-state").textContent).toBe(
     "collapsed/false"
   );

@@ -1,4 +1,5 @@
 import OptimizationIntelligencePage from "./pages/OptimizationIntelligencePage";
+import OptimizationStudioPage from "./pages/OptimizationStudioPage";
 import PlatformAdminPage, {
   AccountInvitePage,
 } from "./pages/PlatformAdminPage";
@@ -118,6 +119,7 @@ function Router() {
       <Route path="/app/optimize/workflows">
         <CreativeWorkflowsPage family="optimize" />
       </Route>
+      <Route path="/app/optimize/studio" component={OptimizationStudioPage} />
       <Route path="/app/optimize">
         <OptimizeRedirect />
       </Route>

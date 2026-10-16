@@ -766,6 +766,8 @@ const routeForPage: Record<string, string> = {
   "directory-creative": "/app/creatives/directory",
   "platform-admin": "/admin",
   "product-home": "/app",
+  navigation: "/app/activate/studio",
+  "navigation-ten": "/app/activate/studio",
   login: "/login",
   signup: "/signup",
   "reset-password": "/reset-password",
@@ -1298,15 +1300,35 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(
         document
           .querySelector("h1")
-          ?.textContent?.includes("What will you make next?") &&
-          document.querySelectorAll(".workspace-loop-card").length === 4,
-        "Product stages are visible on Home"
+          ?.textContent?.includes("Your marketing studios") &&
+          document.querySelectorAll(".workspace-studio-card").length === 4,
+        "Studios are the main entry points on Home"
       );
       check(
         document
-          .querySelector('.workspace-loop-card[data-workflow="Optimize"]')
+          .querySelector('.workspace-studio-card[data-workflow="Optimize"]')
           ?.textContent?.includes("Planned"),
-        "Home does not imply optimization tools are operational"
+        "Home does not imply Optimization Studio is operational"
+      );
+      const studios = document.querySelectorAll<HTMLAnchorElement>(
+        ".workspace-studio-card"
+      );
+      check(
+        [
+          "/app/creatives/studio",
+          "/app/activate/studio",
+          "/app/analytics/studio",
+          "/app/optimize/studio",
+        ].every((href, i) => studios[i].getAttribute("href") === href),
+        "Home links directly to the four studios"
+      );
+      check(
+        !!(
+          studios[3].compareDocumentPosition(
+            document.querySelector(".insights-dashboard")!
+          ) & Node.DOCUMENT_POSITION_FOLLOWING
+        ),
+        "Personal dashboard widgets follow the studios"
       );
     }
     if (which === "video-studio") {
@@ -2114,8 +2136,8 @@ async function navigationChecks(ten: boolean) {
   await pause();
   check(
     children("Activate").querySelector('[aria-current="page"]')?.textContent ===
-      "Meta Ads",
-    "Active channel highlighted"
+      "Activation Studio",
+    "Active studio highlighted"
   );
   if (!mobile)
     check(!!button("Expand sidebar"), "Opening a group keeps the rail compact");
@@ -2151,12 +2173,12 @@ async function navigationChecks(ten: boolean) {
     await pause();
   }
   children("Activate")
-    .querySelector<HTMLAnchorElement>('a[href="/app/social/facebook"]')!
+    .querySelector<HTMLAnchorElement>('a[href="/app/publishing"]')!
     .click();
   await pause();
   check(
-    document.querySelector("h1")?.textContent === "Facebook",
-    "Channel link changes page"
+    document.querySelector("h1")?.textContent === "Calendar",
+    "Calendar link changes page"
   );
   if (mobile)
     check(

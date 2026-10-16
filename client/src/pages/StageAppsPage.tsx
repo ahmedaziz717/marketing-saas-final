@@ -39,32 +39,7 @@ const tools = {
       icon: CalendarDays,
     },
   ],
-  measure: [
-    {
-      name: "Insights Studio",
-      description: "Configure reports, schedule delivery, and build your dashboards.",
-      href: "/app/analytics/studio",
-      icon: BarChart3,
-    },
-    {
-      name: "Performance overview",
-      description: "See your connected-channel results in one place.",
-      href: "/app/analytics",
-      icon: BarChart3,
-    },
-    {
-      name: "Advertising analytics",
-      description: "Explore ad performance by account and reporting period.",
-      href: "/app/analytics/advertising",
-      icon: Megaphone,
-    },
-    {
-      name: "Social analytics",
-      description: "Explore post engagement and Page performance.",
-      href: "/app/analytics/social",
-      icon: MessageSquare,
-    },
-  ],
+  measure: [],
   optimize: [
     {
       name: "Optimization intelligence",
@@ -80,7 +55,7 @@ const descriptions = {
   create: "Create images, videos, ads, and posts with your creative Apps.",
   activate:
     "Put your content to work with publishing tools and your team's Apps.",
-  measure: "Explore performance with reporting tools and your team's Apps.",
+  measure: "Run reusable tools published from your measurement workflows.",
   optimize:
     "Run your team's published Apps for objectives, creative direction, and improvement.",
 };
@@ -132,13 +107,23 @@ function AppsWorkspace({
       <header className="wf-library-heading">
         <div>
           <span className="wf-eyebrow">
-            {section.name.toUpperCase()} / APPS
+            {section.name.toUpperCase()} /{" "}
+            {family === "measure" ? "WORKFLOW APPS" : "APPS"}
           </span>
-          <h1>{section.name} Apps</h1>
+          <h1>
+            {section.name} {family === "measure" ? "workflow apps" : "Apps"}
+          </h1>
           <p>{descriptions[family]}</p>
         </div>
       </header>
       <StageToolNavigation family={family} view="apps" />
+      {family === "measure" && (
+        <p className="wf-report-guidance">
+          Reports you create in Insights Studio, including their schedules and
+          results, live in{" "}
+          <Link href="/app/analytics/reports">Saved reports</Link>.
+        </p>
+      )}
       {!!tools[family].length && (
         <section
           className="wf-apps-section"

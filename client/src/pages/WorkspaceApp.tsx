@@ -1,178 +1,79 @@
 import { Link } from "wouter";
 import {
   ArrowRight,
-  BarChart3,
-  BookOpenText,
   CalendarDays,
-  Clapperboard,
   FolderOpen,
-  Image,
   Link2,
-  MessageSquare,
   Palette,
-  Send,
   ShieldCheck,
-  Sparkles,
-  WandSparkles,
 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { studioContentHref } from "@shared/contentWorkflow";
+import { workspaceStudios } from "@/lib/workspaceStudios";
 import { InsightsDashboard } from "@/components/InsightsDashboard";
 
-const stages = [
-  {
-    label: "Create",
-    icon: Sparkles,
-    description: "Turn an idea into content.",
-    href: "/app/creatives",
-  },
-  {
-    label: "Activate",
-    icon: Send,
-    description: "Put approved work into motion.",
-    href: "/app/publishing",
-  },
-  {
-    label: "Measure",
-    icon: BarChart3,
-    description: "See how your campaigns perform.",
-    href: "/app/analytics",
-  },
-  {
-    label: "Optimize",
-    icon: WandSparkles,
-    description: "Learn, test, and improve.",
-    href: "/app/optimize",
-    planned: true,
-  },
-];
 function Dashboard() {
   const { organization, organizationId } = useWorkspace();
   return (
     <>
       <PageHeader
         eyebrow={organization?.name || "Your workspace"}
-        title="What will you make next?"
-        description="Your brand, creative work, and campaigns. All connected."
+        title="Your marketing studios"
+        description="Create, activate, and measure. Each studio guides you from setup to results."
         action={
-          <Button asChild>
-            <Link href="/app/creatives">
-              <Sparkles size={16} />
-              Explore apps
+          <Button asChild variant="outline">
+            <Link href="/app/creatives/drafts">
+              <FolderOpen size={16} />
+              Continue a draft
             </Link>
           </Button>
         }
       />
-      {organizationId && (
-        <InsightsDashboard
-          key={organizationId}
-          organizationId={organizationId}
-          surface="main"
-        />
-      )}
-      <section className="workspace-home-start" aria-labelledby="start-heading">
-        <div className="workspace-home-intro">
-          <span className="workspace-home-icon">
-            <Sparkles size={25} />
-          </span>
-          <h2 id="start-heading">
-            Start with an idea.
-            <br />
-            <span>Make it your own.</span>
-          </h2>
-          <p>
-            Create something new or bring your next campaign together. Your
-            drafts are ready whenever you are.
-          </p>
-          <Link href="/app/creatives/drafts" className="workspace-draft-link">
-            <FolderOpen size={17} />
-            Continue a draft
-            <ArrowRight size={16} />
-          </Link>
-        </div>
-        <div className="workspace-quick-apps">
-          {[
-            {
-              title: "Create an image",
-              detail: "Products, services, and ideas",
-              icon: Image,
-              href: "/app/creatives/images",
-              color: "images",
-            },
-            {
-              title: "Create a video",
-              detail: "Product stories and motion",
-              icon: Clapperboard,
-              href: "/app/creatives/video",
-              color: "video",
-            },
-            {
-              title: "Compose a post",
-              detail: "Content for your social channels",
-              icon: MessageSquare,
-              href: studioContentHref("facebook"),
-              color: "social",
-            },
-            {
-              title: "Plan a campaign",
-              detail: "A goal, an audience, a direction",
-              icon: BookOpenText,
-              href: "/app/plans",
-              color: "plans",
-            },
-          ].map(({ title, detail, icon: Icon, href, color }) => (
+      <section
+        className="workspace-studios-grid"
+        aria-label="Marketing studios"
+      >
+        {Object.values(workspaceStudios).map(
+          ({ name, stage, icon: Icon, description, href, planned }, index) => (
             <Link
               key={href}
               href={href}
-              className="workspace-quick-app"
-              data-app={color}
+              data-workflow={stage}
+              data-planned={planned}
+              className="workspace-studio-card"
             >
-              <span>
-                <Icon size={22} />
-              </span>
-              <div>
-                <h3>{title}</h3>
-                <p>{detail}</p>
+              <div className="workspace-studio-top">
+                <span className="workspace-studio-icon">
+                  <Icon size={24} aria-hidden="true" />
+                </span>
+                <span className="workspace-studio-stage">
+                  0{index + 1} / {stage}
+                </span>
+                {planned && (
+                  <span className="workspace-studio-badge">Planned</span>
+                )}
               </div>
-              <ArrowRight size={16} />
+              <h2>{name}</h2>
+              <p>{description}</p>
+              <span className="workspace-studio-action">
+                {planned ? "View planned studio" : "Open studio"}
+                <ArrowRight size={16} aria-hidden="true" />
+              </span>
             </Link>
-          ))}
-        </div>
+          )
+        )}
       </section>
-      <section
-        className="workspace-home-section"
-        aria-labelledby="loop-heading"
-      >
-        <div className="studio-section-heading">
-          <div>
-            <h2 id="loop-heading">Your marketing loop</h2>
-            <p>Move between stages without losing the context.</p>
-          </div>
+      {organizationId && (
+        <div className="workspace-home-section">
+          <InsightsDashboard
+            key={organizationId}
+            organizationId={organizationId}
+            surface="main"
+          />
         </div>
-        <div className="workspace-loop-grid">
-          {stages.map(
-            ({ label, icon: Icon, description, href, planned }, index) => (
-              <Link
-                key={label}
-                href={href}
-                data-workflow={label}
-                className="workspace-loop-card"
-              >
-                <div className="workspace-loop-top">
-                  <Icon size={22} />
-                  <span>{planned ? "Planned" : `0${index + 1}`}</span>
-                </div>
-                <h3>{label}</h3>
-                <p>{description}</p>
-                <ArrowRight size={16} className="workspace-loop-arrow" />
-              </Link>
-            )
-          )}
-        </div>
-      </section>
+      )}
       <section
         className="workspace-home-section"
         aria-labelledby="organize-heading"
@@ -210,12 +111,12 @@ function Dashboard() {
             },
           ].map(({ title, detail, icon: Icon, href }) => (
             <Link key={href} href={href} className="workspace-shortcut">
-              <Icon size={20} />
+              <Icon size={20} aria-hidden="true" />
               <div>
                 <h3>{title}</h3>
                 <p>{detail}</p>
               </div>
-              <ArrowRight size={15} />
+              <ArrowRight size={15} aria-hidden="true" />
             </Link>
           ))}
         </div>

@@ -1522,147 +1522,142 @@
   border-color: var(--input);
   background: var(--muted);
 }
-/* Home emphasizes working entry points rather than a second marketing page. */
-.workspace-home-start {
+/* Studios lead Home; saved performance widgets follow the entry points. */
+.workspace-studios-grid {
   display: grid;
-  grid-template-columns: 1fr 1.05fr;
-  gap: 32px;
-  padding: 30px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.workspace-studio-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 26px;
+  border: 1px solid color-mix(in srgb, var(--workflow-color) 25%, var(--border));
   border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--workflow-soft) 55%, var(--card)),
+    var(--card) 75%
+  );
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
-.workspace-home-intro {
-  align-self: center;
-  padding: 6px;
+.workspace-studio-card:hover {
+  border-color: var(--workflow-color);
+  box-shadow: 0 6px 22px
+    color-mix(in srgb, var(--workflow-color) 10%, transparent);
 }
-.workspace-home-icon {
+.workspace-studio-card:focus-visible,
+.workspace-shortcut:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 4px;
+}
+.workspace-studio-top {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.workspace-studio-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  color: var(--workflow-color);
+  background: var(--workflow-soft);
+  flex-shrink: 0;
+}
+.workspace-studio-stage {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--muted-foreground);
+}
+.workspace-studio-badge {
   display: inline-flex;
-  padding: 11px;
-  border-radius: 14px;
-  color: #8862c9;
-  background: color-mix(in srgb, #8862c9 12%, var(--card));
-  margin-bottom: 18px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted-foreground);
+  background: var(--card);
 }
-.workspace-home-intro h2 {
-  font-size: clamp(24px, 2.3vw, 34px);
+.workspace-studio-top .workspace-studio-badge {
+  margin-left: auto;
+}
+.workspace-studio-card h2 {
+  font-size: 22px;
   font-weight: 650;
   line-height: 1.3;
 }
-.workspace-home-intro h2 > span {
+.workspace-studio-card p {
+  max-width: 450px;
+  margin: 10px 0 22px;
+  font-size: 13px;
+  line-height: 1.75;
   color: var(--muted-foreground);
 }
-.workspace-home-intro > p {
-  margin-top: 14px;
-  max-width: 370px;
-  font-size: 12px;
-  line-height: 1.9;
-  color: var(--muted-foreground);
-}
-.workspace-draft-link {
-  display: inline-flex;
-  gap: 9px;
-  align-items: center;
-  padding: 10px 0;
-  margin-top: 18px;
-  font-size: 12px;
-  font-weight: 650;
-}
-.workspace-draft-link:hover {
-  color: var(--primary);
-}
-.workspace-quick-apps {
-  display: grid;
-  gap: 10px;
-}
-.workspace-quick-app {
+.workspace-studio-action {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 17px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  min-width: 0;
-}
-.workspace-quick-app > span {
-  display: grid;
-  place-items: center;
-  width: 43px;
-  height: 43px;
-  flex-shrink: 0;
-  color: var(--app-color);
-  background: var(--app-soft);
-  border-radius: 11px;
-}
-.workspace-quick-app > div {
-  flex: 1;
-  min-width: 0;
-}
-.workspace-quick-app h3 {
-  font-size: 13px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  color: var(--workflow-color);
+  font-size: 12px;
   font-weight: 650;
 }
-.workspace-quick-app p {
-  font-size: 11px;
-  color: var(--muted-foreground);
-  margin-top: 5px;
-}
-.workspace-quick-app > svg {
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-.workspace-quick-app:hover {
-  background: var(--muted);
-  border-color: var(--input);
-}
-.workspace-home-section {
-  margin-top: 30px;
-}
-.workspace-loop-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-.workspace-loop-card {
-  position: relative;
-  display: block;
-  min-width: 0;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
+.workspace-studio-card[data-planned="true"] {
+  border-style: dashed;
   background: var(--card);
 }
-.workspace-loop-card:hover {
-  border-color: var(--workflow-color);
-  background: color-mix(in srgb, var(--workflow-soft) 30%, var(--card));
+.workspace-home-section {
+  margin-top: 32px;
 }
-.workspace-loop-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+.workspace-studio-planned {
+  max-width: 760px;
+  padding: 32px;
+}
+.workspace-studio-planned-icon {
+  display: block;
+  margin: 24px 0;
   color: var(--workflow-color);
 }
-.workspace-loop-top > span {
-  padding: 4px 7px;
-  background: var(--workflow-soft);
-  border-radius: 5px;
-  font-size: 9px;
+.workspace-studio-planned h2 {
+  font-size: 22px;
   font-weight: 650;
+  line-height: 1.4;
 }
-.workspace-loop-card h3 {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--workflow-color);
-}
-.workspace-loop-card p {
-  margin: 8px 0 20px;
-  font-size: 11px;
-  line-height: 1.8;
+.workspace-studio-planned p {
+  margin-top: 16px;
   color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.8;
 }
-.workspace-loop-arrow {
-  color: var(--workflow-color);
+.workspace-studio-planned-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.wf-report-guidance {
+  padding: 16px 20px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.wf-report-guidance a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .workspace-shortcut-grid {
   display: grid;
@@ -1772,13 +1767,6 @@
   .studio-planned-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .workspace-loop-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .workspace-home-start {
-    gap: 22px;
-    padding: 24px;
-  }
 }
 @media (max-width: 767px) {
   .evoke-shell .evoke-toolbar {
@@ -1802,18 +1790,9 @@
   .evoke-shell .evoke-page-header p:last-child {
     font-size: 12px;
   }
-  .workspace-home-start {
-    grid-template-columns: 1fr;
-    padding: 22px;
-  }
+  .workspace-studios-grid,
   .workspace-shortcut-grid {
     grid-template-columns: 1fr;
-  }
-  .workspace-home-intro > p {
-    max-width: none;
-  }
-  .workspace-home-intro h2 {
-    font-size: 28px;
   }
   .studio-section-heading {
     align-items: flex-start;
@@ -1841,19 +1820,12 @@
   .studio-app-art {
     height: 112px;
   }
-  .workspace-loop-grid {
-    gap: 10px;
-  }
-  .workspace-loop-card {
-    padding: 16px;
-  }
-  .workspace-quick-app {
-    padding: 13px;
-    gap: 12px;
-  }
-  .workspace-quick-app p {
-    line-height: 1.6;
-  }
+  .workspace-studios-grid { gap: 14px; }
+  .workspace-studio-card,
+  .workspace-studio-planned { padding: 20px; }
+  .workspace-studio-card h2 { font-size: 20px; }
+  .workspace-studio-planned-actions { flex-direction: column; }
+  .workspace-studio-planned-actions a { white-space: normal; height: auto; min-height: 38px; text-align: center; }
 }
 
 /* Persistent shortcuts for the two visual Studios. */
