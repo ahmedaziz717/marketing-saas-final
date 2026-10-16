@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { registerChannelOAuth } from "../lib/channelConnections";
 import { getDb, closeDb } from "../db";
 import { startWebsiteNotificationDelivery } from "../lib/websiteNotifications";
+import { startInsightDelivery } from "../lib/insightDelivery";
 import { startPublishedPricingChecks } from "../lib/publishedPricing";
 import {
   initializeModelCatalog,
@@ -101,6 +102,7 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
   const stopNotifications = startWebsiteNotificationDelivery();
+  const stopInsightEmails = startInsightDelivery();
   verifyOpenAIBilling();
   void getDb()
     .then(async db => {
@@ -113,7 +115,7 @@ async function startServer() {
     .finally(() => startPublishedPricingChecks());
   process.on("SIGTERM", () => {
     server.close(() => {
-      void stopNotifications()
+      void Promise.all([stopNotifications(), stopInsightEmails()])
         .then(closeDb)
         .finally(() => process.exit(0));
     });

@@ -83,7 +83,9 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     children: [
       { label: "Apps", path: "/app/measure/apps" },
       { label: "Workflows", path: "/app/measure/workflows" },
-      { label: "Overview", path: "/app/analytics", analyticsView: "overview" },
+      { label: "Dashboard", path: "/app/analytics", analyticsView: "overview" },
+      { label: "Saved reports", path: "/app/analytics/reports" },
+      { label: "Insights Studio", path: "/app/analytics/studio" },
       {
         label: "Advertising",
         path: "/app/analytics/advertising",
@@ -139,7 +141,11 @@ const matchesItem = (item: WorkspaceNavItem, location: string) =>
 function childActive(child: Child, location: string, search: string) {
   if (child.analyticsView)
     return (
-      matchesPath("/app/analytics", location) &&
+      [
+        "/app/analytics",
+        "/app/analytics/advertising",
+        "/app/analytics/social",
+      ].includes(location) &&
       analyticsViewForRoute(location, search) === child.analyticsView
     );
   const [path, query] = child.path.split("?");

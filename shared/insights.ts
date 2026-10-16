@@ -1,0 +1,457 @@
+import { z } from "zod";
+import {
+  dateInZone,
+  dateSchema,
+  localScheduleToUtc,
+  moveDate,
+  previousRange,
+  rangeSchema,
+  timezoneSchema,
+  type DateRange,
+} from "./channels";
+import { presetRange } from "./reportDates";
+
+export const insightMetrics = {
+  spend: {
+    label: "Ad spend",
+    unit: "currency",
+    channel: "meta_ads",
+    direction: "neutral",
+  },
+  purchaseValue: {
+    label: "Attributed purchase value",
+    unit: "currency",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  purchases: {
+    label: "Attributed purchases",
+    unit: "number",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  roas: {
+    label: "Purchase ROAS",
+    unit: "ratio",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  impressions: {
+    label: "Ad impressions",
+    unit: "number",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  linkClicks: {
+    label: "Link clicks",
+    unit: "number",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  ctr: {
+    label: "Link CTR",
+    unit: "percent",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  cpa: {
+    label: "Cost per purchase",
+    unit: "currency",
+    channel: "meta_ads",
+    direction: "down",
+  },
+  leads: {
+    label: "Leads",
+    unit: "number",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  registrations: {
+    label: "Registrations",
+    unit: "number",
+    channel: "meta_ads",
+    direction: "up",
+  },
+  posts: {
+    label: "Posts published",
+    unit: "number",
+    channel: "facebook",
+    direction: "neutral",
+  },
+  followers: {
+    label: "Followers now",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+  views: {
+    label: "Page media views",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+  engagements: {
+    label: "Page post engagements",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+  reactions: {
+    label: "Lifetime reactions",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+  comments: {
+    label: "Lifetime comments",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+  shares: {
+    label: "Lifetime shares",
+    unit: "number",
+    channel: "facebook",
+    direction: "up",
+  },
+} as const;
+export type InsightMetric = keyof typeof insightMetrics;
+export const metricSchema = z.enum(
+  Object.keys(insightMetrics) as [InsightMetric, ...InsightMetric[]]
+);
+export const selectableMetrics = Object.keys(insightMetrics).filter(
+  k => !["reactions", "comments", "shares"].includes(k)
+) as InsightMetric[];
+export const reportPeriods = [
+  ["7", "Last 7 days"],
+  ["14", "Last 14 days"],
+  ["30", "Last 30 days"],
+  ["90", "Last 90 days"],
+  ["yesterday", "Yesterday"],
+  ["this_month", "This month"],
+  ["last_month", "Last month"],
+  ["this_year", "This year"],
+  ["custom", "Custom dates"],
+] as const;
+export const reportScheduleSchema = z
+  .object({
+    enabled: z.boolean(),
+    frequency: z.enum(["daily", "weekly", "monthly"]),
+    weekday: z.number().int().min(0).max(6),
+    monthDay: z.number().int().min(1).max(31),
+    hour: z.number().int().min(0).max(23),
+    minute: z.number().int().min(0).max(59),
+    startDate: dateSchema.nullable(),
+    endDate: dateSchema.nullable(),
+  })
+  .refine(
+    s => !s.startDate || !s.endDate || s.startDate <= s.endDate,
+    "Schedule end must be on or after the start date."
+  );
+export const insightConfigSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name your report.")
+      .max(120)
+      .regex(/^[^\r\n]+$/, "Use a single-line report name."),
+    description: z.string().trim().max(1000),
+    connectionIds: z
+      .array(z.string().uuid())
+      .min(1, "Select at least one account or Page.")
+      .max(8)
+      .refine(v => new Set(v).size === v.length),
+    timezone: timezoneSchema,
+    period: z.enum(
+      reportPeriods.map(p => p[0]) as [
+        (typeof reportPeriods)[number][0],
+        ...(typeof reportPeriods)[number][0][],
+      ]
+    ),
+    customRange: rangeSchema,
+    includeToday: z.boolean(),
+    compare: z.boolean(),
+    metrics: z
+      .array(metricSchema)
+      .min(1, "Choose at least one metric.")
+      .max(14)
+      .refine(v => new Set(v).size === v.length),
+    sections: z.object({
+      summary: z.boolean(),
+      trends: z.boolean(),
+      details: z.boolean(),
+    }),
+    chartMetric: metricSchema,
+    schedule: reportScheduleSchema,
+    delivery: z.object({
+      email: z.boolean(),
+      recipientUserIds: z
+        .array(z.number().int().positive())
+        .max(20)
+        .refine(v => new Set(v).size === v.length),
+      attachPdf: z.boolean(),
+      notifyFailure: z.boolean(),
+    }),
+  })
+  .superRefine((c, ctx) => {
+    if (c.delivery.email && !c.delivery.recipientUserIds.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery"],
+        message: "Choose at least one email recipient.",
+      });
+    if (c.schedule.enabled && c.period === "custom")
+      ctx.addIssue({
+        code: "custom",
+        path: ["period"],
+        message: "Use a rolling reporting period for scheduled reports.",
+      });
+    if (!c.metrics.includes(c.chartMetric))
+      ctx.addIssue({
+        code: "custom",
+        path: ["chartMetric"],
+        message: "Choose a chart metric included in your report.",
+      });
+  });
+export type InsightConfig = z.infer<typeof insightConfigSchema>;
+
+export function defaultInsightConfig(
+  timezone = "America/New_York",
+  now = Date.now()
+): InsightConfig {
+  return {
+    name: "Weekly performance report",
+    description: "",
+    connectionIds: [],
+    timezone,
+    period: "7",
+    customRange: presetRange("7", now, timezone),
+    includeToday: false,
+    compare: true,
+    metrics: [
+      "spend",
+      "purchaseValue",
+      "purchases",
+      "roas",
+      "views",
+      "engagements",
+    ],
+    chartMetric: "spend",
+    sections: { summary: true, trends: true, details: true },
+    schedule: {
+      enabled: false,
+      frequency: "weekly",
+      weekday: 1,
+      monthDay: 1,
+      hour: 9,
+      minute: 0,
+      startDate: null,
+      endDate: null,
+    },
+    delivery: {
+      email: false,
+      recipientUserIds: [],
+      attachPdf: true,
+      notifyFailure: true,
+    },
+  };
+}
+export function insightRange(
+  config: InsightConfig,
+  now = Date.now()
+): DateRange {
+  if (config.period === "custom") return rangeSchema.parse(config.customRange);
+  const today = dateInZone(now, config.timezone).slice(0, 10);
+  const range = presetRange(config.period, now, config.timezone);
+  if (
+    !config.includeToday &&
+    !["yesterday", "last_month"].includes(config.period)
+  ) {
+    range.until = moveDate(today, -1);
+    if (["7", "14", "30", "90"].includes(config.period))
+      range.since = moveDate(range.since, -1);
+    // On the first day of a month/year, there are no completed days in that period.
+    if (range.since > range.until)
+      throw new Error(
+        "This reporting period has no completed days yet. Include today or choose the previous period."
+      );
+  }
+  return rangeSchema.parse(range);
+}
+export function nextInsightRun(
+  config: Pick<InsightConfig, "schedule" | "timezone">,
+  after = Date.now()
+): number | null {
+  const s = config.schedule;
+  if (!s.enabled) return null;
+  const today = dateInZone(after, config.timezone).slice(0, 10);
+  const start = s.startDate && s.startDate > today ? s.startDate : today;
+  for (let offset = 0; offset < 370; offset++) {
+    const day = moveDate(start, offset);
+    if (s.endDate && day > s.endDate) return null;
+    const d = new Date(day + "T12:00:00Z");
+    if (s.frequency === "weekly" && d.getUTCDay() !== s.weekday) continue;
+    const days = new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)
+    ).getUTCDate();
+    if (
+      s.frequency === "monthly" &&
+      d.getUTCDate() !== Math.min(s.monthDay, days)
+    )
+      continue;
+    // Shift a DST gap or repeated local time to the next unambiguous minute.
+    for (
+      let minute = s.hour * 60 + s.minute;
+      minute < Math.min(1440, s.hour * 60 + s.minute + 181);
+      minute++
+    ) {
+      try {
+        const at = localScheduleToUtc(
+          `${day}T${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`,
+          config.timezone
+        );
+        if (at > after) return at;
+        break;
+      } catch {
+        /* Examine the next local minute across the DST transition. */
+      }
+    }
+  }
+  return null;
+}
+export function scheduleDescription(config: InsightConfig) {
+  if (!config.schedule.enabled) return "Manual runs only";
+  const s = config.schedule;
+  const cadence =
+    s.frequency === "daily"
+      ? "Every day"
+      : s.frequency === "weekly"
+        ? `Every ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][s.weekday]}`
+        : `Day ${s.monthDay} of each month`;
+  return `${cadence} at ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")} · ${config.timezone}`;
+}
+export type InsightMetricValue = {
+  key: InsightMetric;
+  value: number | null;
+  previous: number | null;
+  change: number | null;
+};
+export type InsightAccount = {
+  connectionId: string;
+  name: string;
+  channel: "facebook" | "meta_ads";
+  currency: string | null;
+  timezone: string | null;
+  status: "ready" | "unavailable";
+  error?: string;
+  warnings: string[];
+  metrics: InsightMetricValue[];
+  series: Array<{
+    date: string;
+    values: Partial<Record<InsightMetric, number | null>>;
+  }>;
+  detailLabel: string;
+  detailMetrics: InsightMetric[];
+  details: Array<{
+    name: string;
+    values: Partial<Record<InsightMetric, number | null>>;
+  }>;
+};
+export type InsightResult = {
+  version: 1;
+  name: string;
+  description: string;
+  generatedAtMs: number;
+  range: DateRange;
+  previousRange: DateRange | null;
+  timezone: string;
+  accounts: InsightAccount[];
+  findings: string[];
+  warnings: string[];
+};
+export function metricChange(value: number | null, prior: number | null) {
+  return value === null || prior === null || prior === 0
+    ? null
+    : ((value - prior) / Math.abs(prior)) * 100;
+}
+export function insightNumber(
+  value: number | null | undefined,
+  metric: InsightMetric,
+  currency?: string | null
+) {
+  if (value === null || value === undefined || !Number.isFinite(value))
+    return "Unavailable";
+  const def = insightMetrics[metric];
+  const number = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: def.unit === "number" ? 0 : 2,
+  }).format(value);
+  return def.unit === "currency"
+    ? `${currency || "Currency not supplied"} ${number}`
+    : def.unit === "ratio"
+      ? `${number}x`
+      : def.unit === "percent"
+        ? `${number}%`
+        : number;
+}
+export const dashboardWidgetSchema = z
+  .object({
+    id: z.string().uuid(),
+    reportId: z.string().uuid(),
+    kind: z.enum(["report", "kpi", "trend"]),
+    connectionId: z.string().uuid().nullable(),
+    metric: metricSchema,
+    size: z.enum(["small", "medium", "wide"]),
+    height: z.enum(["compact", "standard", "tall"]),
+  })
+  .refine(
+    w => w.kind === "report" || !!w.connectionId,
+    "Choose an account for a metric or chart."
+  );
+export type DashboardWidget = z.infer<typeof dashboardWidgetSchema>;
+export const dashboardLayoutSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  surface: z.enum(["main", "measure"]),
+  widgets: z
+    .array(dashboardWidgetSchema)
+    .max(30)
+    .refine(v => new Set(v.map(w => w.id)).size === v.length),
+});
+export const reportPreviousRange = previousRange;
+export function insightChartMetric(
+  preferred: InsightMetric,
+  account: Pick<InsightAccount, "series" | "metrics">
+): InsightMetric {
+  const available = (key: InsightMetric) =>
+    account.series.some(p => typeof p.values[key] === "number");
+  return available(preferred)
+    ? preferred
+    : (account.metrics.find(m => available(m.key))?.key ??
+        account.metrics[0]?.key ??
+        preferred);
+}
+
+export function insightChartPoints(
+  account: Pick<InsightAccount, "series">,
+  metric: InsightMetric
+) {
+  const byDate = new Map(
+    account.series
+      .filter(
+        p =>
+          /^\d{4}-\d{2}-\d{2}/.test(p.date) &&
+          Number.isFinite(Date.parse(p.date))
+      )
+      .map(p => [p.date.slice(0, 10), p.values[metric] ?? null])
+  );
+  const days = Array.from(byDate.keys()).sort();
+  if (!days.length) return [];
+  const points: Array<{ date: string; value: number | null }> = [];
+  for (
+    let day = days[0];
+    day <= days[days.length - 1] && points.length < 370;
+    day = moveDate(day, 1)
+  )
+    points.push({ date: day, value: byDate.get(day) ?? null });
+  return points;
+}

@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { studioContentHref } from "@shared/contentWorkflow";
+import { InsightsDashboard } from "@/components/InsightsDashboard";
 
 const stages = [
   {
@@ -49,7 +50,7 @@ const stages = [
   },
 ];
 function Dashboard() {
-  const { organization } = useWorkspace();
+  const { organization, organizationId } = useWorkspace();
   return (
     <>
       <PageHeader
@@ -65,6 +66,13 @@ function Dashboard() {
           </Button>
         }
       />
+      {organizationId && (
+        <InsightsDashboard
+          key={organizationId}
+          organizationId={organizationId}
+          surface="main"
+        />
+      )}
       <section className="workspace-home-start" aria-labelledby="start-heading">
         <div className="workspace-home-intro">
           <span className="workspace-home-icon">

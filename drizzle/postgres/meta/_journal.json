@@ -113,6 +113,13 @@
       "when": 1791592048847,
       "tag": "0015_workflow_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792111692501,
+      "tag": "0016_insights_studio",
+      "breakpoints": true
     }
   ]
 }
