@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { ThemeProvider } from "../../client/src/contexts/ThemeContext";
 import { defaultVideoSetup } from "../../shared/videoCreation";
+import {
+  generationModels,
+  DEFAULT_VIDEO_MODEL,
+  modelVideoMode,
+} from "../../shared/modelCatalog";
 import { LifestylePersonPicker } from "../../client/src/components/LifestylePersonPicker";
 import {
   defaultCreativeSetup,
@@ -211,7 +216,36 @@ const role =
   new URLSearchParams((window as any).__fixtureQuery ?? location.search).get(
     "role"
   ) ?? "owner";
+const fixtureModels = [
+  generationModels.find(m => m.id === DEFAULT_VIDEO_MODEL)!,
+  generationModels.find(
+    m => m.kind === "video" && modelVideoMode(m) === "edit"
+  )!,
+  generationModels.find(
+    m => m.kind === "video" && modelVideoMode(m) === "motion"
+  )!,
+  generationModels.find(m => m.kind === "image")!,
+];
 function respond(path: string, input: any) {
+  if (path === "models.catalog")
+    return fixtureModels.map(m => ({
+      ...m,
+      routeId: m.id,
+      enabled: true,
+      available: true,
+      estimatedCredits: 235,
+      estimatedSeconds: 5,
+      reason: null,
+      direct: false,
+    }));
+  if (path === "models.credits")
+    return {
+      remaining: 80,
+      allowance: 100,
+      packageName: "Test",
+      textEstimate: 1,
+      enforced: false,
+    };
   if (path === "video.generate" || path === "video.save") mutations.push(path);
   if (path === "briefs.list")
     return [
@@ -232,6 +266,7 @@ function respond(path: string, input: any) {
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
   if (path === "video.options") return { ready: true, reason: null };
+  if (path === "video.catalogImages") return { items: [], nextOffset: null };
   if (path === "video.list") return [...videoDrafts];
   if (path === "video.get") return videoDrafts.find(job => job.id === input.id);
   if (path === "video.save") {
@@ -1039,6 +1074,27 @@ async function fillControl(selector: string, value: string) {
   );
   await pause();
 }
+async function chooseVideoModel(mode: "create" | "edit" | "motion") {
+  const model =
+    mode === "create"
+      ? fixtureModels[0]
+      : fixtureModels.find(m => modelVideoMode(m) === mode)!;
+  const label = Array.from(document.querySelectorAll("span")).find(
+    el => el.textContent === "Generation model"
+  )!;
+  await pressStudioControl(
+    label.parentElement!.querySelector<HTMLButtonElement>("button")!,
+    "Choose generation model"
+  );
+  const choice = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+  ).find(
+    el =>
+      el.querySelector("strong")?.textContent === model.name &&
+      el.textContent?.includes(model.variant)
+  );
+  await pressStudioControl(choice, model.name + " " + model.variant);
+}
 (window as any).runChannelRegression = async () => {
   try {
     await pause();
@@ -1256,69 +1312,56 @@ async function fillControl(selector: string, value: string) {
     if (which === "video-studio") {
       check(
         !!document.querySelector('[aria-label="Video type"]'),
-        "Video creation has Product and UGC routes"
+        "Video creation has Product and Creator routes"
       );
       check(
         !!document.querySelector("#video-prompt"),
         "Video prompt is visible"
       );
-      await click("Edit video");
+      await chooseVideoModel("edit");
       check(
         document.body.textContent?.includes("Source video"),
-        "Edit mode requires source video"
+        "An edit model requires source video"
       );
       check(
-        !Array.from(document.querySelectorAll("label")).some(label =>
-          label.textContent?.startsWith("Aspect ratio")
-        ),
-        "Edit mode hides unsupported ratio controls"
+        button("Generate video")?.disabled,
+        "Generation stays disabled without required source media"
       );
-      await click("Motion control");
+      await chooseVideoModel("motion");
       check(
-        !document.body.textContent?.includes("Generate sound"),
-        "Motion mode hides unsupported sound controls"
+        document.body.textContent?.includes("Motion reference video"),
+        "A motion model exposes its video input"
       );
-      await click("Create video");
+      await chooseVideoModel("create");
       await click("Add images");
+      layout();
       check(
-        !!document.querySelector('[role="dialog"]'),
-        "Reference picker opens accessibly"
+        !!button("Product images") && !!button("Upload"),
+        "Reference picker includes product images and upload"
       );
-      const image = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
-      ).find(button => button.textContent?.includes("Emerald collection hero"));
-      image?.click();
-      await new Promise(resolve => setTimeout(resolve, 30));
+      await click("Image assets");
+      await click("Emerald collection hero");
       await click("Use selected images");
       check(
         !!document.querySelector('img[alt^="Reference 1"]'),
         "Selected reference appears in the video editor"
       );
+      check(
+        !mutations.includes("video.generate"),
+        "Changing models and references never starts paid generation"
+      );
     }
     if (which === "video-ugc") {
       check(
-        !!document.querySelector("#video-prompt"),
-        "UGC uses the video editor"
+        !!document.querySelector("#video-prompt") && !!button("Creator videos"),
+        "Creator video uses the shared editor"
       );
-      check(
-        button("Generation coming soon")?.disabled,
-        "UGC generation is unavailable until its provider is connected"
+      await fillControl(
+        "#video-prompt",
+        "Four people introduce the collection in a bright studio."
       );
-      for (const label of [
-        "Create video",
-        "Edit video",
-        "Extend video",
-        "Motion control",
-        "Save draft",
-      ])
-        check(!!button(label), `UGC has the shared ${label} control`);
-      await click("Edit video");
-      check(
-        document.body.textContent?.includes("Source video"),
-        "UGC edit has a source video picker"
-      );
-      await click("Create video");
       await click("Add images");
+      await click("Image assets");
       await click("Emerald collection hero");
       await click("Use selected images");
       await click("Browse 500 models");
@@ -1326,7 +1369,7 @@ async function fillControl(selector: string, value: string) {
       for (let i = 1; i <= 4; i++) await click(`Woman · Black ${i}`);
       check(
         button("Woman · Black 5")?.disabled,
-        "UGC supports at most four models"
+        "Creator video supports at most four people"
       );
       await click("Use 4 models");
       await click("Save draft");
@@ -1334,34 +1377,38 @@ async function fillControl(selector: string, value: string) {
         videoDrafts[0]?.setup.category === "ugc" &&
           videoDrafts[0]?.setup.people.length === 4 &&
           videoDrafts[0]?.setup.imageKeys[0] === "asset:1",
-        "UGC save keeps category, four models, and references"
+        "Creator draft saves category, people and references"
       );
       await click("Product videos");
       check(
         !button("Browse 500 models"),
-        "Product editor does not show the UGC model picker"
+        "Product editor hides the people picker"
       );
-      await click("UGC videos");
-      // The temporary save toast sits above the final history row on mobile.
+      await click("Creator videos");
       await new Promise(resolve => setTimeout(resolve, 4500));
-      await click("Open Untitled UGC video");
+      await click("Open Untitled creator video");
       await click("Browse 500 models");
       check(
         document.body.textContent?.includes("4 / 4 selected"),
-        "Saved UGC restores its model selection"
+        "Saved creator video restores people"
       );
       await click("Cancel");
       check(
         !!document.querySelector('img[alt^="Reference 1"]'),
-        "Saved UGC restores its image references"
+        "Saved creator video restores references"
       );
       check(
-        videoQuotes.every(setup => setup.category !== "ugc"),
-        "UGC never requests product credit quotes"
+        videoQuotes.some(
+          setup =>
+            setup.category === "ugc" &&
+            setup.people.length === 4 &&
+            setup.modelId === DEFAULT_VIDEO_MODEL
+        ),
+        "Creator quote includes the selected model and people"
       );
       check(
         !mutations.includes("video.generate"),
-        "Saving UGC does not trigger generation"
+        "Saving creator video never starts generation"
       );
       layout();
     }
@@ -2014,7 +2061,13 @@ async function fillControl(selector: string, value: string) {
         "Roadmap is labeled"
       );
       check(
-        !button("Upgrade") && !button("Activate"),
+        !Array.from(
+          document.querySelectorAll<HTMLButtonElement>("button")
+        ).some(
+          control =>
+            !control.closest('[aria-label="Workspace navigation"]') &&
+            ["Upgrade", "Activate"].includes(control.textContent?.trim() ?? "")
+        ),
         "Unbuilt tools are not paid unlocks"
       );
     }
