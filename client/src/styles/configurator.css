@@ -383,24 +383,87 @@
   overflow-x: auto;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--cfg-line);
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
 }
 .cfg-categories button {
-  padding: 10px 16px;
+  display: flex;
+  flex: 1 0 110px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 82px;
+  max-width: 180px;
+  padding: 12px 14px;
   border-radius: 8px;
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--cfg-muted);
   background: var(--cfg-bg);
-  border: 1px solid transparent;
+  border: 1px solid var(--cfg-line);
 }
 .cfg-categories button[aria-pressed="true"] {
-  background: var(--cfg-soft);
-  border-color: var(--cfg-violet);
-  color: var(--cfg-violet);
+  background: #6d50d8;
+  border-color: #6d50d8;
+  color: #fff;
 }
-.cfg-categories button span {
+.cfg-categories button .studio-category-label {
+  font-weight: 600;
+}
+.cfg-categories button small {
   display: block;
   font-size: 9px;
   opacity: 0.7;
+}
+.cfg-categories button:hover:not(:disabled):not([aria-pressed="true"]) {
+  border-color: var(--cfg-violet);
+  color: var(--cfg-ink);
+  background: var(--cfg-soft);
+}
+.studio-category-icon {
+  flex-shrink: 0;
+}
+.studio-category-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 3px 3px 10px;
+  margin-bottom: 10px;
+  max-width: 100%;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.studio-category-filters button {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  min-width: 82px;
+  min-height: 64px;
+  border: 1px solid var(--cfg-line, var(--border));
+  border-radius: 8px;
+  background: var(--cfg-panel, var(--card));
+  color: var(--cfg-muted, var(--muted-foreground));
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.studio-category-filters button[aria-pressed="true"] {
+  background: var(--cfg-soft, var(--muted));
+  border-color: var(--cfg-violet, var(--primary));
+  color: var(--cfg-violet, var(--primary));
+}
+.studio-category-filters button:focus-visible {
+  outline: 2px solid var(--cfg-violet, var(--primary));
+  outline-offset: 1px;
+}
+.studio-category-filters small {
+  font-size: 10px;
 }
 .cfg-content-title {
   display: flex;
@@ -1774,7 +1837,7 @@
   --cfg-shell-height: 0px;
   --cfg-header-height: 0px;
   --cfg-sections-height: 64px;
-  --cfg-categories-height: 54px;
+  --cfg-categories-height: 103px;
 }
 .cfg-root .cfg-heading {
   position: sticky;
@@ -1904,8 +1967,10 @@
     top: calc(var(--cfg-shell-height) + var(--cfg-sections-height));
   }
   .cfg-root .cfg-categories button {
-    padding: 10px 12px;
-    min-height: 40px;
+    padding: 10px;
+    flex-basis: 94px;
+    min-height: 72px;
+    font-size: 11px;
   }
   .cfg-root .cfg-content-title,
   .cfg-root .activation-section-title {

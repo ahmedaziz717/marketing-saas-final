@@ -19,7 +19,6 @@ import {
   Orbit,
   Package,
   Rocket,
-  Search,
   Shapes,
   Snowflake,
   Sparkles,
@@ -30,7 +29,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  CREATIVE_THEME_GROUPS,
   CREATIVE_THEME_LIST,
   getCreativeThemeGroup,
   getCreativeTheme,
@@ -38,8 +36,6 @@ import {
   type CreativeThemeIcon,
   type CreativeThemeId,
 } from "@shared/creativeBuilder";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +43,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
+import {
+  StudioChoicePicker,
+  studioThemeChoices,
+  studioThemeGroups,
+} from "./configurator/StudioChoicePicker";
+import "@/styles/configurator.css";
 
 const ICONS: Record<CreativeThemeIcon, LucideIcon> = {
   sparkles: Sparkles,
@@ -82,28 +84,15 @@ type Props = {
   disabled?: boolean;
 };
 
+/** Compact launch control for older builders; the library uses the shared Studio picker. */
 export function CreativeThemeLibrary({
   selectedTheme,
   onSelect,
   disabled = false,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [group, setGroup] = useState("all");
   const selected = getCreativeTheme(selectedTheme);
   const Icon = ICONS[selected.icon];
-  const groups = CREATIVE_THEME_GROUPS.filter(
-    item => group === "all" || item.id === group
-  )
-    .map(item => ({
-      ...item,
-      themes: item.themes.filter(theme =>
-        `${theme.name} ${theme.direction} ${item.name}`
-          .toLowerCase()
-          .includes(search.trim().toLowerCase())
-      ),
-    }))
-    .filter(item => item.themes.length);
   return (
     <div>
       <button
@@ -120,7 +109,11 @@ export function CreativeThemeLibrary({
             background: `linear-gradient(135deg, ${selected.palette.join(", ")})`,
           }}
         >
-          <Icon size={21} className="rounded bg-black/30 p-0.5" />
+          <Icon
+            size={21}
+            className="rounded bg-black/30 p-0.5"
+            aria-hidden="true"
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">{selected.name}</span>
@@ -134,95 +127,25 @@ export function CreativeThemeLibrary({
         </span>
       </button>
       <Dialog open={open && !disabled} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[88dvh] flex-col overflow-hidden sm:max-w-3xl">
+        <DialogContent className="cfg-root flex max-h-[88dvh] flex-col overflow-hidden sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Choose a creative theme</DialogTitle>
             <DialogDescription>
               Explore everyday styles, seasonal moments, and monthly themes.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                aria-label="Search creative themes"
-                placeholder="Search themes"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </label>
-            <select
-              aria-label="Theme collection"
-              value={group}
-              onChange={e => setGroup(e.target.value)}
-              className="h-10 rounded-lg border bg-background px-3 text-sm"
-            >
-              <option value="all">All collections</option>
-              {CREATIVE_THEME_GROUPS.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-h-0 space-y-5 overflow-y-auto p-1">
-            {groups.map(item => (
-              <section key={item.id}>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {item.name}
-                </h3>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {item.themes.map(theme => {
-                    const ThemeIcon = ICONS[theme.icon];
-                    return (
-                      <button
-                        key={theme.id}
-                        type="button"
-                        aria-label={theme.name}
-                        aria-pressed={theme.id === selectedTheme}
-                        onClick={() => {
-                          onSelect(theme);
-                          setOpen(false);
-                        }}
-                        className={`relative min-h-28 overflow-hidden rounded-xl border p-3 text-left transition-colors ${theme.id === selectedTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:border-primary/50"}`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-x-0 top-0 h-1"
-                          style={{
-                            background: `linear-gradient(90deg, ${theme.palette.join(", ")})`,
-                          }}
-                        />
-                        <span className="flex items-center gap-2 text-sm font-medium">
-                          <ThemeIcon
-                            size={16}
-                            className="shrink-0 text-primary"
-                          />
-                          {theme.name}
-                        </span>
-                        <span className="mt-2 line-clamp-3 block text-xs leading-5 text-muted-foreground">
-                          {theme.direction}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-            {!groups.length && (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                No themes match “{search}”. Try another search or collection.
-              </p>
-            )}
-          </div>
-          <div className="flex items-center justify-between border-t pt-3">
-            <p className="text-xs text-muted-foreground">
-              Selected: {selected.name}
-            </p>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Done
-            </Button>
+          <div className="min-h-0 overflow-y-auto p-1">
+            <StudioChoicePicker
+              title="Theme"
+              choices={studioThemeChoices}
+              groups={studioThemeGroups}
+              selected={[selectedTheme]}
+              disabled={disabled}
+              onSelect={id => {
+                onSelect(getCreativeTheme(id));
+                setOpen(false);
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

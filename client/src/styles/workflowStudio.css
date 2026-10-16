@@ -35,7 +35,7 @@
   padding: 0;
   margin: 0;
   min-width: 0;
-  max-width: 880px;
+  width: 100%;
 }
 .wf-studio .wf-form-field {
   padding: 18px;
@@ -43,6 +43,14 @@
   border-radius: 12px;
   background: var(--cfg-bg);
   margin-bottom: 14px;
+  max-width: 880px;
+  min-width: 0;
+}
+.wf-studio .wf-form-field.wf-form-field-visual {
+  max-width: none;
+  background: transparent;
+  padding: 0;
+  border: 0;
 }
 .wf-studio-field-label {
   display: flex;

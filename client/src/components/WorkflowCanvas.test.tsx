@@ -223,9 +223,9 @@ it("adds and configures an App field directly on the workflow canvas", () => {
   expect(screen.getByText("Field settings")).toBeTruthy();
   expect(screen.queryByText("Open App form")).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: "Required" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Theme" }), {
-    target: { value: "spotlight" },
-  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select Product Spotlight" })
+  );
   expect(graph().nodes[0].config.field).toMatchObject({
     required: true,
     defaultValue: "spotlight",

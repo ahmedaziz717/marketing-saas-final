@@ -6,6 +6,7 @@ import {
   type CopyDimension,
 } from "@shared/copyTaxonomy";
 import { toggleCopyDirection, type CopyDirection } from "@shared/copyDirection";
+import { StudioCategories } from "../configurator/StudioCategories";
 import { StudioCard } from "../configurator/StudioCard";
 import { copyDirectionArt } from "./copyDirectionArt";
 
@@ -45,47 +46,31 @@ export function CopyDirectionTiles({
         choose. Your choices guide new copy without changing existing text.
       </p>
       {!categoryDimension && (
-        <div
-          className="cfg-filter-tabs activation-dimension-tabs"
-          role="group"
-          aria-label="Copy attributes"
-        >
-          {copyDimensions.map(key => (
-            <button
-              type="button"
-              key={key}
-              aria-pressed={dimension === key}
-              onClick={() => {
-                setDimension(key);
-                setSearch("");
-              }}
-            >
-              {copyTaxonomy[key].label}
-              {!!value[key]?.length && <span>{value[key]!.length}</span>}
-            </button>
-          ))}
-        </div>
+        <StudioCategories
+          compact
+          label="Copy attributes"
+          current={dimension}
+          items={copyDimensions.map(key => ({
+            id: key,
+            title: copyTaxonomy[key].label,
+            hint: value[key]?.length ? String(value[key]!.length) : undefined,
+          }))}
+          onSelect={id => {
+            setDimension(id as CopyDimension);
+            setSearch("");
+          }}
+        />
       )}
-      <div
-        className="cfg-filter-tabs activation-dimension-tabs"
-        role="group"
-        aria-label={`Filter ${spec.label.toLowerCase()} choices`}
-      >
-        <button
-          type="button"
-          aria-pressed={filter === "all"}
-          onClick={() => setFilter("all")}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          aria-pressed={filter === "selected"}
-          onClick={() => setFilter("selected")}
-        >
-          Selected ({selected.length})
-        </button>
-      </div>
+      <StudioCategories
+        compact
+        label={`Filter ${spec.label.toLowerCase()} choices`}
+        current={filter}
+        items={[
+          { id: "all", title: "All" },
+          { id: "selected", title: `Selected (${selected.length})` },
+        ]}
+        onSelect={id => setFilter(id as "all" | "selected")}
+      />
       {selections.length > 0 && (
         <div
           className="activation-direction-selections"

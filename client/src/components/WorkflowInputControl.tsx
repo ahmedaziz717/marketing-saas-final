@@ -1,3 +1,4 @@
+import { WorkflowChoiceInput } from "./WorkflowChoiceInput";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
 import { WorkflowPerformanceInput } from "./WorkflowPerformanceInput";
@@ -5,9 +6,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
-  fieldChoices,
   isChoiceField,
-  selectionValues,
   type AppField,
   type InputChoice,
 } from "@shared/workflowInputs";
@@ -37,7 +36,6 @@ export function WorkflowInputControl({
   const [proposals, setProposals] = useState<InputChoice[]>([]);
   const assist = trpc.workflows.assistInput.useMutation();
   const disabled = field.locked;
-  const options = fieldChoices(field);
   return (
     <div className="wf-input-control">
       {field.help && <p className="wf-field-help">{field.help}</p>}
@@ -59,52 +57,15 @@ export function WorkflowInputControl({
         />
       ) : isChoiceField(field) ? (
         <>
-          {field.multiple ? (
-            <div className="wf-choice-list">
-              {options.map(o => (
-                <label key={o.id}>
-                  <input
-                    type="checkbox"
-                    disabled={disabled}
-                    checked={selectionValues(value, true).includes(o.id)}
-                    onChange={e => {
-                      const v = selectionValues(value, true);
-                      if (e.target.checked && v.length >= field.maxSelections) {
-                        toast.error(`Choose up to ${field.maxSelections}.`);
-                        return;
-                      }
-                      onChange(
-                        JSON.stringify(
-                          e.target.checked
-                            ? [...v, o.id]
-                            : v.filter(id => id !== o.id)
-                        )
-                      );
-                    }}
-                  />
-                  {o.label}
-                </label>
-              ))}
-            </div>
-          ) : (
-            <select
-              aria-label={title}
-              disabled={disabled}
-              value={value}
-              onChange={e => onChange(e.target.value)}
-            >
-              <option value="">Choose {title.toLowerCase()}</option>
-              {options.map(o => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
+          <WorkflowChoiceInput
+            field={field}
+            title={title}
+            value={value}
+            onChange={onChange}
+          />
           {field.multiple && (
             <small>
-              Choose up to {field.maxSelections}. Selections guide one run; they
-              do not create separate batches.
+              Selections guide one run; they do not create separate batches.
             </small>
           )}
         </>

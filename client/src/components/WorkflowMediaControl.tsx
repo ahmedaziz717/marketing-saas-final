@@ -1,3 +1,4 @@
+import { StudioCategories } from "./configurator/StudioCategories";
 import { useState } from "react";
 import { Check, Expand, ImageIcon, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -230,36 +231,23 @@ export function WorkflowMediaControl({
         <>
           <div className="wf-media-toolbar">
             {kind === "asset" && (
-              <div
-                className="wf-media-sources"
-                role="group"
-                aria-label="Image source"
-              >
-                {options.productImages && (
-                  <button
-                    type="button"
-                    aria-pressed={tab === "products"}
-                    onClick={() => {
-                      setSource("products");
-                      setOffset(0);
-                    }}
-                  >
-                    Product images
-                  </button>
-                )}
-                {options.approvedAssets && (
-                  <button
-                    type="button"
-                    aria-pressed={tab === "assets"}
-                    onClick={() => {
-                      setSource("assets");
-                      setOffset(0);
-                    }}
-                  >
-                    Approved assets
-                  </button>
-                )}
-              </div>
+              <StudioCategories
+                compact
+                label="Image source"
+                current={tab}
+                items={[
+                  ...(options.productImages
+                    ? [{ id: "products", title: "Product images" }]
+                    : []),
+                  ...(options.approvedAssets
+                    ? [{ id: "assets", title: "Approved assets" }]
+                    : []),
+                ]}
+                onSelect={id => {
+                  setSource(id as "products" | "assets");
+                  setOffset(0);
+                }}
+              />
             )}
             {kind === "asset" &&
               options.allowUpload &&
