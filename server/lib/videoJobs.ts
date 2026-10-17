@@ -128,10 +128,20 @@ export async function getVideoJob(
 export async function resolveVideoReferences(
   db: LibraryDatabase | LibraryTransaction,
   organizationId: number,
-  setup: VideoSetup
+  setup: VideoSetup,
+  purpose: "generation" | "prompt" = "generation"
 ) {
   setup = { ...defaultVideoSetup, ...setup };
-  const problem = videoSetupProblem(setup);
+  // Prompt drafting must not depend on a finished video request or its model's
+  // input requirements. Ownership, media and approval checks below still apply.
+  const problem =
+    purpose === "prompt"
+      ? new Set(setup.imageKeys).size !== setup.imageKeys.length
+        ? "Choose each reference image only once."
+        : setup.imageKeys.length + setup.people.length > 30
+          ? "Use up to 30 image references."
+          : null
+      : videoSetupProblem(setup);
   if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
   await validateVideoPeople(db, organizationId, setup);
   const refs: VideoReference[] = [];

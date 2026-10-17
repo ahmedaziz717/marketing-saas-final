@@ -35,6 +35,8 @@ beforeEach(() => {
   api.page = {
     title: "Homeschool style quiz",
     description: "Explore approaches to learning.",
+    pageContent:
+      "Answer 12 questions about your family's routines and learning preferences.",
     url: "https://learn.example.test/quiz/",
     imageUrl: "",
     product: null,
@@ -91,6 +93,7 @@ it("offers the three types and applies editable quiz context without a catalog i
         title: "Discover your homeschool style",
         description: api.page.description,
         sourceUrl: api.page.url,
+        pageContent: api.page.pageContent,
       },
     })
   );

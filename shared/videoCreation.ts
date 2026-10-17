@@ -28,7 +28,7 @@ export const videoModes = [
     id: "create",
     label: "Create video",
     description:
-      "Bring your product, service, or brand to life from a prompt and reference images.",
+      "Bring your product, service, or brand to life from a prompt, with optional reference images.",
   },
   {
     id: "edit",
@@ -114,7 +114,7 @@ export const videoSetupSchema = z
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
     promotion: promotionSchema.optional(),
-    imageKeys: z.array(videoImageKey).max(9),
+    imageKeys: z.array(videoImageKey).max(30),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
     duration: z.number().int().min(1).max(120),
@@ -158,6 +158,10 @@ export const defaultVideoSetup: VideoSetup = {
   bitrate: "default",
 };
 export function videoSetupProblem(setup: VideoSetup): string | null {
+  if (setup.imageKeys.length + setup.people.length > 30)
+    return "Use up to 30 total image references, including selected people.";
+  if (!setup.prompt.trim() && setup.mode !== "motion")
+    return "Describe what should happen in your video.";
   if (new Set(setup.imageKeys).size !== setup.imageKeys.length)
     return "Choose each reference image only once.";
   if (setup.modelId) {

@@ -29,6 +29,8 @@ const api = vi.hoisted(() => ({
   approveLogo: vi.fn(),
   reviewLogo: vi.fn(),
   submitLogo: vi.fn(),
+  refreshCopy: vi.fn(),
+  draftPrompt: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({
@@ -110,7 +112,7 @@ vi.mock("@/lib/trpc", () => ({
       },
       save: { useMutation: () => ({ mutateAsync: api.save }) },
       generate: { useMutation: () => ({ mutateAsync: api.generate }) },
-      refreshCopy: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      refreshCopy: { useMutation: () => ({ mutateAsync: api.refreshCopy }) },
       quote: {
         useQuery: () => ({ data: { credits: 174 }, isFetching: false }),
       },
@@ -129,6 +131,7 @@ vi.mock("@/lib/trpc", () => ({
             "openai:gpt-image-2",
             "openai:gpt-image-1",
             DEFAULT_VIDEO_MODEL,
+            "higgsfield:bytedance/seedance-2.5/text-to-video",
           ].map(id => ({
             ...generationModel(id),
             routeId: id,
@@ -148,6 +151,9 @@ vi.mock("@/lib/trpc", () => ({
       submit: { useMutation: () => ({ mutateAsync: api.submitLogo }) },
     },
     catalogSources: {
+      previewPage: {
+        useMutation: () => ({ reset: vi.fn(), mutateAsync: vi.fn() }),
+      },
       previewProductPage: {
         useMutation: () => ({ reset: vi.fn(), mutateAsync: vi.fn() }),
       },
@@ -173,7 +179,7 @@ vi.mock("@/lib/trpc", () => ({
       options: { useQuery: () => ({ data: { ready: true } }) },
       save: { useMutation: () => ({ mutateAsync: api.videoSave }) },
       generate: { useMutation: () => ({ mutateAsync: api.videoGenerate }) },
-      draftPrompt: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      draftPrompt: { useMutation: () => ({ mutateAsync: api.draftPrompt }) },
       quote: {
         useQuery: () => ({ data: { credits: 200 }, isFetching: false }),
       },
@@ -195,6 +201,153 @@ beforeEach(() => {
   api.submitLogo.mockReset().mockResolvedValue({ success: true });
   api.save.mockResolvedValue({ briefId: 1, updatedAtMs: 123 });
   api.generate.mockResolvedValue({ status: "queued", jobId: 12 });
+  api.videoSave.mockResolvedValue({ id: "video-draft", revision: 1 });
+  api.draftPrompt.mockResolvedValue({
+    prompt:
+      "Open on a softly lit studio, move slowly through the scene and finish with a close-up.",
+  });
+  api.refreshCopy.mockResolvedValue({
+    headline: "Find your homeschool style",
+    subheadline: "Explore learning approaches in 12 questions.",
+    cta: "Take the quiz",
+  });
+});
+it("allows a video prompt with zero images, switches Seedance input modes with references, and keeps generation gated by the quote", async () => {
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  section(/Story & Sound Tell your story/);
+  const draft = screen.getByRole("button", {
+    name: /Generate prompt from this setup/,
+  }) as HTMLButtonElement;
+  expect(draft.disabled).toBe(false);
+  fireEvent.click(draft);
+  await waitFor(() =>
+    expect(api.draftPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          imageKeys: [],
+          modelId: "higgsfield:bytedance/seedance-2.5/text-to-video",
+        }),
+      })
+    )
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Video prompt · required") as HTMLTextAreaElement)
+        .value
+    ).toContain("softly lit studio")
+  );
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate video",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
+  section(/Type & Source Start with an idea/);
+  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Studio lamp" }));
+  expect(screen.getByText("1 image selected")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          modelId: DEFAULT_VIDEO_MODEL,
+          imageKeys: ["product_image:2"],
+        }),
+      })
+    )
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Clear image references" })
+  );
+  expect(screen.getByText("0 images selected")).toBeTruthy();
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
+it("generates copy from the saved page snapshot and shows which page is being used", async () => {
+  const config = newConfiguration();
+  config.image.promotionMode = "platform";
+  config.image.promotion = {
+    kind: "general",
+    title: "Homeschool quiz",
+    description: "Explore your family's style.",
+    sourceUrl: "https://learn.example.test/quiz/",
+    pageContent: "Answer 12 questions about your routines.",
+  };
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
+  open();
+  section(/Story & Sound Tell your story/);
+  expect(
+    screen.getByText("Homeschool quiz", { selector: ".cfg-copy-source strong" })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: /Generate copy from this setup/ })
+  );
+  await waitFor(() =>
+    expect(api.refreshCopy).toHaveBeenCalledWith({
+      organizationId: 1,
+      setup: config.image,
+    })
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Headline · required") as HTMLInputElement).value
+    ).toBe("Find your homeschool style")
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Review page details" }));
+  expect(
+    (screen.getByLabelText("Page details") as HTMLTextAreaElement).value
+  ).toContain("12 questions");
+});
+it("guides discovery through categories, exposes every option, and remembers visits separately for each creative type", () => {
+  const view = open();
+  expect(
+    screen.getByRole("button", { name: /Options map 1\/15 explored/ })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Explore next: Subject & sources" })
+  );
+  expect(
+    screen.getByRole("heading", { name: "Subject & sources" })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Next: Brand & logo" }));
+  expect(screen.getByRole("heading", { name: "Brand & logo" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Options map/ }));
+  const map = within(
+    screen.getByRole("region", { name: "All creative categories" })
+  );
+  expect(
+    map.getByRole("button", { name: "Explore People" }).textContent
+  ).toContain("Needs people scene");
+  expect(map.queryByRole("button", { name: "Explore Audio" })).toBeNull();
+  fireEvent.click(map.getByRole("button", { name: "Explore Fonts" }));
+  expect(screen.getByRole("heading", { name: "Fonts" })).toBeTruthy();
+  expect(
+    screen
+      .getByRole("button", { name: "Fonts" })
+      .getAttribute("aria-description")
+  ).toBe("Explored");
+  expect(
+    screen.getByRole("button", { name: /Options map 4\/15 explored/ })
+  ).toBeTruthy();
+  view.unmount();
+  open();
+  expect(
+    screen.getByRole("button", { name: /Options map 4\/15 explored/ })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  expect(
+    screen.getByRole("button", { name: /Options map 1\/16 explored/ })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Options map/ }));
+  const videoMap = within(
+    screen.getByRole("region", { name: "All creative categories" })
+  );
+  expect(videoMap.queryByRole("button", { name: "Explore Fonts" })).toBeNull();
+  expect(videoMap.getByRole("button", { name: "Explore Audio" })).toBeTruthy();
 });
 it("compares at most three models and never invokes generation", () => {
   open();
