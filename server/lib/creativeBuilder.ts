@@ -136,7 +136,6 @@ export function buildCreativePrompt(input: {
   hasLogo: boolean;
   logoPlacement?: {
     placement: import("../../shared/logoPreservation").LogoPlacement;
-    background: string;
   };
   adaptMaster?: boolean;
 }) {
@@ -211,7 +210,7 @@ export function buildCreativePrompt(input: {
     "Preserve the physical design, color, proportions, markings, and features of each supplied product. Do not invent parts, logos, prices, performance claims, or certifications. Catalog facts override contradictory styling directions.",
     input.hasLogo
       ? setup.preserveLogo
-        ? `ORIGINAL LOGO FINISH: Create the full, polished advertisement with all selected styling, depth, lighting, typography and copy. The supplied original logo will be added afterward, unchanged, at ${JSON.stringify(input.logoPlacement?.placement ?? { corner: setup.logoPosition ?? "top-left" })} in final-canvas pixels. Keep only this small logo area clear of text, products, people and decorative marks, with a quiet ${input.logoPlacement?.background ?? "contrasting"} background for the original logo colors. Integrate that space naturally into the artwork. Do not draw, trace, repeat, reinterpret or recolor the separate logo anywhere, including from a master reference. Do not add a placeholder, logo-shaped mark, box, badge, text card or blank panel. Preserve markings already on the product. All other art direction remains fully active.`
+        ? `ORIGINAL LOGO FINISH: Create the full, polished advertisement with all selected styling, depth, lighting, typography and copy. The supplied original logo will be added afterward, unchanged, at ${JSON.stringify(input.logoPlacement?.placement ?? { corner: setup.logoPosition ?? "top-left" })} in final-canvas pixels. Keep only this small logo area clear of text, products, people and decorative marks, with the finished scene continuing naturally behind it. Logo contrast is handled locally during final compositing. Do not paint a reserved rectangle, flat color patch or bright panel, and do not simplify the scene to make room for the mark. Do not draw, trace, repeat, reinterpret or recolor the separate logo anywhere, including from a master reference. Do not add a placeholder, logo-shaped mark, box, badge, text card or blank panel. Preserve markings already on the product. All other art direction remains fully active.`
         : "Use only the supplied logo, preserving its exact shape and color."
       : "Do not add a separate brand logo. Preserve markings that already exist on the product.",
     creativeTypographyDirection(
