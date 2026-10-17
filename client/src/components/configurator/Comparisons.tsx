@@ -357,7 +357,10 @@ function describe(
     "Brand logo": image
       ? (context.logos.find(l => l.id === c.image.logoAssetId)?.name ??
         "No logo")
-      : "Via source reference / prompt",
+      : c.video.logoAssetId
+        ? (context.assets.find(a => a.key === `asset:${c.video.logoAssetId}`)
+            ?.name ?? "Unavailable logo")
+        : "No logo",
     "Preserve logo":
       image && c.image.logoAssetId
         ? c.image.preserveLogo

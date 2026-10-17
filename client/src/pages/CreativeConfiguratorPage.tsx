@@ -16,7 +16,7 @@ import {
 } from "@/components/configurator/StudioChoicePicker";
 import { StudioSections } from "@/components/configurator/StudioSections";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
   ArrowRight,
@@ -84,6 +84,8 @@ import {
 } from "@shared/modelCatalog";
 import {
   videoSetupProblem,
+  videoReferenceCount,
+  activeVideoStatuses,
   videoSetupSchema,
   defaultVideoDirection,
   type VideoSetup,
@@ -134,16 +136,47 @@ function Field({
     </label>
   );
 }
-export default function CreativeConfiguratorPage() {
+export default function CreativeConfiguratorPage({
+  initialKind,
+}: {
+  initialKind?: "image" | "video";
+}) {
   const { organizationId } = useWorkspace();
   const { user } = useAuth();
+  const params = new URLSearchParams(useSearch());
+  const requestedVideoId = params.get("video");
+  const plan = Number(params.get("plan"));
   return (
     <WorkspaceGate>
-      <Configurator key={String(user?.id) + ":" + organizationId} />
+      <Configurator
+        key={
+          String(user?.id) +
+          ":" +
+          organizationId +
+          ":" +
+          (requestedVideoId ?? "new")
+        }
+        initialKind={initialKind}
+        requestedVideoId={requestedVideoId}
+        initialPlanId={
+          Number.isSafeInteger(plan) && plan > 0 ? plan : undefined
+        }
+        initialUgc={params.get("type") === "ugc"}
+      />
     </WorkspaceGate>
   );
 }
-function Configurator() {
+function Configurator({
+  initialKind,
+  requestedVideoId,
+  initialPlanId,
+  initialUgc,
+}: {
+  initialKind?: "image" | "video";
+  requestedVideoId: string | null;
+  initialPlanId?: number;
+  initialUgc: boolean;
+}) {
   const studioRoot = useStudioNavigation();
   const { organizationId, membership } = useWorkspace();
   const { user } = useAuth();
@@ -151,14 +184,27 @@ function Configurator() {
   const scope = { organizationId: organizationId! };
   const storageKey = "el-configurator-v1:" + user?.id + ":" + organizationId;
   const [config, setConfig] = useState<ConfiguratorState>(() => {
+    let restored = newConfiguration();
     try {
-      return (
-        readConfiguration(localStorage.getItem(storageKey)) ??
-        newConfiguration()
-      );
+      restored =
+        readConfiguration(localStorage.getItem(storageKey)) ?? restored;
     } catch {
-      return newConfiguration();
+      /* Browser memory is optional. */
     }
+    if (initialKind || requestedVideoId || initialUgc)
+      restored.kind = requestedVideoId || initialUgc ? "video" : initialKind!;
+    if (initialPlanId)
+      restored.video = { ...restored.video, campaignPlanId: initialPlanId };
+    if (initialUgc)
+      restored.video = {
+        ...restored.video,
+        category: "ugc",
+        direction: {
+          ...(restored.video.direction ?? defaultVideoDirection),
+          setting: "people",
+        },
+      };
+    return restored;
   });
   const [section, setSection] = useState("type"),
     [category, setCategory] = useState("type");
@@ -174,6 +220,10 @@ function Configurator() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [pendingImageJob, setPendingImageJob] = useState<number | null>(null);
+  const [pendingVideoJob, setPendingVideoJob] = useState<string | null>(
+    requestedVideoId
+  );
+  const [videoOpened, setVideoOpened] = useState(!requestedVideoId);
   const [savedImage, setSavedImage] = useState<{
     briefId: number;
     updatedAtMs: number;
@@ -213,6 +263,42 @@ function Configurator() {
   const videos = trpc.video.list.useQuery(scope, {
     enabled: !!organizationId && canCreate,
   });
+  const videoDetail = trpc.video.get.useQuery(
+    { ...scope, id: pendingVideoJob ?? "00000000-0000-4000-8000-000000000000" },
+    {
+      enabled: !!organizationId && canCreate && !!pendingVideoJob,
+      retry: false,
+      refetchInterval: query =>
+        query.state.data &&
+        activeVideoStatuses.includes(query.state.data.status)
+          ? 3000
+          : false,
+    }
+  );
+  useEffect(() => {
+    if (
+      !requestedVideoId ||
+      videoOpened ||
+      videoDetail.data?.id !== requestedVideoId
+    )
+      return;
+    const job = videoDetail.data;
+    const parsed = videoSetupSchema.safeParse(job.setup);
+    if (!parsed.success) {
+      setError("This video setup could not be opened. Start a new draft.");
+      setVideoOpened(true);
+      return;
+    }
+    setConfig(previous => ({
+      ...previous,
+      kind: "video",
+      video: videoWithSources(parsed.data),
+    }));
+    setSavedVideo(
+      job.status === "draft" ? { id: job.id, revision: job.revision } : null
+    );
+    setVideoOpened(true);
+  }, [requestedVideoId, videoOpened, videoDetail.data]);
   const readiness = trpc.video.options.useQuery(scope, {
     enabled: !!organizationId && canCreate,
   });
@@ -237,7 +323,7 @@ function Configurator() {
   const model = generationModel(selectedModel?.routeId ?? setup.modelId ?? "");
   const referenceCount = isImage
     ? imageReferenceCount(image)
-    : video.imageKeys.length + video.people.length;
+    : videoReferenceCount(video);
   const incompatible = model
     ? modelCompatibility(
         model,
@@ -316,6 +402,18 @@ function Configurator() {
     const parsed = creativeSetupSchema.safeParse(image);
     if (!parsed.success) issues.push(parsed.error.issues[0].message);
   } else {
+    if (!videoOpened)
+      issues.push(videoDetail.error?.message ?? "Opening your saved video…");
+    if (pendingVideoJob && videoDetail.data?.id !== pendingVideoJob)
+      issues.push(videoDetail.error?.message ?? "Checking your video request…");
+    if (
+      videoDetail.data?.id === pendingVideoJob &&
+      (activeVideoStatuses.includes(videoDetail.data.status) ||
+        videoDetail.data.status === "attention")
+    )
+      issues.push(
+        "Your current video request is still being processed. Follow its progress in the preview."
+      );
     const problem = videoSetupProblem(video);
     if (problem) issues.push(problem);
     if (!video.prompt.trim())
@@ -417,7 +515,7 @@ function Configurator() {
     !issues.length && sameQuote && !quote.isFetching && !quote.error
       ? quote.data?.credits
       : undefined;
-  const ready = credits !== undefined && !busy && !pendingImageJob;
+  const ready = credits !== undefined && !busy && !(isImage && pendingImageJob);
   const estimateCredits =
     credits ?? planning.data?.credits ?? selectedModel?.estimatedCredits;
   const quoteLabel =
@@ -461,7 +559,17 @@ function Configurator() {
       updateImage({ name: image.name.slice(0, 145) + " · Alternative" });
     } else {
       setSavedVideo(null);
-      updateVideo({ title: video.title.slice(0, 145) + " · Alternative" });
+      setPendingVideoJob(null);
+      update(
+        {
+          ...configRef.current,
+          video: {
+            ...video,
+            title: video.title.slice(0, 145) + " · Alternative",
+          },
+        },
+        true
+      );
     }
     toast.success(
       "Original kept for comparison. Customize this alternative, then choose Compare builds."
@@ -477,8 +585,9 @@ function Configurator() {
     });
     setSavedImage(null);
     setSavedVideo(null);
+    setPendingVideoJob(null);
     discovery.reset();
-    update(structuredClone(restored));
+    update(structuredClone(restored), true);
     go("output", "review");
   }
   function toggleCompare(id: string) {
@@ -514,9 +623,22 @@ function Configurator() {
         promotion: { kind: "platform", title: "", description: "" },
       });
   }, [options.data]);
-  function update(next: ConfiguratorState) {
+  function update(next: ConfiguratorState, detachVideo = false) {
     setConfig(next);
     setError("");
+    if (
+      requestedVideoId &&
+      (detachVideo || next.kind !== configRef.current.kind)
+    ) {
+      // Remember the new draft before changing the deep link and remounting.
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        setStorageOk(false);
+        return;
+      }
+      navigate("/app/creatives/studio", { replace: true });
+    }
   }
   function updateImage(patch: Partial<CreativeSetup>) {
     update({
@@ -577,7 +699,7 @@ function Configurator() {
       });
   }
   async function saveDraft() {
-    if (!canCreate || busy) return;
+    if (!canCreate || busy || !videoOpened) return;
     setBusy(true);
     setError("");
     try {
@@ -598,6 +720,10 @@ function Configurator() {
         });
         setSavedVideo({ id: result.id, revision: result.revision });
         await utils.video.list.invalidate();
+        if (requestedVideoId && requestedVideoId !== result.id)
+          navigate("/app/creatives/studio?video=" + result.id, {
+            replace: true,
+          });
       }
       toast.success(
         "Draft saved to your workspace. Open Saved drafts to continue on another device."
@@ -639,18 +765,25 @@ function Configurator() {
           ...savedVideo,
         });
         setSavedVideo({ id: saved.id, revision: saved.revision });
-        await videoGenerate.mutateAsync({
+        const started = await videoGenerate.mutateAsync({
           ...scope,
           id: saved.id,
           revision: saved.revision,
           quotedCredits: credits,
         });
-        navigate("/app/creatives/video?video=" + saved.id);
+        setPendingVideoJob(started.id);
+        setSavedVideo(null);
+        navigate("/app/creatives/studio?video=" + started.id, {
+          replace: true,
+        });
+        document
+          .querySelector(".cfg-stage")
+          ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
       }
       toast.success(
         isImage
           ? "Creating your images. Results will appear here and remain saved as drafts."
-          : "Generation started. Your results will appear in your workspace."
+          : "Creating your video. The result will appear here and remain saved as a draft."
       );
       await utils.models.credits.invalidate();
     } catch (e) {
@@ -975,52 +1108,55 @@ function Configurator() {
               Manage Brand Kit <ArrowRight size={13} />
             </Link>
           </div>
-          {isImage ? (
-            <StudioLogos
-              assets={assets.data ?? []}
-              role={membership?.role ?? "creator"}
-              selectedId={image.logoAssetId}
-              search={search}
-              loading={assets.isLoading}
-              loadError={
-                assets.error
-                  ? "Saved logos could not be loaded. Refresh to try again."
-                  : undefined
-              }
-              onChange={logoAssetId =>
-                updateImage({
-                  logoAssetId,
-                  ...(!logoAssetId ? { preserveLogo: false } : {}),
-                })
-              }
-              onAction={async (asset, action) => {
-                const input = {
-                  ...scope,
-                  key: asset.key,
-                  revision: asset.revision,
-                };
-                if (action === "submit") await submitLogo.mutateAsync(input);
-                else if (asset.state === "needs_review")
-                  await reviewLogo.mutateAsync({
-                    ...input,
-                    decision: "approved",
-                    note: "Approved from Creative Studio's logo picker.",
-                  });
-                else await approveLogo.mutateAsync(input);
-                await Promise.all([
-                  utils.assetLibrary.studioList.invalidate(),
-                  utils.assetLibrary.list.invalidate(),
-                  utils.creativeBuilder.options.invalidate(),
-                ]);
-                if (action === "submit")
-                  toast.success("Logo submitted for review.");
-              }}
-            />
-          ) : (
+          <StudioLogos
+            assets={assets.data ?? []}
+            role={membership?.role ?? "creator"}
+            selectedId={
+              (isImage ? image.logoAssetId : video.logoAssetId) ?? null
+            }
+            search={search}
+            loading={assets.isLoading}
+            loadError={
+              assets.error
+                ? "Saved logos could not be loaded. Refresh to try again."
+                : undefined
+            }
+            onChange={logoAssetId =>
+              isImage
+                ? updateImage({
+                    logoAssetId,
+                    ...(!logoAssetId ? { preserveLogo: false } : {}),
+                  })
+                : updateVideo({ logoAssetId })
+            }
+            onAction={async (asset, action) => {
+              const input = {
+                ...scope,
+                key: asset.key,
+                revision: asset.revision,
+              };
+              if (action === "submit") await submitLogo.mutateAsync(input);
+              else if (asset.state === "needs_review")
+                await reviewLogo.mutateAsync({
+                  ...input,
+                  decision: "approved",
+                  note: "Approved from Creative Studio's logo picker.",
+                });
+              else await approveLogo.mutateAsync(input);
+              await Promise.all([
+                utils.assetLibrary.studioList.invalidate(),
+                utils.assetLibrary.list.invalidate(),
+                utils.creativeBuilder.options.invalidate(),
+              ]);
+              if (action === "submit")
+                toast.success("Logo submitted for review.");
+            }}
+          />
+          {!isImage && video.logoAssetId && (
             <p className="cfg-help">
-              Video uses your selected references and written direction. Exact
-              logo overlays are not available in this prototype; add a branded
-              reference image or finish branding in an editor.
+              Your selected logo is included as a branding reference, with your
+              scene and creative styling kept intact. AI rendering may vary from
+              the original artwork.
             </p>
           )}
           {isImage && image.logoAssetId && (
@@ -1311,7 +1447,7 @@ function Configurator() {
                 </button>
               </div>
             )}
-          {!isImage && !video.imageKeys.length && (
+          {!isImage && !referenceCount && (
             <p className="cfg-help">
               Reference images are optional. AI can build a prompt from your
               written idea, selected page and brand details.
@@ -1640,6 +1776,7 @@ function Configurator() {
               : "Choose a subject"
         : video.imageKeys.length +
           " references" +
+          (video.logoAssetId ? " + logo" : "") +
           (video.sourceVideoKey ? " + source clip" : ""),
       section: "type",
       category: "source",
@@ -1741,12 +1878,32 @@ function Configurator() {
               Drafts
             </span>
           </button>
-          <button disabled={busy} onClick={saveDraft}>
+          <button disabled={busy || !videoOpened} onClick={saveDraft}>
             <Save size={15} /> Save draft
           </button>
         </div>
       </div>
-      <fieldset disabled={busy} className="cfg-workspace">
+      {!videoOpened && (
+        <p role={videoDetail.error ? "alert" : "status"}>
+          {videoDetail.error?.message ?? "Opening your saved video…"}
+          {videoDetail.error && (
+            <button
+              type="button"
+              onClick={() => {
+                setPendingVideoJob(null);
+                setVideoOpened(true);
+                update(configRef.current, true);
+              }}
+            >
+              Return to your browser draft
+            </button>
+          )}
+        </p>
+      )}
+      <fieldset
+        disabled={busy || (!videoOpened && !videoDetail.error)}
+        className="cfg-workspace"
+      >
         <StudioPreview
           key={config.kind + ":" + (savedImage?.briefId ?? "new")}
           summary={
@@ -1802,12 +1959,16 @@ function Configurator() {
           }
           organizationId={organizationId!}
           role={membership?.role ?? ""}
-          jobId={pendingImageJob}
+          jobId={isImage ? pendingImageJob : null}
+          videoJobId={isImage ? null : pendingVideoJob}
+          videoJob={videoDetail.data}
+          videoLoadError={videoDetail.error?.message}
           referenceUrl={preview}
           onSettled={() => {
-            setPendingImageJob(null);
+            if (isImage) setPendingImageJob(null);
             void utils.assetLibrary.studioList.invalidate();
             void utils.models.credits.invalidate();
+            void utils.video.list.invalidate();
           }}
           kind={config.kind}
           briefId={savedImage?.briefId}
@@ -1816,30 +1977,36 @@ function Configurator() {
           reuse={trial => {
             setSavedImage(null);
             setSavedVideo(null);
+            setPendingVideoJob(null);
             discovery.reset();
-            update({
-              ...configRef.current,
-              ...(trial.imageSetup
-                ? {
-                    kind: "image",
-                    image: {
-                      ...trial.imageSetup,
-                      name:
-                        trial.imageSetup.name.slice(0, 140) + " · new version",
-                    },
-                  }
-                : {}),
-              ...(trial.videoSetup
-                ? {
-                    kind: "video",
-                    video: {
-                      ...trial.videoSetup,
-                      title:
-                        trial.videoSetup.title.slice(0, 140) + " · new version",
-                    },
-                  }
-                : {}),
-            });
+            update(
+              {
+                ...configRef.current,
+                ...(trial.imageSetup
+                  ? {
+                      kind: "image",
+                      image: {
+                        ...trial.imageSetup,
+                        name:
+                          trial.imageSetup.name.slice(0, 140) +
+                          " · new version",
+                      },
+                    }
+                  : {}),
+                ...(trial.videoSetup
+                  ? {
+                      kind: "video",
+                      video: {
+                        ...trial.videoSetup,
+                        title:
+                          trial.videoSetup.title.slice(0, 140) +
+                          " · new version",
+                      },
+                    }
+                  : {}),
+              },
+              true
+            );
             toast.success(
               "Settings loaded into a new draft. Review them before generating."
             );
@@ -2146,8 +2313,13 @@ function Configurator() {
                     });
                     discovery.reset("video");
                     setSavedVideo({ id: d.id, revision: d.revision });
+                    setPendingVideoJob(null);
                     setDraftsOpen(false);
                     go("type");
+                    if (requestedVideoId && requestedVideoId !== d.id)
+                      navigate("/app/creatives/studio?video=" + d.id, {
+                        replace: true,
+                      });
                   }}
                 >
                   <Clapperboard size={18} />

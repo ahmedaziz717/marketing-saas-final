@@ -94,7 +94,12 @@ export async function draftVideoPrompt(
       : await readGenerationSource(reference.storageKey);
     const facts = reference.key.startsWith("product_image:")
       ? (await readVideoCatalogImage(db, organizationId, reference.key)).facts
-      : { name: reference.name };
+      : {
+          name: reference.name,
+          ...(reference.role === "logo"
+            ? { role: "Brand logo artwork, not the subject or product" }
+            : {}),
+        };
     content.push(
       { type: "text", text: `Image ${index + 1}: ${JSON.stringify(facts)}` },
       {

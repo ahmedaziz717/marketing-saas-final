@@ -108,6 +108,7 @@ let engine: PGlite,
   videoId: number,
   foreignId: number;
 let productId: number, catalogImageId: number, foreignCatalogImageId: number;
+let logoId: number, foreignLogoId: number;
 let owner: ReturnType<typeof appRouter.createCaller>,
   outsider: typeof owner,
   reviewer: typeof owner;
@@ -230,6 +231,23 @@ beforeAll(async () => {
         updatedAtMs: now,
       })
       .returning();
+    const [logo] = await db
+      .insert(brandAssets)
+      .values({
+        organizationId,
+        brandKitId: kit.id,
+        name: "Brand wordmark",
+        type: "logo",
+        storageKey: `org-${organizationId}/logo.png`,
+        url: "/media/logo.png",
+        mimeType: "image/png",
+        status: "approved",
+        uploadedByUserId: ownerId,
+        createdAtMs: now,
+      })
+      .returning();
+    if (organizationId === org) logoId = logo.id;
+    else foreignLogoId = logo.id;
     const [asset] = await db
       .insert(brandAssets)
       .values({
@@ -282,6 +300,10 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   state.llm.mockReset();
+  await state.db
+    .update(brandAssets)
+    .set({ status: "approved" })
+    .where(eq(brandAssets.id, logoId));
   state.image.mockReset();
   state.image.mockImplementation(async (key: string) => ({
     b64Json: Buffer.from(key).toString("base64"),
@@ -395,6 +417,17 @@ describe("durable video generation", () => {
     expect(images.items.map(item => item.key)).toEqual([
       `product_image:${catalogImageId}`,
     ]);
+    const selected = await owner.video.catalogImages({
+      organizationId: org,
+      selectedOnly: true,
+      selectedKeys: [
+        `product_image:${catalogImageId}`,
+        ...Array.from({ length: 11 }, (_, i) => `product_image:${100000 + i}`),
+      ],
+    });
+    expect(selected.items.map(item => item.key)).toEqual([
+      `product_image:${catalogImageId}`,
+    ]);
     expect(
       (
         await owner.video.catalogImages({
@@ -438,6 +471,111 @@ describe("durable video generation", () => {
       (await owner.video.catalogImages({ organizationId: org })).items
     ).toEqual([]);
     expect(job.credits).toBeGreaterThan(0);
+  });
+
+  it("saves and sends an approved brand logo after subject images and before people", async () => {
+    const settings = {
+      ...setup(),
+      logoAssetId: logoId,
+      category: "ugc" as const,
+      people: [{ kind: "library" as const, id: "female-black-0" }],
+    };
+    const draft = await owner.video.save({
+      organizationId: org,
+      setup: settings,
+    });
+    expect(
+      (await owner.video.get({ organizationId: org, id: draft.id })).setup
+        .logoAssetId
+    ).toBe(logoId);
+    const refs = await resolveVideoReferences(state.db, org, {
+      ...settings,
+      imageKeys: [`asset:${logoId}`, `asset:${imageId}`],
+    });
+    expect(refs.map(ref => ref.key)).toEqual([
+      `asset:${imageId}`,
+      `asset:${logoId}`,
+      "person_library:female-black-0",
+    ]);
+    expect(refs[1].role).toBe("logo");
+    const job = await queued(settings);
+    state.submit.mockResolvedValue({ id: "brand-video-request" });
+    await tick();
+    await tick();
+    const request = state.submit.mock.calls[0][1];
+    expect(request.image_urls).toHaveLength(3);
+    expect(request.image_urls[1]).toContain(`/org-${org}/logo.png`);
+    expect(request.prompt).toContain(
+      "Image 2 is the selected brand logo, not the subject or product"
+    );
+    expect(request.prompt).toContain("Keep the full creative styling");
+    expect(request.prompt).toContain("LAST 1 reference images");
+    expect(
+      (await owner.video.get({ organizationId: org, id: job.id })).status
+    ).toBe("generating");
+  });
+
+  it("uses the actual logo in AI prompt drafting and rejects foreign, wrong-type or unapproved marks before AI", async () => {
+    state.llm.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              prompt:
+                "Reveal the studio lamp with a gentle camera orbit and restrained brand artwork.",
+            }),
+          },
+        },
+      ],
+    });
+    await owner.video.draftPrompt({
+      organizationId: org,
+      setup: { ...setup(), logoAssetId: logoId },
+    });
+    const parts = state.llm.mock.calls[0][0].messages[1].content;
+    expect(
+      parts.filter((part: any) => part.type === "image_url")[1].image_url.url
+    ).toContain(Buffer.from(`org-${org}/logo.png`).toString("base64"));
+    expect(
+      parts.find((part: any) => part.text?.startsWith("Image 2:")).text
+    ).toContain("Brand logo artwork, not the subject or product");
+    state.llm.mockClear();
+    for (const invalidId of [foreignLogoId, imageId]) {
+      await expect(
+        owner.video.save({
+          organizationId: org,
+          setup: { ...setup(), logoAssetId: invalidId },
+        })
+      ).rejects.toThrow(/approved brand logo/);
+      await expect(
+        owner.video.draftPrompt({
+          organizationId: org,
+          setup: { ...setup(), logoAssetId: invalidId },
+        })
+      ).rejects.toThrow(/approved brand logo/);
+    }
+    const refs = await resolveVideoReferences(state.db, org, {
+      ...setup(),
+      logoAssetId: logoId,
+    });
+    await state.db
+      .update(brandAssets)
+      .set({ status: "pending" })
+      .where(eq(brandAssets.id, logoId));
+    await expect(
+      owner.video.quote({
+        organizationId: org,
+        setup: { ...setup(), logoAssetId: logoId },
+      })
+    ).rejects.toThrow(/approved brand logo/);
+    await expect(
+      validateVideoReferences(state.db, {
+        organizationId: org,
+        references: refs,
+      })
+    ).rejects.toThrow(/logo is no longer approved/);
+    expect(state.llm).not.toHaveBeenCalled();
+    expect(state.estimate).not.toHaveBeenCalled();
   });
 
   it("drafts a metered-scope prompt from actual ordered images and protects workspace boundaries", async () => {
