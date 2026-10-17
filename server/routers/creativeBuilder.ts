@@ -1,4 +1,5 @@
 import {
+  findSafeLogoPlacement,
   loadPreservedLogo,
   prepareLogoPlacement,
   renderOriginalLogo,
@@ -408,8 +409,16 @@ export async function runBuilderJob(
           master = await readGenerationSource(image.storageKey);
         const originalDesign = { storageKey: image.storageKey, url: image.url };
         if (preservedLogo && logoLayout) {
+          const design = Buffer.from(
+            await storageGetBase64(image.storageKey),
+            "base64"
+          );
+          logoLayout.placement = await findSafeLogoPlacement(
+            design,
+            logoLayout.placement
+          );
           const png = await renderOriginalLogo(
-            Buffer.from(await storageGetBase64(image.storageKey), "base64"),
+            design,
             preservedLogo,
             logoLayout.placement
           );
