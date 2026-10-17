@@ -2476,3 +2476,138 @@
     font-size: 12px;
   }
 }
+
+/* Compact phone layout: one generation action and estimate in the sticky bar. */
+.cfg-completion-hint::before {
+  content: " · ";
+}
+@media (max-width: 700px) {
+  .cfg-completion-hint {
+    display: block;
+  }
+  .cfg-completion-hint::before {
+    content: none;
+  }
+  .cfg-root .cfg-heading {
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+  .cfg-section-heading {
+    margin-top: 6px;
+  }
+  .cfg-section-heading .cfg-section-button {
+    min-height: 52px;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .cfg-section-heading small {
+    display: none;
+  }
+  .cfg-root .cfg-categories {
+    margin-bottom: 10px;
+    padding-top: 10px;
+  }
+  .cfg-root .cfg-categories .studio-category-track > button {
+    min-height: 64px;
+    padding: 8px;
+  }
+  .cfg-root .cfg-content-title {
+    margin: 12px 0;
+    gap: 8px;
+  }
+  .cfg-content-title .cfg-eyebrow {
+    display: none;
+  }
+  .cfg-card-copy {
+    padding: 10px 12px 6px;
+  }
+  .cfg-creative .cfg-stage {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .cfg-creative .cfg-stage .cfg-preview,
+  .cfg-creative .cfg-stage .cfg-preview > img,
+  .cfg-creative .cfg-stage .cfg-preview > .cfg-art,
+  .cfg-creative .cfg-stage .cfg-result-expand > img,
+  .cfg-creative .cfg-stage .cfg-result-preview > video {
+    height: 176px;
+    min-height: 0;
+  }
+  .cfg-creative .cfg-preview > img {
+    padding: 10px 12px 44px;
+  }
+  .cfg-creative .cfg-preview-caption {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+  }
+  .cfg-creative .cfg-preview-caption strong {
+    font-size: 17px;
+    margin-top: 4px;
+  }
+  .cfg-creative .cfg-trials-heading {
+    margin: 10px 0 6px;
+  }
+  .cfg-creative .cfg-stage .cfg-trial {
+    flex-basis: 62px;
+    min-height: 64px;
+    padding: 5px;
+  }
+  .cfg-creative .cfg-stage .cfg-trial img,
+  .cfg-creative .cfg-stage .cfg-trial-video {
+    width: 50px;
+    height: 38px;
+  }
+  .cfg-creative .cfg-trial small {
+    display: none;
+  }
+  .cfg-creative .cfg-trials {
+    margin-bottom: 6px;
+  }
+  .cfg-creative .cfg-build-top:has(.cfg-draft-status.is-saved),
+  .cfg-creative .cfg-estimate,
+  .cfg-creative .cfg-bottom .cfg-next-section,
+  .cfg-creative .cfg-bottom .cfg-credit-detail {
+    display: none;
+  }
+  .cfg-creative .cfg-build > .cfg-field > input {
+    font-size: 17px;
+    padding-bottom: 6px;
+    min-height: 44px;
+  }
+  .cfg-creative .cfg-summary {
+    margin: 8px 0 0;
+    gap: 5px;
+  }
+  .cfg-creative .cfg-summary button {
+    padding: 6px 20px 6px 8px;
+    min-height: 44px;
+  }
+  .cfg-creative .cfg-summary span {
+    margin-bottom: 1px;
+  }
+  .cfg-creative .cfg-summary svg {
+    top: 18px;
+  }
+  .cfg-creative .cfg-bottom {
+    margin-top: 10px;
+    flex-wrap: nowrap;
+    padding: 8px 10px;
+  }
+  .cfg-creative .cfg-bottom > div:first-child {
+    min-width: 0;
+  }
+  .cfg-creative .cfg-bottom > div > strong {
+    font-weight: 500;
+    color: var(--cfg-muted);
+  }
+  .cfg-creative .cfg-bottom > .cfg-actions {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .cfg-creative .cfg-bottom .cfg-actions button {
+    min-height: 44px;
+    padding: 9px 12px;
+  }
+}
