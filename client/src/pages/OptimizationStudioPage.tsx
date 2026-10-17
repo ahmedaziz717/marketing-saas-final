@@ -383,546 +383,567 @@ function Studio({
         onSelect={id =>
           select(sections.find(s => s.id === id)!.categories[0].id)
         }
-      />
-      <div className="cfg-body">
-        <StudioCategories
-          items={section.categories}
-          current={page}
-          onSelect={select}
-        />
-        {error && (
-          <p role="alert" className="insight-notice">
-            {error}
-          </p>
-        )}
-        {saved.error && (
-          <p role="alert" className="insight-notice">
-            Saved plans could not be loaded. {saved.error.message}
-          </p>
-        )}
-        {availability.error && (
-          <p role="alert" className="insight-notice">
-            {availability.error.message}
-          </p>
-        )}
-        {availability.data?.enabled === false && (
-          <p className="insight-notice">
-            Historical optimization analysis is not enabled for this workspace.
-            You can save goals and experiment plans; an administrator can enable
-            the existing optimization service.
-          </p>
-        )}
-        {detail.data && revision && detail.data.revision > revision && (
-          <p role="alert" className="insight-notice">
-            This plan changed in another tab. Reopen it before saving to keep
-            both edits safe.
-          </p>
-        )}
-        <fieldset disabled={busy} className="insight-form">
-          {page === "purpose" && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>What would you like to improve?</h2>
-                  <p>
-                    Give this plan a question that your evidence can answer.
-                  </p>
-                </div>
-              </div>
-              <div className="insight-form-grid">
-                <label className="insight-label">
-                  Plan title
-                  <input
-                    aria-label="Plan title"
-                    value={name}
-                    maxLength={100}
-                    onChange={e => {
-                      setName(e.target.value);
-                      setDirty(true);
-                    }}
-                  />
-                </label>
-                <label className="insight-label insight-full">
-                  Goal & context
-                  <textarea
-                    aria-label="Goal & context"
-                    rows={5}
-                    maxLength={5000}
-                    placeholder="For example: Which headline approaches deserve a controlled test to improve purchase efficiency?"
-                    value={studio.objective}
-                    onChange={e => updateStudio({ objective: e.target.value })}
-                  />
-                </label>
-              </div>
-              <div className="optimization-explainer">
-                <Lightbulb size={22} />
-                <p>
-                  Choose an account and areas to analyze. Review the observed
-                  patterns and evidence limits, then turn a finding into an
-                  editable experiment plan.
-                </p>
-              </div>
-            </section>
+      >
+        <div className="cfg-body">
+          <StudioCategories
+            items={section.categories}
+            current={page}
+            onSelect={select}
+          />
+          {error && (
+            <p role="alert" className="insight-notice">
+              {error}
+            </p>
           )}
-          {page === "focus" && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>Choose up to three areas</h2>
+          {saved.error && (
+            <p role="alert" className="insight-notice">
+              Saved plans could not be loaded. {saved.error.message}
+            </p>
+          )}
+          {availability.error && (
+            <p role="alert" className="insight-notice">
+              {availability.error.message}
+            </p>
+          )}
+          {availability.data?.enabled === false && (
+            <p className="insight-notice">
+              Historical optimization analysis is not enabled for this
+              workspace. You can save goals and experiment plans; an
+              administrator can enable the existing optimization service.
+            </p>
+          )}
+          {detail.data && revision && detail.data.revision > revision && (
+            <p role="alert" className="insight-notice">
+              This plan changed in another tab. Reopen it before saving to keep
+              both edits safe.
+            </p>
+          )}
+          <fieldset disabled={busy} className="insight-form">
+            {page === "purpose" && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>What would you like to improve?</h2>
+                    <p>
+                      Give this plan a question that your evidence can answer.
+                    </p>
+                  </div>
+                </div>
+                <div className="insight-form-grid">
+                  <label className="insight-label">
+                    Plan title
+                    <input
+                      aria-label="Plan title"
+                      value={name}
+                      maxLength={100}
+                      onChange={e => {
+                        setName(e.target.value);
+                        setDirty(true);
+                      }}
+                    />
+                  </label>
+                  <label className="insight-label insight-full">
+                    Goal & context
+                    <textarea
+                      aria-label="Goal & context"
+                      rows={5}
+                      maxLength={5000}
+                      placeholder="For example: Which headline approaches deserve a controlled test to improve purchase efficiency?"
+                      value={studio.objective}
+                      onChange={e =>
+                        updateStudio({ objective: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="optimization-explainer">
+                  <Lightbulb size={22} />
                   <p>
-                    Each area gets its own recommendation and supporting
-                    evidence.
+                    Choose an account and areas to analyze. Review the observed
+                    patterns and evidence limits, then turn a finding into an
+                    editable experiment plan.
                   </p>
                 </div>
-              </div>
-              <div className="optimization-focus-grid">
-                {optimizerKinds.map(kind => (
-                  <label
-                    key={kind}
-                    className="optimization-focus"
-                    data-selected={settings.focus.includes(kind)}
-                  >
+              </section>
+            )}
+            {page === "focus" && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>Choose up to three areas</h2>
+                    <p>
+                      Each area gets its own recommendation and supporting
+                      evidence.
+                    </p>
+                  </div>
+                </div>
+                <div className="optimization-focus-grid">
+                  {optimizerKinds.map(kind => (
+                    <label
+                      key={kind}
+                      className="optimization-focus"
+                      data-selected={settings.focus.includes(kind)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={settings.focus.includes(kind)}
+                        disabled={
+                          !settings.focus.includes(kind) &&
+                          settings.focus.length >= 3
+                        }
+                        onChange={e =>
+                          update({
+                            focus: e.target.checked
+                              ? [...settings.focus, kind]
+                              : settings.focus.filter(k => k !== kind),
+                          })
+                        }
+                      />
+                      <span>
+                        <strong>
+                          {optimizerLibrary[kind].name.replace(
+                            " optimizer",
+                            ""
+                          )}
+                        </strong>
+                        <small>{optimizerLibrary[kind].test}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            )}
+            {page === "source" && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>Choose the evidence</h2>
+                    <p>
+                      Analyze imported Meta ad results from January 2026 onward.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <label className="insight-label">
+                    Meta ad account
+                    <WorkflowConnectionInput
+                      title="Meta ad account"
+                      channel="meta_ads"
+                      organizationId={organizationId}
+                      value={settings.connectionId}
+                      onChange={connectionId => update({ connectionId })}
+                    />
+                  </label>
+                  <DateRangeFilter
+                    value={settings.range}
+                    timezone={account?.details.timezone ?? "UTC"}
+                    onChange={range => range && update({ range })}
+                  />
+                  <p className="insight-caption">
+                    Dates use the account timezone:{" "}
+                    {account?.details.timezone ?? "UTC"}. Only the selected
+                    period is analyzed.
+                  </p>
+                  <label className="insight-check">
                     <input
                       type="checkbox"
-                      checked={settings.focus.includes(kind)}
-                      disabled={
-                        !settings.focus.includes(kind) &&
-                        settings.focus.length >= 3
-                      }
+                      checked={settings.refreshHistory}
                       onChange={e =>
-                        update({
-                          focus: e.target.checked
-                            ? [...settings.focus, kind]
-                            : settings.focus.filter(k => k !== kind),
-                        })
+                        update({ refreshHistory: e.target.checked })
                       }
                     />
                     <span>
-                      <strong>
-                        {optimizerLibrary[kind].name.replace(" optimizer", "")}
-                      </strong>
-                      <small>{optimizerLibrary[kind].test}</small>
+                      Refresh Meta history before this analysis
+                      <small>
+                        Runs a read-only import first. An initial import can
+                        take longer; progress appears with the run.
+                      </small>
                     </span>
                   </label>
-                ))}
-              </div>
-            </section>
-          )}
-          {page === "source" && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>Choose the evidence</h2>
-                  <p>
-                    Analyze imported Meta ad results from January 2026 onward.
-                  </p>
                 </div>
-              </div>
-              <div className="space-y-6">
+              </section>
+            )}
+            {page === "quality" && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>Know what the evidence supports</h2>
+                    <p>
+                      Coverage and classification quality stay visible beside
+                      your results.
+                    </p>
+                  </div>
+                </div>
+                {progress.error && <p role="alert">{progress.error.message}</p>}
+                <div className="optimization-evidence-card">
+                  <strong>
+                    {!settings.connectionId
+                      ? "Choose an account first"
+                      : progress.isLoading
+                        ? "Checking imported evidence…"
+                        : progress.data
+                          ? `History import: ${progress.data.status}`
+                          : "No imported history yet"}
+                  </strong>
+                  {progress.data ? (
+                    <>
+                      <p>
+                        {progress.data.range.since} –{" "}
+                        {progress.data.range.until} ·{" "}
+                        {progress.data.rows.toLocaleString()} imported records
+                      </p>
+                      <p>
+                        {progress.data.completedTasks} /{" "}
+                        {progress.data.totalTasks} slices · Updated{" "}
+                        {new Date(progress.data.updatedAtMs).toLocaleString()}
+                      </p>
+                      {progress.data.error && (
+                        <p role="alert">{progress.data.error}</p>
+                      )}
+                      {progress.data.warnings.map((w, i) => (
+                        <p key={i}>{w}</p>
+                      ))}
+                    </>
+                  ) : (
+                    <p>
+                      Enable “Refresh Meta history” in Account & dates to import
+                      evidence on the next run.
+                    </p>
+                  )}
+                  <Link href="/app/optimize/intelligence">
+                    Inspect or manage imported history →
+                  </Link>
+                </div>
                 <label className="insight-label">
-                  Meta ad account
-                  <WorkflowConnectionInput
-                    title="Meta ad account"
-                    channel="meta_ads"
-                    organizationId={organizationId}
-                    value={settings.connectionId}
-                    onChange={connectionId => update({ connectionId })}
-                  />
+                  Minimum classification confidence
+                  <select
+                    aria-label="Minimum classification confidence"
+                    value={settings.minimumConfidence}
+                    onChange={e =>
+                      update({ minimumConfidence: Number(e.target.value) })
+                    }
+                  >
+                    <option value={0}>Include all classifications</option>
+                    <option value={0.5}>50% · moderate and above</option>
+                    <option value={0.8}>80% · high confidence only</option>
+                  </select>
                 </label>
-                <DateRangeFilter
-                  value={settings.range}
-                  timezone={account?.details.timezone ?? "UTC"}
-                  onChange={range => range && update({ range })}
-                />
                 <p className="insight-caption">
-                  Dates use the account timezone:{" "}
-                  {account?.details.timezone ?? "UTC"}. Only the selected period
-                  is analyzed.
+                  This filters how confidently an ad was classified. It is
+                  separate from confidence in a performance result. Missing
+                  coverage and unknown values remain explicit; observed
+                  associations do not establish causal lift.
                 </p>
-                <label className="insight-check">
-                  <input
-                    type="checkbox"
-                    checked={settings.refreshHistory}
-                    onChange={e => update({ refreshHistory: e.target.checked })}
-                  />
-                  <span>
-                    Refresh Meta history before this analysis
-                    <small>
-                      Runs a read-only import first. An initial import can take
-                      longer; progress appears with the run.
-                    </small>
-                  </span>
-                </label>
-              </div>
-            </section>
-          )}
-          {page === "quality" && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>Know what the evidence supports</h2>
-                  <p>
-                    Coverage and classification quality stay visible beside your
-                    results.
-                  </p>
+              </section>
+            )}
+            {page === "review" && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>Ready to analyze?</h2>
+                    <p>
+                      Save the setup and run the connected analysis workflow.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {progress.error && <p role="alert">{progress.error.message}</p>}
-              <div className="optimization-evidence-card">
-                <strong>
-                  {!settings.connectionId
-                    ? "Choose an account first"
-                    : progress.isLoading
-                      ? "Checking imported evidence…"
-                      : progress.data
-                        ? `History import: ${progress.data.status}`
-                        : "No imported history yet"}
-                </strong>
-                {progress.data ? (
-                  <>
-                    <p>
-                      {progress.data.range.since} – {progress.data.range.until}{" "}
-                      · {progress.data.rows.toLocaleString()} imported records
-                    </p>
-                    <p>
-                      {progress.data.completedTasks} /{" "}
-                      {progress.data.totalTasks} slices · Updated{" "}
-                      {new Date(progress.data.updatedAtMs).toLocaleString()}
-                    </p>
-                    {progress.data.error && (
-                      <p role="alert">{progress.data.error}</p>
-                    )}
-                    {progress.data.warnings.map((w, i) => (
-                      <p key={i}>{w}</p>
-                    ))}
-                  </>
-                ) : (
-                  <p>
-                    Enable “Refresh Meta history” in Account & dates to import
-                    evidence on the next run.
+                <dl className="optimization-summary">
+                  <div>
+                    <dt>Plan</dt>
+                    <dd>{name}</dd>
+                  </div>
+                  <div>
+                    <dt>Goal</dt>
+                    <dd>
+                      {studio.objective || "Add a goal in the Goal section"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Source</dt>
+                    <dd>
+                      {account?.name ?? "Choose a connected account"} ·{" "}
+                      {settings.range.since} – {settings.range.until}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Focus</dt>
+                    <dd>
+                      {settings.focus
+                        .map(k =>
+                          optimizerLibrary[k].name.replace(" optimizer", "")
+                        )
+                        .join(", ") || "Choose at least one area"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>History</dt>
+                    <dd>
+                      {settings.refreshHistory
+                        ? "Refresh before analysis"
+                        : "Use currently imported evidence"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>
+                      Recommendations, coverage notes and editable experiment
+                      plans · 0 AI generation credits
+                    </dd>
+                  </div>
+                </dl>
+                <p className="insight-caption">
+                  This run reads performance and prepares recommendations.
+                  Campaign changes and experiment launches remain separate
+                  actions requiring review.
+                </p>
+                <Button
+                  disabled={
+                    !!active ||
+                    !availability.data?.enabled ||
+                    !studio.objective.trim() ||
+                    !settings.connectionId ||
+                    !settings.focus.length
+                  }
+                  onClick={() => persist(true)}
+                >
+                  {busy
+                    ? "Starting analysis…"
+                    : active
+                      ? "Analysis already in progress"
+                      : "Save & run analysis"}
+                </Button>
+                {active && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedRunId("");
+                      select("results");
+                    }}
+                  >
+                    View progress
+                  </Button>
+                )}
+                {workflowId && (
+                  <p className="mt-4">
+                    <Link
+                      href={`/app/optimize/workflows?workflow=${workflowId}`}
+                    >
+                      View the underlying workflow →
+                    </Link>
                   </p>
                 )}
-                <Link href="/app/optimize/intelligence">
-                  Inspect or manage imported history →
-                </Link>
-              </div>
-              <label className="insight-label">
-                Minimum classification confidence
-                <select
-                  aria-label="Minimum classification confidence"
-                  value={settings.minimumConfidence}
-                  onChange={e =>
-                    update({ minimumConfidence: Number(e.target.value) })
-                  }
-                >
-                  <option value={0}>Include all classifications</option>
-                  <option value={0.5}>50% · moderate and above</option>
-                  <option value={0.8}>80% · high confidence only</option>
-                </select>
-              </label>
-              <p className="insight-caption">
-                This filters how confidently an ad was classified. It is
-                separate from confidence in a performance result. Missing
-                coverage and unknown values remain explicit; observed
-                associations do not establish causal lift.
-              </p>
-            </section>
-          )}
-          {page === "review" && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>Ready to analyze?</h2>
-                  <p>Save the setup and run the connected analysis workflow.</p>
-                </div>
-              </div>
-              <dl className="optimization-summary">
-                <div>
-                  <dt>Plan</dt>
-                  <dd>{name}</dd>
-                </div>
-                <div>
-                  <dt>Goal</dt>
-                  <dd>
-                    {studio.objective || "Add a goal in the Goal section"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Source</dt>
-                  <dd>
-                    {account?.name ?? "Choose a connected account"} ·{" "}
-                    {settings.range.since} – {settings.range.until}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Focus</dt>
-                  <dd>
-                    {settings.focus
-                      .map(k =>
-                        optimizerLibrary[k].name.replace(" optimizer", "")
-                      )
-                      .join(", ") || "Choose at least one area"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>History</dt>
-                  <dd>
-                    {settings.refreshHistory
-                      ? "Refresh before analysis"
-                      : "Use currently imported evidence"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Output</dt>
-                  <dd>
-                    Recommendations, coverage notes and editable experiment
-                    plans · 0 AI generation credits
-                  </dd>
-                </div>
-              </dl>
-              <p className="insight-caption">
-                This run reads performance and prepares recommendations.
-                Campaign changes and experiment launches remain separate actions
-                requiring review.
-              </p>
-              <Button
-                disabled={
-                  !!active ||
-                  !availability.data?.enabled ||
-                  !studio.objective.trim() ||
-                  !settings.connectionId ||
-                  !settings.focus.length
-                }
-                onClick={() => persist(true)}
-              >
-                {busy
-                  ? "Starting analysis…"
-                  : active
-                    ? "Analysis already in progress"
-                    : "Save & run analysis"}
-              </Button>
-              {active && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedRunId("");
-                    select("results");
-                  }}
-                >
-                  View progress
-                </Button>
-              )}
-              {workflowId && (
-                <p className="mt-4">
-                  <Link href={`/app/optimize/workflows?workflow=${workflowId}`}>
-                    View the underlying workflow →
-                  </Link>
-                </p>
-              )}
-            </section>
-          )}
-          {(page === "results" || page === "history") && (
-            <section>
-              <div className="cfg-content-title">
-                <div>
-                  <h2>
-                    {page === "history"
-                      ? "Analysis history"
-                      : "Your next opportunities"}
-                  </h2>
-                  <p>
-                    Each run retains the evidence and settings used at that
-                    time.
-                  </p>
-                </div>
-              </div>
-              {sourceRun.error && <p role="alert">{sourceRun.error.message}</p>}
-              {!latest && (
-                <div className="insight-empty">
-                  <Lightbulb size={28} />
-                  <h3>
-                    {sourceRun.isLoading
-                      ? "Loading saved run…"
-                      : "Your findings will appear here"}
-                  </h3>
-                  <p>
-                    Complete your goal and evidence setup, then run the
-                    analysis.
-                  </p>
-                  <Button onClick={() => select("review")}>
-                    Review analysis setup
-                  </Button>
-                </div>
-              )}
-              {page === "history" && (
-                <div className="optimization-history">
-                  {runs.map(r => (
-                    <button
-                      type="button"
-                      key={r.id}
-                      onClick={() => {
-                        setSelectedRunId(r.id);
-                        select("results");
-                      }}
-                    >
-                      <span>
-                        {new Date(r.createdAtMs).toLocaleString()}
-                        <small>Saved analysis settings & evidence</small>
-                      </span>
-                      <strong>{workflowRunStatusLabel(r)}</strong>
-                      <ArrowRight size={16} />
-                    </button>
-                  ))}
-                  {runs.length === 20 && (
-                    <p className="insight-caption">
-                      Showing the latest 20 runs. Older evidence remains
-                      accessible from linked experiments.
+              </section>
+            )}
+            {(page === "results" || page === "history") && (
+              <section>
+                <div className="cfg-content-title">
+                  <div>
+                    <h2>
+                      {page === "history"
+                        ? "Analysis history"
+                        : "Your next opportunities"}
+                    </h2>
+                    <p>
+                      Each run retains the evidence and settings used at that
+                      time.
                     </p>
-                  )}
+                  </div>
                 </div>
-              )}
-              {page === "results" && latest && (
-                <>
-                  <div className="optimization-run-banner">
-                    <div>
-                      <strong>{workflowRunStatusLabel(latest)}</strong>
-                      <p>
-                        {new Date(latest.createdAtMs).toLocaleString()} ·{" "}
-                        {
-                          latest.graph.nodes.find(
-                            n => n.type === "analyze_history"
-                          )?.config.analysis?.range.since
-                        }{" "}
-                        –{" "}
-                        {
-                          latest.graph.nodes.find(
-                            n => n.type === "analyze_history"
-                          )?.config.analysis?.range.until
-                        }
-                      </p>
-                      <p>{latest.graph.optimizationStudio?.objective}</p>
-                    </div>
-                    <Button variant="outline" onClick={() => select("history")}>
-                      Run history
+                {sourceRun.error && (
+                  <p role="alert">{sourceRun.error.message}</p>
+                )}
+                {!latest && (
+                  <div className="insight-empty">
+                    <Lightbulb size={28} />
+                    <h3>
+                      {sourceRun.isLoading
+                        ? "Loading saved run…"
+                        : "Your findings will appear here"}
+                    </h3>
+                    <p>
+                      Complete your goal and evidence setup, then run the
+                      analysis.
+                    </p>
+                    <Button onClick={() => select("review")}>
+                      Review analysis setup
                     </Button>
                   </div>
-                  {dirty && (
-                    <p className="insight-notice">
-                      These results belong to the saved run shown above. Run
-                      again to analyze your edited settings.
-                    </p>
-                  )}
-                  {latest.error && (
-                    <p role="alert" className="insight-notice">
-                      {latest.error}
-                    </p>
-                  )}
-                  <WorkflowRunProgress
-                    run={latest}
-                    refreshError={!!detail.error || !!sourceRun.error}
-                    refreshing={detail.isFetching}
-                    onRefresh={() => detail.refetch()}
-                  />
-                  <WorkflowRunReview
-                    hideBackgroundWaits
-                    organizationId={organizationId}
-                    role={role}
-                    run={latest}
-                    onRefresh={() => detail.refetch()}
-                  />
-                  {results.map(data => {
-                    const r = optimizerOutputSchema.parse(data);
-                    return (
-                      <article
-                        key={r.kind}
-                        className="optimization-recommendation"
+                )}
+                {page === "history" && (
+                  <div className="optimization-history">
+                    {runs.map(r => (
+                      <button
+                        type="button"
+                        key={r.id}
+                        onClick={() => {
+                          setSelectedRunId(r.id);
+                          select("results");
+                        }}
                       >
-                        <OptimizationResult data={data} />
-                        <div className="optimization-recommendation-action">
-                          <p>
-                            {r.decision === "propose_test"
-                              ? "Turn this finding into a controlled test with a clear decision rule."
-                              : "Evidence is not sufficient for a supported recommendation. You can draft an exploratory test and gather more data."}
-                          </p>
-                          <Button
-                            variant="outline"
-                            disabled={
-                              latest.status !== "completed" ||
-                              r.decision === "unsupported_channel" ||
-                              studio.experiments.length >= 30
-                            }
-                            onClick={() => addPlan(data)}
-                          >
-                            {r.decision === "propose_test"
-                              ? "Create experiment plan"
-                              : "Plan exploratory test"}
-                          </Button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                  {latest.status === "completed" && !results.length && (
-                    <p className="insight-notice">
-                      This run has no compatible recommendation output. Open the
-                      underlying workflow to inspect its steps.
-                    </p>
-                  )}
-                </>
-              )}
-              {active && (
-                <Button
-                  className="mt-4"
-                  variant="outline"
-                  disabled={stop.isPending || active.stopRequested}
-                  onClick={async () => {
-                    try {
-                      await stop.mutateAsync({ organizationId, id: active.id });
-                      await detail.refetch();
-                    } catch (e) {
-                      setError((e as Error).message);
-                    }
-                  }}
-                >
-                  {active.stopRequested
-                    ? "Stopping after current step…"
-                    : "Stop active analysis"}
-                </Button>
-              )}
-            </section>
-          )}
-          {page === "plans" && (
-            <OptimizationExperiments
-              plans={studio.experiments}
-              onChange={experiments => updateStudio({ experiments })}
-              onAdd={() => addPlan()}
-              onSource={id => {
-                setSelectedRunId(id);
-                select("results");
-              }}
-              onSave={() => persist()}
-            />
-          )}
-        </fieldset>
-        <footer className="optimization-footer">
-          <Button
-            variant="outline"
-            disabled={index <= 0 || busy}
-            onClick={() => select(pages[index - 1].id)}
-          >
-            <ArrowLeft size={16} /> Previous
-          </Button>
-          <span>
-            {section.title} · {index + 1} of {pages.length}
-          </span>
-          <Button
-            variant="outline"
-            disabled={index >= pages.length - 1 || busy}
-            onClick={() => select(pages[index + 1].id)}
-          >
-            Continue <ArrowRight size={16} />
-          </Button>
-        </footer>
-      </div>
+                        <span>
+                          {new Date(r.createdAtMs).toLocaleString()}
+                          <small>Saved analysis settings & evidence</small>
+                        </span>
+                        <strong>{workflowRunStatusLabel(r)}</strong>
+                        <ArrowRight size={16} />
+                      </button>
+                    ))}
+                    {runs.length === 20 && (
+                      <p className="insight-caption">
+                        Showing the latest 20 runs. Older evidence remains
+                        accessible from linked experiments.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {page === "results" && latest && (
+                  <>
+                    <div className="optimization-run-banner">
+                      <div>
+                        <strong>{workflowRunStatusLabel(latest)}</strong>
+                        <p>
+                          {new Date(latest.createdAtMs).toLocaleString()} ·{" "}
+                          {
+                            latest.graph.nodes.find(
+                              n => n.type === "analyze_history"
+                            )?.config.analysis?.range.since
+                          }{" "}
+                          –{" "}
+                          {
+                            latest.graph.nodes.find(
+                              n => n.type === "analyze_history"
+                            )?.config.analysis?.range.until
+                          }
+                        </p>
+                        <p>{latest.graph.optimizationStudio?.objective}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => select("history")}
+                      >
+                        Run history
+                      </Button>
+                    </div>
+                    {dirty && (
+                      <p className="insight-notice">
+                        These results belong to the saved run shown above. Run
+                        again to analyze your edited settings.
+                      </p>
+                    )}
+                    {latest.error && (
+                      <p role="alert" className="insight-notice">
+                        {latest.error}
+                      </p>
+                    )}
+                    <WorkflowRunProgress
+                      run={latest}
+                      refreshError={!!detail.error || !!sourceRun.error}
+                      refreshing={detail.isFetching}
+                      onRefresh={() => detail.refetch()}
+                    />
+                    <WorkflowRunReview
+                      hideBackgroundWaits
+                      organizationId={organizationId}
+                      role={role}
+                      run={latest}
+                      onRefresh={() => detail.refetch()}
+                    />
+                    {results.map(data => {
+                      const r = optimizerOutputSchema.parse(data);
+                      return (
+                        <article
+                          key={r.kind}
+                          className="optimization-recommendation"
+                        >
+                          <OptimizationResult data={data} />
+                          <div className="optimization-recommendation-action">
+                            <p>
+                              {r.decision === "propose_test"
+                                ? "Turn this finding into a controlled test with a clear decision rule."
+                                : "Evidence is not sufficient for a supported recommendation. You can draft an exploratory test and gather more data."}
+                            </p>
+                            <Button
+                              variant="outline"
+                              disabled={
+                                latest.status !== "completed" ||
+                                r.decision === "unsupported_channel" ||
+                                studio.experiments.length >= 30
+                              }
+                              onClick={() => addPlan(data)}
+                            >
+                              {r.decision === "propose_test"
+                                ? "Create experiment plan"
+                                : "Plan exploratory test"}
+                            </Button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    {latest.status === "completed" && !results.length && (
+                      <p className="insight-notice">
+                        This run has no compatible recommendation output. Open
+                        the underlying workflow to inspect its steps.
+                      </p>
+                    )}
+                  </>
+                )}
+                {active && (
+                  <Button
+                    className="mt-4"
+                    variant="outline"
+                    disabled={stop.isPending || active.stopRequested}
+                    onClick={async () => {
+                      try {
+                        await stop.mutateAsync({
+                          organizationId,
+                          id: active.id,
+                        });
+                        await detail.refetch();
+                      } catch (e) {
+                        setError((e as Error).message);
+                      }
+                    }}
+                  >
+                    {active.stopRequested
+                      ? "Stopping after current step…"
+                      : "Stop active analysis"}
+                  </Button>
+                )}
+              </section>
+            )}
+            {page === "plans" && (
+              <OptimizationExperiments
+                plans={studio.experiments}
+                onChange={experiments => updateStudio({ experiments })}
+                onAdd={() => addPlan()}
+                onSource={id => {
+                  setSelectedRunId(id);
+                  select("results");
+                }}
+                onSave={() => persist()}
+              />
+            )}
+          </fieldset>
+          <footer className="optimization-footer">
+            <Button
+              variant="outline"
+              disabled={index <= 0 || busy}
+              onClick={() => select(pages[index - 1].id)}
+            >
+              <ArrowLeft size={16} /> Previous
+            </Button>
+            <span>
+              {section.title} · {index + 1} of {pages.length}
+            </span>
+            <Button
+              variant="outline"
+              disabled={index >= pages.length - 1 || busy}
+              onClick={() => select(pages[index + 1].id)}
+            >
+              Continue <ArrowRight size={16} />
+            </Button>
+          </footer>
+        </div>
+      </StudioSections>
     </div>
   );
 }

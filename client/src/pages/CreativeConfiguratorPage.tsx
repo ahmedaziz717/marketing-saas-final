@@ -1767,54 +1767,58 @@ function Configurator() {
             icon: sectionIcons[i],
           }))}
           onSelect={id => go(id)}
-        />
-        <div className="cfg-body">
-          <StudioCategories
-            items={categories.map(c => ({
-              ...c,
-              hint:
-                c.id === "people" && scene !== "people"
-                  ? "Needs people scene"
-                  : undefined,
-            }))}
-            current={category}
-            onSelect={chooseCategory}
-          />
-          <div className="cfg-content-title">
-            <div>
-              <span className="cfg-eyebrow">{currentSection.title}</span>
-              <h2>
-                {currentSection.categories.find(c => c.id === category)?.title}
-              </h2>
+        >
+          <div className="cfg-body">
+            <StudioCategories
+              items={categories.map(c => ({
+                ...c,
+                hint:
+                  c.id === "people" && scene !== "people"
+                    ? "Needs people scene"
+                    : undefined,
+              }))}
+              current={category}
+              onSelect={chooseCategory}
+            />
+            <div className="cfg-content-title">
+              <div>
+                <span className="cfg-eyebrow">{currentSection.title}</span>
+                <h2>
+                  {
+                    currentSection.categories.find(c => c.id === category)
+                      ?.title
+                  }
+                </h2>
+              </div>
+              {["model", "source", "mood", "format"].includes(category) && (
+                <label className="cfg-search">
+                  <Search size={16} />
+                  <input
+                    aria-label="Search choices"
+                    placeholder="Find your next choice…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      aria-label="Clear search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </label>
+              )}
             </div>
-            {["model", "source", "mood", "format"].includes(category) && (
-              <label className="cfg-search">
-                <Search size={16} />
-                <input
-                  aria-label="Search choices"
-                  placeholder="Find your next choice…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    aria-label="Clear search"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </label>
+            {options.isLoading ? (
+              <p className="cfg-empty">
+                <Loader2 className="animate-spin" /> Loading your workspace…
+              </p>
+            ) : (
+              content()
             )}
           </div>
-          {options.isLoading ? (
-            <p className="cfg-empty">
-              <Loader2 className="animate-spin" /> Loading your workspace…
-            </p>
-          ) : (
-            content()
-          )}
-        </div>
+        </StudioSections>
       </fieldset>
       {error && (
         <div role="alert" className="cfg-problems">

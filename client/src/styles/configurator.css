@@ -380,13 +380,10 @@
 .cfg-categories {
   display: flex;
   gap: 7px;
-  overflow-x: auto;
-  padding-bottom: 14px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--cfg-line);
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
 }
-.cfg-categories button {
+.cfg-categories .studio-category-track > button {
   display: flex;
   flex: 1 0 110px;
   flex-direction: column;
@@ -404,20 +401,22 @@
   background: var(--cfg-bg);
   border: 1px solid var(--cfg-line);
 }
-.cfg-categories button[aria-pressed="true"] {
+.cfg-categories .studio-category-track > button[aria-pressed="true"] {
   background: #6d50d8;
   border-color: #6d50d8;
   color: #fff;
 }
-.cfg-categories button .studio-category-label {
+.cfg-categories .studio-category-track > button .studio-category-label {
   font-weight: 600;
 }
-.cfg-categories button small {
+.cfg-categories .studio-category-track > button small {
   display: block;
   font-size: 9px;
   opacity: 0.7;
 }
-.cfg-categories button:hover:not(:disabled):not([aria-pressed="true"]) {
+.cfg-categories
+  .studio-category-track
+  > button:hover:not(:disabled):not([aria-pressed="true"]) {
   border-color: var(--cfg-violet);
   color: var(--cfg-ink);
   background: var(--cfg-soft);
@@ -428,14 +427,11 @@
 .studio-category-filters {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  padding: 3px 3px 10px;
+  padding: 3px 0 10px;
   margin-bottom: 10px;
   max-width: 100%;
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
 }
-.studio-category-filters button {
+.studio-category-filters .studio-category-track > button {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
@@ -453,12 +449,12 @@
   line-height: 1.25;
   white-space: nowrap;
 }
-.studio-category-filters button[aria-pressed="true"] {
+.studio-category-filters .studio-category-track > button[aria-pressed="true"] {
   background: var(--cfg-soft, var(--muted));
   border-color: var(--cfg-violet, var(--primary));
   color: var(--cfg-violet, var(--primary));
 }
-.studio-category-filters button:focus-visible {
+.studio-category-filters .studio-category-track > button:focus-visible {
   outline: 2px solid var(--cfg-violet, var(--primary));
   outline-offset: 1px;
 }
@@ -1129,15 +1125,6 @@
   }
   .cfg-build {
     padding: 7px 4px;
-  }
-  .cfg-sections {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-  }
-  .cfg-sections button {
-    min-width: 145px;
-    scroll-snap-align: start;
   }
   .cfg-body {
     padding: 12px;
@@ -1832,7 +1819,7 @@
   flex: 1;
   min-width: 140px;
 }
-/* Both studios share compact navigation and measured sticky offsets. */
+/* Shared Studio navigation keeps the header and desktop section bar in view. */
 .cfg-root {
   --cfg-shell-height: 0px;
   --cfg-header-height: 0px;
@@ -1865,21 +1852,12 @@
   margin-bottom: 12px;
   box-shadow: 0 4px 14px #00000008;
 }
-.cfg-root .cfg-categories {
-  position: sticky;
-  top: calc(
-    var(--cfg-shell-height) + var(--cfg-header-height) +
-      var(--cfg-sections-height)
-  );
-  z-index: 31;
-  background: var(--cfg-panel);
-  padding: 10px 0;
-}
+.cfg-root .cfg-categories,
 .cfg-root .cfg-content-title,
 .cfg-root .activation-section-title {
   scroll-margin-top: calc(
     var(--cfg-shell-height) + var(--cfg-header-height) +
-      var(--cfg-sections-height) + var(--cfg-categories-height) + 12px
+      var(--cfg-sections-height) + 16px
   );
 }
 .cfg-stage {
@@ -1941,32 +1919,7 @@
     padding: 8px 10px;
     font-size: 11px;
   }
-  .cfg-root .cfg-sections {
-    top: var(--cfg-shell-height);
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-  .cfg-root .cfg-sections button {
-    min-width: 0;
-    padding: 10px 3px;
-    justify-content: center;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .cfg-root .cfg-sections button strong {
-    font-size: 10px;
-  }
-  .cfg-root .cfg-sections button small,
-  .cfg-root .cfg-sections button b {
-    display: none;
-  }
-  .cfg-root .cfg-sections button svg {
-    width: 17px;
-    height: 17px;
-  }
-  .cfg-root .cfg-categories {
-    top: calc(var(--cfg-shell-height) + var(--cfg-sections-height));
-  }
-  .cfg-root .cfg-categories button {
+  .cfg-root .cfg-categories .studio-category-track > button {
     padding: 10px;
     flex-basis: 94px;
     min-height: 72px;
@@ -1974,10 +1927,7 @@
   }
   .cfg-root .cfg-content-title,
   .cfg-root .activation-section-title {
-    scroll-margin-top: calc(
-      var(--cfg-shell-height) + var(--cfg-sections-height) +
-        var(--cfg-categories-height) + 8px
-    );
+    scroll-margin-top: calc(var(--cfg-shell-height) + 8px);
   }
   .cfg-stage {
     gap: 12px;
@@ -1996,8 +1946,12 @@
   .cfg-root .cfg-body {
     padding: 0 12px 16px;
   }
+  .cfg-root .cfg-card-grid,
+  .cfg-root .cfg-source-tabs,
+  .cfg-root .optimization-focus-grid,
+  .cfg-root .insight-metric-choices,
   .activation-direction-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
   .activation-dimension-tabs {
     flex-wrap: nowrap;
@@ -2380,5 +2334,145 @@
   }
   .cfg-creative .cfg-bottom .cfg-actions button {
     flex: 1;
+  }
+}
+
+/* One aligned surface for section navigation, category icons and choices. */
+.cfg-section-layout {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 16px;
+  background: var(--cfg-panel);
+}
+.cfg-section-panel {
+  min-width: 0;
+}
+.cfg-section-panel[hidden] {
+  display: none;
+}
+.cfg-root .cfg-section-panel > .cfg-body {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.studio-category-navigation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.studio-category-track {
+  display: flex;
+  flex: 1;
+  gap: 7px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 3px;
+  margin: -3px;
+}
+.studio-category-track::-webkit-scrollbar {
+  display: none;
+}
+.studio-category-navigation > .studio-category-arrow {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  min-width: 28px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--cfg-muted, var(--muted-foreground));
+  background: transparent;
+}
+.studio-category-navigation > .studio-category-arrow:hover:not(:disabled) {
+  background: var(--cfg-soft, var(--muted));
+  color: var(--cfg-ink, var(--foreground));
+}
+.studio-category-navigation > .studio-category-arrow:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.cfg-section-heading {
+  margin: 8px 0 0;
+  scroll-margin-top: calc(var(--cfg-shell-height) + 8px);
+}
+.cfg-section-heading:first-child {
+  margin-top: 0;
+}
+.cfg-section-heading .cfg-section-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  padding: 13px 16px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 10px;
+  color: var(--cfg-ink);
+  background: var(--cfg-panel);
+  text-align: left;
+}
+.cfg-section-heading .cfg-section-button[aria-expanded="true"] {
+  border-radius: 10px 10px 0 0;
+  border-color: #6d50d8;
+  background: #6d50d8;
+  color: #fff;
+}
+.cfg-section-heading
+  .cfg-section-button:hover:not(:disabled):not([aria-expanded="true"]) {
+  background: var(--cfg-soft);
+}
+.cfg-section-heading strong,
+.cfg-section-heading small {
+  display: block;
+}
+.cfg-section-heading strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.cfg-section-heading small {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.cfg-section-heading svg {
+  flex-shrink: 0;
+}
+.cfg-section-chevron {
+  margin-left: auto;
+  opacity: 0.7;
+}
+.cfg-section-layout.is-mobile {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.cfg-root .cfg-section-layout.is-mobile .cfg-section-panel > .cfg-body {
+  padding: 0 12px 16px;
+  border: 1px solid var(--cfg-line);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+@media (max-width: 700px) {
+  .cfg-card-art {
+    height: auto;
+    aspect-ratio: 1.65;
+  }
+  .cfg-card-copy {
+    padding: 14px 14px 6px;
+  }
+  .cfg-card-copy h3 {
+    font-size: 14px;
+  }
+  .cfg-card-copy p {
+    font-size: 12px;
   }
 }
