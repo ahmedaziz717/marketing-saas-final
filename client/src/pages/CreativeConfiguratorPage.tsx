@@ -1644,7 +1644,9 @@ function Configurator() {
             <>
               <div className="cfg-build-top">
                 <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
-                <span className="cfg-draft-status">
+                <span
+                  className={`cfg-draft-status${storageOk ? " is-saved" : ""}`}
+                >
                   {storageOk
                     ? "Remembered in this browser"
                     : "Browser storage unavailable · save a draft"}
@@ -1830,12 +1832,22 @@ function Configurator() {
           <div>
             <strong>{quoteLabel}</strong>
             <span>
-              {busy ? "Working…" : creditDetail}
-              {issues.length ? ` · ${issues.length} items to complete` : ""}
+              {busy ? (
+                "Working…"
+              ) : (
+                <span className="cfg-credit-detail">{creditDetail}</span>
+              )}
+              {issues.length > 0 && (
+                <span className="cfg-completion-hint">
+                  {issues.length} {issues.length === 1 ? "item" : "items"} to
+                  complete
+                </span>
+              )}
             </span>
           </div>
           <div className="cfg-actions">
             <button
+              className="cfg-next-section"
               disabled={busy}
               onClick={() => {
                 const i = configuratorSections.findIndex(s => s.id === section);
