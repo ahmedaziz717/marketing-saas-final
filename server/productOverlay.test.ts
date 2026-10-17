@@ -96,6 +96,16 @@ it("uses measured target bounds instead of a fixed small box and flags a differe
       height: 200,
     })
   ).toEqual({ layers: [{ left: 100, top: 20, width: 80 }], sameAngle: false });
+  // The provider rejects JSON mode before generation unless a message explicitly
+  // asks for JSON. Exercise the real request contract, not just its mocked reply.
+  const request = mocked.invoke.mock.calls.at(-1)![0];
+  expect(request.response_format).toEqual({ type: "json_object" });
+  expect(
+    request.messages.some(
+      (message: { content: unknown }) =>
+        typeof message.content === "string" && /\bjson\b/i.test(message.content)
+    )
+  ).toBe(true);
   mocked.invoke.mockResolvedValue({
     choices: [
       {
