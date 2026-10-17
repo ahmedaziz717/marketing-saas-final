@@ -69,8 +69,40 @@ export async function findSafeLogoPlacement(
     .toBuffer();
   const result = await invokeLLM({
     model: requireLatestGptTextModel((await listLLMModels()).data),
-    maxTokens: 2200,
-    response_format: { type: "json_object" },
+    maxTokens: 6000,
+    reasoning: { effort: "low" },
+    includedInAction: true,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "protected_creative_regions",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["confidence", "regions"],
+          properties: {
+            confidence: { type: "number", minimum: 0, maximum: 1 },
+            regions: {
+              type: "array",
+              minItems: 1,
+              maxItems: 60,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["left", "top", "width", "height"],
+                properties: Object.fromEntries(
+                  ["left", "top", "width", "height"].map(key => [
+                    key,
+                    { type: "number", minimum: 0, maximum: 1000 },
+                  ])
+                ),
+              },
+            },
+          },
+        },
+      },
+    },
     messages: [
       {
         role: "system",
@@ -91,6 +123,10 @@ export async function findSafeLogoPlacement(
       },
     ],
   });
+  if (result.choices[0]?.finish_reason === "length")
+    throw new Error(
+      "The logo placement inspection did not finish. Please retry this creative."
+    );
   const content = result.choices[0]?.message?.content;
   let payload: unknown;
   try {
