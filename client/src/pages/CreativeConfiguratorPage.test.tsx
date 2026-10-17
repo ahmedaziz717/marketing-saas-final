@@ -63,6 +63,9 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/app/creatives/configurator", api.route],
   Link: ({ children, href }: any) => <a href={href}>{children}</a>,
 }));
+vi.mock("@/components/LogoSourceTools", () => ({
+  LogoSourceTools: () => <div>Logo import tools</div>,
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
@@ -622,4 +625,31 @@ it("persists product preservation in image drafts and retains it when switching 
     ).checked
   ).toBe(true);
   expect(api.generate).not.toHaveBeenCalled();
+});
+
+it("offers Rubik and keeps font preservation off until explicitly selected", async () => {
+  open();
+  section(/Story & Sound/);
+  fireEvent.click(screen.getByRole("button", { name: "Copy & prompt" }));
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: "Preserve selected font",
+      }) as HTMLInputElement
+    ).checked
+  ).toBe(false);
+  fireEvent.change(screen.getByRole("combobox", { name: "Creative font" }), {
+    target: { value: "Rubik" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          fontFamily: "Rubik",
+          preserveFont: false,
+        }),
+      })
+    )
+  );
 });

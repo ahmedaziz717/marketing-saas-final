@@ -50,6 +50,9 @@ vi.mock("@/pages/BrandPage", () => ({
   ),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/components/LogoSourceTools", () => ({
+  LogoSourceTools: () => <div>Logo import tools</div>,
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({

@@ -109,7 +109,8 @@ export function productCandidateFromEvidence(input: {
   return { eligible, reasons };
 }
 
-export function normalizeWebsiteUrl(value: string) {
+/** Validate a request URL without rewriting the path or query the server expects. */
+export function normalizeWebsiteRequestUrl(value: string) {
   const prepared = /^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim())
     ? value.trim()
     : `https://${value.trim()}`;
@@ -121,7 +122,11 @@ export function normalizeWebsiteUrl(value: string) {
   if (url.port && !["80", "443"].includes(url.port))
     throw new Error("Only standard website ports 80 and 443 are supported");
   url.hash = "";
-  return canonicalizeUrl(url);
+  return url.toString();
+}
+
+export function normalizeWebsiteUrl(value: string) {
+  return canonicalizeUrl(normalizeWebsiteRequestUrl(value));
 }
 
 export function isForbiddenIp(value: string) {
@@ -142,7 +147,9 @@ export function isForbiddenIp(value: string) {
 }
 
 export async function assertPublicUrl(value: string) {
-  const normalized = normalizeWebsiteUrl(value);
+  // Canonical identities are for deduplication only. Stripping a trailing slash
+  // here causes a loop when WordPress (and other sites) redirects back to it.
+  const normalized = normalizeWebsiteRequestUrl(value);
   const url = new URL(normalized);
   if (url.hostname === "localhost" || url.hostname.endsWith(".localhost"))
     throw new Error("Private or local websites are not supported");
@@ -293,7 +300,7 @@ export async function safeFetchText(
   );
   if (response.status >= 300 && response.status < 400 && response.location) {
     const next = new URL(response.location, url);
-    if (!sameSite(next.toString(), rootUrl))
+    if (!sameSite(next.toString(), normalizeWebsiteRequestUrl(rootUrl)))
       throw new Error("Website redirect left the approved site boundary");
     return safeFetchText(next.toString(), redirects + 1, rootUrl);
   }
@@ -347,6 +354,19 @@ export async function safeFetchImage(
       `Unsupported image content type: ${contentType || "unknown"}`
     );
   return { finalUrl: url.toString(), contentType, data: response.body };
+}
+
+/** Public Drive downloads only. Each redirect is revalidated and DNS-pinned. */
+export async function safeFetchDriveFile(value: string, redirects = 0): Promise<{ data: Buffer; contentType: string }> {
+  if (redirects > MAX_REDIRECTS) throw new Error("Drive download redirected too many times.");
+  const candidate = new URL(value);
+  if (candidate.protocol !== "https:" || !["drive.google.com", "drive.usercontent.google.com"].includes(candidate.hostname) && !candidate.hostname.endsWith(".googleusercontent.com"))
+    throw new Error("Drive download left the allowed Google file hosts.");
+  const { url, addresses } = await assertPublicUrl(value);
+  const result = await requestPinned(url, addresses[0]!.address, 8 * 1024 * 1024);
+  if (result.status >= 300 && result.status < 400 && result.location) return safeFetchDriveFile(new URL(result.location, url).href, redirects + 1);
+  if (result.status !== 200) throw new Error("This Drive file is not publicly accessible.");
+  return { data: result.body, contentType: result.contentType.split(";")[0] };
 }
 
 function absoluteUrl(value: string | undefined, base: string) {

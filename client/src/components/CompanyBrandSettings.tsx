@@ -1,3 +1,4 @@
+import { LogoSourceTools } from "./LogoSourceTools";
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Upload } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -200,6 +201,18 @@ export function CompanyBrandSettings() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   PNG, JPG, WebP · up to 8 MB
                 </p>
+                <LogoSourceTools
+                  organizationId={organizationId!}
+                  role={membership?.role ?? ""}
+                  upload={false}
+                  onChanged={async () => {
+                    await Promise.all([
+                      utils.brand.assets.invalidate(),
+                      utils.assetLibrary.studioList.invalidate(),
+                      utils.creativeBuilder.options.invalidate(),
+                    ]);
+                  }}
+                />
               </>
             )}
           </div>
@@ -268,9 +281,7 @@ export function CompanyBrandSettings() {
       <Tabs
         value={tab}
         onValueChange={value =>
-          navigate(
-            `/app/brand${value === "brand" ? "?tab=brand" : ""}`
-          )
+          navigate(`/app/brand${value === "brand" ? "?tab=brand" : ""}`)
         }
       >
         <TabsList className="mb-4" aria-label="Company and brand details">

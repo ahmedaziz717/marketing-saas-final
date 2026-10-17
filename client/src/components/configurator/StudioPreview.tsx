@@ -1,3 +1,4 @@
+import { ProductOverlayEditor } from "../ProductOverlayEditor";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Film, ImagePlus, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
@@ -341,6 +342,18 @@ export function StudioPreview({
                 ? workflowLabel(selectedAsset.state)
                 : "Saved draft"}
             </small>
+            {kind === "image" && selectedAsset?.hasProductOverlay && (
+              <ProductOverlayEditor
+                organizationId={organizationId}
+                variantId={Number(selected.key.split(":")[1])}
+                onSaved={async () => {
+                  await Promise.all([
+                    history.refetch(),
+                    utils.assetLibrary.studioList.invalidate(),
+                  ]);
+                }}
+              />
+            )}
             <div className="cfg-result-actions">
               <button
                 type="button"

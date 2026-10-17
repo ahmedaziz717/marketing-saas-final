@@ -1,3 +1,5 @@
+import { LogoSourceTools } from "@/components/LogoSourceTools";
+import { CREATIVE_FONT_GROUPS } from "@shared/creativeFonts";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -920,7 +922,7 @@ function Configurator() {
                   : !sameQuote || quote.isFetching
                     ? "Checking product cutouts…"
                     : credits !== undefined
-                      ? "Product cutouts are ready. Their original viewing angles and details will be preserved."
+                      ? "Product cutouts are ready. After generation, align them over the complete design and save a separate version."
                       : "Select a product cutout and complete your setup to check readiness."}
             </div>
           )}
@@ -959,6 +961,19 @@ function Configurator() {
               Manage Brand Kit <ArrowRight size={13} />
             </Link>
           </div>
+          {isImage && (
+            <LogoSourceTools
+              organizationId={organizationId!}
+              role={membership?.role ?? ""}
+              onChanged={async () => {
+                await Promise.all([
+                  utils.assetLibrary.studioList.invalidate(),
+                  utils.creativeBuilder.options.invalidate(),
+                  utils.brand.assets.invalidate(),
+                ]);
+              }}
+            />
+          )}
           {isImage ? (
             <StudioLogos
               assets={assets.data ?? []}
@@ -1203,6 +1218,61 @@ function Configurator() {
                 onChange={e => updateVideo({ prompt: e.target.value })}
               />
             </Field>
+          )}
+          {isImage && (
+            <>
+              <Field title="Creative font">
+                <select
+                  aria-label="Creative font"
+                  value={image.fontFamily ?? ""}
+                  onChange={e => updateImage({ fontFamily: e.target.value })}
+                >
+                  <option value="">Automatic · art-directed typography</option>
+                  {Object.entries(CREATIVE_FONT_GROUPS).map(
+                    ([group, fonts]) => (
+                      <optgroup key={group} label={group}>
+                        {fonts.map(font => (
+                          <option key={font} value={font}>
+                            {font}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )}
+                  {!!options.data?.brand?.fonts?.length && (
+                    <optgroup label="Brand fonts">
+                      {options.data.brand.fonts
+                        .filter(
+                          font =>
+                            !Object.values(CREATIVE_FONT_GROUPS)
+                              .flat()
+                              .includes(font as any)
+                        )
+                        .map(font => (
+                          <option key={font} value={font}>
+                            {font}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </select>
+              </Field>
+              <label className="cfg-checkbox">
+                <input
+                  type="checkbox"
+                  checked={image.preserveFont ?? false}
+                  onChange={e =>
+                    updateImage({ preserveFont: e.target.checked })
+                  }
+                />
+                Preserve selected font
+              </label>
+              <p className="cfg-help">
+                Off by default. Allow complementary fonts and creative
+                lettering. Turn on to request consistent use of your selected or
+                brand font; inspect the generated letterforms.
+              </p>
+            </>
           )}
           <button
             className="cfg-secondary"
@@ -1497,7 +1567,7 @@ function Configurator() {
           {isImage && image.preserveProduct && (
             <div>
               <dt>Product preservation</dt>
-              <dd>Original cutout · selected angle · no AI redraw</dd>
+              <dd>Complete AI design + editable original-product layer</dd>
             </div>
           )}
           {summary.map(s => (
@@ -1963,7 +2033,7 @@ function Configurator() {
             credits. The result goes to your workspace for review.
             {isImage &&
               image.preserveProduct &&
-              " The original product cutout will be placed over the generated scene, keeping its viewing angle and lighting."}
+              " The complete creative is saved first. Use Adjust original product on the result to align the catalog cutout and save a separate version."}
           </DialogDescription>
           <p>
             {selectedModel?.name} ·{" "}

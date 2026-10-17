@@ -1,3 +1,11 @@
+import sharp from "sharp";
+import {
+  discoverDriveLogos,
+  fetchDriveLogo,
+  driveReference,
+} from "../lib/driveLogos";
+import { normalizeBrandLogo } from "../lib/brandLogoImport";
+import { detectAssetMime } from "../lib/assetLibrary";
 import { scanBrandWebsite } from "../lib/brandWebsiteScan";
 import { importBrandLogos } from "../lib/brandLogoImport";
 import { suggestProfile } from "../lib/marketingDrafts";
@@ -31,6 +39,64 @@ const brandInput = z.object({
 });
 
 export const brandRouter = router({
+  discoverDriveLogos: protectedProcedure
+    .input(
+      z.object({
+        organizationId: z.number().int().positive(),
+        url: z.string().url().max(2048),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+      ]);
+      return discoverDriveLogos(input.url);
+    }),
+  importDriveLogos: protectedProcedure
+    .input(
+      z.object({
+        organizationId: z.number().int().positive(),
+        urls: z.array(z.string().url().max(2048)).min(1).max(20),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+      ]);
+      const db = (await getDb())!;
+      const [kit] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      if (!kit)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your brand before adding logos.",
+        });
+      const urls = input.urls.map(url => {
+        const ref = driveReference(url);
+        if (ref.kind !== "file")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose an individual logo file.",
+          });
+        return ref.downloadUrl;
+      });
+      return importBrandLogos(
+        db,
+        input.organizationId,
+        kit.id,
+        ctx.user.id,
+        urls,
+        { label: "Google Drive logo", fetchImage: fetchDriveLogo }
+      );
+    }),
+
   scanWebsite: protectedProcedure
     .input(
       z.object({
@@ -207,7 +273,10 @@ export const brandRouter = router({
         name: z.string().min(2).max(180),
         type: z.enum(["logo", "font", "product", "reference", "other"]),
         mimeType: z.string().regex(/^image\//),
-        base64: z.string().min(20),
+        base64: z
+          .string()
+          .min(20)
+          .max(12 * 1024 * 1024),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -230,7 +299,7 @@ export const brandRouter = router({
           code: "NOT_FOUND",
           message: "Brand kit not found",
         });
-      const bytes = Buffer.from(
+      let bytes: Buffer = Buffer.from(
         input.base64.replace(/^data:[^;]+;base64,/, ""),
         "base64"
       );
@@ -239,12 +308,21 @@ export const brandRouter = router({
           code: "PAYLOAD_TOO_LARGE",
           message: "Assets must be 8 MB or smaller",
         });
-      const extension =
-        input.mimeType.split("/")[1]?.replace("jpeg", "jpg") || "png";
+      const detected = detectAssetMime(bytes);
+      if (!detected?.startsWith("image/") || detected !== input.mimeType)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose a valid PNG, JPEG, WebP or GIF image.",
+        });
+      const outputMimeType = input.type === "logo" ? "image/png" : detected;
+      if (input.type === "logo")
+        bytes = await normalizeBrandLogo(bytes, detected);
+      else await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata();
+      const extension = outputMimeType.split("/")[1].replace("jpeg", "jpg");
       const stored = await storagePut(
         `org-${input.organizationId}/brand/${Date.now()}-${input.name}.${extension}`,
         bytes,
-        input.mimeType
+        outputMimeType
       );
       const inserted = await db
         .insert(brandAssets)
@@ -255,7 +333,7 @@ export const brandRouter = router({
           type: input.type,
           storageKey: stored.key,
           url: stored.url,
-          mimeType: input.mimeType,
+          mimeType: outputMimeType,
           status: "pending",
           uploadedByUserId: ctx.user.id,
           createdAtMs: Date.now(),

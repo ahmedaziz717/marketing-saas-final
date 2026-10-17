@@ -1,7 +1,10 @@
+import { apiCatalogAddress, readApiCatalogPage } from "./apiCatalog";
+import type { ApiCatalogConfig } from "../../shared/apiCatalog";
 import type { StoreProvider, CatalogEntry } from "../../shared/catalog";
 import { safeStoreRequest } from "./websiteCrawler";
-export type StoreCredentials = { token: string; secret?: string };
+export type StoreCredentials = { token: string; secret?: string; api?: ApiCatalogConfig };
 export function storeAddress(provider: StoreProvider, value: string) {
+  if (provider === "api") return apiCatalogAddress(value);
   const url = new URL(value);
   if (
     url.protocol !== "https:" ||
@@ -43,6 +46,10 @@ export async function readStorePage(
   credentials: StoreCredentials,
   cursor: string | null
 ): Promise<{ items: StoreItem[]; next: string | null; total: number | null }> {
+  if (provider === "api") {
+    if (!credentials.api) throw new Error("Reconnect this API catalog.");
+    return readApiCatalogPage(address, credentials.api, cursor);
+  }
   const base = storeAddress(provider, address);
   const empty = {
     recordType: "standalone" as const,

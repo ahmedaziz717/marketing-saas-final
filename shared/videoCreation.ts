@@ -14,6 +14,8 @@ import {
   getCreativeMood,
   personReferenceKey,
   personReferenceSchema,
+  promotionSchema,
+  promotionContext,
 } from "./creativeBuilder";
 import {
   CREATIVE_THEMES,
@@ -111,6 +113,7 @@ export const videoSetupSchema = z
     title: z.string().trim().min(1).max(160),
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
+    promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(9),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
@@ -243,14 +246,21 @@ export function videoEndpoint(setup: VideoSetup) {
 
 /** Older saved jobs keep their exact prompt unless creative direction was selected. */
 export function videoPrompt(setup: VideoSetup) {
+  const promotion = setup.promotion
+    ? promotionContext({
+        promotionMode: "platform",
+        promotion: setup.promotion,
+      })
+    : "";
   const identity = (setup.people ?? []).length
     ? `The LAST ${(setup.people ?? []).length} reference images are the selected people, in order. Include these people and preserve their distinct appearance throughout the video. These portraits specify identity, not product endorsements or testimonials. Adapt poses, clothing and lighting to the scene. Keep children and teens age-appropriate, with ordinary clothing and activities and no adult themes.`
     : "";
   if (!setup.direction)
-    return [setup.prompt, identity].filter(Boolean).join("\n\n");
+    return [promotion, setup.prompt, identity].filter(Boolean).join("\n\n");
   const direction = setup.direction,
     theme = getCreativeTheme(direction.theme);
   return [
+    promotion,
     setup.prompt,
     identity,
     `Creative theme — ${theme.name}: ${direction.themePrompt || theme.direction}`,

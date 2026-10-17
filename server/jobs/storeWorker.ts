@@ -55,7 +55,7 @@ export async function processNextStoreJob(db: Database) {
     const result = await readStorePage(
       source.provider as StoreProvider,
       source.storeUrl,
-      JSON.parse(decryptToken(source.credentials, catalogEncryptionKey())),
+      JSON.parse(decryptToken(source.credentials, source.provider === "api" ? undefined : catalogEncryptionKey())),
       source.cursor
     );
     for (const item of result.items) {

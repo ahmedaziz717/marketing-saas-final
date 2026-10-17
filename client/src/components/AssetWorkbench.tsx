@@ -1,3 +1,4 @@
+import { ProductOverlayEditor } from "./ProductOverlayEditor";
 import { studioContentHref } from "@shared/contentWorkflow";
 import {
   assetSizeMatches,
@@ -566,6 +567,20 @@ export function AssetWorkbench({
           {selected && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
               <section className="min-w-0">
+                {selected.hasProductOverlay && canCreate && (
+                  <div className="mb-3">
+                    <ProductOverlayEditor
+                      organizationId={organizationId!}
+                      variantId={Number(selected.key.split(":")[1])}
+                      onSaved={async key => {
+                        await refresh();
+                        if (embedded) setLocalKey(key);
+                        else navigate(libraryAssetLink(key, "draft"));
+                      }}
+                    />
+                  </div>
+                )}
+
                 <div className="grid min-h-40 place-items-center rounded-xl bg-muted/50 p-3">
                   {selected.mediaType === "video" ? (
                     <video

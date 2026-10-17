@@ -300,7 +300,7 @@ it("fails instead of silently omitting an unavailable selected identity", async 
   expect(updates).toContainEqual(expect.objectContaining({ status: "failed" }));
 });
 
-it("adds original cutouts only after scene generation and excludes product, logo and campaign references in every size", async () => {
+it("saves the full creative untouched and retains product, logo and campaign references with editable overlay metadata", async () => {
   const { db, args, written } = fixture();
   args.setup.preserveProduct = true;
   const product = await sharp({
@@ -349,33 +349,30 @@ it("adds original cutouts only after scene generation and excludes product, logo
   });
   await runBuilderJob(db, args);
   expect(mocked.generate).toHaveBeenCalledTimes(3);
-  expect(mocked.put).toHaveBeenCalledTimes(3);
-  const variants = written.flat();
-  for (const variant of variants) {
-    expect(variant.imageStorageKey).toMatch(/-preserved.png$/);
-    expect(variant.renderMetadata.productPreservation.method).toBe(
-      "original_cutout_v2"
-    );
-    const layer = variant.renderMetadata.productPreservation.layers[0];
-    const pixel = await sharp(storage.get(variant.imageStorageKey)!)
-      .extract({
-        left: layer.left + Math.floor(layer.width / 2),
-        top: layer.top + Math.floor(layer.height / 2),
-        width: 1,
-        height: 1,
-      })
-      .removeAlpha()
-      .raw()
-      .toBuffer();
-    expect([...pixel]).toEqual([255, 0, 0]);
+  expect(mocked.put).not.toHaveBeenCalled();
+  for (const variant of written.flat()) {
+    expect(variant.imageStorageKey).toMatch(/^scene-/);
+    expect(variant.renderMetadata.productPreservation).toMatchObject({
+      method: "editable_original_v3",
+      designStorageKey: variant.imageStorageKey,
+      applied: false,
+    });
+    expect(variant.renderMetadata.productPreservation.layers[0]).toMatchObject({
+      sourceKey: "lamp.png",
+    });
   }
   for (const [request] of mocked.generate.mock.calls) {
-    expect(request.prompt).toContain("BACKGROUND-ONLY PASS");
-    expect(request.prompt).not.toContain("Catalog facts:");
-    expect(request.prompt).not.toContain(args.setup.copy.headline);
-    expect(request.originalImages.map((r: any) => r.b64Json)).toEqual([
-      "person:adult-female-brown",
-    ]);
+    expect(request.prompt).not.toContain("BACKGROUND-ONLY PASS");
+    expect(request.prompt).toContain("Catalog facts:");
+    expect(request.prompt).toContain(args.setup.copy.headline);
+    expect(request.originalImages.map((r: any) => r.b64Json)).toEqual(
+      expect.arrayContaining([
+        "lamp.png",
+        "logo.png",
+        "campaign-with-product.png",
+        "person:adult-female-brown",
+      ])
+    );
   }
 });
 
@@ -399,40 +396,6 @@ it("does not spend credits or return an AI redraw when a queued product image is
     expect.objectContaining({
       status: "failed",
       errorMessage: expect.stringContaining("transparent PNG"),
-    })
-  );
-});
-
-it("checks all copy layouts before spending credits, including a later small output", async () => {
-  const { db, args, written, updates } = fixture();
-  args.setup.preserveProduct = true;
-  args.setup.formatIds = ["square_1_1", "google_leaderboard"];
-  args.setup.copy = {
-    headline: "Long headline ".repeat(13),
-    subheadline: "Detailed specification and product features ".repeat(9),
-    cta: "View every available product configuration",
-  };
-  const png = await sharp({
-    create: { width: 100, height: 100, channels: 4, background: "red" },
-  })
-    .extend({
-      left: 3,
-      right: 3,
-      top: 3,
-      bottom: 3,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .png()
-    .toBuffer();
-  mocked.read.mockResolvedValue(png.toString("base64"));
-  await runBuilderJob(db, args);
-  expect(mocked.generate).not.toHaveBeenCalled();
-  expect(mocked.put).not.toHaveBeenCalled();
-  expect(written).toEqual([]);
-  expect(updates).toContainEqual(
-    expect.objectContaining({
-      status: "failed",
-      errorMessage: expect.stringContaining("layout cannot"),
     })
   );
 });
