@@ -23,10 +23,12 @@ import { randomUUID } from "node:crypto";
 import { storagePut, storageGetBase64 } from "../storage";
 import {
   loadPreservedProducts,
-  layoutPreservedProducts,
-  preservationSceneInstruction,
-  compositePreservedProducts,
+  type ProductCutout,
 } from "../lib/productPreservation";
+import {
+  preparePreservedComposition,
+  compositePreservedCreative,
+} from "../lib/preservedComposition";
 import {
   findLifestylePerson,
   modelMatchesShot,
@@ -64,6 +66,7 @@ import { requireOrganizationRole } from "../lib/access";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import {
   buildCreativePrompt,
+  buildPreservationScenePrompt,
   resolveBuilderInputs,
 } from "../lib/creativeBuilder";
 import { categorizeGenerationError } from "../lib/generation";
@@ -274,6 +277,57 @@ export async function loadInputs(
   };
 }
 
+function builderProductGroups(
+  setup: CreativeSetup,
+  resolved: Awaited<ReturnType<typeof loadInputs>>
+) {
+  return setup.promotionMode === "platform" || isReferenceCreative(setup)
+    ? [[]]
+    : setup.productMode === "together"
+      ? [resolved.products]
+      : resolved.products.map(product => [product]);
+}
+
+function compositionKey(group: Array<{ id: number }>, formatId: string) {
+  return `${group.map(p => p.id).join("-")}:${formatId}`;
+}
+
+async function prepareBuilderPreservation(
+  setup: CreativeSetup,
+  resolved: Awaited<ReturnType<typeof loadInputs>>,
+  cutouts: ProductCutout[]
+) {
+  const compositions = new Map<
+    string,
+    Awaited<ReturnType<typeof preparePreservedComposition>>
+  >();
+  if (!setup.preserveProduct) return compositions;
+  const logo = resolved.logo
+    ? Buffer.from(await storageGetBase64(resolved.logo.storageKey), "base64")
+    : undefined;
+  // Preflight every format before any paid call, not halfway through a batch.
+  for (const group of builderProductGroups(setup, resolved)) {
+    for (const formatId of setup.formatIds) {
+      compositions.set(
+        compositionKey(group, formatId),
+        await preparePreservedComposition({
+          setup,
+          brand: resolved.brand,
+          products: group,
+          canvas: formatDetails(formatId)!,
+          logo,
+          cutouts: group.length
+            ? cutouts.filter(p =>
+                group.some(g => g.image?.storageKey === p.sourceKey)
+              )
+            : cutouts,
+        })
+      );
+    }
+  }
+  return compositions;
+}
+
 export async function runBuilderJob(
   db: Database,
   args: {
@@ -291,15 +345,21 @@ export async function runBuilderJob(
   try {
     // Validate every source before making any paid request, including queued jobs.
     const preserved = await loadPreservedProducts(setup, resolved);
+    const compositions = await prepareBuilderPreservation(
+      setup,
+      resolved,
+      preserved
+    );
     if (
       args.rateSnapshots &&
       args.rateSnapshots.length !== creativeImageOutputs(setup).length
     )
       throw new Error("The saved image quotes do not match this creative set.");
     const imageModel = setup.modelId ?? REQUIRED_IMAGE_MODEL_ID;
-    const logoSource = resolved.logo
-      ? await readGenerationSource(resolved.logo.storageKey)
-      : null;
+    const logoSource =
+      !setup.preserveProduct && resolved.logo
+        ? await readGenerationSource(resolved.logo.storageKey)
+        : null;
     const personSources = await Promise.all(
       selectedPeople(setup).map(async person => {
         if (person.kind === "library") return readLifestylePortrait(person.id);
@@ -312,24 +372,23 @@ export async function runBuilderJob(
         return readGenerationSource(asset.storageKey);
       })
     );
-    const groups =
-      setup.promotionMode === "platform" || isReferenceCreative(setup)
-        ? [[]]
-        : setup.productMode === "together"
-          ? [resolved.products]
-          : resolved.products.map(product => [product]);
+    const groups = builderProductGroups(setup, resolved);
     const generated: Array<typeof creativeVariants.$inferInsert> = [];
     let outputIndex = 0;
     for (const group of groups) {
       await renewBuilderJob(db, organizationId, jobId);
-      const sources = await Promise.all(
-        group.flatMap(product =>
-          product.image ? [readGenerationSource(product.image.storageKey)] : []
-        )
-      );
+      const sources = setup.preserveProduct
+        ? []
+        : await Promise.all(
+            group.flatMap(product =>
+              product.image
+                ? [readGenerationSource(product.image.storageKey)]
+                : []
+            )
+          );
       sources.push(
         ...(await Promise.all(
-          (resolved.references ?? []).map(r =>
+          (setup.preserveProduct ? [] : (resolved.references ?? [])).map(r =>
             readGenerationSource(r.storageKey)
           )
         ))
@@ -344,17 +403,8 @@ export async function runBuilderJob(
         .sort((a, b) => b.width * b.height - a.width * a.height);
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
-        const productLayers = setup.preserveProduct
-          ? await layoutPreservedProducts(
-              group.length
-                ? preserved.filter(p =>
-                    group.some(g => g.image?.storageKey === p.sourceKey)
-                  )
-                : preserved,
-              format,
-              setup.placement
-            )
-          : [];
+        const composition = compositions.get(compositionKey(group, format.id));
+        const productLayers = composition?.layers ?? [];
         let image = await generateSunburstImage({
           modelId: setup.modelId,
           modelOptions: setup.modelOptions,
@@ -362,18 +412,22 @@ export async function runBuilderJob(
             args.rateSnapshots?.[outputIndex++] ?? args.rateSnapshot,
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
-          prompt:
-            buildCreativePrompt({
-              setup,
-              brand: resolved.brand,
-              products: group,
-              formatId: format.id,
-              hasLogo: !!resolved.logo,
-              adaptMaster: !!master,
-            }) +
-            (productLayers.length
-              ? "\n\n" + preservationSceneInstruction(productLayers)
-              : ""),
+          prompt: composition
+            ? buildPreservationScenePrompt({
+                setup,
+                brand: resolved.brand,
+                formatId: format.id,
+                layers: composition.layers,
+                copyRegion: composition.regions.copy,
+              })
+            : buildCreativePrompt({
+                setup,
+                brand: resolved.brand,
+                products: group,
+                formatId: format.id,
+                hasLogo: !!resolved.logo,
+                adaptMaster: !!master,
+              }),
           outputSize: {
             width: format.width,
             height: format.height,
@@ -383,17 +437,17 @@ export async function runBuilderJob(
         });
         if (!image.url || !image.storageKey)
           throw new Error("Image generation returned an incomplete result");
-        if (productLayers.length) {
+        if (composition) {
           const background = Buffer.from(
             await storageGetBase64(image.storageKey),
             "base64"
           );
-          const composite = await compositePreservedProducts(
+          const composite = await compositePreservedCreative(
             background,
-            productLayers
+            composition
           );
           const stored = await storagePut(
-            `org-${organizationId}/creatives/${jobId}/${format.id}-preserved.png`,
+            `org-${organizationId}/creatives/${jobId}/${format.id}-${group.map(p => p.id).join("-") || "sources"}-preserved.png`,
             composite,
             "image/png"
           );
@@ -437,7 +491,9 @@ export async function runBuilderJob(
             ...(productLayers.length
               ? {
                   productPreservation: {
-                    method: "original_cutout_v1",
+                    method: "original_cutout_v2",
+                    copyRegion: composition!.regions.copy,
+                    sceneOnly: true,
                     layers: productLayers.map(
                       ({ sourceKey, sha256, left, top, width, height }) => ({
                         sourceKey,
@@ -569,8 +625,10 @@ export async function builderImageQuote(
   resolved: Awaited<ReturnType<typeof loadInputs>>
 ) {
   let preserved;
+  let compositions;
   try {
     preserved = await loadPreservedProducts(setup, resolved);
+    compositions = await prepareBuilderPreservation(setup, resolved, preserved);
   } catch (error) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -589,9 +647,11 @@ export async function builderImageQuote(
       creativeImageOutputs(setup)
     );
   const common = await Promise.all(
-    (resolved.references ?? []).map(r => readGenerationSource(r.storageKey))
+    (setup.preserveProduct ? [] : (resolved.references ?? [])).map(r =>
+      readGenerationSource(r.storageKey)
+    )
   );
-  if (resolved.logo)
+  if (resolved.logo && !setup.preserveProduct)
     common.push(await readGenerationSource(resolved.logo.storageKey));
   for (const person of selectedPeople(setup)) {
     if (person.kind === "library")
@@ -602,12 +662,7 @@ export async function builderImageQuote(
       common.push(await readGenerationSource(asset.storageKey));
     }
   }
-  const groups =
-    setup.promotionMode === "platform" || isReferenceCreative(setup)
-      ? [[]]
-      : setup.productMode === "together"
-        ? [resolved.products]
-        : resolved.products.map(product => [product]);
+  const groups = builderProductGroups(setup, resolved);
   const formats = setup.formatIds
     .map(id => formatDetails(id)!)
     .sort((a, b) => b.width * b.height - a.width * a.height);
@@ -615,37 +670,31 @@ export async function builderImageQuote(
   for (const group of groups) {
     const sources = [
       ...(await Promise.all(
-        group.flatMap(p =>
+        (setup.preserveProduct ? [] : group).flatMap(p =>
           p.image ? [readGenerationSource(p.image.storageKey)] : []
         )
       )),
       ...common,
     ];
     for (const format of formats) {
-      const productLayers = setup.preserveProduct
-        ? await layoutPreservedProducts(
-            group.length
-              ? preserved.filter(p =>
-                  group.some(g => g.image?.storageKey === p.sourceKey)
-                )
-              : preserved,
-            format,
-            setup.placement
-          )
-        : [];
+      const composition = compositions.get(compositionKey(group, format.id));
       const request = await prepareImageRequest(model, {
-        prompt:
-          buildCreativePrompt({
-            setup,
-            brand: resolved.brand,
-            products: group,
-            formatId: format.id,
-            hasLogo: !!resolved.logo,
-            adaptMaster: false,
-          }) +
-          (productLayers.length
-            ? "\n\n" + preservationSceneInstruction(productLayers)
-            : ""),
+        prompt: composition
+          ? buildPreservationScenePrompt({
+              setup,
+              brand: resolved.brand,
+              formatId: format.id,
+              layers: composition.layers,
+              copyRegion: composition.regions.copy,
+            })
+          : buildCreativePrompt({
+              setup,
+              brand: resolved.brand,
+              products: group,
+              formatId: format.id,
+              hasLogo: !!resolved.logo,
+              adaptMaster: false,
+            }),
         originalImages: sources,
         modelOptions: setup.modelOptions,
         storagePrefix: `org-${organizationId}/image-quotes`,
@@ -1308,10 +1357,11 @@ export const creativeBuilderRouter = router({
               ? 1
               : 0;
       const referenceCount =
-        productReferences +
-        (resolved.references?.length ?? 0) +
-        (resolved.logo ? 1 : 0) +
-        selectedPeople(setup).length;
+        (setup.preserveProduct
+          ? 0
+          : productReferences +
+            (resolved.references?.length ?? 0) +
+            (resolved.logo ? 1 : 0)) + selectedPeople(setup).length;
       if (referenceCount > referenceCapacity(generationQuote.model))
         throw new TRPCError({
           code: "BAD_REQUEST",

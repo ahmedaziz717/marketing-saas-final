@@ -148,10 +148,16 @@ export function StudioSources({
           <span>
             <strong>Preserve original product</strong>
             <small>
-              Place the original cutout over the generated scene. Keeps the
-              selected viewing angle, colors and details; only resizes and
-              positions it. Requires a transparent PNG or WebP product image.
+              Keep the original product and logo, with copy placed safely
+              alongside them. Uses your theme for the scene and keeps the
+              selected product angle. Requires a transparent PNG or WebP cutout.
             </small>
+            {image.preserveProduct && !!image.referenceAssetIds?.length && (
+              <small>
+                Campaign reference images are skipped in this mode to avoid
+                duplicate products.
+              </small>
+            )}
           </span>
           <input
             type="checkbox"

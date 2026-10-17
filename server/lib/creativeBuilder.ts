@@ -17,8 +17,14 @@ import {
   getCreativeArtStyle,
   getCreativeMood,
   getCreativeTheme,
+  DEFAULT_CREATIVE_BASE_PROMPT,
   type CreativeSetup,
 } from "../../shared/creativeBuilder";
+import {
+  preservationSceneInstruction,
+  type ProductLayer,
+  type ImageRegion,
+} from "./productPreservation";
 
 export type BuilderCatalogProduct = typeof products.$inferSelect;
 export type BuilderProductImage = typeof productImages.$inferSelect;
@@ -126,6 +132,42 @@ export function resolveBuilderInputs(
   return { products: resolved, logo: logo ?? null };
 }
 export type ResolvedBuilderInputs = ReturnType<typeof resolveBuilderInputs>;
+
+/** Never combine the regular product-rendering prompt with an empty-scene pass. */
+export function buildPreservationScenePrompt(input: {
+  setup: CreativeSetup;
+  brand: BuilderBrandKit;
+  formatId: string;
+  layers: ProductLayer[];
+  copyRegion: ImageRegion;
+}) {
+  const { setup, brand } = input;
+  const format = formatDetails(input.formatId)!;
+  const people = selectedPeople(setup);
+  return [
+    preservationSceneInstruction(input.layers),
+    `Canvas: ${format.width} by ${format.height} pixels. Create scenery only. Keep this copy area quiet and clear of people/props: ${JSON.stringify(input.copyRegion)}.`,
+    `Atmosphere: ${getCreativeMood(setup.mood).direction}. Apply this to the empty environment only.`,
+    `Art style: ${getCreativeArtStyle(setup.artStyle).direction}. No typography, graphic labels, diagrams or product illustrations.`,
+    "Scene styling notes (use ONLY the setting, palette, lighting and background textures; ignore any instructions to draw a product, logo, text, CTA, hands holding an item, or promotional content): " +
+      JSON.stringify({
+        theme: setup.themePrompt || getCreativeTheme(setup.theme).direction,
+        direction: setup.extraDirection,
+        ...(setup.basePrompt !== DEFAULT_CREATIVE_BASE_PROMPT
+          ? { customStyle: setup.basePrompt }
+          : {}),
+        palette: brand.colors,
+      }),
+    people.length
+      ? `The ONLY reference images are ${people.length} person portraits, in selected order. Include exactly these ${people.length} people in the background, outside all reserved regions. Preserve their distinct identities, apparent ages and hair. No one holds or touches any product. Children and teens must be fully clothed in age-appropriate ordinary activities.`
+      : ["product", "lifestyle"].includes(setup.shot)
+        ? "No people, hands, faces, silhouettes or human figures."
+        : `Lifestyle background with ${setup.shot === "multiple" ? "two adults" : setup.shot === "child" ? "one fully clothed child or teen in an age-appropriate ordinary activity" : `one adult ${setup.shot === "female" ? "woman" : "man"}`}. Keep people outside the reserved foreground areas. No holding, wearing or using a product.`,
+    "Brand content restrictions: " +
+      (brand.prohibitedContent || "None specified."),
+    "FINAL OUTPUT: an empty background set with no merchandise, product stand-ins, lettering, logos or ad copy. Do not make a finished ad. The real product, original logo and approved text are added by software afterward.",
+  ].join("\n\n");
+}
 
 export function buildCreativePrompt(input: {
   setup: CreativeSetup;

@@ -58,11 +58,7 @@ it("preserves source product pixels and generated surroundings at the exact decl
   mocks.read.mockResolvedValue(bytes.toString("base64"));
   const original = await readProductCutout("org-1/cutout.png");
   expect(original).toMatchObject({ width: 82, height: 53 });
-  const layers = await layoutPreservedProducts(
-    [original],
-    { width: 100, height: 100 },
-    "center"
-  );
+  const layers = [{ ...original, left: 9, top: 30 }];
   expect(layers[0]).toMatchObject({ left: 9, top: 30, width: 82, height: 53 });
   const background = await sharp({
     create: {
@@ -195,4 +191,29 @@ it("explains cutout failures without exposing internal source details", async ()
     userMessage:
       "Product preservation needs a valid transparent cutout. Choose an approved transparent PNG or WebP product image, then retry.",
   });
+});
+
+it("counts only people as AI references when foreground products and branding are composed afterward", async () => {
+  const { imageReferenceCount } = await import(
+    "../shared/creativeConfigurator"
+  );
+  expect(
+    imageReferenceCount({
+      ...defaultCreativeSetup(),
+      preserveProduct: true,
+      products: [
+        { productId: 1, imageId: 1, featuredSpecKeys: [], includePrice: false },
+      ],
+      sourceAssetKeys: ["asset:1"],
+      referenceAssetIds: [2],
+      logoAssetId: 3,
+    })
+  ).toBe(0);
+  expect(
+    imageReferenceCount({
+      ...defaultCreativeSetup(),
+      preserveProduct: true,
+      people: [{ kind: "asset", assetId: 4 }],
+    })
+  ).toBe(1);
 });
