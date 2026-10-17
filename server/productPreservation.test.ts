@@ -1,3 +1,4 @@
+import { renderProductOverlay } from "./lib/productOverlay";
 import sharp from "sharp";
 import { beforeEach, expect, it, vi } from "vitest";
 import {
@@ -19,8 +20,6 @@ import {
   readProductCutout,
   loadPreservedProducts,
   layoutPreservedProducts,
-  compositePreservedProducts,
-  preservationSceneInstruction,
 } from "./lib/productPreservation";
 import { builderImageQuote } from "./routers/creativeBuilder";
 
@@ -70,7 +69,11 @@ it("preserves source product pixels and generated surroundings at the exact decl
   })
     .png()
     .toBuffer();
-  const result = await compositePreservedProducts(background, layers);
+  const { png: result } = await renderProductOverlay(
+    background,
+    [original],
+    layers
+  );
   const interior = await sharp(result)
     .extract({ left: 9, top: 30, width: 82, height: 53 })
     .ensureAlpha()
@@ -83,10 +86,6 @@ it("preserves source product pixels and generated surroundings at the exact decl
     .raw()
     .toBuffer();
   expect([...outside]).toEqual([7, 19, 31, 255]);
-  expect(preservationSceneInstruction(layers)).toContain('"left":9');
-  expect(preservationSceneInstruction(layers)).toContain(
-    "Do NOT draw any product"
-  );
 });
 
 it("fits separate products without overlap or perspective distortion across formats", async () => {
@@ -193,7 +192,7 @@ it("explains cutout failures without exposing internal source details", async ()
   });
 });
 
-it("counts only people as AI references when foreground products and branding are composed afterward", async () => {
+it("counts all visual references when preparing a complete creative with editable product layers", async () => {
   const { imageReferenceCount } = await import(
     "../shared/creativeConfigurator"
   );
@@ -208,7 +207,7 @@ it("counts only people as AI references when foreground products and branding ar
       referenceAssetIds: [2],
       logoAssetId: 3,
     })
-  ).toBe(0);
+  ).toBe(4);
   expect(
     imageReferenceCount({
       ...defaultCreativeSetup(),

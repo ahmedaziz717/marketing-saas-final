@@ -148,14 +148,13 @@ export function StudioSources({
           <span>
             <strong>Preserve original product</strong>
             <small>
-              Keep the original product and logo, with copy placed safely
-              alongside them. Uses your theme for the scene and keeps the
-              selected product angle. Requires a transparent PNG or WebP cutout.
+              Keep the complete AI design, then align the original product as an
+              editable layer. Requires a transparent PNG or WebP cutout.
             </small>
-            {image.preserveProduct && !!image.referenceAssetIds?.length && (
+            {image.preserveProduct && (
               <small>
-                Campaign reference images are skipped in this mode to avoid
-                duplicate products.
+                Adjust product size and position in the result, then save a
+                separate version. The complete original design stays saved.
               </small>
             )}
           </span>

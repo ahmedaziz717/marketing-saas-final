@@ -44,6 +44,7 @@ export function AssetUploadDialog({
   defaultDisposition,
   defaultPurpose = "finished",
   defaultUgc = false,
+  defaultSourceType = "other",
   mediaFilter,
   onSaved,
   onComplete,
@@ -56,6 +57,7 @@ export function AssetUploadDialog({
   defaultDisposition: "draft" | "submit";
   defaultPurpose?: "source" | "finished";
   defaultUgc?: boolean;
+  defaultSourceType?: "logo" | "product" | "reference" | "other";
   mediaFilter?: "image" | "video";
   onSaved: () => Promise<unknown>;
   onComplete: (key: string, state: AssetState) => void;
@@ -81,12 +83,19 @@ export function AssetUploadDialog({
       setFiles([]);
       setPurpose(parent?.purpose ?? defaultPurpose);
       setUgc(parent?.isUgc ?? defaultUgc);
-      setSourceType(parent?.sourceType ?? "other");
+      setSourceType(parent?.sourceType ?? defaultSourceType);
       setRights(false);
       setProgress("");
       setDisposition(parent ? "draft" : defaultDisposition);
     }
-  }, [open, parent?.key, defaultDisposition, defaultPurpose, defaultUgc]);
+  }, [
+    open,
+    parent?.key,
+    defaultDisposition,
+    defaultPurpose,
+    defaultUgc,
+    defaultSourceType,
+  ]);
   useEffect(() => {
     const next = files.map(file => ({ file, url: URL.createObjectURL(file) }));
     setPreviews(next);

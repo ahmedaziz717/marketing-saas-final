@@ -51,15 +51,13 @@ beforeAll(async () => {
     })
     .returning();
   orgId = org.id;
-  await state.db
-    .insert(organizationMemberships)
-    .values({
-      organizationId: orgId,
-      userId: user.id,
-      role: "owner",
-      status: "active",
-      createdAtMs: 1,
-    });
+  await state.db.insert(organizationMemberships).values({
+    organizationId: orgId,
+    userId: user.id,
+    role: "owner",
+    status: "active",
+    createdAtMs: 1,
+  });
   const [other] = await state.db
     .insert(users)
     .values({ openId: "catalog-outsider" })
@@ -196,4 +194,57 @@ describe("Catalog sources", () => {
       await state.db.select().from(products).where(eq(products.sourceId, id))
     ).toHaveLength(2);
   });
+});
+
+it("connects a public API with encrypted configuration and keeps it private from list responses", async () => {
+  process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET = "integration-api-test-key";
+  try {
+    vi.mocked(readStorePage).mockResolvedValue({
+      items: [],
+      next: null,
+      total: 0,
+    });
+    const source = await caller.connect({
+      organizationId: orgId,
+      provider: "api",
+      storeUrl: "https://api.example/catalog?limit=20",
+      api: {
+        auth: { type: "none" },
+        itemsPath: "items",
+        nextPath: "",
+        fields: {},
+        notes: "Products are in items.",
+      },
+    });
+    const [row] = await state.db
+      .select()
+      .from(catalogSources)
+      .where(eq(catalogSources.id, source.id));
+    expect(row.credentials.ciphertext).toBeTruthy();
+    expect(JSON.stringify(row.credentials)).not.toContain(
+      "Products are in items"
+    );
+    const publicRow = (await caller.list({ organizationId: orgId })).find(
+      row => row.id === source.id
+    )!;
+    expect(publicRow.storeUrl).toBe("https://api.example/catalog?limit=20");
+    expect(publicRow).not.toHaveProperty("credentials");
+    expect(publicRow).not.toHaveProperty("api");
+    await expect(
+      outsider.connect({
+        organizationId: orgId,
+        provider: "api",
+        storeUrl: "https://api.example/catalog",
+        api: {
+          auth: { type: "none" },
+          itemsPath: "",
+          nextPath: "",
+          fields: {},
+          notes: "",
+        },
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  } finally {
+    delete process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET;
+  }
 });

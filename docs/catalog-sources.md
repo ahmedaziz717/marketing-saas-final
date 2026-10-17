@@ -16,6 +16,14 @@ Set the SAME random `CATALOG_TOKEN_ENCRYPTION_SECRET` on web and worker before c
 
 Automatic synchronization runs every six hours, with manual sync and pause/resume. This is scheduled polling, not webhooks. It refreshes catalog items but does not delete products missing from later provider responses. Inventory writeback, orders, checkout, sending emails, ad publishing, and appointment scheduling are outside this change. Provider account access has to be verified with each merchant's real credentials; fixture tests alone do not certify a merchant connection.
 
+## Custom JSON API sources
+
+Choose **API endpoint** in Catalog Sources or Integrations. Public feeds need no password. Basic username/password, bearer tokens and custom `X-*`/Authorization headers are supported. Credential values and the validated mapping are encrypted with the existing shared integration encryption secret; no additional catalog secret setup is required for this new provider. Existing store connectors retain their catalog-specific encryption key.
+
+Only public HTTPS GET JSON endpoints are fetched. DNS is checked and pinned; redirects are rejected. URL credentials, common secret query parameters and routing/forwarding headers are rejected. Common product fields are inferred deterministically, with optional dot-path mappings. Every product must have a name and a landing-page URL; missing landing pages are not invented. Preview shows the first five entries and page count before connection. Next-page URLs must remain on the exact configured origin. Repeated pages fail explicitly; limits are 2,000 items per page, 200 pages per run and 6 MB per response. POST/GraphQL APIs and pagination that exposes only opaque cursor tokens need dedicated connectors.
+
+Optional explanatory notes, pasted/uploaded screenshots and PDF/TXT/Markdown/JSON documents can suggest field mappings through the existing metered AI reader. The UI shows the AI credit estimate. Authentication fields are never included in that request. Response structure rather than product values is sent. Files are size/type checked, images re-encoded, PDFs sent as data without local execution, and no document content can change request URLs, authentication or run code. Instructions are untrusted evidence; only schema-validated paths are accepted and then checked against the actual feed. Raw instruction files are not persisted by EvokeLoop; mapping and notes are encrypted with the connection. Word files should be exported as PDF.
+
 ## Services and CSV
 
 Service entries support fixed/starting-at/hourly/recurring/quote pricing, duration, service area, delivery, packages, and preferred CTA. The existing Creative Builder accepts approved services without a product image and includes their service facts in the generation prompt. No model identity is added to customer-facing labels.

@@ -65,5 +65,6 @@ export const STORE_PROVIDERS = [
   "shopify",
   "bigcommerce",
   "woocommerce",
+  "api",
 ] as const;
 export type StoreProvider = (typeof STORE_PROVIDERS)[number];

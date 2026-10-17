@@ -13,6 +13,16 @@ import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
 import { appendActivity } from "../lib/activity";
 import { previewStudioProductPage } from "../lib/studioProductPage";
+import {
+  apiCatalogConfigSchema,
+  apiInstructionFileSchema,
+} from "../../shared/apiCatalog";
+import {
+  apiCatalogAddress,
+  fetchApiCatalog,
+  parseApiCatalog,
+} from "../lib/apiCatalog";
+import { suggestApiMapping } from "../lib/apiInstructions";
 const org = z.object({ organizationId: z.number().int().positive() });
 const idInput = org.extend({ sourceId: z.number().int().positive() });
 async function owner(userId: number, organizationId: number) {
@@ -22,6 +32,47 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  previewApi: protectedProcedure
+    .input(
+      org.extend({
+        endpoint: z.string().url().max(2048),
+        config: apiCatalogConfigSchema,
+        files: z.array(apiInstructionFileSchema).max(3).default([]),
+        interpretInstructions: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await owner(ctx.user.id, input.organizationId);
+      const endpoint = apiCatalogAddress(input.endpoint);
+      const data = await fetchApiCatalog(endpoint, input.config);
+      const mapping = input.interpretInstructions
+        ? await suggestApiMapping(data, input.config.notes, input.files)
+        : {
+            itemsPath: input.config.itemsPath,
+            nextPath: input.config.nextPath,
+            fields: input.config.fields,
+          };
+      const result = parseApiCatalog(data, endpoint, {
+        ...input.config,
+        ...mapping,
+      });
+      return {
+        mapping,
+        count: result.items.length,
+        total: result.total,
+        hasNext: !!result.next,
+        samples: result.items
+          .slice(0, 5)
+          .map(({ name, sku, productUrl, imageUrl, price, currency }) => ({
+            name,
+            sku,
+            productUrl,
+            imageUrl,
+            price,
+            currency,
+          })),
+      };
+    }),
   previewProductPage: protectedProcedure
     .input(org.extend({ website: z.string().trim().min(3).max(2048) }))
     .mutation(async ({ ctx, input }) => {
@@ -77,26 +128,37 @@ export const catalogSourcesRouter = router({
   }),
   connect: protectedProcedure
     .input(
-      org.extend({
-        provider: z.enum(STORE_PROVIDERS),
-        storeUrl: z.string().url(),
-        token: z.string().min(8).max(4000),
-        secret: z.string().max(4000).optional(),
-      })
+      org
+        .extend({
+          provider: z.enum(STORE_PROVIDERS),
+          storeUrl: z.string().url(),
+          token: z.string().max(4000).default(""),
+          secret: z.string().max(4000).optional(),
+          api: apiCatalogConfigSchema.optional(),
+        })
+        .refine(
+          input =>
+            input.provider === "api" ? !!input.api : input.token.length >= 8,
+          "Provide the API configuration or store credentials."
+        )
     )
     .mutation(async ({ ctx, input }) => {
       const db = await owner(ctx.user.id, input.organizationId);
       const address = storeAddress(input.provider, input.storeUrl);
-      catalogEncryptionKey();
+      if (input.provider !== "api") catalogEncryptionKey();
       await readStorePage(
         input.provider,
         address,
-        { token: input.token, secret: input.secret },
+        { token: input.token, secret: input.secret, api: input.api },
         null
       );
       const credentials = encryptToken(
-        JSON.stringify({ token: input.token, secret: input.secret }),
-        catalogEncryptionKey()
+        JSON.stringify({
+          token: input.token,
+          secret: input.secret,
+          api: input.api,
+        }),
+        input.provider === "api" ? undefined : catalogEncryptionKey()
       );
       const [source] = await db
         .insert(catalogSources)

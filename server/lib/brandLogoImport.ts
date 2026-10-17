@@ -8,7 +8,7 @@ import { appendActivity } from "./activity";
 import type { LibraryDatabase } from "./assetLibrary";
 
 export async function normalizeBrandLogo(bytes: Buffer, mimeType: string) {
-  if (mimeType === "image/svg+xml") {
+  if (mimeType === "image/svg+xml" || /<svg\b/i.test(bytes.subarray(0, 8192).toString("utf8"))) {
     const svg = bytes.toString("utf8");
     // Rasterize only self-contained vectors: never let the renderer resolve URLs or local files.
     if (
@@ -35,7 +35,8 @@ export async function importBrandLogos(
   organizationId: number,
   brandKitId: number,
   actorUserId: number,
-  urls: string[]
+  urls: string[],
+  options?: { fetchImage?: (url: string) => Promise<{ data: Buffer; contentType: string }>; label?: string }
 ) {
   const existing = await db
     .select()
@@ -52,7 +53,7 @@ export async function importBrandLogos(
   for (const url of Array.from(new Set(urls))) {
     if (known.has(url)) continue;
     try {
-      const image = await safeFetchImage(url, 0, true);
+      const image = options?.fetchImage ? await options.fetchImage(url) : await safeFetchImage(url, 0, true);
       const bytes = await normalizeBrandLogo(image.data, image.contentType);
       const digest = createHash("sha256").update(bytes).digest("hex");
       const stored = await storagePut(
@@ -65,7 +66,7 @@ export async function importBrandLogos(
         .values({
           organizationId,
           brandKitId,
-          name: "Website logo",
+          name: options?.label ?? "Website logo",
           type: "logo",
           storageKey: stored.key,
           url: stored.url,

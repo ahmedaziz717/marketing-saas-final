@@ -21,7 +21,7 @@ export type ImageRegion = {
   height: number;
 };
 
-/** Foreground regions never intersect, regardless of what the model renders. */
+/** Starting positions for the editor only; these never constrain AI art direction. */
 export function preservationRegions(
   canvas: { width: number; height: number },
   placement: CreativeSetup["placement"],
@@ -162,7 +162,7 @@ export async function loadPreservedProducts(
   return cutouts;
 }
 
-/** Fixed layout is shared by the scene prompt and deterministic final composite. */
+/** Suggest initial layer sizes; the complete design is generated independently. */
 export async function layoutPreservedProducts(
   cutouts: ProductCutout[],
   canvas: { width: number; height: number },
@@ -202,39 +202,4 @@ export async function layoutPreservedProducts(
     });
   }
   return layers;
-}
-
-export function preservationSceneInstruction(layers: ProductLayer[]) {
-  return [
-    "PRODUCT PRESERVATION — BACKGROUND-ONLY PASS. Create an empty set, not a finished advertisement.",
-    "Product photos, logos and copy are deliberately NOT supplied to you. They will be placed by software after this pass. Do NOT draw any product, merchandise, duplicate product, stand-in object, packaging, placeholder, silhouette, bounding box, logo, lettering or text anywhere in the image. Render surrounding scenery only, with an empty surface for the foreground product.",
-    "Keep the following pixel rectangles clear of props and people. No hands or foreground objects may cross these regions. Do not guess, redraw or relight an unseen product. Use a subtle ground plane with restrained perspective and no strong shadow for an imaginary object.",
-    JSON.stringify(
-      layers.map(({ left, top, width, height }) => ({
-        left,
-        top,
-        width,
-        height,
-      }))
-    ),
-    "Generate uninterrupted background scenery through those rectangles so transparent parts of the cutouts blend naturally. All product pixels, branding and copy are added afterward. Leave the set empty.",
-  ].join("\n\n");
-}
-
-export async function compositePreservedProducts(
-  background: Buffer,
-  layers: ProductLayer[]
-) {
-  // No style transfer, perspective warp, recoloring, or model pass after this step.
-  return sharp(background, { limitInputPixels: 16_000_000 })
-    .composite(
-      layers.map(({ png, left, top }) => ({
-        input: png,
-        left,
-        top,
-        blend: "over" as const,
-      }))
-    )
-    .png()
-    .toBuffer();
 }

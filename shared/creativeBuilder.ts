@@ -349,6 +349,8 @@ export const creativeSetupSchema = z
     productMode: z.enum(["separate", "together"]),
     // Optional for compatibility with saved and queued configurations.
     preserveProduct: z.boolean().optional(),
+    fontFamily: z.string().trim().max(80).optional(),
+    preserveFont: z.boolean().default(false),
     shot: z.enum([
       "product",
       "female",
@@ -525,6 +527,7 @@ export function defaultCreativeSetup(
     formatIds: ["square_1_1", "portrait_4_5", "story_9_16"],
     products: [],
     productMode: "separate",
+    preserveFont: false,
     shot: "product",
     mood: "clean",
     artStyle: "realistic",

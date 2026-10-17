@@ -119,8 +119,6 @@ export function modelCompatibility(
   return null;
 }
 export function imageReferenceCount(setup: CreativeSetup) {
-  if (setup.preserveProduct)
-    return setup.people?.length ?? (setup.person ? 1 : 0);
   return (
     (setup.promotionMode === "platform"
       ? 0

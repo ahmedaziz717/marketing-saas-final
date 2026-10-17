@@ -349,6 +349,19 @@ export async function safeFetchImage(
   return { finalUrl: url.toString(), contentType, data: response.body };
 }
 
+/** Public Drive downloads only. Each redirect is revalidated and DNS-pinned. */
+export async function safeFetchDriveFile(value: string, redirects = 0): Promise<{ data: Buffer; contentType: string }> {
+  if (redirects > MAX_REDIRECTS) throw new Error("Drive download redirected too many times.");
+  const candidate = new URL(value);
+  if (candidate.protocol !== "https:" || !["drive.google.com", "drive.usercontent.google.com"].includes(candidate.hostname) && !candidate.hostname.endsWith(".googleusercontent.com"))
+    throw new Error("Drive download left the allowed Google file hosts.");
+  const { url, addresses } = await assertPublicUrl(value);
+  const result = await requestPinned(url, addresses[0]!.address, 8 * 1024 * 1024);
+  if (result.status >= 300 && result.status < 400 && result.location) return safeFetchDriveFile(new URL(result.location, url).href, redirects + 1);
+  if (result.status !== 200) throw new Error("This Drive file is not publicly accessible.");
+  return { data: result.body, contentType: result.contentType.split(";")[0] };
+}
+
 function absoluteUrl(value: string | undefined, base: string) {
   if (!value || value.startsWith("data:") || value.startsWith("javascript:"))
     return null;

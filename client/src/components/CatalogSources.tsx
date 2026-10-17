@@ -1,3 +1,4 @@
+import { ApiCatalogConnect } from "./ApiCatalogConnect";
 import { OfferingDiscovery } from "./OfferingDiscovery";
 import { PartnerLogo } from "./PartnerLogo";
 import { useState } from "react";
@@ -14,6 +15,7 @@ import { Progress } from "./ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { CatalogEntryForm } from "./CatalogEntryForm";
 const names = {
+  api: "API endpoint",
   shopify: "Shopify",
   bigcommerce: "BigCommerce",
   woocommerce: "WooCommerce",
@@ -220,7 +222,7 @@ export function CatalogSources({
         </>
       )}
       {!!query.data?.length && (
-        <h3 className="text-xl font-semibold">Your store connections</h3>
+        <h3 className="text-xl font-semibold">Your catalog connections</h3>
       )}
       {query.error && <p role="alert">{query.error.message}</p>}
       {query.data
@@ -352,8 +354,9 @@ export function CatalogSources({
           </div>
         ))}
       <div className="grid gap-4 md:grid-cols-3">
+        {"API endpoint".toLowerCase().includes(search.toLowerCase()) && <ApiCatalogConnect organizationId={organizationId} onConnected={refresh} />}
         {STORE_PROVIDERS.filter(p =>
-          names[p].toLowerCase().includes(search.toLowerCase())
+          p !== "api" && names[p].toLowerCase().includes(search.toLowerCase())
         ).map(p => (
           <div key={p} className="surface p-6">
             <PartnerLogo slug={p} name={names[p]} />

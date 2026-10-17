@@ -345,8 +345,14 @@ function describe(
     Composition: d.placement,
     "Product preservation": image
       ? c.image.preserveProduct
-        ? "Original cutout · selected angle"
+        ? "Complete design + editable product overlay"
         : "AI composition"
+      : "Not applicable",
+    Font: image ? c.image.fontFamily || "Art-directed" : "Not applicable",
+    "Preserve font": image
+      ? c.image.preserveFont
+        ? "On"
+        : "Off"
       : "Not applicable",
     "Brand logo": image
       ? (context.logos.find(l => l.id === c.image.logoAssetId)?.name ??
