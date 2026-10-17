@@ -17,6 +17,7 @@ export function StudioSections<T extends string>({
     icon: LucideIcon;
     disabled?: boolean;
     disabledReason?: string;
+    progress?: { explored: number; total: number };
   }[];
   current: T;
   onSelect: (id: T) => void;
@@ -80,6 +81,16 @@ export function StudioSections<T extends string>({
         <span>
           <strong>{item.title}</strong>
           <small>{item.subtitle}</small>
+          {item.progress && (
+            <span
+              className="cfg-section-progress"
+              aria-label={`${item.progress.explored} of ${item.progress.total} categories explored`}
+            >
+              {Array.from({ length: item.progress.total }, (_, i) => (
+                <i key={i} data-explored={i < item.progress!.explored} />
+              ))}
+            </span>
+          )}
         </span>
         {mobile ? (
           expanded ? (

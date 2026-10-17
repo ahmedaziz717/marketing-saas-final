@@ -53,6 +53,7 @@ export function PageUrlSource({
   const [description, setDescription] = useState(
     saved?.sourceUrl ? saved.description : ""
   );
+  const [pageContent, setPageContent] = useState(saved?.pageContent);
   const [reviewedUrl, setReviewedUrl] = useState(saved?.sourceUrl ?? "");
   const [applied, setApplied] = useState(!!saved?.sourceUrl);
   const [imported, setImported] = useState(false);
@@ -101,6 +102,7 @@ export function PageUrlSource({
             });
             setTitle(page.title);
             setDescription(page.description);
+            setPageContent(page.pageContent);
             setReviewedUrl(page.url);
           } catch {}
         }}
@@ -238,6 +240,7 @@ export function PageUrlSource({
                       title: title.trim(),
                       description: description.trim(),
                       sourceUrl: reviewedUrl,
+                      pageContent,
                     };
                     if (kind === "image")
                       updateImage({
@@ -266,6 +269,25 @@ export function PageUrlSource({
                 >
                   {applied ? "Page added to brief" : "Use page for promotion"}
                 </button>
+                <details className="cfg-page-content">
+                  <summary>Page content used by AI</summary>
+                  <p className="cfg-help">
+                    The copy uses your title, summary and this page text. Remove
+                    anything unrelated before adding it to your brief.
+                  </p>
+                  <label className="cfg-field">
+                    <span>Page details</span>
+                    <textarea
+                      value={pageContent ?? ""}
+                      rows={7}
+                      maxLength={12000}
+                      onChange={e => {
+                        setPageContent(e.target.value);
+                        setApplied(false);
+                      }}
+                    />
+                  </label>
+                </details>
                 {applied && (
                   <p role="status">
                     Your {pageType === "service" ? "service" : "page content"}{" "}

@@ -11,7 +11,7 @@ import {
 } from "./videoCreation";
 import {
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_VIDEO_MODEL,
+  generationModel,
   modelDefaults,
   modelVideoMode,
   referenceCapacity,
@@ -38,7 +38,7 @@ export function newConfiguration(): ConfiguratorState {
     video: {
       ...defaultVideoSetup,
       title: "Untitled video",
-      modelId: DEFAULT_VIDEO_MODEL,
+      modelId: "higgsfield:bytedance/seedance-2.5/text-to-video",
       direction: { ...defaultVideoDirection },
     },
   };
@@ -53,7 +53,12 @@ export function readConfiguration(
     const image = creativeSetupSchema.safeParse(value.image),
       video = videoSetupSchema.safeParse(value.video);
     return image.success && video.success
-      ? { version: 1, kind: value.kind, image: image.data, video: video.data }
+      ? {
+          version: 1,
+          kind: value.kind,
+          image: image.data,
+          video: videoWithSources(video.data),
+        }
       : null;
   } catch {
     return null;
@@ -74,6 +79,30 @@ export function videoWithModel(
     resolution: String(options.resolution ?? "720p"),
     sound: Boolean(options.generate_audio ?? options.sound ?? false),
   };
+}
+/** Seedance's prompt and reference modes share settings, but use different endpoints. */
+export function videoWithSources(setup: VideoSetup): VideoSetup {
+  const prefix = "higgsfield:bytedance/seedance-2.5/";
+  if (
+    setup.mode !== "create" ||
+    ![prefix + "text-to-video", prefix + "reference-to-video"].includes(
+      setup.modelId ?? ""
+    )
+  )
+    return setup;
+  const modelId =
+    prefix +
+    (setup.imageKeys.length || setup.people.length || setup.sourceVideoKey
+      ? "reference-to-video"
+      : "text-to-video");
+  if (modelId === setup.modelId) return setup;
+  const model = generationModel(modelId)!;
+  const modelOptions = Object.fromEntries(
+    Object.entries(setup.modelOptions ?? {}).filter(([key]) =>
+      Object.hasOwn(model.inputSchema.properties, key)
+    )
+  );
+  return { ...setup, modelId, modelOptions };
 }
 /** Explain incompatibilities without silently dropping references or changing the user's model. */
 export function modelCompatibility(

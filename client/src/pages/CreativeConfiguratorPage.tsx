@@ -1,5 +1,9 @@
 import { StudioFonts } from "@/components/configurator/StudioFonts";
 import {
+  StudioDiscovery,
+  useStudioExploration,
+} from "@/components/configurator/StudioDiscovery";
+import {
   useStudioNavigation,
   scrollStudioChoices,
 } from "@/components/configurator/studioNavigation";
@@ -92,6 +96,7 @@ import {
   imageReferenceCount,
   modelCompatibility,
   videoWithModel,
+  videoWithSources,
   readConfigurationSnapshot,
   type ConfigurationSnapshot,
   type ConfiguratorState,
@@ -107,6 +112,7 @@ type Choice = {
   palette?: readonly string[];
   badge?: string;
   reason?: string;
+  notice?: string;
   detail?: ReactNode;
   footer?: ReactNode;
 };
@@ -248,6 +254,12 @@ function Configurator() {
         : "people"
     : (video.direction?.setting ?? "product");
   const currentSection = configuratorSections.find(s => s.id === section)!;
+  const discovery = useStudioExploration(
+    storageKey,
+    config.kind,
+    category,
+    scene === "people"
+  );
   const categories = currentSection.categories.filter(c =>
     isImage ? !["audio", "subtitles"].includes(c.id) : c.id !== "fonts"
   );
@@ -465,6 +477,7 @@ function Configurator() {
     });
     setSavedImage(null);
     setSavedVideo(null);
+    discovery.reset();
     update(structuredClone(restored));
     go("output", "review");
   }
@@ -514,7 +527,7 @@ function Configurator() {
   function updateVideo(patch: Partial<VideoSetup>) {
     update({
       ...configRef.current,
-      video: { ...configRef.current.video, ...patch },
+      video: videoWithSources({ ...configRef.current.video, ...patch }),
     });
   }
   function updateDirection(patch: Partial<VideoDirection>) {
@@ -745,6 +758,7 @@ function Configurator() {
                 </div>
               </button>
               {c.reason && <p className="cfg-disabled-reason">{c.reason}</p>}
+              {c.notice && <p className="cfg-disabled-reason">{c.notice}</p>}
               <div className="cfg-card-tools">
                 <button
                   className="cfg-info"
@@ -936,6 +950,7 @@ function Configurator() {
             search={search}
             updateImage={updateImage}
             updateVideo={updateVideo}
+            onModels={() => go("model")}
             onUploaded={async () => {
               await Promise.all([
                 utils.assetLibrary.studioList.invalidate(),
@@ -1265,7 +1280,6 @@ function Configurator() {
             disabled={
               copyAI.isPending ||
               promptAI.isPending ||
-              (!isImage && !video.imageKeys.length) ||
               (isImage && options.data?.brand?.status !== "active")
             }
             onClick={generateText}
@@ -1275,7 +1289,7 @@ function Configurator() {
               ? "Writing…"
               : isImage
                 ? "Generate copy from this setup"
-                : "Generate prompt from references"}
+                : "Generate prompt from this setup"}
             <ActionCredits
               organizationId={organizationId}
               operation={
@@ -1283,10 +1297,24 @@ function Configurator() {
               }
             />
           </button>
+          {isImage &&
+            image.promotionMode === "platform" &&
+            image.promotion?.sourceUrl && (
+              <div className="cfg-copy-source">
+                <span>
+                  Copy source:{" "}
+                  <strong>{image.promotion.title || "Selected page"}</strong>
+                </span>
+                <button type="button" onClick={() => go("type", "source")}>
+                  Review page details{" "}
+                  <ArrowRight size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           {!isImage && !video.imageKeys.length && (
             <p className="cfg-help">
-              Add a reference image in Type & Source to generate a prompt from
-              it.
+              Reference images are optional. AI can build a prompt from your
+              written idea, selected page and brand details.
             </p>
           )}
         </div>
@@ -1430,11 +1458,14 @@ function Configurator() {
               const d = generationModel(m.routeId)!;
               const reason = !m.available
                 ? (m.reason ?? "Currently unavailable.")
-                : modelCompatibility(
+                : undefined;
+              const notice = m.available
+                ? modelCompatibility(
                     d,
                     referenceCount,
                     !isImage && !!video.sourceVideoKey
-                  );
+                  )
+                : null;
               return {
                 id: m.id,
                 title: m.name,
@@ -1443,6 +1474,7 @@ function Configurator() {
                 art: config.kind,
                 badge: m.direct ? "Great Value" : undefined,
                 reason: reason ?? undefined,
+                notice: notice ?? undefined,
                 footer: (
                   <>
                     {m.estimatedCredits != null
@@ -1784,6 +1816,7 @@ function Configurator() {
           reuse={trial => {
             setSavedImage(null);
             setSavedVideo(null);
+            discovery.reset();
             update({
               ...configRef.current,
               ...(trial.imageSetup
@@ -1841,16 +1874,29 @@ function Configurator() {
         <StudioSections
           label="Studio sections"
           current={section}
-          items={configuratorSections.map((s, i) => ({
+          items={discovery.sections.map((s, i) => ({
             ...s,
             icon: sectionIcons[i],
+            progress: {
+              explored: s.categories.filter(c => c.available && c.explored)
+                .length,
+              total: s.categories.filter(c => c.available).length,
+            },
           }))}
           onSelect={id => go(id)}
         >
           <div className="cfg-body">
+            <StudioDiscovery
+              discovery={discovery}
+              current={category}
+              onSelect={go}
+            />
             <StudioCategories
               items={categories.map(c => ({
                 ...c,
+                explored: discovery.sections
+                  .find(s => s.id === section)
+                  ?.categories.find(item => item.id === c.id)?.explored,
                 hint:
                   c.id === "people" && scene !== "people"
                     ? "Needs people scene"
@@ -1907,50 +1953,62 @@ function Configurator() {
         </div>
       )}
       {!pendingImageJob && (
-        <div className="cfg-bottom">
-          <div>
-            <strong>{quoteLabel}</strong>
-            <span>
-              {busy ? (
-                "Working…"
-              ) : (
-                <span className="cfg-credit-detail">{creditDetail}</span>
-              )}
-              {issues.length > 0 && (
-                <span className="cfg-completion-hint">
-                  {issues.length} {issues.length === 1 ? "item" : "items"} to
-                  complete
-                </span>
-              )}
-            </span>
+        <>
+          {!ready && (issues.length > 0 || quote.error) && (
+            <div className="cfg-ready-help" role="status">
+              <button type="button" onClick={() => go("output", "review")}>
+                <CircleHelp size={15} aria-hidden="true" />
+                <span>{issues[0] ?? quote.error?.message}</span>
+                <ArrowRight size={15} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          <div className="cfg-bottom">
+            <div>
+              <strong>{quoteLabel}</strong>
+              <span>
+                {busy ? (
+                  "Working…"
+                ) : (
+                  <span className="cfg-credit-detail">{creditDetail}</span>
+                )}
+                {issues.length > 0 && (
+                  <span className="cfg-completion-hint">
+                    {issues.length} {issues.length === 1 ? "item" : "items"} to
+                    complete
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="cfg-actions">
+              <button
+                className="cfg-next-section"
+                disabled={busy}
+                onClick={() => {
+                  const next = discovery.following;
+                  go(next?.section ?? "output", next?.id ?? "review");
+                }}
+              >
+                {discovery.following
+                  ? `Next: ${discovery.following.title}`
+                  : "Review configuration"}{" "}
+                <ChevronRight size={15} />
+              </button>
+              <button
+                className="cfg-primary"
+                disabled={!ready}
+                onClick={() => setConfirm(true)}
+              >
+                {busy ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  <Sparkles size={16} />
+                )}{" "}
+                Generate {isImage ? "images" : "video"}
+              </button>
+            </div>
           </div>
-          <div className="cfg-actions">
-            <button
-              className="cfg-next-section"
-              disabled={busy}
-              onClick={() => {
-                const i = configuratorSections.findIndex(s => s.id === section);
-                go(
-                  configuratorSections[(i + 1) % configuratorSections.length].id
-                );
-              }}
-            >
-              Next section <ChevronRight size={15} />
-            </button>
-            <button
-              className="cfg-primary"
-              disabled={!ready}
-              onClick={() => setConfirm(true)}
-            >
-              {busy ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <Sparkles size={16} />
-              )}{" "}
-              Generate {isImage ? "images" : "video"}
-            </button>
-          </div>
-        </div>
+        </>
       )}
       {info && (
         <Dialog open onOpenChange={open => !open && setInfo(null)}>
@@ -2056,6 +2114,7 @@ function Configurator() {
                       "This draft cannot be opened in Creative Studio."
                     );
                   update({ ...config, kind: "image", image: parsed.data });
+                  discovery.reset("image");
                   setSavedImage({ briefId: d.id, updatedAtMs: d.updatedAtMs });
                   setDraftsOpen(false);
                   go("type");
@@ -2080,7 +2139,12 @@ function Configurator() {
                       return toast.error(
                         "This draft cannot be opened in Creative Studio."
                       );
-                    update({ ...config, kind: "video", video: parsed.data });
+                    update({
+                      ...config,
+                      kind: "video",
+                      video: videoWithSources(parsed.data),
+                    });
+                    discovery.reset("video");
                     setSavedVideo({ id: d.id, revision: d.revision });
                     setDraftsOpen(false);
                     go("type");

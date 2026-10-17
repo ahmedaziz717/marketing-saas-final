@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { PROMOTION_TYPES, type CreativeSetup } from "@shared/creativeBuilder";
 import type { VideoSetup } from "@shared/videoCreation";
 import type { LibraryAsset } from "@shared/assetLibrary";
+import { generationModel, referenceCapacity } from "@shared/modelCatalog";
 import { AssetUploadDialog } from "@/components/AssetUploadDialog";
 import { StudioCard } from "./StudioCard";
 import { PageUrlSource } from "./PageUrlSource";
@@ -38,6 +39,7 @@ export function StudioSources({
   updateImage,
   updateVideo,
   onUploaded,
+  onModels,
 }: {
   organizationId: number;
   role: string;
@@ -50,6 +52,7 @@ export function StudioSources({
   updateImage: (patch: Partial<CreativeSetup>) => void;
   updateVideo: (patch: Partial<VideoSetup>) => void;
   onUploaded: () => Promise<unknown>;
+  onModels?: () => void;
 }) {
   const [tab, setTab] = useState(
       (
@@ -65,6 +68,8 @@ export function StudioSources({
     [upload, setUpload] = useState(false),
     [offset, setOffset] = useState(0);
   const isImage = kind === "image";
+  const referenceLimit = isImage ? 9 : 30 - video.people.length;
+  const videoModel = generationModel(video.modelId ?? "");
   const catalog = trpc.video.catalogImages.useQuery(
     { organizationId, search, offset },
     { enabled: !isImage && tab === "catalog" }
@@ -132,7 +137,7 @@ export function StudioSources({
   function toggleSource(key: string) {
     const next = sourceKeys.includes(key)
       ? sourceKeys.filter(k => k !== key)
-      : sourceKeys.length < 9
+      : sourceKeys.length < referenceLimit
         ? [...sourceKeys, key]
         : sourceKeys;
     if (isImage)
@@ -153,6 +158,48 @@ export function StudioSources({
   ] as const;
   return (
     <div className="cfg-source-browser">
+      {!isImage && (
+        <div className="cfg-video-references">
+          <strong>Reference images · optional</strong>
+          <p>
+            Start with your idea alone, or select multiple images from the
+            catalog and your saved assets.
+          </p>
+          <span>
+            {video.imageKeys.length}{" "}
+            {video.imageKeys.length === 1 ? "image" : "images"} selected
+            {video.people.length
+              ? ` + ${video.people.length} people references`
+              : ""}
+          </span>
+          {videoModel && (
+            <p>
+              {referenceCapacity(videoModel)
+                ? `${videoModel.name} accepts up to ${Math.min(30, referenceCapacity(videoModel))} image references.`
+                : `${videoModel.name} is in prompt-only mode.`}{" "}
+              {videoModel.providerModel.startsWith("bytedance/seedance-2.5/") &&
+              ["create"].includes(video.mode)
+                ? "Its prompt and reference modes follow your selection."
+                : "Some models require an image or source clip."}
+            </p>
+          )}
+          <div className="cfg-actions">
+            {(video.imageKeys.length > 0 || video.people.length > 0) && (
+              <button
+                type="button"
+                onClick={() => updateVideo({ imageKeys: [], people: [] })}
+              >
+                Clear image references
+              </button>
+            )}
+            {onModels && (
+              <button type="button" onClick={onModels}>
+                Explore video models
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {isImage && (
         <label className="cfg-preserve-product">
           <ShieldCheck size={22} aria-hidden="true" />
@@ -357,7 +404,8 @@ export function StudioSources({
                     contain
                     selected={sourceKeys.includes(p.key)}
                     disabled={
-                      sourceKeys.length >= 9 && !sourceKeys.includes(p.key)
+                      sourceKeys.length >= referenceLimit &&
+                      !sourceKeys.includes(p.key)
                     }
                     onSelect={() => toggleSource(p.key)}
                   />
@@ -441,7 +489,9 @@ export function StudioSources({
                     selected={selected}
                     disabled={
                       blocked ||
-                      (tab === "assets" && sourceKeys.length >= 9 && !selected)
+                      (tab === "assets" &&
+                        sourceKeys.length >= referenceLimit &&
+                        !selected)
                     }
                     onSelect={() =>
                       tab === "video"

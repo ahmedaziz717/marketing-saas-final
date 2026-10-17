@@ -1,5 +1,10 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 import { studioCategoryIcon } from "./studioCategoryIcons";
 
 export function StudioCategories({
@@ -16,6 +21,7 @@ export function StudioCategories({
     reason?: string;
     hint?: string;
     icon?: LucideIcon;
+    explored?: boolean;
   }[];
   current: string;
   onSelect: (id: string) => void;
@@ -114,10 +120,26 @@ export function StudioCategories({
               key={item.id}
               type="button"
               aria-pressed={current === item.id}
+              aria-description={
+                item.explored === undefined
+                  ? undefined
+                  : item.explored
+                    ? "Explored"
+                    : "Not explored"
+              }
               disabled={item.disabled}
               title={item.disabled ? item.reason : undefined}
               onClick={() => onSelect(item.id)}
             >
+              {item.explored !== undefined && (
+                <span
+                  className={`cfg-exploration-mark cfg-category-mark${item.explored ? " is-explored" : ""}`}
+                  aria-hidden="true"
+                  title={item.explored ? "Explored" : "Not explored"}
+                >
+                  {item.explored ? <Check size={11} /> : null}
+                </span>
+              )}
               <Icon
                 className="studio-category-icon"
                 size={compact ? 18 : 24}

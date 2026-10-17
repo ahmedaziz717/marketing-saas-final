@@ -5,6 +5,7 @@ import {
   modelCompatibility,
   imageReferenceCount,
   videoWithModel,
+  videoWithSources,
 } from "../shared/creativeConfigurator";
 import {
   generationModels,
@@ -12,6 +13,36 @@ import {
   DEFAULT_IMAGE_MODEL,
   type ModelDefinition,
 } from "../shared/modelCatalog";
+import {
+  videoRequestBody,
+  videoSetupProblem,
+  videoSetupSchema,
+} from "../shared/videoCreation";
+
+it("uses text generation with zero references and retains multiple inputs and settings when changing Seedance input modes", () => {
+  const text = {
+    ...newConfiguration().video,
+    prompt: "A slow sunrise over a quiet lake",
+    duration: 8,
+    modelOptions: { generate_audio: false, duration: 8 },
+  };
+  expect(videoSetupProblem(text)).toBeNull();
+  expect(videoRequestBody(text, [])).not.toHaveProperty("image_urls");
+  const images = Array.from({ length: 12 }, (_, i) => `asset:${i + 1}`);
+  const withImages = videoWithSources({ ...text, imageKeys: images });
+  expect(withImages.modelId).toMatch(/reference-to-video$/);
+  expect(withImages.duration).toBe(8);
+  expect(videoSetupSchema.safeParse(withImages).success).toBe(true);
+  expect(videoSetupProblem(withImages)).toBeNull();
+  expect(videoRequestBody(withImages, images).image_urls).toEqual(images);
+  expect(videoWithSources({ ...withImages, imageKeys: [] }).modelId).toMatch(
+    /text-to-video$/
+  );
+  expect(videoWithSources({ ...withImages, mode: "edit" }).modelId).toBe(
+    withImages.modelId
+  );
+  expect(videoSetupProblem({ ...text, prompt: "" })).toContain("Describe");
+});
 
 it("restores independent image/video settings and rejects corrupt browser state", () => {
   const config = newConfiguration();

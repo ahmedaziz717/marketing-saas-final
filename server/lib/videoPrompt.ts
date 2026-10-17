@@ -10,34 +10,62 @@ import { readGenerationSource } from "./creativeImages";
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { readVideoCatalogImage } from "./videoCatalog";
 import type { LibraryDatabase } from "./assetLibrary";
+import { previewStudioPage } from "./studioProductPage";
 
 export async function draftVideoPrompt(
   db: LibraryDatabase,
   organizationId: number,
   setup: VideoSetup
 ) {
-  if (!setup.imageKeys.length)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Add at least one image to generate a video prompt.",
-    });
-  // Drafting only needs images; an edit/extend draft need not have a source clip yet.
-  const references = await resolveVideoReferences(db, organizationId, {
-    ...setup,
-    mode: "create",
-    sourceVideoKey: null,
-    prompt: "Draft from selected images",
-  });
+  // Draft from optional images or text; an edit/extend draft need not have a source clip yet.
+  const references = await resolveVideoReferences(
+    db,
+    organizationId,
+    {
+      ...setup,
+      mode: "create",
+      sourceVideoKey: null,
+      prompt: "Draft from selected images",
+    },
+    "prompt"
+  );
   const [brand] = await db
     .select()
     .from(brandKits)
     .where(eq(brandKits.organizationId, organizationId))
     .limit(1);
+  if (
+    !references.length &&
+    !setup.prompt.trim() &&
+    !setup.promotion?.description.trim() &&
+    !brand?.businessProfile?.summary?.trim()
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Describe your video idea, add a page, or complete your brand description first. Reference images are optional.",
+    });
+  if (setup.promotion?.sourceUrl && setup.promotion.pageContent === undefined) {
+    try {
+      const page = await previewStudioPage(setup.promotion.sourceUrl);
+      setup = {
+        ...setup,
+        promotion: { ...setup.promotion, pageContent: page.pageContent },
+      };
+    } catch {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "The source page could not be read. Refresh its details in Page URL or describe the promotion manually.",
+      });
+    }
+  }
   const content: MessageContent[] = [
     {
       type: "text",
       text: JSON.stringify({
-        task: "Draft one editable video-generation prompt from these numbered images. Suggest a coherent opening, camera motion, subject action, and ending appropriate to the duration. Mention Image 1, Image 2, etc. only for supplied references. Describe visual motion, not a static advertising layout. Return a fresh variation if priorDescription is present.",
+        task: "Draft one editable video-generation prompt from the selected page or written idea, with any supplied numbered reference images. A selected page is the primary subject; brand information is background, not a replacement subject. With zero images, develop the stated subject and creative direction without referring to nonexistent images. Suggest a coherent opening, camera motion, subject action, and ending appropriate to the duration. Mention Image 1, Image 2, etc. only for supplied references. Describe visual motion, not a static advertising layout. Return a fresh variation if priorDescription is present.",
+        subject: setup.promotion ?? null,
         mode: setup.mode,
         category: setup.category,
         duration: setup.duration,
@@ -82,6 +110,8 @@ export async function draftVideoPrompt(
   const model = requireLatestGptTextModel((await listLLMModels()).data);
   const response = await invokeLLM({
     model,
+    maxTokens: 6000,
+    reasoning: { effort: "low" },
     messages: [
       {
         role: "system",

@@ -502,6 +502,40 @@ describe("durable video generation", () => {
     expect(await state.db.select().from(videoJobs)).toHaveLength(0);
   });
 
+  it("drafts from a written idea without images and without requiring an edit model's source clip", async () => {
+    state.llm.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              prompt:
+                "Open on a sunlit reading nook, then move slowly toward a table of learning materials.",
+            }),
+          },
+        },
+      ],
+    });
+    const result = await owner.video.draftPrompt({
+      organizationId: org,
+      setup: {
+        ...setup(),
+        modelId: "higgsfield:bytedance/seedance-2.5/video-edit",
+        mode: "edit",
+        sourceVideoKey: null,
+        imageKeys: [],
+        prompt: "A welcoming reading nook for families",
+      },
+    });
+    expect(result.prompt).toContain("reading nook");
+    const parts = state.llm.mock.calls[0][0].messages[1].content;
+    expect(parts.filter((part: any) => part.type === "image_url")).toHaveLength(
+      0
+    );
+    expect(parts[0].text).toContain("A welcoming reading nook for families");
+    expect(parts[0].text).toContain("zero images");
+    expect(await state.db.select().from(videoJobs)).toHaveLength(0);
+  });
+
   it("applies video direction to the provider prompt and preserves old saved prompts", () => {
     const settings = {
       ...setup(),

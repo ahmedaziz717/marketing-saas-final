@@ -1,4 +1,5 @@
 import { catalogEntrySchema } from "../../shared/catalog";
+import * as cheerio from "cheerio";
 import {
   assertPublicUrl,
   extractPageEvidence,
@@ -20,6 +21,22 @@ export async function previewStudioPage(website: string) {
   )
     throw new Error("Use a public web page, not a feed or download.");
   const evidence = extractPageEvidence(page.text, page.finalUrl);
+  const $ = cheerio.load(page.text);
+  $(
+    'script,style,noscript,svg,nav,footer,aside,[hidden],[aria-hidden="true"], [style*="display:none"], [style*="display: none"]'
+  ).remove();
+  const main = $('main,[role="main"]').first();
+  const article = $("article").first();
+  const body = main.length ? main : article.length ? article : $("body");
+  // Keep adjacent headings, paragraphs and list items distinct in the snapshot.
+  body.find("h1,h2,h3,h4,p,li,dt,dd,section,div,br").append("\n");
+  const pageContent = body
+    .text()
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 12000);
   const item = evidence.structuredProducts[0] ?? {};
   const offers = Array.isArray(item.offers) ? item.offers[0] : item.offers;
   const offer =
@@ -30,9 +47,10 @@ export async function previewStudioPage(website: string) {
     typeof value === "string" || typeof value === "number"
       ? String(value)
       : fallback;
-  const title = evidence.title || text(item.name);
+  const title =
+    evidence.title || text(item.name) || body.find("h1").first().text().trim();
   const description =
-    evidence.description || text(item.description) || evidence.text;
+    evidence.description || text(item.description) || pageContent;
   if (!title.trim() && !description.trim())
     throw new Error(
       "This page has no readable details. It may need a login or JavaScript. Describe the promotion manually instead."
@@ -57,10 +75,10 @@ export async function previewStudioPage(website: string) {
   const product = evidence.productCandidate
     ? catalogEntrySchema.parse({
         name: text(item.name, evidence.title).slice(0, 300),
-        description: text(item.description, evidence.description).slice(
-          0,
-          10000
-        ),
+        description: text(
+          item.description,
+          evidence.description || pageContent
+        ).slice(0, 10000),
         productUrl: page.finalUrl,
         sku: text(item.sku, evidence.commerceMeta.sku ?? "").slice(0, 180),
         price: text(offer.price, evidence.commerceMeta.price ?? "").slice(
@@ -79,6 +97,7 @@ export async function previewStudioPage(website: string) {
     url: page.finalUrl,
     title: title.slice(0, 180),
     description: description.slice(0, 3000),
+    pageContent,
     imageUrl,
     product,
   };
