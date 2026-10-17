@@ -56,13 +56,12 @@ it("retains original logo pixels and all surrounding art, never enlarging low-re
   })
     .png()
     .toBuffer();
-  const { placement, background } = await prepareLogoPlacement(
+  const { placement } = await prepareLogoPlacement(
     logo,
     canvas,
     "bottom-right"
   );
   expect(placement).toEqual({ width: 80, height: 40, left: 957, top: 997 });
-  expect(background).toBe("light");
   const result = await renderOriginalLogo(design, logo, placement);
   const actual = await sharp(result).ensureAlpha().raw().toBuffer();
   const before = await sharp(design).ensureAlpha().raw().toBuffer();
@@ -124,11 +123,11 @@ it("reserves only the logo area while retaining complete style, copy and product
     hasLogo: true,
     logoPlacement: {
       placement: { left: 43, top: 43, width: 120, height: 90 },
-      background: "light",
     },
   });
   expect(prompt).toContain('"left":43');
-  expect(prompt).toContain("quiet light background");
+  expect(prompt).toContain("Logo contrast is handled locally");
+  expect(prompt).toContain("Do not paint a reserved rectangle");
   expect(prompt).toContain("MANDATORY ART STYLE");
   expect(prompt).toContain("MANDATORY MOOD");
   expect(prompt).toContain(setup.copy.headline);
@@ -136,3 +135,52 @@ it("reserves only the logo area while retaining complete style, copy and product
   expect(prompt).toContain("Follow the separate logo instructions above");
   expect(prompt).not.toContain("Use only the supplied logo");
 });
+
+it.each([
+  ["black", "#19182b", true],
+  ["white", "#e7dff2", false],
+])(
+  "supports a %s logo on a low-contrast scene without repainting the mark or distant art",
+  async (color, background, lighten) => {
+    const bytes = await sharp({
+      create: { width: 60, height: 40, channels: 4, background: color },
+    })
+      .extend({
+        left: 2,
+        right: 2,
+        top: 2,
+        bottom: 2,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
+    mocks.read.mockResolvedValue(bytes.toString("base64"));
+    const logo = (await loadPreservedLogo(
+      { ...defaultCreativeSetup(), preserveLogo: true, logoAssetId: 1 },
+      { logo: { storageKey: "logo.png" } }
+    ))!;
+    const design = await sharp({
+      create: { width: 200, height: 160, channels: 4, background },
+    })
+      .png()
+      .toBuffer();
+    const placement = { left: 50, top: 50, width: 60, height: 40 };
+    const result = await renderOriginalLogo(design, logo, placement);
+    expect(
+      (await sharp(result).extract(placement).raw().toBuffer()).equals(
+        await sharp(logo.png).raw().toBuffer()
+      )
+    ).toBe(true);
+    const pixel = async (image: Buffer, left: number, top: number) => [
+      ...(await sharp(image)
+        .extract({ left, top, width: 1, height: 1 })
+        .raw()
+        .toBuffer()),
+    ];
+    expect(await pixel(result, 5, 5)).toEqual(await pixel(design, 5, 5));
+    const near = (await pixel(result, 49, 70))[0];
+    const distant = (await pixel(result, 29, 70))[0];
+    expect(lighten ? near > distant : near < distant).toBe(true);
+    expect(await pixel(result, 28, 70)).toEqual(await pixel(design, 28, 70));
+  }
+);
