@@ -23,6 +23,9 @@ export type GenerationErrorCategory = "source_image" | "model_unavailable" | "mo
 
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
+  if (/preserve original product|product cutout/.test(normalized)) {
+    return { category: "source_image", userMessage: "Product preservation needs a valid transparent cutout. Choose an approved transparent PNG or WebP product image, then retry." };
+  }
   if (/source image|original image|no readable raster|could not be decoded|for image https?:/.test(normalized)) {
     return { category: "source_image", userMessage: "A selected source image could not be read. Use approved PNG, JPEG, or WebP assets, then retry." };
   }

@@ -588,3 +588,38 @@ it("reports a failed generation in place without navigating or approving", async
   expect(api.route).not.toHaveBeenCalled();
   expect(api.approveLogo).not.toHaveBeenCalled();
 });
+
+it("persists product preservation in image drafts and retains it when switching creative types", async () => {
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  const option = screen.getByRole("checkbox", {
+    name: /Preserve original product/,
+  });
+  expect((option as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(option);
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({ preserveProduct: true }),
+      })
+    )
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  expect(
+    screen.queryByRole("checkbox", { name: /Preserve original product/ })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
+  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: /Preserve original product/,
+      }) as HTMLInputElement
+    ).checked
+  ).toBe(true);
+  expect(api.generate).not.toHaveBeenCalled();
+});

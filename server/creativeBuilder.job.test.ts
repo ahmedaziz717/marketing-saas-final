@@ -5,12 +5,19 @@ vi.mock("./lib/lifestylePeople", () => ({
   }),
 }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import { defaultCreativeSetup } from "../shared/creativeBuilder";
 
 const mocked = vi.hoisted(() => ({
   generate: vi.fn(),
   activity: vi.fn(async () => {}),
   renew: vi.fn(async () => {}),
+  read: vi.fn(),
+  put: vi.fn(),
+}));
+vi.mock("./storage", () => ({
+  storageGetBase64: mocked.read,
+  storagePut: mocked.put,
 }));
 vi.mock("./lib/openaiSunburst", () => ({
   generateSunburstImage: mocked.generate,
@@ -291,4 +298,99 @@ it("fails instead of silently omitting an unavailable selected identity", async 
   await runBuilderJob(db, args);
   expect(mocked.generate).not.toHaveBeenCalled();
   expect(updates).toContainEqual(expect.objectContaining({ status: "failed" }));
+});
+
+it("stores only the final composites and reuses original cutouts in every size", async () => {
+  const { db, args, written } = fixture();
+  args.setup.preserveProduct = true;
+  const product = await sharp({
+    create: { width: 100, height: 60, channels: 4, background: "red" },
+  })
+    .extend({
+      left: 4,
+      right: 4,
+      top: 4,
+      bottom: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+  const storage = new Map<string, Buffer>([["lamp.png", product]]);
+  mocked.read.mockImplementation(async (key: string) =>
+    storage.get(key)!.toString("base64")
+  );
+  mocked.generate.mockImplementation(async (request: any) => {
+    const key = `scene-${request.outputSize.width}x${request.outputSize.height}.png`;
+    storage.set(
+      key,
+      await sharp({
+        create: {
+          width: request.outputSize.width,
+          height: request.outputSize.height,
+          channels: 4,
+          background: "blue",
+        },
+      })
+        .png()
+        .toBuffer()
+    );
+    return { storageKey: key, url: "/" + key };
+  });
+  mocked.put.mockImplementation(async (key: string, bytes: Buffer) => {
+    storage.set(key, bytes);
+    return { key, url: "/" + key };
+  });
+  await runBuilderJob(db, args);
+  expect(mocked.generate).toHaveBeenCalledTimes(3);
+  expect(mocked.put).toHaveBeenCalledTimes(3);
+  const variants = written.flat();
+  for (const variant of variants) {
+    expect(variant.imageStorageKey).toMatch(/-preserved.png$/);
+    expect(variant.renderMetadata.productPreservation.method).toBe(
+      "original_cutout_v1"
+    );
+    const layer = variant.renderMetadata.productPreservation.layers[0];
+    const pixel = await sharp(storage.get(variant.imageStorageKey)!)
+      .extract({
+        left: layer.left + Math.floor(layer.width / 2),
+        top: layer.top + Math.floor(layer.height / 2),
+        width: 1,
+        height: 1,
+      })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+    expect([...pixel]).toEqual([255, 0, 0]);
+  }
+  for (const [request] of mocked.generate.mock.calls) {
+    expect(request.prompt).toContain("BACKGROUND-ONLY PASS");
+    expect(request.originalImages.map((r: any) => r.b64Json)).toEqual([
+      "lamp.png",
+      "logo.png",
+    ]);
+  }
+});
+
+it("does not spend credits or return an AI redraw when a queued product image is not a cutout", async () => {
+  const { db, args, written, updates } = fixture();
+  args.setup.preserveProduct = true;
+  mocked.read.mockResolvedValue(
+    (
+      await sharp({
+        create: { width: 20, height: 20, channels: 3, background: "white" },
+      })
+        .png()
+        .toBuffer()
+    ).toString("base64")
+  );
+  await runBuilderJob(db, args);
+  expect(mocked.generate).not.toHaveBeenCalled();
+  expect(mocked.put).not.toHaveBeenCalled();
+  expect(written).toEqual([]);
+  expect(updates).toContainEqual(
+    expect.objectContaining({
+      status: "failed",
+      errorMessage: expect.stringContaining("transparent PNG"),
+    })
+  );
 });

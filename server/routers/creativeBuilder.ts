@@ -20,7 +20,13 @@ import { readLibraryAsset } from "../lib/assetLibrary";
 import { parseAssetKey } from "../../shared/assetLibrary";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
-import { storagePut } from "../storage";
+import { storagePut, storageGetBase64 } from "../storage";
+import {
+  loadPreservedProducts,
+  layoutPreservedProducts,
+  preservationSceneInstruction,
+  compositePreservedProducts,
+} from "../lib/productPreservation";
 import {
   findLifestylePerson,
   modelMatchesShot,
@@ -283,6 +289,8 @@ export async function runBuilderJob(
 ) {
   const { organizationId, actorUserId, briefId, jobId, setup, resolved } = args;
   try {
+    // Validate every source before making any paid request, including queued jobs.
+    const preserved = await loadPreservedProducts(setup, resolved);
     if (
       args.rateSnapshots &&
       args.rateSnapshots.length !== creativeImageOutputs(setup).length
@@ -336,21 +344,36 @@ export async function runBuilderJob(
         .sort((a, b) => b.width * b.height - a.width * a.height);
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
-        const image = await generateSunburstImage({
+        const productLayers = setup.preserveProduct
+          ? await layoutPreservedProducts(
+              group.length
+                ? preserved.filter(p =>
+                    group.some(g => g.image?.storageKey === p.sourceKey)
+                  )
+                : preserved,
+              format,
+              setup.placement
+            )
+          : [];
+        let image = await generateSunburstImage({
           modelId: setup.modelId,
           modelOptions: setup.modelOptions,
           rateSnapshot:
             args.rateSnapshots?.[outputIndex++] ?? args.rateSnapshot,
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
-          prompt: buildCreativePrompt({
-            setup,
-            brand: resolved.brand,
-            products: group,
-            formatId: format.id,
-            hasLogo: !!resolved.logo,
-            adaptMaster: !!master,
-          }),
+          prompt:
+            buildCreativePrompt({
+              setup,
+              brand: resolved.brand,
+              products: group,
+              formatId: format.id,
+              hasLogo: !!resolved.logo,
+              adaptMaster: !!master,
+            }) +
+            (productLayers.length
+              ? "\n\n" + preservationSceneInstruction(productLayers)
+              : ""),
           outputSize: {
             width: format.width,
             height: format.height,
@@ -360,7 +383,24 @@ export async function runBuilderJob(
         });
         if (!image.url || !image.storageKey)
           throw new Error("Image generation returned an incomplete result");
+        if (productLayers.length) {
+          const background = Buffer.from(
+            await storageGetBase64(image.storageKey),
+            "base64"
+          );
+          const composite = await compositePreservedProducts(
+            background,
+            productLayers
+          );
+          const stored = await storagePut(
+            `org-${organizationId}/creatives/${jobId}/${format.id}-preserved.png`,
+            composite,
+            "image/png"
+          );
+          image = { url: stored.url, storageKey: stored.key };
+        }
         if (
+          !setup.preserveProduct &&
           !master &&
           (!setup.modelId ||
             referenceCapacity(generationModel(setup.modelId)!) > sources.length)
@@ -394,6 +434,23 @@ export async function runBuilderJob(
           imageUrl: image.url,
           imageStorageKey: image.storageKey,
           renderMetadata: {
+            ...(productLayers.length
+              ? {
+                  productPreservation: {
+                    method: "original_cutout_v1",
+                    layers: productLayers.map(
+                      ({ sourceKey, sha256, left, top, width, height }) => ({
+                        sourceKey,
+                        sha256,
+                        left,
+                        top,
+                        width,
+                        height,
+                      })
+                    ),
+                  },
+                }
+              : {}),
             campaignPlanId: setup.campaignPlanId,
             productIds: group.map(product => product.id),
             promotion:
@@ -511,6 +568,18 @@ export async function builderImageQuote(
   setup: CreativeSetup,
   resolved: Awaited<ReturnType<typeof loadInputs>>
 ) {
+  let preserved;
+  try {
+    preserved = await loadPreservedProducts(setup, resolved);
+  } catch (error) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Product cutout could not be checked.",
+    });
+  }
   const model = await resolveModel(db, setup.modelId, "image");
   if (model.provider !== "higgsfield")
     return imageBatchQuote(
@@ -553,15 +622,30 @@ export async function builderImageQuote(
       ...common,
     ];
     for (const format of formats) {
+      const productLayers = setup.preserveProduct
+        ? await layoutPreservedProducts(
+            group.length
+              ? preserved.filter(p =>
+                  group.some(g => g.image?.storageKey === p.sourceKey)
+                )
+              : preserved,
+            format,
+            setup.placement
+          )
+        : [];
       const request = await prepareImageRequest(model, {
-        prompt: buildCreativePrompt({
-          setup,
-          brand: resolved.brand,
-          products: group,
-          formatId: format.id,
-          hasLogo: !!resolved.logo,
-          adaptMaster: false,
-        }),
+        prompt:
+          buildCreativePrompt({
+            setup,
+            brand: resolved.brand,
+            products: group,
+            formatId: format.id,
+            hasLogo: !!resolved.logo,
+            adaptMaster: false,
+          }) +
+          (productLayers.length
+            ? "\n\n" + preservationSceneInstruction(productLayers)
+            : ""),
         originalImages: sources,
         modelOptions: setup.modelOptions,
         storagePrefix: `org-${organizationId}/image-quotes`,

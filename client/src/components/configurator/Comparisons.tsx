@@ -343,6 +343,11 @@ function describe(
       CREATIVE_ART_STYLES.find(a => a.id === d.artStyle)?.name ?? d.artStyle,
     Mood: CREATIVE_MOODS.find(a => a.id === d.mood)?.name ?? d.mood,
     Composition: d.placement,
+    "Product preservation": image
+      ? c.image.preserveProduct
+        ? "Original cutout · selected angle"
+        : "AI composition"
+      : "Not applicable",
     "Brand logo": image
       ? (context.logos.find(l => l.id === c.image.logoAssetId)?.name ??
         "No logo")

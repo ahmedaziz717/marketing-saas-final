@@ -347,6 +347,8 @@ export const creativeSetupSchema = z
       .optional(),
     referenceAssetIds: z.array(z.number().int().positive()).max(3).optional(),
     productMode: z.enum(["separate", "together"]),
+    // Optional for compatibility with saved and queued configurations.
+    preserveProduct: z.boolean().optional(),
     shot: z.enum([
       "product",
       "female",
@@ -573,6 +575,16 @@ export function creativeImageOutputs(setup: CreativeSetup) {
 }
 export function generationSetupIssues(setup: CreativeSetup) {
   const issues: string[] = [];
+  if (setup.preserveProduct) {
+    if (setup.promotionMode === "platform")
+      issues.push(
+        "Preserve original product requires a product photo, not a business promotion."
+      );
+    if (!setup.products.length && (setup.sourceAssetKeys?.length ?? 0) > 3)
+      issues.push("Preserve up to three product cutouts in one image.");
+    if (setup.products.some(product => product.imageId === null))
+      issues.push("Choose a product photo for each item to preserve.");
+  }
   if (
     setup.promotionMode !== "platform" &&
     !setup.products.length &&

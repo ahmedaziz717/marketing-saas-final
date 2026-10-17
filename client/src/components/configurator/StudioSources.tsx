@@ -7,6 +7,7 @@ import {
   Package,
   Upload,
   Building2,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -141,6 +142,24 @@ export function StudioSources({
   ] as const;
   return (
     <div className="cfg-source-browser">
+      {isImage && (
+        <label className="cfg-preserve-product">
+          <ShieldCheck size={22} aria-hidden="true" />
+          <span>
+            <strong>Preserve original product</strong>
+            <small>
+              Place the original cutout over the generated scene. Keeps the
+              selected viewing angle, colors and details; only resizes and
+              positions it. Requires a transparent PNG or WebP product image.
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            checked={!!image.preserveProduct}
+            onChange={e => updateImage({ preserveProduct: e.target.checked })}
+          />
+        </label>
+      )}
       {!!selectedItems.length && (
         <section className="cfg-selected-sources" aria-label="Selected sources">
           <div className="cfg-choice-count">

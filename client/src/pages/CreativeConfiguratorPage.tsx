@@ -910,25 +910,40 @@ function Configurator() {
       );
     if (category === "source")
       return (
-        <StudioSources
-          organizationId={organizationId!}
-          role={membership?.role ?? "creator"}
-          kind={config.kind}
-          image={image}
-          video={video}
-          products={products}
-          assets={assets.data ?? []}
-          search={search}
-          updateImage={updateImage}
-          updateVideo={updateVideo}
-          onUploaded={async () => {
-            await Promise.all([
-              utils.assetLibrary.studioList.invalidate(),
-              utils.creativeBuilder.options.invalidate(),
-              utils.video.catalogImages.invalidate(),
-            ]);
-          }}
-        />
+        <>
+          {isImage && image.preserveProduct && (
+            <div className="cfg-note" role="status">
+              {quote.error
+                ? quote.error.message
+                : issues.length
+                  ? issues.join(" ")
+                  : !sameQuote || quote.isFetching
+                    ? "Checking product cutouts…"
+                    : credits !== undefined
+                      ? "Product cutouts are ready. Their original viewing angles and details will be preserved."
+                      : "Select a product cutout and complete your setup to check readiness."}
+            </div>
+          )}
+          <StudioSources
+            organizationId={organizationId!}
+            role={membership?.role ?? "creator"}
+            kind={config.kind}
+            image={image}
+            video={video}
+            products={products}
+            assets={assets.data ?? []}
+            search={search}
+            updateImage={updateImage}
+            updateVideo={updateVideo}
+            onUploaded={async () => {
+              await Promise.all([
+                utils.assetLibrary.studioList.invalidate(),
+                utils.creativeBuilder.options.invalidate(),
+                utils.video.catalogImages.invalidate(),
+              ]);
+            }}
+          />
+        </>
       );
     if (category === "brand")
       return (
@@ -1479,6 +1494,12 @@ function Configurator() {
           </p>
         </div>
         <dl>
+          {isImage && image.preserveProduct && (
+            <div>
+              <dt>Product preservation</dt>
+              <dd>Original cutout · selected angle · no AI redraw</dd>
+            </div>
+          )}
           {summary.map(s => (
             <div key={s.title}>
               <dt>{s.title}</dt>
@@ -1940,6 +1961,9 @@ function Configurator() {
           <DialogDescription>
             Your current configuration will use {credits ?? "the displayed"}{" "}
             credits. The result goes to your workspace for review.
+            {isImage &&
+              image.preserveProduct &&
+              " The original product cutout will be placed over the generated scene, keeping its viewing angle and lighting."}
           </DialogDescription>
           <p>
             {selectedModel?.name} ·{" "}
