@@ -35,3 +35,9 @@ Wix, Squarespace, Square, Adobe Commerce, PrestaShop, and booking providers rema
 ## Deployment
 
 Apply the additive Drizzle migration through the normal web deployment before deploying the updated worker. Existing creative-worker enablement remains unchanged; catalog and creative processing use independent loops in the same paid worker. Run CI with an isolated PostgreSQL database. Never run the integration suite against staging tenant data.
+
+## Page URL in Creative Studio
+
+Subject & sources has one **Page URL** entry with three choices: Product, Service and General promotion. Product previews use the existing catalog review and approval path. Service and General promotion read a public page without AI credits, let the user edit its title and description, and copy reviewed facts plus the final source URL into the creative brief. These promotions do not create catalog products. General promotion supports content such as quizzes, articles, resources and events. Image and video drafts retain this context and include it as facts, not instructions, in generation prompts. **Describe manually** remains the fallback for pages requiring sign-in, browser-only rendering or blocking automated access.
+
+Website requests preserve path slashes and query order. Canonical URL identities are used only for deduplication; rewriting outgoing requests can create infinite redirects on sites that require trailing slashes. Every redirect is still public-IP checked and pinned, restricted to the source site, and bounded by the existing hop and response limits.

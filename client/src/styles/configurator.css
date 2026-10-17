@@ -2661,3 +2661,12 @@
     display: none;
   }
 }
+
+/* One URL entry point, with compact promotion choices on narrow screens. */
+.cfg-page-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-bottom: 1rem; }
+.cfg-page-types button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: .2rem; padding: .7rem; border: 1px solid var(--cfg-border, #ddd8ee); border-radius: .75rem; background: var(--cfg-surface, #fff); }
+.cfg-page-types button[aria-pressed="true"] { border-color: #7250e8; box-shadow: inset 0 0 0 1px #7250e8; background: #7250e80d; }
+.cfg-page-types small { font-size: .72rem; line-height: 1.4; }
+.cfg-page-details { min-width: 0; flex: 1; }
+.cfg-page-details > a { display: inline-block; margin-bottom: .75rem; }
+@media (max-width: 480px) { .cfg-page-types { gap: .35rem; } .cfg-page-types button { padding: .6rem .45rem; } .cfg-page-types strong { font-size: .78rem; } .cfg-page-types small { font-size: .66rem; } }

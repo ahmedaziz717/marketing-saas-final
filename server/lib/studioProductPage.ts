@@ -2,20 +2,27 @@ import { catalogEntrySchema } from "../../shared/catalog";
 import {
   assertPublicUrl,
   extractPageEvidence,
-  normalizeWebsiteUrl,
+  normalizeWebsiteRequestUrl,
   safeFetchText,
 } from "./websiteCrawler";
 
 /** Deterministic, bounded single-page import. No paid AI extraction or crawling. */
-export async function previewStudioProductPage(website: string) {
-  const url = normalizeWebsiteUrl(website),
+export async function previewStudioPage(website: string) {
+  const url = normalizeWebsiteRequestUrl(website),
     page = await safeFetchText(url);
   if (page.status < 200 || page.status >= 300)
-    throw new Error(`The product page returned HTTP ${page.status}.`);
-  const evidence = extractPageEvidence(page.text, page.finalUrl);
-  if (!evidence.productCandidate)
     throw new Error(
-      "We could not identify a product on this page. Use a direct product page, or choose Business / service."
+      `The page returned HTTP ${page.status}. Check that it is publicly accessible, or describe the promotion manually.`
+    );
+  if (
+    page.contentType &&
+    !/text\/(?:html|plain)|application\/xhtml/i.test(page.contentType)
+  )
+    throw new Error("Use a public web page, not a feed or download.");
+  const evidence = extractPageEvidence(page.text, page.finalUrl);
+  if (!evidence.title.trim() && !evidence.text.trim())
+    throw new Error(
+      "This page has no readable details. It may need a login or JavaScript. Describe the promotion manually instead."
     );
   const item = evidence.structuredProducts[0] ?? {};
   const offers = Array.isArray(item.offers) ? item.offers[0] : item.offers;
@@ -44,17 +51,42 @@ export async function previewStudioProductPage(website: string) {
       }
     }
   }
-  return catalogEntrySchema.parse({
-    name: text(item.name, evidence.title).slice(0, 300),
-    description: text(item.description, evidence.description).slice(0, 10000),
-    productUrl: page.finalUrl,
-    sku: text(item.sku, evidence.commerceMeta.sku ?? "").slice(0, 180),
-    price: text(offer.price, evidence.commerceMeta.price ?? "").slice(0, 80),
-    currency: text(
-      offer.priceCurrency,
-      evidence.commerceMeta.currency ?? ""
-    ).slice(0, 16),
-    specifications: evidence.specifications,
+  const product = evidence.productCandidate
+    ? catalogEntrySchema.parse({
+        name: text(item.name, evidence.title).slice(0, 300),
+        description: text(item.description, evidence.description).slice(
+          0,
+          10000
+        ),
+        productUrl: page.finalUrl,
+        sku: text(item.sku, evidence.commerceMeta.sku ?? "").slice(0, 180),
+        price: text(offer.price, evidence.commerceMeta.price ?? "").slice(
+          0,
+          80
+        ),
+        currency: text(
+          offer.priceCurrency,
+          evidence.commerceMeta.currency ?? ""
+        ).slice(0, 16),
+        specifications: evidence.specifications,
+        imageUrl,
+      })
+    : null;
+  return {
+    url: page.finalUrl,
+    title: evidence.title.slice(0, 180),
+    description: (evidence.description || evidence.text).slice(0, 3000),
     imageUrl,
-  });
+    product,
+  };
+}
+
+/** Compatibility for older clients; non-product pages use the generic preview. */
+export async function previewStudioProductPage(website: string) {
+  const page = await previewStudioPage(website);
+  if (!page.product)
+    throw new Error(
+      "This page does not appear to be a product. In Page URL, choose Service or General promotion to use its content."
+    );
+  return page.product;
 }

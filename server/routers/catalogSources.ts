@@ -12,7 +12,10 @@ import { encryptToken, catalogEncryptionKey } from "../lib/secureToken";
 import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
 import { appendActivity } from "../lib/activity";
-import { previewStudioProductPage } from "../lib/studioProductPage";
+import {
+  previewStudioPage,
+  previewStudioProductPage,
+} from "../lib/studioProductPage";
 import {
   apiCatalogConfigSchema,
   apiInstructionFileSchema,
@@ -72,6 +75,26 @@ export const catalogSourcesRouter = router({
             currency,
           })),
       };
+    }),
+  previewPage: protectedProcedure
+    .input(org.extend({ website: z.string().trim().min(3).max(2048) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+      ]);
+      try {
+        return await previewStudioPage(input.website);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read this page.",
+        });
+      }
     }),
   previewProductPage: protectedProcedure
     .input(org.extend({ website: z.string().trim().min(3).max(2048) }))

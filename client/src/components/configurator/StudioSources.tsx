@@ -17,6 +17,7 @@ import type { VideoSetup } from "@shared/videoCreation";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { AssetUploadDialog } from "@/components/AssetUploadDialog";
 import { StudioCard } from "./StudioCard";
+import { PageUrlSource } from "./PageUrlSource";
 
 type Product = {
   id: number;
@@ -50,11 +51,19 @@ export function StudioSources({
   updateVideo: (patch: Partial<VideoSetup>) => void;
   onUploaded: () => Promise<unknown>;
 }) {
-  const [tab, setTab] = useState("catalog"),
+  const [tab, setTab] = useState(
+      (
+        kind === "image"
+          ? image.promotion?.sourceUrl
+          : video.promotion?.sourceUrl
+      )
+        ? "url"
+        : kind === "image" && image.promotionMode === "platform"
+          ? "business"
+          : "catalog"
+    ),
     [upload, setUpload] = useState(false),
     [offset, setOffset] = useState(0);
-  const [url, setUrl] = useState(""),
-    [imported, setImported] = useState(false);
   const isImage = kind === "image";
   const catalog = trpc.video.catalogImages.useQuery(
     { organizationId, search, offset },
@@ -68,8 +77,6 @@ export function StudioSources({
     },
     { enabled: !isImage }
   );
-  const preview = trpc.catalogSources.previewProductPage.useMutation();
-  const importer = trpc.catalogSources.addEntries.useMutation();
   const sourceKeys = isImage ? (image.sourceAssetKeys ?? []) : video.imageKeys;
   const selectedItems = isImage
     ? [
@@ -129,16 +136,20 @@ export function StudioSources({
         ? [...sourceKeys, key]
         : sourceKeys;
     if (isImage)
-      updateImage({ sourceAssetKeys: next, promotionMode: "offerings" });
+      updateImage({
+        sourceAssetKeys: next,
+        promotionMode:
+          image.promotionMode === "platform" ? "platform" : "offerings",
+      });
     else updateVideo({ imageKeys: next });
   }
   const sourceTabs = [
     ["catalog", "Product catalog", "Choose product photos", Package],
     ["assets", "Image assets", "Reuse your saved images", Image],
-    ["url", "Product page URL", "Bring in a product", Link2],
+    ["url", "Page URL", "Product, service or page content", Link2],
     ["video", "Source video", "Edit or extend a clip", Film],
     ["upload", "Upload", "Add images or video", Upload],
-    ["business", "Business / service", "Start without a product", Building2],
+    ["business", "Describe manually", "Start with your own brief", Building2],
   ] as const;
   return (
     <div className="cfg-source-browser">
@@ -456,94 +467,16 @@ export function StudioSources({
         </>
       )}
       {tab === "url" && (
-        <div className="cfg-form">
-          <h3>Start with a product page</h3>
-          <p className="cfg-help">
-            Paste a direct product URL. We read its title, photos and product
-            details without using AI credits.
-          </p>
-          <form
-            onSubmit={async e => {
-              e.preventDefault();
-              setImported(false);
-              try {
-                await preview.mutateAsync({ organizationId, website: url });
-              } catch {}
-            }}
-          >
-            <label className="cfg-field">
-              <span>Product page URL</span>
-              <input
-                aria-label="Product page URL"
-                value={url}
-                onChange={e => {
-                  setUrl(e.target.value);
-                  preview.reset();
-                  setImported(false);
-                }}
-                placeholder="yourstore.com/products/product-name"
-                required
-              />
-            </label>
-            <button
-              className="cfg-primary"
-              disabled={preview.isPending || !url.trim()}
-            >
-              {preview.isPending ? "Reading product…" : "Find product"}
-            </button>
-          </form>
-          {preview.error && (
-            <p role="alert" className="cfg-problems">
-              {preview.error.message}
-            </p>
-          )}
-          {preview.data && (
-            <div className="cfg-url-result">
-              {preview.data.imageUrl && (
-                <img src={preview.data.imageUrl} alt={preview.data.name} />
-              )}
-              <div>
-                <h3>{preview.data.name}</h3>
-                <p>{preview.data.description}</p>
-                {imported ? (
-                  <p>
-                    Added to your catalog for review.{" "}
-                    <Link href="/app/catalog">
-                      Review and approve the product
-                    </Link>
-                    , then return here to select its images.
-                  </p>
-                ) : (
-                  <button
-                    className="cfg-primary"
-                    disabled={importer.isPending}
-                    onClick={async () => {
-                      try {
-                        const result = await importer.mutateAsync({
-                          organizationId,
-                          entries: [preview.data!],
-                        });
-                        if (result[0]?.error) throw new Error(result[0].error);
-                        setImported(true);
-                        await onUploaded();
-                      } catch (e) {
-                        toast.error(
-                          e instanceof Error
-                            ? e.message
-                            : "Could not import product"
-                        );
-                      }
-                    }}
-                  >
-                    {importer.isPending
-                      ? "Adding product…"
-                      : "Add to catalog for review"}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <PageUrlSource
+          organizationId={organizationId}
+          kind={kind}
+          image={image}
+          video={video}
+          updateImage={updateImage}
+          updateVideo={updateVideo}
+          onUploaded={onUploaded}
+          onManual={() => setTab("business")}
+        />
       )}
       {tab === "upload" && (
         <div className="cfg-upload-zone">
@@ -574,6 +507,7 @@ export function StudioSources({
                 onClick={() =>
                   updateImage({
                     promotionMode: "platform",
+                    preserveProduct: false,
                     products: [],
                     promotion: image.promotion ?? {
                       kind: "platform",
