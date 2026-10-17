@@ -69,6 +69,13 @@ export function preservationRegions(
 export async function readProductCutout(
   sourceKey: string
 ): Promise<ProductCutout> {
+  return readTransparentArtwork(sourceKey, "product");
+}
+
+export async function readTransparentArtwork(
+  sourceKey: string,
+  subject: "product" | "logo"
+): Promise<ProductCutout> {
   const bytes = Buffer.from(await storageGetBase64(sourceKey), "base64");
   const source = sharp(bytes, { limitInputPixels: 16_000_000 })
     .rotate()
@@ -96,11 +103,13 @@ export async function readProductCutout(
   }
   if (right < left || bottom < top)
     throw new Error(
-      "Preserve original product needs a visible product cutout; this image is empty."
+      `Preserve original ${subject} needs visible artwork; this image is empty.`
     );
   if (transparent < info.width * info.height * 0.01)
     throw new Error(
-      "Preserve original product needs a transparent PNG or WebP cutout. Choose a transparent catalog photo or upload an approved cutout in Image assets. No generation has started."
+      subject === "logo"
+        ? "Preserve original logo needs a transparent PNG or WebP. Upload a transparent logo in Brand so its background does not cover the creative. No generation has started."
+        : "Preserve original product needs a transparent PNG or WebP cutout. Choose a transparent catalog photo or upload an approved cutout in Image assets. No generation has started."
     );
   const width = right - left + 1,
     height = bottom - top + 1;

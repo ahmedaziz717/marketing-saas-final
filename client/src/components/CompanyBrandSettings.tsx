@@ -201,18 +201,6 @@ export function CompanyBrandSettings() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   PNG, JPG, WebP · up to 8 MB
                 </p>
-                <LogoSourceTools
-                  organizationId={organizationId!}
-                  role={membership?.role ?? ""}
-                  upload={false}
-                  onChanged={async () => {
-                    await Promise.all([
-                      utils.brand.assets.invalidate(),
-                      utils.assetLibrary.studioList.invalidate(),
-                      utils.creativeBuilder.options.invalidate(),
-                    ]);
-                  }}
-                />
               </>
             )}
           </div>
@@ -277,6 +265,18 @@ export function CompanyBrandSettings() {
             )}
           </div>
         </div>
+        <LogoSourceTools
+          organizationId={organizationId!}
+          role={membership?.role ?? ""}
+          upload={!canManage}
+          onChanged={async () => {
+            await Promise.all([
+              utils.brand.assets.invalidate(),
+              utils.assetLibrary.studioList.invalidate(),
+              utils.creativeBuilder.options.invalidate(),
+            ]);
+          }}
+        />
       </section>
       <Tabs
         value={tab}

@@ -1,5 +1,4 @@
-import { LogoSourceTools } from "@/components/LogoSourceTools";
-import { CREATIVE_FONT_GROUPS } from "@shared/creativeFonts";
+import { StudioFonts } from "@/components/configurator/StudioFonts";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -249,8 +248,8 @@ function Configurator() {
         : "people"
     : (video.direction?.setting ?? "product");
   const currentSection = configuratorSections.find(s => s.id === section)!;
-  const categories = currentSection.categories.filter(
-    c => !isImage || !["audio", "subtitles"].includes(c.id)
+  const categories = currentSection.categories.filter(c =>
+    isImage ? !["audio", "subtitles"].includes(c.id) : c.id !== "fonts"
   );
   const products = options.data?.products ?? [];
   const selectedProduct = products.find(
@@ -961,19 +960,6 @@ function Configurator() {
               Manage Brand Kit <ArrowRight size={13} />
             </Link>
           </div>
-          {isImage && (
-            <LogoSourceTools
-              organizationId={organizationId!}
-              role={membership?.role ?? ""}
-              onChanged={async () => {
-                await Promise.all([
-                  utils.assetLibrary.studioList.invalidate(),
-                  utils.creativeBuilder.options.invalidate(),
-                  utils.brand.assets.invalidate(),
-                ]);
-              }}
-            />
-          )}
           {isImage ? (
             <StudioLogos
               assets={assets.data ?? []}
@@ -986,7 +972,12 @@ function Configurator() {
                   ? "Saved logos could not be loaded. Refresh to try again."
                   : undefined
               }
-              onChange={logoAssetId => updateImage({ logoAssetId })}
+              onChange={logoAssetId =>
+                updateImage({
+                  logoAssetId,
+                  ...(!logoAssetId ? { preserveLogo: false } : {}),
+                })
+              }
               onAction={async (asset, action) => {
                 const input = {
                   ...scope,
@@ -1016,6 +1007,45 @@ function Configurator() {
               logo overlays are not available in this prototype; add a branded
               reference image or finish branding in an editor.
             </p>
+          )}
+          {isImage && image.logoAssetId && (
+            <div className="cfg-preserve-setting">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={image.preserveLogo ?? false}
+                  onChange={e =>
+                    updateImage({ preserveLogo: e.target.checked })
+                  }
+                />
+                Preserve original logo
+              </label>
+              <p className="cfg-help">
+                Keep the uploaded artwork, colors and proportions. Use a
+                transparent logo; the creative keeps its full styling with a
+                small area reserved for your mark.
+              </p>
+              {image.preserveLogo && (
+                <label className="cfg-logo-position">
+                  Logo position
+                  <select
+                    aria-label="Logo position"
+                    value={image.logoPosition ?? "top-left"}
+                    onChange={e =>
+                      updateImage({
+                        logoPosition: e.target
+                          .value as CreativeSetup["logoPosition"],
+                      })
+                    }
+                  >
+                    <option value="top-left">Top left</option>
+                    <option value="top-right">Top right</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="bottom-right">Bottom right</option>
+                  </select>
+                </label>
+              )}
+            </div>
           )}
           {isImage && !!options.data?.references.length && (
             <section className="cfg-brand-references">
@@ -1175,6 +1205,16 @@ function Configurator() {
         [direction.placement],
         id => updateDirection({ placement: id as VideoDirection["placement"] })
       );
+    if (category === "fonts" && isImage)
+      return (
+        <StudioFonts
+          font={image.fontFamily}
+          preserve={image.preserveFont ?? false}
+          brandFonts={options.data?.brand?.fonts ?? []}
+          search={search}
+          onChange={updateImage}
+        />
+      );
     if (category === "message")
       return (
         <div className="cfg-form">
@@ -1218,61 +1258,6 @@ function Configurator() {
                 onChange={e => updateVideo({ prompt: e.target.value })}
               />
             </Field>
-          )}
-          {isImage && (
-            <>
-              <Field title="Creative font">
-                <select
-                  aria-label="Creative font"
-                  value={image.fontFamily ?? ""}
-                  onChange={e => updateImage({ fontFamily: e.target.value })}
-                >
-                  <option value="">Automatic · art-directed typography</option>
-                  {Object.entries(CREATIVE_FONT_GROUPS).map(
-                    ([group, fonts]) => (
-                      <optgroup key={group} label={group}>
-                        {fonts.map(font => (
-                          <option key={font} value={font}>
-                            {font}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )
-                  )}
-                  {!!options.data?.brand?.fonts?.length && (
-                    <optgroup label="Brand fonts">
-                      {options.data.brand.fonts
-                        .filter(
-                          font =>
-                            !Object.values(CREATIVE_FONT_GROUPS)
-                              .flat()
-                              .includes(font as any)
-                        )
-                        .map(font => (
-                          <option key={font} value={font}>
-                            {font}
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                </select>
-              </Field>
-              <label className="cfg-checkbox">
-                <input
-                  type="checkbox"
-                  checked={image.preserveFont ?? false}
-                  onChange={e =>
-                    updateImage({ preserveFont: e.target.checked })
-                  }
-                />
-                Preserve selected font
-              </label>
-              <p className="cfg-help">
-                Off by default. Allow complementary fonts and creative
-                lettering. Turn on to request consistent use of your selected or
-                brand font; inspect the generated letterforms.
-              </p>
-            </>
           )}
           <button
             className="cfg-secondary"
@@ -1883,7 +1868,9 @@ function Configurator() {
                   }
                 </h2>
               </div>
-              {["model", "source", "mood", "format"].includes(category) && (
+              {["model", "source", "mood", "format", "fonts"].includes(
+                category
+              ) && (
                 <label className="cfg-search">
                   <Search size={16} />
                   <input
