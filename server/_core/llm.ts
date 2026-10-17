@@ -20,7 +20,12 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
+    mime_type?:
+      | "audio/mpeg"
+      | "audio/wav"
+      | "application/pdf"
+      | "audio/mp4"
+      | "video/mp4";
   };
 };
 
@@ -29,7 +34,12 @@ export type PdfContent = {
   file: { filename: string; file_data: string };
 };
 
-export type MessageContent = string | TextContent | ImageContent | FileContent | PdfContent;
+export type MessageContent =
+  | string
+  | TextContent
+  | ImageContent
+  | FileContent
+  | PdfContent;
 
 export type Message = {
   role: Role;
@@ -62,6 +72,8 @@ export type ToolChoice =
   | ToolChoiceExplicit;
 
 export type InvokeParams = {
+  /** Internal quality work bundled in an already quoted action; never accept from request input. */
+  includedInAction?: boolean;
   messages: Message[];
   tools?: Tool[];
   toolChoice?: ToolChoice;
@@ -94,7 +106,9 @@ export type InvokeResult = {
     index: number;
     message: {
       role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent | PdfContent>;
+      content:
+        | string
+        | Array<TextContent | ImageContent | FileContent | PdfContent>;
       tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
@@ -314,9 +328,7 @@ const fetchWithBackoff = async (
         return response;
       }
 
-      const retryAfterMs = parseRetryAfter(
-        response.headers.get("retry-after")
-      );
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       try {
         await response.body?.cancel();
       } catch {
@@ -401,26 +413,35 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  return meteredCall("openai", String(model || "unspecified"), "text", async () => {
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.openAiApiKey}`,
+  return meteredCall(
+    "openai",
+    String(model || "unspecified"),
+    "text",
+    async () => {
+      const response = await fetchWithBackoff(resolveApiUrl(), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ENV.openAiApiKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+        );
+      }
+
+      const result = (await response.json()) as InvokeResult;
+      return {
+        value: result,
+        usage: result.usage as unknown as Record<string, unknown>,
+      };
     },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
-  }
-
-  const result = (await response.json()) as InvokeResult;
-  return { value: result, usage: result.usage as unknown as Record<string, unknown> };
-  });
+    { includedInAction: params.includedInAction }
+  );
 }
 
 export type ModelInfo = {

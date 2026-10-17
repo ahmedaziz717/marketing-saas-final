@@ -79,7 +79,7 @@ export async function meteredCall<T>(
     id: string;
     record: (metadata: Record<string, unknown>) => Promise<void>;
   }) => Promise<{ value: T; usage?: Record<string, unknown> }>,
-  options?: { rateSnapshot?: ProviderRate }
+  options?: { rateSnapshot?: ProviderRate; includedInAction?: boolean }
 ): Promise<T> {
   const scope = aiScope.getStore();
   // Unit tests without a request context do not access production persistence.
@@ -93,7 +93,9 @@ export async function meteredCall<T>(
       kind === "text" && !options?.rateSnapshot
         ? textActionRate(baseRate, textActionForOperation(scope?.operation))
         : baseRate,
-    credits = estimatedActionCredits(rate),
+    // Internal finishing checks are included in the image quote. Retain their
+    // actual provider cost and account attribution without a second deduction.
+    credits = options?.includedInAction ? 0 : estimatedActionCredits(rate),
     id = randomUUID(),
     period = utcCreditMonth(),
     createdAtMs = Date.now();

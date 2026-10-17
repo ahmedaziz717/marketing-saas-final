@@ -263,6 +263,45 @@ it("prices image usage automatically within the requesting account and snapshots
     .where(eq(creditLedger.organizationId, organizationId));
   expect(ledger.filter((r: any) => r.id.startsWith("settle:"))).toHaveLength(0);
 });
+it("accounts for bundled logo inspection cost without another customer charge and still enforces account pauses", async () => {
+  const { organizationId } = await admin.createAccount({
+    name: "Bundled logo inspection",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  const before = (await creditState(state.db, organizationId)).remaining;
+  const inspect = () =>
+    aiScope.run(
+      { organizationId, actorUserId: 2, operation: "creativeBuilder.generate" },
+      () =>
+        meteredCall(
+          "openai",
+          "gpt-5.5",
+          "text",
+          async () => ({
+            value: "positions",
+            usage: { prompt_tokens: 1500, completion_tokens: 1000 },
+          }),
+          { includedInAction: true }
+        )
+    );
+  expect(await inspect()).toBe("positions");
+  expect((await creditState(state.db, organizationId)).remaining).toBe(before);
+  const [usage] = await state.db
+    .select()
+    .from(aiUsage)
+    .where(eq(aiUsage.organizationId, organizationId));
+  expect(usage.credits).toBe(0);
+  expect(usage.costMicros).toBeGreaterThan(0);
+  expect(usage.organizationId).toBe(organizationId);
+  expect(usage.usage.retailMicros).toBe(0);
+  await state.db
+    .update(platformAccounts)
+    .set({ aiPaused: 1 })
+    .where(eq(platformAccounts.organizationId, organizationId));
+  await expect(inspect()).rejects.toMatchObject({ code: "FORBIDDEN" });
+});
+
 it("backfills valid historical usage without repricing existing costs or changing credits, and audits once", async () => {
   const { organizationId } = await admin.createAccount({
     name: "Historical costs",

@@ -276,6 +276,12 @@ it("checks completed image content and rejects uncertain or out-of-canvas protec
   expect(mocks.vision.mock.calls[0][0].messages[0].content).toContain(
     "untrusted data"
   );
+  expect(mocks.vision.mock.calls[0][0]).toMatchObject({
+    maxTokens: 6000,
+    reasoning: { effort: "low" },
+    includedInAction: true,
+    response_format: { type: "json_schema", json_schema: { strict: true } },
+  });
   respond({
     confidence: 0.4,
     regions: [{ left: 40, top: 40, width: 300, height: 180 }],
@@ -289,5 +295,11 @@ it("checks completed image content and rejects uncertain or out-of-canvas protec
   });
   await expect(findSafeLogoPlacement(design, preferred)).rejects.toThrow(
     "could not be verified"
+  );
+  mocks.vision.mockResolvedValue({
+    choices: [{ finish_reason: "length", message: { content: "" } }],
+  });
+  await expect(findSafeLogoPlacement(design, preferred)).rejects.toThrow(
+    "did not finish"
   );
 });
