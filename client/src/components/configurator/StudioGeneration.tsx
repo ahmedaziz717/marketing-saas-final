@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Sparkles } from "lucide-react";
+import { Image, Film, Sparkles } from "lucide-react";
 
 /** Decorative motion accompanies real job state; it does not imply a completion percentage. */
 export function StudioGeneration({
@@ -7,11 +7,13 @@ export function StudioGeneration({
   referenceUrl,
   completed = 0,
   reconnecting = false,
+  kind = "image",
 }: {
   status?: string;
   referenceUrl?: string;
   completed?: number;
   reconnecting?: boolean;
+  kind?: "image" | "video";
 }) {
   const [startedAt] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
@@ -25,12 +27,18 @@ export function StudioGeneration({
   const title = reconnecting
     ? "Checking your generation"
     : status === "queued"
-      ? "Your images are queued"
-      : "Creating your images";
+      ? kind === "video"
+        ? "Your video is queued"
+        : "Your images are queued"
+      : kind === "video"
+        ? status === "saving"
+          ? "Saving your video"
+          : "Creating your video"
+        : "Creating your images";
   return (
     <div
       className="cfg-generation"
-      aria-label="Image generation"
+      aria-label={kind === "video" ? "Video generation" : "Image generation"}
       aria-busy="true"
     >
       <div className="cfg-generation-visual" aria-hidden="true">
@@ -40,6 +48,8 @@ export function StudioGeneration({
         <div className="cfg-generation-card cfg-generation-card-front">
           {referenceUrl ? (
             <img src={referenceUrl} alt="" />
+          ) : kind === "video" ? (
+            <Film size={38} />
           ) : (
             <Image size={38} />
           )}
@@ -62,7 +72,9 @@ export function StudioGeneration({
             : completed > 0
               ? `${completed} ${completed === 1 ? "image is" : "images are"} ready. Finishing the remaining versions.`
               : status === "queued"
-                ? "Waiting to start. Finished images will appear here."
+                ? kind === "video"
+                  ? "Waiting to start. Your finished video will appear here."
+                  : "Waiting to start. Finished images will appear here."
                 : "Bringing your creative to life. Results will appear here."}
         </p>
       </div>

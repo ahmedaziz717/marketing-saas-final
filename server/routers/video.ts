@@ -26,6 +26,7 @@ import {
   videoReadiness,
   finishVideoFailure,
   validateVideoPeople,
+  validateVideoLogo,
 } from "../lib/videoJobs";
 import { quotedVideoRequest } from "../lib/videoPricing";
 import { listVideoCatalogImages } from "../lib/videoCatalog";
@@ -43,7 +44,7 @@ export const videoRouter = router({
         selectedOnly: z.boolean().default(false),
         selectedKeys: z
           .array(z.string().regex(/^product_image:[1-9][0-9]*$/))
-          .max(9)
+          .max(30)
           .default([]),
       })
     )
@@ -136,6 +137,7 @@ export const videoRouter = router({
       }
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         await validateVideoPeople(tx, input.organizationId, input.setup);
+        await validateVideoLogo(tx, input.organizationId, input.setup);
         const now = Date.now();
         if (input.id) {
           const job = await getVideoJob(tx, input.organizationId, input.id);

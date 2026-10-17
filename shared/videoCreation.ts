@@ -115,6 +115,7 @@ export const videoSetupSchema = z
     prompt: z.string().trim().max(10000),
     promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(30),
+    logoAssetId: z.number().int().positive().nullable().optional(),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
     duration: z.number().int().min(1).max(120),
@@ -149,6 +150,7 @@ export const defaultVideoSetup: VideoSetup = {
   mode: "create",
   prompt: "",
   imageKeys: [],
+  logoAssetId: null,
   direction: defaultVideoDirection,
   sourceVideoKey: null,
   duration: 5,
@@ -157,9 +159,21 @@ export const defaultVideoSetup: VideoSetup = {
   sound: true,
   bitrate: "default",
 };
+/** Put branding after subject images and before portraits; never send a logo twice. */
+export function videoImageReferenceKeys(setup: VideoSetup): string[] {
+  const logoKey = setup.logoAssetId ? `asset:${setup.logoAssetId}` : null;
+  return [
+    ...setup.imageKeys.filter(key => key !== logoKey),
+    ...(logoKey ? [logoKey] : []),
+  ];
+}
+export function videoReferenceCount(setup: VideoSetup): number {
+  return videoImageReferenceKeys(setup).length + (setup.people ?? []).length;
+}
 export function videoSetupProblem(setup: VideoSetup): string | null {
-  if (setup.imageKeys.length + setup.people.length > 30)
-    return "Use up to 30 total image references, including selected people.";
+  const count = videoReferenceCount(setup);
+  if (count > 30)
+    return "Use up to 30 total image references, including the logo and selected people.";
   if (!setup.prompt.trim() && setup.mode !== "motion")
     return "Describe what should happen in your video.";
   if (new Set(setup.imageKeys).size !== setup.imageKeys.length)
@@ -170,9 +184,10 @@ export function videoSetupProblem(setup: VideoSetup): string | null {
     try {
       modelRequestBody(model, {
         prompt: videoPrompt(setup),
-        images: [...setup.imageKeys, ...(setup.people ?? [])].map(
-          () => "https://reference.invalid/image"
-        ),
+        images: [
+          ...videoImageReferenceKeys(setup),
+          ...(setup.people ?? []),
+        ].map(() => "https://reference.invalid/image"),
         video: setup.sourceVideoKey
           ? "https://reference.invalid/video"
           : undefined,
@@ -187,14 +202,10 @@ export function videoSetupProblem(setup: VideoSetup): string | null {
     return "Choose each reference image only once.";
   if (setup.mode !== "create" && !setup.sourceVideoKey)
     return "Choose a source video first.";
-  if (
-    setup.mode === "motion" &&
-    ((!setup.imageKeys.length && !(setup.people ?? []).length) ||
-      setup.imageKeys.length + (setup.people ?? []).length > 8)
-  )
+  if (setup.mode === "motion" && (!count || count > 8))
     return "Motion control needs 1–8 reference images.";
-  if (setup.imageKeys.length + (setup.people ?? []).length > 9)
-    return "Use up to 9 total images, including selected people.";
+  if (count > 9)
+    return "Use up to 9 total images, including the logo and selected people.";
   if (!setup.prompt && setup.mode !== "motion")
     return "Describe the video you want to create.";
   return null;
@@ -226,6 +237,7 @@ export type VideoReference = {
   width?: number;
   height?: number;
   durationSeconds?: number;
+  role?: "logo";
 };
 export function videoModelKey(setup: VideoSetup) {
   if (setup.modelId)
@@ -242,7 +254,7 @@ export function videoEndpoint(setup: VideoSetup) {
       ? "video-edit"
       : setup.mode === "extend"
         ? "video-extend"
-        : setup.imageKeys.length || (setup.people ?? []).length
+        : videoReferenceCount(setup)
           ? "reference-to-video"
           : "text-to-video";
   return `bytedance/seedance-2.5/${task}`;
@@ -259,13 +271,19 @@ export function videoPrompt(setup: VideoSetup) {
   const identity = (setup.people ?? []).length
     ? `The LAST ${(setup.people ?? []).length} reference images are the selected people, in order. Include these people and preserve their distinct appearance throughout the video. These portraits specify identity, not product endorsements or testimonials. Adapt poses, clothing and lighting to the scene. Keep children and teens age-appropriate, with ordinary clothing and activities and no adult themes.`
     : "";
+  const branding = setup.logoAssetId
+    ? `Image ${videoImageReferenceKeys(setup).length} is the selected brand logo, not the subject or product. Use this supplied artwork as restrained branding, preserving its lettering, colors and proportions. Keep the full creative styling, scene, camera movement and subject prominence; do not turn the logo into the main scene or deform the mark. Do not invent a replacement logo.`
+    : "";
   if (!setup.direction)
-    return [promotion, setup.prompt, identity].filter(Boolean).join("\n\n");
+    return [promotion, setup.prompt, branding, identity]
+      .filter(Boolean)
+      .join("\n\n");
   const direction = setup.direction,
     theme = getCreativeTheme(direction.theme);
   return [
     promotion,
     setup.prompt,
+    branding,
     identity,
     `Creative theme — ${theme.name}: ${direction.themePrompt || theme.direction}`,
     `Mood — ${getCreativeMood(direction.mood).name}: ${getCreativeMood(direction.mood).direction}`,

@@ -8,6 +8,8 @@ import { providerWorkers, videoJobs } from "../../drizzle/videoSchema";
 import { parseAssetKey } from "../../shared/assetLibrary";
 import {
   videoSetupProblem,
+  videoImageReferenceKeys,
+  videoReferenceCount,
   defaultVideoSetup,
   type VideoReference,
   type VideoSetup,
@@ -43,6 +45,39 @@ export function publicVideoJob(job: VideoJob) {
     createdAtMs: job.createdAtMs,
     updatedAtMs: job.updatedAtMs,
   };
+}
+/** A selected brand mark must be an approved logo in the current workspace. */
+export async function validateVideoLogo(
+  db: LibraryDatabase | LibraryTransaction,
+  organizationId: number,
+  setup: VideoSetup
+) {
+  if (!setup.logoAssetId) return;
+  const [logo] = await db
+    .select()
+    .from(brandAssets)
+    .where(
+      and(
+        eq(brandAssets.id, setup.logoAssetId),
+        eq(brandAssets.organizationId, organizationId),
+        eq(brandAssets.type, "logo"),
+        eq(brandAssets.status, "approved")
+      )
+    );
+  if (!logo)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Choose an approved brand logo from this workspace.",
+    });
+  if (
+    !logo.storageKey ||
+    !["image/png", "image/jpeg", "image/webp"].includes(logo.mimeType ?? "")
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Save your logo as PNG, JPEG or WebP in the Brand Kit before using it in video.",
+    });
 }
 /** Saved portraits must be approved references owned by this workspace. */
 export async function validateVideoPeople(
@@ -138,15 +173,17 @@ export async function resolveVideoReferences(
     purpose === "prompt"
       ? new Set(setup.imageKeys).size !== setup.imageKeys.length
         ? "Choose each reference image only once."
-        : setup.imageKeys.length + setup.people.length > 30
+        : videoReferenceCount(setup) > 30
           ? "Use up to 30 image references."
           : null
       : videoSetupProblem(setup);
   if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
   await validateVideoPeople(db, organizationId, setup);
+  await validateVideoLogo(db, organizationId, setup);
   const refs: VideoReference[] = [];
+  const imageKeys = videoImageReferenceKeys(setup);
   const keys = [
-    ...setup.imageKeys,
+    ...imageKeys,
     ...setup.people.flatMap(person =>
       person.kind === "asset" ? [`asset:${person.assetId}`] : []
     ),
@@ -251,6 +288,9 @@ export async function resolveVideoReferences(
     }
     refs.push({
       key,
+      ...(key === `asset:${setup.logoAssetId}`
+        ? { role: "logo" as const }
+        : {}),
       storageKey,
       fingerprint: asset.fingerprint,
       name: asset.name,
@@ -272,7 +312,7 @@ export async function resolveVideoReferences(
     });
   }
   const ordered = [
-    ...setup.imageKeys,
+    ...imageKeys,
     ...setup.people.map(person =>
       person.kind === "library"
         ? `person_library:${person.id}`
@@ -311,6 +351,13 @@ export async function validateVideoReferences(
       continue;
     }
     const asset = await readLibraryAsset(db, job.organizationId, ref.key);
+    if (
+      ref.role === "logo" &&
+      (asset.sourceType !== "logo" || asset.state !== "approved")
+    )
+      throw new Error(
+        "The selected brand logo is no longer approved. Choose an approved logo and prepare a new draft."
+      );
     if (
       asset.fingerprint !== ref.fingerprint ||
       ["rejected", "changes_requested"].includes(asset.state)

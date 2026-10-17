@@ -31,6 +31,10 @@ const api = vi.hoisted(() => ({
   submitLogo: vi.fn(),
   refreshCopy: vi.fn(),
   draftPrompt: vi.fn(),
+  videoJob: undefined as any,
+  search: "",
+  cancelVideo: vi.fn(),
+  checkVideo: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({
@@ -63,6 +67,7 @@ vi.mock("@/components/ActionCredits", () => ({
 }));
 vi.mock("wouter", () => ({
   useLocation: () => ["/app/creatives/configurator", api.route],
+  useSearch: () => api.search,
   Link: ({ children, href }: any) => <a href={href}>{children}</a>,
 }));
 vi.mock("@/components/LogoSourceTools", () => ({
@@ -73,6 +78,7 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({
       creativeBuilder: { options: { invalidate: vi.fn() } },
       video: {
+        get: { invalidate: vi.fn() },
         list: { invalidate: vi.fn() },
         catalogImages: { invalidate: vi.fn() },
       },
@@ -160,6 +166,13 @@ vi.mock("@/lib/trpc", () => ({
       addEntries: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     },
     video: {
+      get: {
+        useQuery: (input: any) => ({
+          data: api.videoJob?.id === input.id ? api.videoJob : undefined,
+        }),
+      },
+      cancel: { useMutation: () => ({ mutateAsync: api.cancelVideo }) },
+      checkAgain: { useMutation: () => ({ mutateAsync: api.checkVideo }) },
       catalogImages: {
         useQuery: () => ({
           data: {
@@ -195,6 +208,8 @@ beforeEach(() => {
   api.drafts = [];
   api.history = [];
   api.job = undefined;
+  api.videoJob = undefined;
+  api.search = "";
   api.assets = [];
   api.approveLogo.mockReset().mockResolvedValue({ success: true });
   api.reviewLogo.mockReset().mockResolvedValue({ success: true });
@@ -202,6 +217,11 @@ beforeEach(() => {
   api.save.mockResolvedValue({ briefId: 1, updatedAtMs: 123 });
   api.generate.mockResolvedValue({ status: "queued", jobId: 12 });
   api.videoSave.mockResolvedValue({ id: "video-draft", revision: 1 });
+  api.videoGenerate.mockResolvedValue({
+    id: "video-draft",
+    revision: 1,
+    status: "queued",
+  });
   api.draftPrompt.mockResolvedValue({
     prompt:
       "Open on a softly lit studio, move slowly through the scene and finish with a close-up.",
@@ -434,6 +454,216 @@ function open() {
 function section(name: RegExp) {
   fireEvent.click(screen.getByRole("button", { name }));
 }
+it("shows the shared brand logos in video and saves the choice without changing image branding", async () => {
+  api.assets = [
+    {
+      key: "asset:4",
+      name: "Brand wordmark",
+      url: "/logo.png",
+      mediaType: "image",
+      sourceType: "logo",
+      state: "approved",
+      revision: "a".repeat(64),
+    },
+  ];
+  const view = render(<CreativeConfiguratorPage initialKind="video" />);
+  const heading = screen.getByRole("heading", { level: 1 }).textContent;
+  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select Brand wordmark" })
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          logoAssetId: 4,
+          imageKeys: [],
+          modelId: "higgsfield:bytedance/seedance-2.5/reference-to-video",
+        }),
+      })
+    )
+  );
+  view.unmount();
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  expect(
+    screen
+      .getByRole("button", { name: "Select Brand wordmark" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  expect(
+    screen
+      .getByRole("button", { name: "Select No logo" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+});
+
+it("keeps video generation, playback and approval in the same Studio layout", async () => {
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video.prompt = "A slow sunrise over a mountain lake";
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
+  const view = open();
+  const heading = screen.getByRole("heading", { level: 1 }).textContent;
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate video",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Generate video" }));
+  api.videoJob = {
+    id: "video-draft",
+    setup: config.video,
+    revision: 1,
+    status: "queued",
+    assetKey: null,
+    createdAtMs: 1000,
+    cancelRequested: false,
+  };
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Confirm · 200 credits",
+    })
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("Video generation")).toBeTruthy()
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+  expect(api.route).toHaveBeenCalledWith(
+    "/app/creatives/studio?video=video-draft",
+    { replace: true }
+  );
+  expect(
+    screen.getByRole("button", { name: "Request cancellation" })
+  ).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Generate video",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  api.videoJob = { ...api.videoJob, status: "completed", assetKey: "asset:11" };
+  api.assets = [
+    {
+      key: "asset:11",
+      name: "Finished film",
+      url: "/finished.mp4",
+      mediaType: "video",
+      sourceType: "generated",
+      state: "draft",
+      revision: "b".repeat(64),
+    },
+  ];
+  view.rerender(<CreativeConfiguratorPage />);
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Generated video preview").getAttribute("src")
+    ).toBe("/finished.mp4")
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+  expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
+  expect(api.approveLogo).not.toHaveBeenCalled();
+  expect(api.videoGenerate).toHaveBeenCalledTimes(1);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use these settings as a new draft" })
+  );
+  expect(
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toContain("new version");
+  expect(screen.queryByLabelText("Generated video preview")).toBeNull();
+});
+
+it("opens a saved video in the shared header and checks an uncertain request without starting another", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  api.search = `video=${id}`;
+  api.videoJob = {
+    id,
+    setup: {
+      ...newConfiguration().video,
+      title: "Saved brand film",
+      logoAssetId: 4,
+    },
+    revision: 2,
+    status: "attention",
+    error: "Waiting for the provider to confirm the result.",
+    assetKey: null,
+    createdAtMs: 1000,
+  };
+  open();
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Creative name") as HTMLInputElement).value
+    ).toBe("Saved brand film")
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
+    "Creative Studio"
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Waiting for the provider"
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Check same request again" })
+  );
+  await waitFor(() =>
+    expect(api.checkVideo).toHaveBeenCalledWith({ organizationId: 1, id })
+  );
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
+it("keeps creator-video campaign context in the shared entry point", async () => {
+  api.search = "plan=7&type=ugc";
+  render(<CreativeConfiguratorPage initialKind="video" />);
+  fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          category: "ugc",
+          campaignPlanId: 7,
+          direction: expect.objectContaining({ setting: "people" }),
+        }),
+      })
+    )
+  );
+});
+it("opens a failed request in Studio and detaches a new version from its old link", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  api.search = `video=${id}`;
+  api.videoJob = {
+    id,
+    setup: { ...newConfiguration().video, title: "Brand film", logoAssetId: 4 },
+    revision: 2,
+    status: "failed",
+    error: "The provider could not finish this video.",
+    assetKey: null,
+    createdAtMs: 1000,
+  };
+  open();
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Creative name") as HTMLInputElement).value
+    ).toBe("Brand film")
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Use these settings as a new draft" })
+  );
+  expect(api.route).toHaveBeenCalledWith("/app/creatives/studio", {
+    replace: true,
+  });
+  expect(
+    JSON.parse(localStorage.getItem("el-configurator-v1:10:1")!).video
+  ).toMatchObject({ title: "Brand film · new version", logoAssetId: 4 });
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
 it("preserves each type's name and setup when switching Image/Video", () => {
   open();
   fireEvent.change(screen.getByLabelText("Creative name"), {

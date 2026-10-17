@@ -7,6 +7,7 @@ import {
   defaultVideoSetup,
   defaultVideoDirection,
   videoSetupSchema,
+  videoReferenceCount,
   type VideoSetup,
 } from "./videoCreation";
 import {
@@ -92,7 +93,7 @@ export function videoWithSources(setup: VideoSetup): VideoSetup {
     return setup;
   const modelId =
     prefix +
-    (setup.imageKeys.length || setup.people.length || setup.sourceVideoKey
+    (videoReferenceCount(setup) || setup.sourceVideoKey
       ? "reference-to-video"
       : "text-to-video");
   if (modelId === setup.modelId) return setup;

@@ -81,27 +81,26 @@ function Router() {
         <StageAppsPage />
       </Route>
       <Route path="/app/activate/studio" component={ActivationStudioPage} />
-      <Route
-        path="/app/creatives/studio"
-        component={CreativeConfiguratorPage}
-      />
-      <Route
-        path="/app/creatives/configurator"
-        component={CreativeConfiguratorPage}
-      />
+      <Route path="/app/creatives/studio">
+        <CreativeConfiguratorPage />
+      </Route>
+      <Route path="/app/creatives/configurator">
+        <CreativeConfiguratorPage />
+      </Route>
       <Route path="/app/creatives/overview" component={CreativesPage} />
+      <Route path="/app/creatives/video">
+        <CreativeConfiguratorPage initialKind="video" />
+      </Route>
       <Route path="/app/creatives/workflows">
         <CreativeWorkflowsPage />
       </Route>
-      {["images", "video", "ads", "social", "saved", "ugc", "drafts"].map(
-        view => (
-          <Route
-            key={view}
-            path={"/app/creatives/" + view}
-            component={CreativesPage}
-          />
-        )
-      )}
+      {["images", "ads", "social", "saved", "ugc", "drafts"].map(view => (
+        <Route
+          key={view}
+          path={"/app/creatives/" + view}
+          component={CreativesPage}
+        />
+      ))}
       {(["activate", "measure", "optimize"] as const).map(family => (
         <Route key={family} path={`/app/${family}/apps`}>
           <StageAppsPage family={family} />

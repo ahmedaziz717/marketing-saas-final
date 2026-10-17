@@ -79,7 +79,7 @@ export async function listVideoCatalogImages(
       productImages.id
     )
     .offset(input.selectedOnly ? 0 : input.offset)
-    .limit(input.selectedOnly ? 9 : 61);
+    .limit(input.selectedOnly ? 30 : 61);
   return {
     items: rows.slice(0, 60).map(choice),
     nextOffset:

@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { PROMOTION_TYPES, type CreativeSetup } from "@shared/creativeBuilder";
-import type { VideoSetup } from "@shared/videoCreation";
+import { videoReferenceCount, type VideoSetup } from "@shared/videoCreation";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { generationModel, referenceCapacity } from "@shared/modelCatalog";
 import { AssetUploadDialog } from "@/components/AssetUploadDialog";
@@ -68,7 +68,14 @@ export function StudioSources({
     [upload, setUpload] = useState(false),
     [offset, setOffset] = useState(0);
   const isImage = kind === "image";
-  const referenceLimit = isImage ? 9 : 30 - video.people.length;
+  const referenceLimit = isImage
+    ? 9
+    : 30 -
+      video.people.length -
+      (video.logoAssetId &&
+      !video.imageKeys.includes(`asset:${video.logoAssetId}`)
+        ? 1
+        : 0);
   const videoModel = generationModel(video.modelId ?? "");
   const catalog = trpc.video.catalogImages.useQuery(
     { organizationId, search, offset },
@@ -171,6 +178,7 @@ export function StudioSources({
             {video.people.length
               ? ` + ${video.people.length} people references`
               : ""}
+            {video.logoAssetId ? " + brand logo" : ""}
           </span>
           {videoModel && (
             <p>
@@ -184,10 +192,12 @@ export function StudioSources({
             </p>
           )}
           <div className="cfg-actions">
-            {(video.imageKeys.length > 0 || video.people.length > 0) && (
+            {videoReferenceCount(video) > 0 && (
               <button
                 type="button"
-                onClick={() => updateVideo({ imageKeys: [], people: [] })}
+                onClick={() =>
+                  updateVideo({ imageKeys: [], people: [], logoAssetId: null })
+                }
               >
                 Clear image references
               </button>

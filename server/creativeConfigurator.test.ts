@@ -17,6 +17,9 @@ import {
   videoRequestBody,
   videoSetupProblem,
   videoSetupSchema,
+  videoImageReferenceKeys,
+  videoReferenceCount,
+  videoPrompt,
 } from "../shared/videoCreation";
 
 it("uses text generation with zero references and retains multiple inputs and settings when changing Seedance input modes", () => {
@@ -58,6 +61,42 @@ it("restores independent image/video settings and rejects corrupt browser state"
   expect(
     readConfiguration(JSON.stringify({ ...config, kind: "audio" }))
   ).toBeNull();
+});
+it("retains video branding separately, counts it once, and selects an image-capable route", () => {
+  const config = newConfiguration();
+  config.video = videoWithSources({
+    ...config.video,
+    logoAssetId: 7,
+    prompt: "A sunrise over a quiet lake",
+  });
+  expect(config.video.modelId).toMatch(/reference-to-video$/);
+  expect(videoReferenceCount(config.video)).toBe(1);
+  expect(videoSetupProblem(config.video)).toBeNull();
+  const restored = readConfiguration(JSON.stringify(config))!;
+  expect(restored.video.logoAssetId).toBe(7);
+  expect(restored.image.logoAssetId).toBeNull();
+  const mixed = {
+    ...restored.video,
+    category: "ugc" as const,
+    imageKeys: ["asset:7", "product_image:2"],
+    people: [{ kind: "library" as const, id: "female-black-0" }],
+  };
+  expect(videoImageReferenceKeys(mixed)).toEqual([
+    "product_image:2",
+    "asset:7",
+  ]);
+  expect(videoReferenceCount(mixed)).toBe(3);
+  expect(videoPrompt(mixed)).toContain("Image 2 is the selected brand logo");
+  expect(videoPrompt(mixed)).toContain("LAST 1 reference images");
+  expect(
+    videoWithSources({ ...config.video, logoAssetId: null }).modelId
+  ).toMatch(/text-to-video$/);
+  expect(
+    videoSetupProblem({
+      ...config.video,
+      imageKeys: Array.from({ length: 30 }, (_, i) => `asset:${i + 100}`),
+    })
+  ).toContain("30 total");
 });
 it("counts image references using the server's per-output grouping", () => {
   const s = newConfiguration().image;
