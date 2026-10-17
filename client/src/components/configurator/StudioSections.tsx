@@ -116,7 +116,11 @@ export function StudioSections<T extends string>({
         panel,
       ];
   return (
-    <div className={`cfg-section-layout${mobile ? " is-mobile" : ""}`}>
+    <div
+      className={`cfg-section-layout${mobile ? " is-mobile" : ""}`}
+      role={mobile ? "group" : undefined}
+      aria-label={mobile ? label : undefined}
+    >
       {contents}
     </div>
   );

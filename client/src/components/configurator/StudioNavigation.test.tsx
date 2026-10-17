@@ -70,6 +70,7 @@ function Form() {
 }
 it("opens the mobile panel directly under its section and preserves inputs through collapse, navigation and resizing", () => {
   render(<Form />);
+  expect(screen.getByRole("group", { name: "Studio sections" })).toBeTruthy();
   const input = screen.getByRole("textbox", { name: "Campaign brief" });
   fireEvent.change(input, { target: { value: "Keep my draft" } });
   const first = screen.getByRole("button", { name: /^Type & Source/ });
