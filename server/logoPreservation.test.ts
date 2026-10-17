@@ -4,7 +4,15 @@ import {
   creativeSetupSchema,
   defaultCreativeSetup,
 } from "../shared/creativeBuilder";
-const mocks = vi.hoisted(() => ({ read: vi.fn(), resolve: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  read: vi.fn(),
+  resolve: vi.fn(),
+  vision: vi.fn(),
+}));
+vi.mock("./_core/llm", () => ({
+  invokeLLM: mocks.vision,
+  listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
+}));
 vi.mock("./storage", () => ({
   storageGetBase64: mocks.read,
   storagePut: vi.fn(),
@@ -15,6 +23,8 @@ vi.mock("./lib/modelCatalog", () => ({
   imageModelQuote: vi.fn(),
 }));
 import {
+  chooseSafeLogoPlacement,
+  findSafeLogoPlacement,
   loadPreservedLogo,
   prepareLogoPlacement,
   renderOriginalLogo,
@@ -184,3 +194,100 @@ it.each([
     expect(await pixel(result, 28, 70)).toEqual(await pixel(design, 28, 70));
   }
 );
+
+it("moves the original logo clear of headline, CTA, and product without moving their pixels", async () => {
+  const canvas = { width: 1080, height: 1080 };
+  const preferred = { left: 43, top: 43, width: 151, height: 151 };
+  const protectedRegions = [
+    { left: 55, top: 120, width: 600, height: 160 },
+    { left: 70, top: 325, width: 380, height: 120 },
+    { left: 65, top: 470, width: 400, height: 80 },
+    { left: 480, top: 260, width: 500, height: 690 },
+  ];
+  const placement = chooseSafeLogoPlacement(
+    canvas,
+    preferred,
+    protectedRegions
+  );
+  expect(placement).not.toEqual(preferred);
+  expect(placement.width).toBe(preferred.width);
+  const feather = Math.ceil(placement.width * 0.35);
+  for (const r of protectedRegions)
+    expect(
+      placement.left + placement.width + feather <= r.left ||
+        placement.left - feather >= r.left + r.width ||
+        placement.top + placement.height + feather <= r.top ||
+        placement.top - feather >= r.top + r.height
+    ).toBe(true);
+  const design = await sharp({
+    create: { ...canvas, channels: 4, background: "#171329" },
+  })
+    .png()
+    .toBuffer();
+  const png = await sharp({
+    create: { width: 151, height: 151, channels: 4, background: "black" },
+  })
+    .png()
+    .toBuffer();
+  const result = await renderOriginalLogo(
+    design,
+    { png, width: 151, height: 151, sourceKey: "logo", sha256: "hash" },
+    placement
+  );
+  for (const region of protectedRegions)
+    expect(
+      (await sharp(result).extract(region).raw().toBuffer()).equals(
+        await sharp(design).extract(region).raw().toBuffer()
+      )
+    ).toBe(true);
+});
+
+it("keeps an already-clear corner and refuses to cover a fully occupied canvas", () => {
+  const canvas = { width: 1000, height: 1000 };
+  const preferred = { left: 40, top: 40, width: 100, height: 100 };
+  expect(
+    chooseSafeLogoPlacement(canvas, preferred, [
+      { left: 400, top: 400, width: 200, height: 200 },
+    ])
+  ).toEqual(preferred);
+  expect(() =>
+    chooseSafeLogoPlacement(canvas, preferred, [
+      { left: 0, top: 0, width: 1000, height: 1000 },
+    ])
+  ).toThrow("without covering text or the subject");
+});
+
+it("checks completed image content and rejects uncertain or out-of-canvas protection bounds", async () => {
+  const design = await sharp({
+    create: { width: 1000, height: 1000, channels: 4, background: "white" },
+  })
+    .png()
+    .toBuffer();
+  const preferred = { left: 40, top: 40, width: 100, height: 100 };
+  const respond = (payload: unknown) =>
+    mocks.vision.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(payload) } }],
+    });
+  respond({
+    confidence: 0.95,
+    regions: [{ left: 40, top: 40, width: 300, height: 180 }],
+  });
+  expect(await findSafeLogoPlacement(design, preferred)).not.toEqual(preferred);
+  expect(mocks.vision.mock.calls[0][0].messages[0].content).toContain(
+    "untrusted data"
+  );
+  respond({
+    confidence: 0.4,
+    regions: [{ left: 40, top: 40, width: 300, height: 180 }],
+  });
+  await expect(findSafeLogoPlacement(design, preferred)).rejects.toThrow(
+    "could not be verified"
+  );
+  respond({
+    confidence: 0.95,
+    regions: [{ left: 900, top: 40, width: 300, height: 180 }],
+  });
+  await expect(findSafeLogoPlacement(design, preferred)).rejects.toThrow(
+    "could not be verified"
+  );
+});

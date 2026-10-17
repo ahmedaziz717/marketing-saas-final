@@ -1022,8 +1022,9 @@ function Configurator() {
               </label>
               <p className="cfg-help">
                 Keep the uploaded artwork, colors and proportions. Use a
-                transparent logo; the creative keeps its full styling with a
-                small area reserved for your mark.
+                transparent logo. Your creative keeps its full styling; the mark
+                may move from your preferred corner to avoid covering text or
+                the subject.
               </p>
               {image.preserveLogo && (
                 <label className="cfg-logo-position">

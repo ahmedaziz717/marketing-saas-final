@@ -14,6 +14,11 @@ const mocked = vi.hoisted(() => ({
   renew: vi.fn(async () => {}),
   read: vi.fn(),
   put: vi.fn(),
+  vision: vi.fn(),
+}));
+vi.mock("./_core/llm", () => ({
+  invokeLLM: mocked.vision,
+  listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
 }));
 vi.mock("./storage", () => ({
   storageGetBase64: mocked.read,
@@ -112,6 +117,18 @@ function fixture() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocked.vision.mockResolvedValue({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            confidence: 0.98,
+            regions: [{ left: 0, top: 0, width: 250, height: 250 }],
+          }),
+        },
+      },
+    ],
+  });
   let image = 0;
   mocked.generate.mockImplementation(async () => ({
     url: "/generated-" + ++image + ".png",
@@ -447,6 +464,7 @@ it("finishes every size with original logo artwork while keeping the raw master 
   await runBuilderJob(db, args);
   expect(written.flat()).toHaveLength(3);
   expect(mocked.put).toHaveBeenCalledTimes(3);
+  expect(mocked.vision).toHaveBeenCalledTimes(3);
   for (const variant of written.flat()) {
     expect(variant.imageStorageKey).toContain("original-logo-");
     const metadata = variant.renderMetadata.logoPreservation;
