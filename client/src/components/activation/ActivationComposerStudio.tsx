@@ -295,645 +295,655 @@ export function ActivationComposerStudio(p: Props) {
             </p>
           </div>
         </div>
-        <ActivationSections current={p.section} onSelect={p.onSection} />
-        {copyBusy && !(p.section === "copy" && category === "compose") && (
-          <div className="studio-background-copy" role="status">
-            <span className="studio-small-spinner" /> Copy is generating. It
-            will be ready in Compose.
-            <button
-              type="button"
-              onClick={() => {
-                setCategories(previous => ({ ...previous, copy: "compose" }));
-                p.onSection("copy");
-              }}
-            >
-              View progress
-            </button>
-          </div>
-        )}
-        <div className="cfg-body activation-fields" ref={p.scrollBody}>
-          <ActivationCategories
-            items={items}
-            current={category}
-            onSelect={chooseCategory}
-          />
-          <div className="cfg-content-title">
-            <div>
-              <span className="cfg-eyebrow">
-                {
-                  activationSections.find(section => section.id === p.section)
-                    ?.title
-                }
-              </span>
-              <h2>{heading}</h2>
+        <ActivationSections current={p.section} onSelect={p.onSection}>
+          {copyBusy && !(p.section === "copy" && category === "compose") && (
+            <div className="studio-background-copy" role="status">
+              <span className="studio-small-spinner" /> Copy is generating. It
+              will be ready in Compose.
+              <button
+                type="button"
+                onClick={() => {
+                  setCategories(previous => ({ ...previous, copy: "compose" }));
+                  p.onSection("copy");
+                }}
+              >
+                View progress
+              </button>
             </div>
-          </div>
-          {p.section === "setup" && (
-            <>
-              {category === "account" && (
-                <>
-                  <p className="activation-help">
-                    Choose a connected {meta ? "ad account" : "Page"} with
-                    publishing permission.
-                  </p>
-                  {p.connectionsLoading && (
-                    <p role="status">Loading connected accounts…</p>
-                  )}
-                  {p.connectionsError && (
-                    <p role="alert">
-                      Connections could not be loaded.{" "}
-                      <button onClick={p.retryConnections}>Try again</button>
+          )}
+          <div className="cfg-body activation-fields" ref={p.scrollBody}>
+            <ActivationCategories
+              items={items}
+              current={category}
+              onSelect={chooseCategory}
+            />
+            <div className="cfg-content-title">
+              <div>
+                <span className="cfg-eyebrow">
+                  {
+                    activationSections.find(section => section.id === p.section)
+                      ?.title
+                  }
+                </span>
+                <h2>{heading}</h2>
+              </div>
+            </div>
+            {p.section === "setup" && (
+              <>
+                {category === "account" && (
+                  <>
+                    <p className="activation-help">
+                      Choose a connected {meta ? "ad account" : "Page"} with
+                      publishing permission.
                     </p>
-                  )}
-                  <div className="cfg-card-grid activation-account-grid">
-                    {p.accounts.map(a => (
+                    {p.connectionsLoading && (
+                      <p role="status">Loading connected accounts…</p>
+                    )}
+                    {p.connectionsError && (
+                      <p role="alert">
+                        Connections could not be loaded.{" "}
+                        <button onClick={p.retryConnections}>Try again</button>
+                      </p>
+                    )}
+                    <div className="cfg-card-grid activation-account-grid">
+                      {p.accounts.map(a => (
+                        <StudioCard
+                          key={a.id}
+                          title={a.name}
+                          description={
+                            a.details.pageName || channelNames[p.channel]
+                          }
+                          badge={
+                            a.details.capabilities.includes("publish")
+                              ? "Connected"
+                              : "Read only"
+                          }
+                          selected={a.id === p.connectionId}
+                          disabled={!a.details.capabilities.includes("publish")}
+                          media={
+                            <div className="activation-choice-symbol">
+                              <Building2 size={38} />
+                              <span>{a.name.slice(0, 2).toUpperCase()}</span>
+                            </div>
+                          }
+                          onSelect={() => {
+                            if (a.id !== p.connectionId) {
+                              p.setConnection(a.id);
+                              p.setContent(previous => ({
+                                ...previous,
+                                metaCampaignId: "",
+                                adSetId: "",
+                              }));
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {!!p.connectionId && !account && (
+                      <p role="alert">
+                        The previous account is unavailable. Reconnect it or
+                        choose another account.
+                      </p>
+                    )}
+                    {!p.connectionsLoading && !p.accounts.length && (
+                      <p role="status">No connected accounts available.</p>
+                    )}
+                    <Link
+                      className="activation-connect"
+                      href="/app/settings/integrations"
+                    >
+                      Manage channel connections →
+                    </Link>
+                  </>
+                )}
+                {category === "page" && (
+                  <>
+                    <div className="cfg-card-grid activation-account-grid">
                       <StudioCard
-                        key={a.id}
-                        title={a.name}
-                        description={
-                          a.details.pageName || channelNames[p.channel]
-                        }
-                        badge={
-                          a.details.capabilities.includes("publish")
-                            ? "Connected"
-                            : "Read only"
-                        }
-                        selected={a.id === p.connectionId}
-                        disabled={!a.details.capabilities.includes("publish")}
+                        title={account?.details.pageName || "Page not selected"}
+                        description="The Facebook Page connected to this ad account is the public identity for your ad."
+                        badge="Ad identity"
+                        selected={!!account?.details.pageId}
                         media={
                           <div className="activation-choice-symbol">
-                            <Building2 size={38} />
-                            <span>{a.name.slice(0, 2).toUpperCase()}</span>
+                            <Building2 size={42} />
                           </div>
                         }
-                        onSelect={() => {
-                          if (a.id !== p.connectionId) {
-                            p.setConnection(a.id);
-                            p.setContent(previous => ({
-                              ...previous,
-                              metaCampaignId: "",
-                              adSetId: "",
-                            }));
-                          }
-                        }}
+                        onSelect={() => {}}
+                      />
+                    </div>
+                    <p className="activation-help">
+                      To use another Page, update this ad connection in{" "}
+                      <Link href="/app/settings/integrations">
+                        Integrations
+                      </Link>
+                      .
+                    </p>
+                  </>
+                )}
+                {category === "campaign" && account && (
+                  <AdCampaignPicker
+                    key={p.connectionId}
+                    connectionId={p.connectionId}
+                    campaignId={p.content.metaCampaignId ?? ""}
+                    adSetId={p.content.adSetId}
+                    canManage={
+                      ["owner", "admin", "publisher"].includes(p.role) &&
+                      account.details.capabilities.includes("publish")
+                    }
+                    onChange={(metaCampaignId, adSetId) =>
+                      p.setContent(previous => ({
+                        ...previous,
+                        metaCampaignId,
+                        adSetId,
+                      }))
+                    }
+                  />
+                )}
+                {category === "details" && (
+                  <div className="activation-form-grid">
+                    <label className="cfg-field">
+                      <span>Internal title{meta ? "" : " (optional)"}</span>
+                      <input
+                        maxLength={180}
+                        value={p.content.title}
+                        onChange={e => field("title", e.target.value)}
+                      />
+                    </label>
+                    <label className="cfg-field">
+                      <span>Campaign label (optional)</span>
+                      <input
+                        value={p.content.campaignLabel}
+                        onChange={e => field("campaignLabel", e.target.value)}
+                      />
+                    </label>
+                    <div className="activation-span">
+                      <CampaignPlanSelect
+                        value={p.content.campaignPlanId}
+                        onChange={(planId, plan) =>
+                          p.setContent(previous => ({
+                            ...previous,
+                            campaignPlanId: planId,
+                            promotion: {
+                              audience:
+                                previous.promotion?.audience ||
+                                plan?.audience?.slice(0, 2000) ||
+                                "",
+                              goal:
+                                previous.promotion?.goal ||
+                                plan?.creativeDirection?.slice(0, 2000) ||
+                                "",
+                              offer:
+                                previous.promotion?.offer ||
+                                plan?.offer?.slice(0, 2000) ||
+                                "",
+                            },
+                            link: previous.link || plan?.destinationUrl || "",
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {p.section === "creative" && (
+              <>
+                {category === "format" && (
+                  <div className="cfg-card-grid activation-format-grid">
+                    {(
+                      [
+                        [
+                          "single",
+                          "Single image",
+                          "One image · up to five alternatives per copy field",
+                          Image,
+                        ],
+                        [
+                          "placement",
+                          "Placement images",
+                          "One ad · square, portrait and vertical images",
+                          RectangleVertical,
+                        ],
+                        [
+                          "carousel",
+                          "Carousel",
+                          "One ad · 2–10 image cards",
+                          Layers,
+                        ],
+                      ] as const
+                    ).map(([value, title, description, Icon]) => (
+                      <StudioCard
+                        key={value}
+                        title={title}
+                        description={description}
+                        selected={p.format === value}
+                        media={
+                          <div className="activation-choice-symbol">
+                            <Icon size={42} />
+                          </div>
+                        }
+                        onSelect={() => p.setFormat(value)}
                       />
                     ))}
                   </div>
-                  {!!p.connectionId && !account && (
-                    <p role="alert">
-                      The previous account is unavailable. Reconnect it or
-                      choose another account.
-                    </p>
-                  )}
-                  {!p.connectionsLoading && !p.accounts.length && (
-                    <p role="status">No connected accounts available.</p>
-                  )}
-                  <Link
-                    className="activation-connect"
-                    href="/app/settings/integrations"
-                  >
-                    Manage channel connections →
-                  </Link>
-                </>
-              )}
-              {category === "page" && (
-                <>
-                  <div className="cfg-card-grid activation-account-grid">
-                    <StudioCard
-                      title={account?.details.pageName || "Page not selected"}
-                      description="The Facebook Page connected to this ad account is the public identity for your ad."
-                      badge="Ad identity"
-                      selected={!!account?.details.pageId}
-                      media={
-                        <div className="activation-choice-symbol">
-                          <Building2 size={42} />
-                        </div>
-                      }
-                      onSelect={() => {}}
-                    />
-                  </div>
-                  <p className="activation-help">
-                    To use another Page, update this ad connection in{" "}
-                    <Link href="/app/settings/integrations">Integrations</Link>.
-                  </p>
-                </>
-              )}
-              {category === "campaign" && account && (
-                <AdCampaignPicker
-                  key={p.connectionId}
-                  connectionId={p.connectionId}
-                  campaignId={p.content.metaCampaignId ?? ""}
-                  adSetId={p.content.adSetId}
-                  canManage={
-                    ["owner", "admin", "publisher"].includes(p.role) &&
-                    account.details.capabilities.includes("publish")
-                  }
-                  onChange={(metaCampaignId, adSetId) =>
-                    p.setContent(previous => ({
-                      ...previous,
-                      metaCampaignId,
-                      adSetId,
-                    }))
-                  }
-                />
-              )}
-              {category === "details" && (
-                <div className="activation-form-grid">
-                  <label className="cfg-field">
-                    <span>Internal title{meta ? "" : " (optional)"}</span>
-                    <input
-                      maxLength={180}
-                      value={p.content.title}
-                      onChange={e => field("title", e.target.value)}
-                    />
-                  </label>
-                  <label className="cfg-field">
-                    <span>Campaign label (optional)</span>
-                    <input
-                      value={p.content.campaignLabel}
-                      onChange={e => field("campaignLabel", e.target.value)}
-                    />
-                  </label>
-                  <div className="activation-span">
-                    <CampaignPlanSelect
-                      value={p.content.campaignPlanId}
-                      onChange={(planId, plan) =>
-                        p.setContent(previous => ({
-                          ...previous,
-                          campaignPlanId: planId,
-                          promotion: {
-                            audience:
-                              previous.promotion?.audience ||
-                              plan?.audience?.slice(0, 2000) ||
-                              "",
-                            goal:
-                              previous.promotion?.goal ||
-                              plan?.creativeDirection?.slice(0, 2000) ||
-                              "",
-                            offer:
-                              previous.promotion?.offer ||
-                              plan?.offer?.slice(0, 2000) ||
-                              "",
-                          },
-                          link: previous.link || plan?.destinationUrl || "",
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {p.section === "creative" && (
-            <>
-              {category === "format" && (
-                <div className="cfg-card-grid activation-format-grid">
-                  {(
-                    [
-                      [
-                        "single",
-                        "Single image",
-                        "One image · up to five alternatives per copy field",
-                        Image,
-                      ],
-                      [
-                        "placement",
-                        "Placement images",
-                        "One ad · square, portrait and vertical images",
-                        RectangleVertical,
-                      ],
-                      [
-                        "carousel",
-                        "Carousel",
-                        "One ad · 2–10 image cards",
-                        Layers,
-                      ],
-                    ] as const
-                  ).map(([value, title, description, Icon]) => (
-                    <StudioCard
-                      key={value}
-                      title={title}
-                      description={description}
-                      selected={p.format === value}
-                      media={
-                        <div className="activation-choice-symbol">
-                          <Icon size={42} />
-                        </div>
-                      }
-                      onSelect={() => p.setFormat(value)}
-                    />
-                  ))}
-                </div>
-              )}
-              {category === "assets" && (
-                <>
-                  {p.format === "placement" && (
-                    <div className="cfg-card-grid activation-format-grid">
-                      {placementSlots.map(s => {
-                        const asset = p.assets.find(
-                          a => a.key === p.content.placementAssetKeys?.[s.key]
-                        );
-                        return (
-                          <StudioCard
-                            key={s.key}
-                            title={s.label}
-                            description={`${s.ratio} · ${s.size}`}
-                            selected={slot === s.key}
-                            badge={asset ? "Image selected" : "Choose image"}
-                            media={
-                              asset ? (
-                                <img src={asset.url} alt={asset.name} />
-                              ) : (
-                                <div className="activation-choice-symbol">
-                                  <RectangleVertical size={42} />
-                                </div>
-                              )
-                            }
-                            onSelect={() => setSlot(s.key)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                  {p.assetsLoading ? (
-                    <p role="status">Loading approved assets…</p>
-                  ) : p.assetsError ? (
-                    <p role="alert">
-                      Assets could not be loaded.{" "}
-                      <button onClick={p.retryAssets}>Try again</button>
-                    </p>
-                  ) : (
-                    <StudioAssetTiles
-                      key={
-                        p.format + ":" + (p.format === "placement" ? slot : "")
-                      }
-                      assets={p.assets}
-                      channel={p.channel}
-                      multiple={p.format === "carousel"}
-                      requiredFormat={
-                        p.format === "placement" ? slot : undefined
-                      }
-                      selected={
-                        p.format === "placement"
-                          ? p.content.placementAssetKeys?.[slot]
-                            ? [p.content.placementAssetKeys[slot]!]
-                            : []
-                          : keys
-                      }
-                      onSelect={selected => {
-                        if (p.format === "placement") {
-                          const value = {
-                            ...p.content.placementAssetKeys,
-                            [slot]: selected[0],
-                          };
-                          p.setAsset(value.square ?? "");
-                          p.setContent(previous => ({
-                            ...previous,
-                            placementAssetKeys: value,
-                          }));
-                        } else {
-                          p.setAsset(selected[0] ?? "");
-                          if (p.format === "carousel")
+                )}
+                {category === "assets" && (
+                  <>
+                    {p.format === "placement" && (
+                      <div className="cfg-card-grid activation-format-grid">
+                        {placementSlots.map(s => {
+                          const asset = p.assets.find(
+                            a => a.key === p.content.placementAssetKeys?.[s.key]
+                          );
+                          return (
+                            <StudioCard
+                              key={s.key}
+                              title={s.label}
+                              description={`${s.ratio} · ${s.size}`}
+                              selected={slot === s.key}
+                              badge={asset ? "Image selected" : "Choose image"}
+                              media={
+                                asset ? (
+                                  <img src={asset.url} alt={asset.name} />
+                                ) : (
+                                  <div className="activation-choice-symbol">
+                                    <RectangleVertical size={42} />
+                                  </div>
+                                )
+                              }
+                              onSelect={() => setSlot(s.key)}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {p.assetsLoading ? (
+                      <p role="status">Loading approved assets…</p>
+                    ) : p.assetsError ? (
+                      <p role="alert">
+                        Assets could not be loaded.{" "}
+                        <button onClick={p.retryAssets}>Try again</button>
+                      </p>
+                    ) : (
+                      <StudioAssetTiles
+                        key={
+                          p.format +
+                          ":" +
+                          (p.format === "placement" ? slot : "")
+                        }
+                        assets={p.assets}
+                        channel={p.channel}
+                        multiple={p.format === "carousel"}
+                        requiredFormat={
+                          p.format === "placement" ? slot : undefined
+                        }
+                        selected={
+                          p.format === "placement"
+                            ? p.content.placementAssetKeys?.[slot]
+                              ? [p.content.placementAssetKeys[slot]!]
+                              : []
+                            : keys
+                        }
+                        onSelect={selected => {
+                          if (p.format === "placement") {
+                            const value = {
+                              ...p.content.placementAssetKeys,
+                              [slot]: selected[0],
+                            };
+                            p.setAsset(value.square ?? "");
                             p.setContent(previous => ({
                               ...previous,
-                              carouselAssetKeys: selected,
+                              placementAssetKeys: value,
                             }));
-                        }
-                      }}
-                    />
-                  )}
-                  {!meta && p.assetKey && (
-                    <button
-                      className="cfg-secondary"
-                      onClick={() => p.setAsset("")}
-                    >
-                      Remove media
-                    </button>
-                  )}
-                  {!meta && (
+                          } else {
+                            p.setAsset(selected[0] ?? "");
+                            if (p.format === "carousel")
+                              p.setContent(previous => ({
+                                ...previous,
+                                carouselAssetKeys: selected,
+                              }));
+                          }
+                        }}
+                      />
+                    )}
+                    {!meta && p.assetKey && (
+                      <button
+                        className="cfg-secondary"
+                        onClick={() => p.setAsset("")}
+                      >
+                        Remove media
+                      </button>
+                    )}
+                    {!meta && (
+                      <p className="activation-help">
+                        Media is optional for text and website-preview posts.
+                      </p>
+                    )}
+                    {p.format === "carousel" && keys.length > 0 && (
+                      <div className="activation-carousel-order">
+                        <h3>Card order</h3>
+                        {keys.map((key, index) => (
+                          <div key={key}>
+                            <span>
+                              {index + 1}.{" "}
+                              {p.assets.find(a => a.key === key)?.name}
+                            </span>
+                            {[-1, 1].map(delta => (
+                              <button
+                                key={delta}
+                                type="button"
+                                className="cfg-secondary"
+                                disabled={
+                                  index + delta < 0 ||
+                                  index + delta >= keys.length
+                                }
+                                aria-label={`Move card ${index + 1} ${delta < 0 ? "earlier" : "later"}`}
+                                onClick={() => {
+                                  const next = [...keys];
+                                  [next[index], next[index + delta]] = [
+                                    next[index + delta],
+                                    next[index],
+                                  ];
+                                  p.setAsset(next[0]);
+                                  p.setContent(previous => ({
+                                    ...previous,
+                                    carouselAssetKeys: next,
+                                  }));
+                                }}
+                              >
+                                {delta < 0 ? "←" : "→"}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="activation-help">
-                      Media is optional for text and website-preview posts.
+                      Only approved finished creatives appear here.{" "}
+                      <Link href="/app/library?view=drafts">
+                        Review drafts in the Asset Library
+                      </Link>{" "}
+                      or{" "}
+                      <Link href="/app/creatives/studio">
+                        create a new asset
+                      </Link>
+                      .
                     </p>
-                  )}
-                  {p.format === "carousel" && keys.length > 0 && (
-                    <div className="activation-carousel-order">
-                      <h3>Card order</h3>
-                      {keys.map((key, index) => (
-                        <div key={key}>
-                          <span>
-                            {index + 1}.{" "}
-                            {p.assets.find(a => a.key === key)?.name}
-                          </span>
-                          {[-1, 1].map(delta => (
-                            <button
-                              key={delta}
-                              type="button"
-                              className="cfg-secondary"
-                              disabled={
-                                index + delta < 0 ||
-                                index + delta >= keys.length
-                              }
-                              aria-label={`Move card ${index + 1} ${delta < 0 ? "earlier" : "later"}`}
-                              onClick={() => {
-                                const next = [...keys];
-                                [next[index], next[index + delta]] = [
-                                  next[index + delta],
-                                  next[index],
-                                ];
-                                p.setAsset(next[0]);
-                                p.setContent(previous => ({
-                                  ...previous,
-                                  carouselAssetKeys: next,
-                                }));
-                              }}
-                            >
-                              {delta < 0 ? "←" : "→"}
-                            </button>
-                          ))}
-                        </div>
+                  </>
+                )}
+              </>
+            )}
+            {p.section === "copy" && (
+              <>
+                {directionCategory && (
+                  <CopyDirectionTiles
+                    key={directionCategory}
+                    dimension={directionCategory}
+                    value={p.content.copyDirection}
+                    onChange={value =>
+                      p.setContent(previous => ({
+                        ...previous,
+                        copyDirection: value,
+                      }))
+                    }
+                  />
+                )}
+                {category === "brief" && (
+                  <div className="activation-copy-setup">
+                    <p className="activation-help">
+                      Describe what you are promoting, who it is for, and the
+                      result you want. Fill from brand only completes blank
+                      fields. Continue to Compose to create and edit your copy.
+                    </p>
+                    <div className="activation-form-grid">
+                      {(
+                        [
+                          ["offer", "What are you promoting?"],
+                          ["audience", "Audience"],
+                          ["goal", "Goal"],
+                        ] as const
+                      ).map(([key, title]) => (
+                        <label className="cfg-field" key={key}>
+                          <span>{title}</span>
+                          <textarea
+                            aria-label={title}
+                            rows={3}
+                            maxLength={2000}
+                            value={p.content.promotion?.[key] ?? ""}
+                            onChange={e =>
+                              p.setContent(previous => ({
+                                ...previous,
+                                promotion: {
+                                  audience: "",
+                                  goal: "",
+                                  offer: "",
+                                  ...previous.promotion,
+                                  [key]: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
                       ))}
                     </div>
-                  )}
-                  <p className="activation-help">
-                    Only approved finished creatives appear here.{" "}
-                    <Link href="/app/library?view=drafts">
-                      Review drafts in the Asset Library
-                    </Link>{" "}
-                    or{" "}
-                    <Link href="/app/creatives/studio">create a new asset</Link>
-                    .
-                  </p>
-                </>
-              )}
-            </>
-          )}
-          {p.section === "copy" && (
-            <>
-              {directionCategory && (
-                <CopyDirectionTiles
-                  key={directionCategory}
-                  dimension={directionCategory}
-                  value={p.content.copyDirection}
-                  onChange={value =>
-                    p.setContent(previous => ({
-                      ...previous,
-                      copyDirection: value,
-                    }))
-                  }
-                />
-              )}
-              {category === "brief" && (
-                <div className="activation-copy-setup">
-                  <p className="activation-help">
-                    Describe what you are promoting, who it is for, and the
-                    result you want. Fill from brand only completes blank
-                    fields. Continue to Compose to create and edit your copy.
-                  </p>
-                  <div className="activation-form-grid">
-                    {(
-                      [
-                        ["offer", "What are you promoting?"],
-                        ["audience", "Audience"],
-                        ["goal", "Goal"],
-                      ] as const
-                    ).map(([key, title]) => (
-                      <label className="cfg-field" key={key}>
-                        <span>{title}</span>
-                        <textarea
-                          aria-label={title}
-                          rows={3}
-                          maxLength={2000}
-                          value={p.content.promotion?.[key] ?? ""}
-                          onChange={e =>
-                            p.setContent(previous => ({
-                              ...previous,
-                              promotion: {
-                                audience: "",
-                                goal: "",
-                                offer: "",
-                                ...previous.promotion,
-                                [key]: e.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      </label>
-                    ))}
+                    {p.brandDefaults && (
+                      <button
+                        className="cfg-secondary"
+                        type="button"
+                        onClick={() =>
+                          p.setContent(previous => ({
+                            ...previous,
+                            promotion: {
+                              audience:
+                                previous.promotion?.audience ||
+                                p.brandDefaults?.audiences?.slice(0, 2000) ||
+                                "",
+                              goal:
+                                previous.promotion?.goal ||
+                                p.brandDefaults?.goals?.slice(0, 2000) ||
+                                "",
+                              offer:
+                                previous.promotion?.offer ||
+                                p.brandDefaults?.primaryOffer?.slice(0, 2000) ||
+                                "",
+                            },
+                          }))
+                        }
+                      >
+                        Fill from brand
+                      </button>
+                    )}
+                    <label className="cfg-field activation-copy-instructions">
+                      <span>Additional instructions (optional)</span>
+                      <textarea
+                        aria-label="Additional instructions (optional)"
+                        rows={3}
+                        maxLength={2000}
+                        value={p.content.copyInstructions ?? ""}
+                        onChange={e =>
+                          field("copyInstructions", e.target.value)
+                        }
+                        placeholder="Add real offer details, deadlines, supporting facts, or specific instructions."
+                      />
+                    </label>
                   </div>
-                  {p.brandDefaults && (
-                    <button
-                      className="cfg-secondary"
-                      type="button"
-                      onClick={() =>
-                        p.setContent(previous => ({
-                          ...previous,
-                          promotion: {
-                            audience:
-                              previous.promotion?.audience ||
-                              p.brandDefaults?.audiences?.slice(0, 2000) ||
-                              "",
-                            goal:
-                              previous.promotion?.goal ||
-                              p.brandDefaults?.goals?.slice(0, 2000) ||
-                              "",
-                            offer:
-                              previous.promotion?.offer ||
-                              p.brandDefaults?.primaryOffer?.slice(0, 2000) ||
-                              "",
-                          },
-                        }))
-                      }
-                    >
-                      Fill from brand
-                    </button>
-                  )}
-                  <label className="cfg-field activation-copy-instructions">
-                    <span>Additional instructions (optional)</span>
-                    <textarea
-                      aria-label="Additional instructions (optional)"
-                      rows={3}
-                      maxLength={2000}
-                      value={p.content.copyInstructions ?? ""}
-                      onChange={e => field("copyInstructions", e.target.value)}
-                      placeholder="Add real offer details, deadlines, supporting facts, or specific instructions."
-                    />
-                  </label>
-                </div>
-              )}
-            </>
-          )}
-          <div hidden={p.section !== "copy" || category !== "compose"}>
-            <StudioCopyComposer
-              onBusyChange={setCopyBusy}
-              organizationId={p.organizationId}
-              channel={p.channel}
-              assetKeys={copyImages}
-              hasMedia={!!p.assetKey}
-              content={p.content}
-              onChange={p.setContent}
-              errors={p.errors}
-              onEditChoices={() => chooseCategory("messaging_style")}
-              onEditBrief={() => chooseCategory("brief")}
-              preview={
-                <ContentPreview
-                  channel={p.channel}
-                  content={p.content}
-                  asset={selectedAsset}
-                  assets={p.assets}
-                />
-              }
-            />
-          </div>
-          {p.section === "delivery" && (
-            <>
-              <div className="cfg-card-grid activation-timing-grid">
-                <StudioCard
-                  title="After confirmation"
-                  description="Keep this ready until you decide to deliver it."
-                  selected={!p.local}
-                  media={
-                    <div className="activation-choice-symbol">
-                      <Clock3 size={42} />
-                    </div>
-                  }
-                  onSelect={() => p.setLocal("")}
-                />
-                <StudioCard
-                  title="Schedule for later"
-                  description="Choose a date, time and time zone."
-                  selected={!!p.local}
-                  media={
-                    <div className="activation-choice-symbol">
-                      <CalendarDays size={42} />
-                    </div>
-                  }
-                  onSelect={() =>
-                    document.getElementById(`${uid}-date`)?.focus()
-                  }
-                />
-              </div>
-              <div className="activation-form-grid">
-                <label className="cfg-field">
-                  <span>Publish date and time</span>
-                  <input
-                    id={`${uid}-date`}
-                    type="datetime-local"
-                    value={p.local}
-                    onChange={e => p.setLocal(e.target.value)}
-                  />
-                </label>
-                <label className="cfg-field">
-                  <span>Time zone</span>
-                  <input
-                    value={p.timezone}
-                    onChange={e => p.setTimezone(e.target.value)}
-                  />
-                </label>
-              </div>
-              <p className="activation-help">
-                Saving a time does not schedule delivery. Approval and final
-                confirmation follow in Review.
-              </p>
-            </>
-          )}
-          {p.section === "preview" && (
-            <div className="studio-activation-review">
-              <div className="studio-copy-layout">
-                <div className="studio-review-preview">
+                )}
+              </>
+            )}
+            <div hidden={p.section !== "copy" || category !== "compose"}>
+              <StudioCopyComposer
+                onBusyChange={setCopyBusy}
+                organizationId={p.organizationId}
+                channel={p.channel}
+                assetKeys={copyImages}
+                hasMedia={!!p.assetKey}
+                content={p.content}
+                onChange={p.setContent}
+                errors={p.errors}
+                onEditChoices={() => chooseCategory("messaging_style")}
+                onEditBrief={() => chooseCategory("brief")}
+                preview={
                   <ContentPreview
                     channel={p.channel}
                     content={p.content}
                     asset={selectedAsset}
                     assets={p.assets}
                   />
-                </div>
-                <div className="studio-review-summary">
-                  <h3>Confirm your activation</h3>
-                  {[
-                    {
-                      title: "Destination",
-                      value: `${channelNames[p.channel]} · ${account?.name || "Choose an account"}`,
-                      section: "setup",
-                      category: "account",
-                    },
-                    {
-                      title: "Creative",
-                      value: keys.length
-                        ? `${keys.length} approved asset${keys.length === 1 ? "" : "s"}`
-                        : meta
-                          ? "Choose an approved creative"
-                          : "Text or website post",
-                      section: "creative",
-                      category: "assets",
-                    },
-                    {
-                      title: "Copy",
-                      value: p.content.message
-                        ? "Copy added — shown in preview"
-                        : "No caption added",
-                      section: "copy",
-                      category: "compose",
-                    },
-                    {
-                      title: "Timing",
-                      value: p.local
-                        ? `${p.local.replace("T", " · ")} (${p.timezone})`
-                        : "Now, after you confirm",
-                      section: "delivery",
-                      category: "schedule",
-                    },
-                  ].map(row => (
-                    <div key={row.title}>
-                      <div>
-                        <strong>{row.title}</strong>
-                        <p>{row.value}</p>
+                }
+              />
+            </div>
+            {p.section === "delivery" && (
+              <>
+                <div className="cfg-card-grid activation-timing-grid">
+                  <StudioCard
+                    title="After confirmation"
+                    description="Keep this ready until you decide to deliver it."
+                    selected={!p.local}
+                    media={
+                      <div className="activation-choice-symbol">
+                        <Clock3 size={42} />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCategories(previous => ({
-                            ...previous,
-                            [row.section]: row.category,
-                          }));
-                          p.onSection(row.section as ActivationSection);
-                        }}
-                      >
-                        Edit {row.title.toLowerCase()}
-                      </button>
-                    </div>
-                  ))}
-                  <p>
-                    {!["owner", "admin", "publisher"].includes(p.role)
-                      ? "A publisher will review your post or ad before delivery."
-                      : p.liveDelivery === false
-                        ? "Test mode: this saves a test schedule. Nothing will be sent."
-                        : meta
-                          ? "This creates your ad in Meta with its status set to paused."
-                          : p.local
-                            ? "Confirming schedules this post to publish automatically at the selected time."
-                            : "Confirming publishes this post to the selected Facebook Page as soon as it is processed."}
-                  </p>
-                  {p.content.textVariants && (
+                    }
+                    onSelect={() => p.setLocal("")}
+                  />
+                  <StudioCard
+                    title="Schedule for later"
+                    description="Choose a date, time and time zone."
+                    selected={!!p.local}
+                    media={
+                      <div className="activation-choice-symbol">
+                        <CalendarDays size={42} />
+                      </div>
+                    }
+                    onSelect={() =>
+                      document.getElementById(`${uid}-date`)?.focus()
+                    }
+                  />
+                </div>
+                <div className="activation-form-grid">
+                  <label className="cfg-field">
+                    <span>Publish date and time</span>
+                    <input
+                      id={`${uid}-date`}
+                      type="datetime-local"
+                      value={p.local}
+                      onChange={e => p.setLocal(e.target.value)}
+                    />
+                  </label>
+                  <label className="cfg-field">
+                    <span>Time zone</span>
+                    <input
+                      value={p.timezone}
+                      onChange={e => p.setTimezone(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <p className="activation-help">
+                  Saving a time does not schedule delivery. Approval and final
+                  confirmation follow in Review.
+                </p>
+              </>
+            )}
+            {p.section === "preview" && (
+              <div className="studio-activation-review">
+                <div className="studio-copy-layout">
+                  <div className="studio-review-preview">
+                    <ContentPreview
+                      channel={p.channel}
+                      content={p.content}
+                      asset={selectedAsset}
+                      assets={p.assets}
+                    />
+                  </div>
+                  <div className="studio-review-summary">
+                    <h3>Confirm your activation</h3>
+                    {[
+                      {
+                        title: "Destination",
+                        value: `${channelNames[p.channel]} · ${account?.name || "Choose an account"}`,
+                        section: "setup",
+                        category: "account",
+                      },
+                      {
+                        title: "Creative",
+                        value: keys.length
+                          ? `${keys.length} approved asset${keys.length === 1 ? "" : "s"}`
+                          : meta
+                            ? "Choose an approved creative"
+                            : "Text or website post",
+                        section: "creative",
+                        category: "assets",
+                      },
+                      {
+                        title: "Copy",
+                        value: p.content.message
+                          ? "Copy added — shown in preview"
+                          : "No caption added",
+                        section: "copy",
+                        category: "compose",
+                      },
+                      {
+                        title: "Timing",
+                        value: p.local
+                          ? `${p.local.replace("T", " · ")} (${p.timezone})`
+                          : "Now, after you confirm",
+                        section: "delivery",
+                        category: "schedule",
+                      },
+                    ].map(row => (
+                      <div key={row.title}>
+                        <div>
+                          <strong>{row.title}</strong>
+                          <p>{row.value}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCategories(previous => ({
+                              ...previous,
+                              [row.section]: row.category,
+                            }));
+                            p.onSection(row.section as ActivationSection);
+                          }}
+                        >
+                          Edit {row.title.toLowerCase()}
+                        </button>
+                      </div>
+                    ))}
                     <p>
-                      Additional saved ad text options are included. Meta may
-                      combine them with the main copy.
+                      {!["owner", "admin", "publisher"].includes(p.role)
+                        ? "A publisher will review your post or ad before delivery."
+                        : p.liveDelivery === false
+                          ? "Test mode: this saves a test schedule. Nothing will be sent."
+                          : meta
+                            ? "This creates your ad in Meta with its status set to paused."
+                            : p.local
+                              ? "Confirming schedules this post to publish automatically at the selected time."
+                              : "Confirming publishes this post to the selected Facebook Page as soon as it is processed."}
                     </p>
-                  )}
+                    {p.content.textVariants && (
+                      <p>
+                        Additional saved ad text options are included. Meta may
+                        combine them with the main copy.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {p.activationError && (
-            <p role="alert" className="studio-generation-error">
-              {p.activationError}
-            </p>
-          )}
-          {Object.entries(p.errors).map(([key, error]) => (
-            <p key={key} role="alert" className="text-destructive mt-3">
-              {error}
-            </p>
-          ))}
-        </div>
+            )}
+            {p.activationError && (
+              <p role="alert" className="studio-generation-error">
+                {p.activationError}
+              </p>
+            )}
+            {Object.entries(p.errors).map(([key, error]) => (
+              <p key={key} role="alert" className="text-destructive mt-3">
+                {error}
+              </p>
+            ))}
+          </div>
+        </ActivationSections>
         <div className="cfg-actions activation-footer">
           <button type="button" onClick={p.onClose}>
             Cancel

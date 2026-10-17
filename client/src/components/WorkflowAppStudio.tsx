@@ -226,209 +226,210 @@ export function WorkflowAppStudio({
         onSelect={id =>
           select(groups.find(s => s.id === id)?.categories[0].id ?? id)
         }
-      />
-      <div className="cfg-body">
-        <StudioCategories
-          items={(section?.categories ?? [current]).map(category => ({
-            ...category,
-            icon: studioCategoryIcon(
-              category.fields[0]?.config.field?.kind ?? category.id,
-              category.title
-            ),
-          }))}
-          current={current.id}
-          onSelect={select}
-        />
-        {error && (
-          <p role="alert" className="wf-studio-error">
-            {error}
-          </p>
-        )}
-        {/* Keep input controls mounted so navigation preserves in-progress AI suggestions. */}
-        {inputPages.map(category => (
+      >
+        <div className="cfg-body">
+          <StudioCategories
+            items={(section?.categories ?? [current]).map(category => ({
+              ...category,
+              icon: studioCategoryIcon(
+                category.fields[0]?.config.field?.kind ?? category.id,
+                category.title
+              ),
+            }))}
+            current={current.id}
+            onSelect={select}
+          />
+          {error && (
+            <p role="alert" className="wf-studio-error">
+              {error}
+            </p>
+          )}
+          {/* Keep input controls mounted so navigation preserves in-progress AI suggestions. */}
+          {inputPages.map(category => (
+            <section
+              key={category.id}
+              hidden={current.id !== category.id}
+              aria-label={`${category.title} inputs`}
+            >
+              <div className="cfg-content-title">
+                <div>
+                  <h2>{category.title}</h2>
+                  <p>Set the inputs this App will use.</p>
+                </div>
+                <span>
+                  {category.fields.length}{" "}
+                  {category.fields.length === 1 ? "field" : "fields"}
+                </span>
+              </div>
+              <fieldset disabled={busy} className="wf-studio-fields">
+                {category.fields.map(n => (
+                  <div
+                    className={`wf-form-field${n.config.field && isChoiceField(n.config.field) ? " wf-form-field-visual" : ""}`}
+                    key={n.id}
+                  >
+                    {(category.fields.length > 1 ||
+                      n.title !== category.title ||
+                      n.config.field?.required ||
+                      n.config.field?.locked) && (
+                      <div className="wf-studio-field-label">
+                        {(category.fields.length > 1 ||
+                          n.title !== category.title) &&
+                          n.title}
+                        {n.config.field?.required && <span>Required</span>}
+                        {n.config.field?.locked && <span>Preset</span>}
+                      </div>
+                    )}
+                    {n.config.field ? (
+                      <WorkflowInputControl
+                        field={n.config.field}
+                        title={n.title}
+                        value={value(n)}
+                        onChange={v => onChange(n.id, v)}
+                        organizationId={organizationId}
+                        preview={preview}
+                        context={context}
+                        productIds={productIds}
+                        imageKeys={imageKeys}
+                      />
+                    ) : n.type === "image" ? (
+                      <select
+                        aria-label={n.title}
+                        value={value(n)}
+                        onChange={e => onChange(n.id, e.target.value)}
+                      >
+                        <option value="">Choose an image</option>
+                        {assets.data
+                          ?.filter(a => a.mediaType === "image")
+                          .map(a => (
+                            <option key={a.key} value={a.key}>
+                              {a.name}
+                              {a.width && a.height
+                                ? ` · ${a.width} × ${a.height}`
+                                : ""}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <textarea
+                        aria-label={n.title}
+                        rows={5}
+                        maxLength={10000}
+                        value={value(n)}
+                        onChange={e => onChange(n.id, e.target.value)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </fieldset>
+            </section>
+          ))}
           <section
-            key={category.id}
-            hidden={current.id !== category.id}
-            aria-label={`${category.title} inputs`}
+            hidden={current.id !== "review"}
+            aria-label="Review App inputs"
           >
             <div className="cfg-content-title">
               <div>
-                <h2>{category.title}</h2>
-                <p>Set the inputs this App will use.</p>
+                <h2>Ready to run?</h2>
+                <p>Review your inputs, then check the estimated credits.</p>
               </div>
-              <span>
-                {category.fields.length}{" "}
-                {category.fields.length === 1 ? "field" : "fields"}
-              </span>
             </div>
-            <fieldset disabled={busy} className="wf-studio-fields">
-              {category.fields.map(n => (
-                <div
-                  className={`wf-form-field${n.config.field && isChoiceField(n.config.field) ? " wf-form-field-visual" : ""}`}
-                  key={n.id}
-                >
-                  {(category.fields.length > 1 ||
-                    n.title !== category.title ||
-                    n.config.field?.required ||
-                    n.config.field?.locked) && (
-                    <div className="wf-studio-field-label">
-                      {(category.fields.length > 1 ||
-                        n.title !== category.title) &&
-                        n.title}
-                      {n.config.field?.required && <span>Required</span>}
-                      {n.config.field?.locked && <span>Preset</span>}
-                    </div>
-                  )}
-                  {n.config.field ? (
-                    <WorkflowInputControl
-                      field={n.config.field}
-                      title={n.title}
-                      value={value(n)}
-                      onChange={v => onChange(n.id, v)}
-                      organizationId={organizationId}
-                      preview={preview}
-                      context={context}
-                      productIds={productIds}
-                      imageKeys={imageKeys}
-                    />
-                  ) : n.type === "image" ? (
-                    <select
-                      aria-label={n.title}
-                      value={value(n)}
-                      onChange={e => onChange(n.id, e.target.value)}
-                    >
-                      <option value="">Choose an image</option>
-                      {assets.data
-                        ?.filter(a => a.mediaType === "image")
-                        .map(a => (
-                          <option key={a.key} value={a.key}>
-                            {a.name}
-                            {a.width && a.height
-                              ? ` · ${a.width} × ${a.height}`
-                              : ""}
-                          </option>
-                        ))}
-                    </select>
-                  ) : (
-                    <textarea
-                      aria-label={n.title}
-                      rows={5}
-                      maxLength={10000}
-                      value={value(n)}
-                      onChange={e => onChange(n.id, e.target.value)}
-                    />
-                  )}
-                </div>
-              ))}
-            </fieldset>
-          </section>
-        ))}
-        <section
-          hidden={current.id !== "review"}
-          aria-label="Review App inputs"
-        >
-          <div className="cfg-content-title">
-            <div>
-              <h2>Ready to run?</h2>
-              <p>Review your inputs, then check the estimated credits.</p>
-            </div>
-          </div>
-          {inputPages.length ? (
-            <div className="wf-studio-summary">
-              {groups.map(group => (
-                <div key={group.id} className="wf-studio-summary-section">
-                  <h3>{group.title}</h3>
-                  {group.categories.map(category => (
-                    <article key={category.id}>
-                      <div className="wf-studio-summary-heading">
-                        <h4>{category.title}</h4>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => select(category.id)}
-                          aria-label={`Edit ${group.title}: ${category.title}`}
-                        >
-                          <Pencil size={13} /> Edit
-                        </button>
-                      </div>
-                      <dl>
-                        {category.fields.map(n => (
-                          <div key={n.id}>
-                            <dt>{n.title}</dt>
-                            <dd>{summarize(n)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </article>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p>
-              This App uses its published configuration. There are no inputs to
-              fill in.
-            </p>
-          )}
-          {preview ? (
-            <div className="wf-studio-run">
+            {inputPages.length ? (
+              <div className="wf-studio-summary">
+                {groups.map(group => (
+                  <div key={group.id} className="wf-studio-summary-section">
+                    <h3>{group.title}</h3>
+                    {group.categories.map(category => (
+                      <article key={category.id}>
+                        <div className="wf-studio-summary-heading">
+                          <h4>{category.title}</h4>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => select(category.id)}
+                            aria-label={`Edit ${group.title}: ${category.title}`}
+                          >
+                            <Pencil size={13} /> Edit
+                          </button>
+                        </div>
+                        <dl>
+                          {category.fields.map(n => (
+                            <div key={n.id}>
+                              <dt>{n.title}</dt>
+                              <dd>{summarize(n)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
               <p>
-                In the published App, users review estimated credits here before
-                confirming a run.
+                This App uses its published configuration. There are no inputs
+                to fill in.
               </p>
-              <button type="button" className="cfg-primary" disabled>
-                Review credits & run
-              </button>
-            </div>
-          ) : (
-            review
-          )}
-        </section>
-        <section hidden={current.id !== "results"} aria-label="App results">
-          <div className="cfg-content-title">
-            <div>
-              <h2>Results</h2>
-              <p>Follow progress and review everything your App creates.</p>
-            </div>
-          </div>
-          {preview ? (
-            <p>
-              Run progress, outputs, and any actions requiring approval will
-              appear here in the published App.
-            </p>
-          ) : (
-            results
-          )}
-        </section>
-        <footer className="wf-studio-footer">
-          <span>
-            Step {index + 1} of {pages.length}
-          </span>
-          <div className="cfg-actions">
-            {index > 0 && (
-              <button
-                type="button"
-                className="cfg-secondary"
-                onClick={() => select(pages[index - 1].id)}
-              >
-                <ArrowLeft size={15} /> Previous
-              </button>
             )}
-            {index < inputPages.length && (
-              <button
-                type="button"
-                className="cfg-primary"
-                onClick={() => select(pages[index + 1].id)}
-              >
-                {pages[index + 1].id === "review"
-                  ? "Review inputs"
-                  : "Continue"}
-                <ArrowRight size={15} />
-              </button>
+            {preview ? (
+              <div className="wf-studio-run">
+                <p>
+                  In the published App, users review estimated credits here
+                  before confirming a run.
+                </p>
+                <button type="button" className="cfg-primary" disabled>
+                  Review credits & run
+                </button>
+              </div>
+            ) : (
+              review
             )}
-          </div>
-        </footer>
-      </div>
+          </section>
+          <section hidden={current.id !== "results"} aria-label="App results">
+            <div className="cfg-content-title">
+              <div>
+                <h2>Results</h2>
+                <p>Follow progress and review everything your App creates.</p>
+              </div>
+            </div>
+            {preview ? (
+              <p>
+                Run progress, outputs, and any actions requiring approval will
+                appear here in the published App.
+              </p>
+            ) : (
+              results
+            )}
+          </section>
+          <footer className="wf-studio-footer">
+            <span>
+              Step {index + 1} of {pages.length}
+            </span>
+            <div className="cfg-actions">
+              {index > 0 && (
+                <button
+                  type="button"
+                  className="cfg-secondary"
+                  onClick={() => select(pages[index - 1].id)}
+                >
+                  <ArrowLeft size={15} /> Previous
+                </button>
+              )}
+              {index < inputPages.length && (
+                <button
+                  type="button"
+                  className="cfg-primary"
+                  onClick={() => select(pages[index + 1].id)}
+                >
+                  {pages[index + 1].id === "review"
+                    ? "Review inputs"
+                    : "Continue"}
+                  <ArrowRight size={15} />
+                </button>
+              )}
+            </div>
+          </footer>
+        </div>
+      </StudioSections>
     </div>
   );
 }

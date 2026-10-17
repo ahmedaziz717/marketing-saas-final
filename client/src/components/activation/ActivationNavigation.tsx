@@ -1,4 +1,5 @@
 import { CalendarDays, ClipboardCheck, Image, Radio, Type } from "lucide-react";
+import type { ReactNode } from "react";
 import { StudioSections } from "../configurator/StudioSections";
 import { copyDimensions, copyTaxonomy } from "@shared/copyTaxonomy";
 
@@ -58,10 +59,12 @@ export function ActivationSections({
   current,
   onSelect,
   needsChannel = false,
+  children,
 }: {
   current: ActivationSection;
   onSelect: (section: ActivationSection) => void;
   needsChannel?: boolean;
+  children: ReactNode;
 }) {
   return (
     <StudioSections
@@ -73,7 +76,9 @@ export function ActivationSections({
         disabled: needsChannel && item.id !== "setup",
         disabledReason: "Choose a connected channel first",
       }))}
-    />
+    >
+      {children}
+    </StudioSections>
   );
 }
 export { StudioCategories as ActivationCategories } from "../configurator/StudioCategories";

@@ -132,19 +132,19 @@
 .studio-choice-picker button:disabled {
   cursor: not-allowed;
 }
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .studio-choice-picker .studio-choice-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
   .studio-choice-picker .cfg-card-copy {
-    padding: 10px;
+    padding: 14px;
   }
   .studio-choice-picker .cfg-card-copy h3 {
-    font-size: 12px;
+    font-size: 14px;
   }
   .studio-choice-picker .cfg-card-copy p {
-    font-size: 11px;
+    font-size: 12px;
   }
   .studio-choice-picker .cfg-card-copy h3 svg {
     width: 13px;

@@ -3,11 +3,20 @@ import { useLayoutEffect, useRef } from "react";
 /** Scroll only after React has switched the visible choice category. */
 export function scrollStudioChoices(container: HTMLElement | null) {
   requestAnimationFrame(() => {
-    const target = Array.from(
-      container?.querySelectorAll<HTMLElement>(
-        ".cfg-content-title, .activation-section-title"
+    const mobile = window.matchMedia?.("(max-width: 700px)").matches;
+    const root = container?.closest(".cfg-root") ?? container;
+    const activeHeader = Array.from(
+      root?.querySelectorAll<HTMLElement>(
+        '.cfg-section-heading:has([aria-expanded="true"])'
       ) ?? []
     ).find(element => !element.closest("[hidden]"));
+    const target =
+      (mobile && activeHeader) ||
+      Array.from(
+        container?.querySelectorAll<HTMLElement>(
+          ".cfg-categories, .cfg-content-title, .activation-section-title"
+        ) ?? []
+      ).find(element => !element.closest("[hidden]"));
     target?.scrollIntoView?.({
       block: "start",
       behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
@@ -25,7 +34,8 @@ export function useStudioNavigation() {
     if (!node || typeof ResizeObserver === "undefined") return;
     const visible = (selector: string) =>
       Array.from(node.querySelectorAll<HTMLElement>(selector)).find(
-        element => !element.closest("[hidden]")
+        element =>
+          !element.closest("[hidden]") && element.getClientRects().length > 0
       );
     const measure = () => {
       const heights = {
