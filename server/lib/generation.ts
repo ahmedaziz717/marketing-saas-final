@@ -23,6 +23,9 @@ export type GenerationErrorCategory = "source_image" | "model_unavailable" | "mo
 
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
+  if (/product preservation layout/.test(normalized)) {
+    return { category: "source_image", userMessage: "The selected copy is too long for this preserved-product layout. Shorten the copy/specs or choose a larger format, then retry." };
+  }
   if (/preserve original product|product cutout/.test(normalized)) {
     return { category: "source_image", userMessage: "Product preservation needs a valid transparent cutout. Choose an approved transparent PNG or WebP product image, then retry." };
   }

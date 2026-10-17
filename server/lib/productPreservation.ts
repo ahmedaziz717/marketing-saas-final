@@ -14,6 +14,56 @@ export type ProductLayer = ProductCutout & {
   left: number;
   top: number;
 };
+export type ImageRegion = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/** Foreground regions never intersect, regardless of what the model renders. */
+export function preservationRegions(
+  canvas: { width: number; height: number },
+  placement: CreativeSetup["placement"],
+  count: number
+) {
+  const { width: w, height: h } = canvas;
+  const region = (
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): ImageRegion => ({
+    left: Math.round(x * w),
+    top: Math.round(y * h),
+    width: Math.floor(width * w),
+    height: Math.floor(height * h),
+  });
+  const stacked =
+    placement === "center" ||
+    (placement === "auto" && (w / h < 0.85 || count > 1));
+  if (stacked)
+    return {
+      copy: region(0.06, 0.05, 0.88, 0.37),
+      product: region(0.09, 0.48, 0.82, 0.46),
+    };
+  const left = placement === "left";
+  const banner = w / h > 4;
+  return {
+    copy: region(
+      left ? (banner ? 0.29 : 0.54) : 0.05,
+      0.07,
+      banner ? 0.66 : 0.41,
+      0.86
+    ),
+    product: region(
+      left ? 0.05 : banner ? 0.75 : 0.54,
+      0.07,
+      banner ? 0.2 : 0.41,
+      0.86
+    ),
+  };
+}
 
 /** Inspect alpha only. Never guess a mask or repaint the supplied product. */
 export async function readProductCutout(
@@ -120,16 +170,13 @@ export async function layoutPreservedProducts(
 ): Promise<ProductLayer[]> {
   if (!cutouts.length || cutouts.length > 3)
     throw new Error("Choose one to three cutouts per image.");
-  const { width, height } = canvas;
-  const wide = width / height > 1.4;
-  const side = placement === "left" || placement === "right";
-  const regionWidth = width * (side ? 0.48 : 0.82);
-  const regionLeft = side
-    ? width * (placement === "left" ? 0.06 : 0.46)
-    : width * 0.09;
-  const regionTop = height * (wide ? 0.12 : 0.3);
-  const regionHeight = height * (wide ? 0.72 : 0.53);
-  const gap = width * 0.025;
+  const {
+    left: regionLeft,
+    top: regionTop,
+    width: regionWidth,
+    height: regionHeight,
+  } = preservationRegions(canvas, placement, cutouts.length).product;
+  const gap = canvas.width * 0.025;
   const cellWidth = (regionWidth - gap * (cutouts.length - 1)) / cutouts.length;
   const layers: ProductLayer[] = [];
   for (let i = 0; i < cutouts.length; i++) {
@@ -159,9 +206,9 @@ export async function layoutPreservedProducts(
 
 export function preservationSceneInstruction(layers: ProductLayer[]) {
   return [
-    "PRODUCT PRESERVATION — BACKGROUND-ONLY PASS. This overrides any request above to draw, restyle or relight the product.",
-    "The supplied product cutouts will be placed onto your finished scene by software at their ORIGINAL viewing angle. Do NOT draw any product, duplicate product, placeholder, frame, silhouette or bounding box. Render the surrounding environment, requested copy, and branding only.",
-    "Keep the following pixel rectangles clear of text, logos, props and people. Build the scene perspective around the selected source views, never a new product angle. No hands or other foreground objects may cross these regions. Keep the source product lighting plausible in this environment; use subtle ground/contact shadows below the regions only.",
+    "PRODUCT PRESERVATION — BACKGROUND-ONLY PASS. Create an empty set, not a finished advertisement.",
+    "Product photos, logos and copy are deliberately NOT supplied to you. They will be placed by software after this pass. Do NOT draw any product, merchandise, duplicate product, stand-in object, packaging, placeholder, silhouette, bounding box, logo, lettering or text anywhere in the image. Render surrounding scenery only, with an empty surface for the foreground product.",
+    "Keep the following pixel rectangles clear of props and people. No hands or foreground objects may cross these regions. Do not guess, redraw or relight an unseen product. Use a subtle ground plane with restrained perspective and no strong shadow for an imaginary object.",
     JSON.stringify(
       layers.map(({ left, top, width, height }) => ({
         left,
@@ -170,7 +217,7 @@ export function preservationSceneInstruction(layers: ProductLayer[]) {
         height,
       }))
     ),
-    "Keep all copy outside the reserved product rectangles. Generate background scenery through those rectangles so transparent parts of the original cutouts blend naturally. The product's own pixels are added afterward; do not generate or modify them.",
+    "Generate uninterrupted background scenery through those rectangles so transparent parts of the cutouts blend naturally. All product pixels, branding and copy are added afterward. Leave the set empty.",
   ].join("\n\n");
 }
 
