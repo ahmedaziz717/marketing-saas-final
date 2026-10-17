@@ -70,9 +70,11 @@ const setup = () => ({
 });
 
 describe("creative setup and trusted catalog inputs", () => {
-  it("provides exactly 100 uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
-    expect(CREATIVE_THEME_LIST).toHaveLength(100);
-    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(100);
+  it("provides an expanded collection of uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
+    expect(CREATIVE_THEME_LIST.length).toBeGreaterThan(100);
+    expect(new Set(CREATIVE_THEME_LIST.map(theme => theme.id)).size).toBe(
+      CREATIVE_THEME_LIST.length
+    );
     expect(CREATIVE_THEME_GROUPS.map(group => group.name)).toEqual([
       "Always On",
       "General / Evergreen",
@@ -89,17 +91,58 @@ describe("creative setup and trusted catalog inputs", () => {
       "November",
       "December",
     ]);
-    expect(CREATIVE_THEME_LIST.every(theme => theme.icon && theme.direction.length >= 20)).toBe(true);
+    expect(
+      CREATIVE_THEME_LIST.every(
+        theme => theme.icon && theme.direction.length >= 20
+      )
+    ).toBe(true);
+  });
+
+  it("offers four distinct Valentine and Memorial Day directions with refreshed copy", () => {
+    for (const prefix of ["valentines", "memorial-day"]) {
+      const variants = CREATIVE_THEME_LIST.filter(t => t.id.startsWith(prefix));
+      expect(variants).toHaveLength(4);
+      expect(new Set(variants.map(t => t.direction)).size).toBe(4);
+      expect(new Set(variants.map(t => t.headline)).size).toBe(4);
+      for (const variant of variants) {
+        const setup = applyCreativeTheme(defaultCreativeSetup(), variant.id);
+        expect(setup.themePrompt).toBe(variant.direction);
+        expect(setup.copy.headline).toBe(variant.headline);
+      }
+    }
+    expect(
+      CREATIVE_THEME_LIST.some(t =>
+        /gaming|workstation|women in tech|CES Tech/i.test(t.name)
+      )
+    ).toBe(false);
   });
 
   it("provides stable icon-led mood and art-style options", () => {
     expect(CREATIVE_MOODS.map(option => option.name)).toEqual([
-      "Clean", "Vibrant", "Dark", "Minimal", "Bold", "Warm", "Playful", "Premium",
+      "Clean",
+      "Vibrant",
+      "Dark",
+      "Minimal",
+      "Bold",
+      "Warm",
+      "Playful",
+      "Premium",
     ]);
     expect(CREATIVE_ART_STYLES.map(option => option.name)).toEqual([
-      "Realistic", "Animation", "Illustration", "3D Render", "Editorial", "Cinematic", "Collage", "Technical",
+      "Realistic",
+      "Animation",
+      "Illustration",
+      "3D Render",
+      "Editorial",
+      "Cinematic",
+      "Collage",
+      "Technical",
     ]);
-    expect([...CREATIVE_MOODS, ...CREATIVE_ART_STYLES].every(option => option.icon && option.direction.length >= 20)).toBe(true);
+    expect(
+      [...CREATIVE_MOODS, ...CREATIVE_ART_STYLES].every(
+        option => option.icon && option.direction.length >= 20
+      )
+    ).toBe(true);
   });
 
   it("replaces all theme-owned copy for a different theme and preserves edits for the current theme", () => {
@@ -135,9 +178,15 @@ describe("creative setup and trusted catalog inputs", () => {
     expect(parsed.themePrompt).toBe(CREATIVE_THEMES.spotlight.direction);
     expect(parsed.mood).toBe("clean");
     expect(parsed.artStyle).toBe("realistic");
-    expect(creativeSetupSchema.parse({ ...parsed, shot: "female" }).shot).toBe("female");
-    expect(creativeSetupSchema.parse({ ...parsed, shot: "male" }).shot).toBe("male");
-    expect(creativeSetupSchema.parse({ ...parsed, shot: "lifestyle" }).shot).toBe("lifestyle");
+    expect(creativeSetupSchema.parse({ ...parsed, shot: "female" }).shot).toBe(
+      "female"
+    );
+    expect(creativeSetupSchema.parse({ ...parsed, shot: "male" }).shot).toBe(
+      "male"
+    );
+    expect(
+      creativeSetupSchema.parse({ ...parsed, shot: "lifestyle" }).shot
+    ).toBe("lifestyle");
   });
 
   it("accepts incomplete saved setups but blocks generation until product and size selections are complete", () => {
@@ -248,8 +297,10 @@ describe("creative setup and trusted catalog inputs", () => {
     const selection = {
       ...setup(),
       theme: "weekend" as const,
-      basePrompt: "Use an editorial product-ad composition with confident whitespace and premium lighting.",
-      themePrompt: "Use warm weekend sunlight, relaxed energy, and a welcoming lifestyle setting.",
+      basePrompt:
+        "Use an editorial product-ad composition with confident whitespace and premium lighting.",
+      themePrompt:
+        "Use warm weekend sunlight, relaxed energy, and a welcoming lifestyle setting.",
       mood: "dark" as const,
       artStyle: "cinematic" as const,
       shot: "lifestyle" as const,
@@ -315,5 +366,96 @@ describe("customer-facing model privacy", () => {
         "Required GPT image model gpt-image-2.5-sunburst is unavailable"
       ).userMessage
     ).not.toMatch(/GPT|Sunburst|OpenAI|model/i);
+  });
+});
+
+it("allows an approved service without a product image and carries service facts into its prompt", () => {
+  const service = {
+    ...product,
+    recordType: "service" as const,
+    serviceDetails: {
+      pricing: "quote",
+      area: "Wichita",
+      duration: "",
+      delivery: "onsite",
+      packages: "",
+      cta: "Get a quote",
+    },
+  };
+  const configuration = {
+    ...setup(),
+    products: [
+      {
+        productId: 11,
+        imageId: null,
+        featuredSpecKeys: [],
+        includePrice: false,
+      },
+    ],
+  };
+  expect(creativeSetupSchema.safeParse(configuration).success).toBe(true);
+  const resolved = resolveBuilderInputs(
+    1,
+    configuration,
+    [service],
+    [],
+    [logo]
+  );
+  expect(resolved.products[0].image).toBeNull();
+  expect(resolved.products[0].serviceDetails).toMatchObject({
+    pricing: "quote",
+    area: "Wichita",
+  });
+  expect(() =>
+    resolveBuilderInputs(
+      1,
+      configuration,
+      [{ ...service, recordType: "standalone" }],
+      [],
+      [logo]
+    )
+  ).toThrow();
+});
+
+describe("business promotions without catalog products", () => {
+  it("defaults directory and subscription accounts to one promotion per size", () => {
+    for (const model of ["directory", "membership", "saas", "services"]) {
+      const draft = defaultCreativeSetup(model);
+      expect(draft.promotionMode).toBe("platform");
+      expect(draft.products).toEqual([]);
+      expect(outputCount(draft)).toBe(3);
+      expect(generationSetupIssues(draft)).toEqual([]);
+      expect(creativeSetupSchema.safeParse(draft).success).toBe(true);
+    }
+    expect(defaultCreativeSetup().promotionMode).toBeUndefined();
+    expect(outputCount(defaultCreativeSetup())).toBe(0);
+  });
+  it("requires details for a category or provider and preserves attribution in the prompt", () => {
+    const draft = defaultCreativeSetup("directory");
+    draft.promotion = {
+      kind: "listing",
+      title: "Music teacher",
+      description: "Independent piano teacher listed in our directory.",
+    };
+    expect(generationSetupIssues(draft)).toEqual([]);
+    const prompt = buildCreativePrompt({
+      setup: draft,
+      brand,
+      products: [],
+      formatId: "square_1_1",
+      hasLogo: false,
+    });
+    expect(prompt).toContain("third-party provider/listing");
+    expect(prompt).toContain("does not deliver those services");
+    expect(prompt).toContain("Independent piano teacher");
+    expect(prompt).toContain("No physical product is selected");
+    draft.promotion.description = "";
+    expect(generationSetupIssues(draft)).toContain(
+      "Add a promotion name and description so the creative has accurate context."
+    );
+    expect(
+      creativeSetupSchema.safeParse({ ...draft, products: setup().products })
+        .success
+    ).toBe(false);
   });
 });

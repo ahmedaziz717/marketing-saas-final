@@ -1,0 +1,156 @@
+/* Inline visual fields keep their Studio appearance in the workflow inspector. */
+.wf-field-settings .studio-choice-picker {
+  --cfg-bg: var(--background);
+  --cfg-panel: var(--card);
+  --cfg-ink: var(--foreground);
+  --cfg-muted: var(--muted-foreground);
+  --cfg-line: var(--border);
+  --cfg-soft: var(--muted);
+  --cfg-violet: var(--primary);
+  --cfg-lime: #d5ee84;
+}
+.studio-choice-picker {
+  min-width: 0;
+  width: 100%;
+  color: var(--cfg-ink);
+}
+.studio-choice-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+.studio-choice-toolbar > p {
+  font-size: 12px;
+  color: var(--cfg-muted);
+  margin: 0;
+}
+.studio-choice-toolbar small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+}
+.studio-choice-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--cfg-line);
+  background: var(--cfg-panel);
+  border-radius: 8px;
+  padding: 9px 10px;
+  width: min(100%, 290px);
+  min-width: 0;
+}
+.studio-choice-search svg {
+  flex-shrink: 0;
+}
+.studio-choice-picker .studio-choice-search input,
+.wf-studio .wf-form-field .studio-choice-picker .studio-choice-search input,
+.wf-field-settings .studio-choice-picker .studio-choice-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  color: var(--cfg-ink);
+}
+.studio-choice-search button {
+  padding: 2px;
+  display: grid;
+  place-items: center;
+}
+.studio-choice-selection {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--cfg-muted);
+}
+.studio-choice-selection span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.studio-choice-selection button {
+  flex-shrink: 0;
+  color: var(--cfg-violet);
+}
+.studio-choice-picker .studio-choice-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(185px, 100%), 1fr));
+  gap: 14px;
+}
+.studio-choice-picker .cfg-choice {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+}
+.studio-choice-picker .cfg-card-art {
+  width: 100%;
+  flex-shrink: 0;
+  height: auto;
+  aspect-ratio: 1.65;
+}
+.studio-choice-picker .cfg-card-copy h3 {
+  display: flex;
+  align-items: start;
+  gap: 7px;
+}
+.studio-choice-picker .cfg-card-copy h3 svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--cfg-violet);
+}
+.studio-choice-symbol {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--cfg-violet);
+  background: linear-gradient(135deg, var(--cfg-soft), var(--cfg-panel));
+}
+.studio-choice-empty {
+  padding: 28px 12px;
+  text-align: center;
+  border: 1px dashed var(--cfg-line);
+  border-radius: 10px;
+  color: var(--cfg-muted);
+}
+.studio-choice-empty button {
+  margin-top: 8px;
+  color: var(--cfg-violet);
+}
+.studio-choice-picker button:focus-visible {
+  outline: 3px solid var(--cfg-violet);
+  outline-offset: -3px;
+}
+.studio-choice-picker button:disabled {
+  cursor: not-allowed;
+}
+@media (max-width: 700px) {
+  .studio-choice-picker .studio-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .studio-choice-picker .cfg-card-copy {
+    padding: 14px;
+  }
+  .studio-choice-picker .cfg-card-copy h3 {
+    font-size: 14px;
+  }
+  .studio-choice-picker .cfg-card-copy p {
+    font-size: 12px;
+  }
+  .studio-choice-picker .cfg-card-copy h3 svg {
+    width: 13px;
+    height: 13px;
+  }
+  .studio-choice-search {
+    width: 100%;
+  }
+}

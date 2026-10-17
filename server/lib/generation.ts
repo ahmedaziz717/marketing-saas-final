@@ -23,11 +23,20 @@ export type GenerationErrorCategory = "source_image" | "model_unavailable" | "mo
 
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
+  if (/preserve original logo|original logo does not fit/.test(normalized)) {
+    return { category: "source_image", userMessage: "Logo preservation needs a valid transparent logo. Upload and approve a transparent PNG or WebP in Brand, then retry." };
+  }
+  if (/product preservation layout/.test(normalized)) {
+    return { category: "source_image", userMessage: "The selected copy is too long for this preserved-product layout. Shorten the copy/specs or choose a larger format, then retry." };
+  }
+  if (/preserve original product|product cutout/.test(normalized)) {
+    return { category: "source_image", userMessage: "Product preservation needs a valid transparent cutout. Choose an approved transparent PNG or WebP product image, then retry." };
+  }
   if (/source image|original image|no readable raster|could not be decoded|for image https?:/.test(normalized)) {
     return { category: "source_image", userMessage: "A selected source image could not be read. Use approved PNG, JPEG, or WebP assets, then retry." };
   }
   if (/sunburst credential|invalid_api_key|authentication|model_not_found|does not have access|sunburst request failed \((401|403)\)/.test(normalized)) {
-    return { category: "model_access", userMessage: "GPT Image 2.5 Sunburst access is unavailable for this workspace. Ask an owner to verify the OpenAI connection, then retry." };
+    return { category: "model_access", userMessage: "AI generation is unavailable for this workspace. Ask an owner to check the connection, then retry." };
   }
   if (/required gpt|model.+unavailable|list image models|list llm models/.test(normalized)) {
     return { category: "model_unavailable", userMessage: "AI generation is temporarily unavailable. Your setup is saved; try again later." };

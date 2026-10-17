@@ -74,7 +74,7 @@ export async function appendActivity(
   } as const;
   await db
     .insert(activityEvents)
-    .values({ ...event, eventHash: stableHash(event) });
+    .values({ ...event, eventHash: stableHash(event) }).returning({ insertId: activityEvents.id });
 }
 
 export async function listActivity(organizationId: number) {

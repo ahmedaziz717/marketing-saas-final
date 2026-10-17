@@ -1,3 +1,4 @@
+import { meteredCall } from "../lib/aiMetering";
 import { ENV } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -23,7 +24,12 @@ export type FileContent = {
   };
 };
 
-export type MessageContent = string | TextContent | ImageContent | FileContent;
+export type PdfContent = {
+  type: "file";
+  file: { filename: string; file_data: string };
+};
+
+export type MessageContent = string | TextContent | ImageContent | FileContent | PdfContent;
 
 export type Message = {
   role: Role;
@@ -88,7 +94,7 @@ export type InvokeResult = {
     index: number;
     message: {
       role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent>;
+      content: string | Array<TextContent | ImageContent | FileContent | PdfContent>;
       tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
@@ -119,7 +125,7 @@ const ensureArray = (
 
 const normalizeContentPart = (
   part: MessageContent
-): TextContent | ImageContent | FileContent => {
+): TextContent | ImageContent | FileContent | PdfContent => {
   if (typeof part === "string") {
     return { type: "text", text: part };
   }
@@ -135,6 +141,8 @@ const normalizeContentPart = (
   if (part.type === "file_url") {
     return part;
   }
+
+  if (part.type === "file") return part;
 
   throw new Error("Unsupported message content part");
 };
@@ -212,15 +220,9 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
+const resolveApiUrl = () => "https://api.openai.com/v1/chat/completions";
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
+  if (!ENV.openAiApiKey) throw new Error("AI service is not configured");
 };
 
 const normalizeResponseFormat = ({
@@ -380,14 +382,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   const resolvedMaxTokens = max_tokens ?? maxTokens;
   if (typeof resolvedMaxTokens === "number") {
-    payload.max_tokens = resolvedMaxTokens;
+    payload.max_completion_tokens = resolvedMaxTokens;
   }
 
-  if (thinking) {
-    payload.thinking = thinking;
-  }
+  if (thinking) throw new Error("Unsupported text generation option");
   if (reasoning) {
-    payload.reasoning = reasoning;
+    payload.reasoning_effort = reasoning.effort;
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -401,11 +401,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
+  return meteredCall("openai", String(model || "unspecified"), "text", async () => {
   const response = await fetchWithBackoff(resolveApiUrl(), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.openAiApiKey}`,
     },
     body: JSON.stringify(payload),
   });
@@ -417,7 +418,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = (await response.json()) as InvokeResult;
+  return { value: result, usage: result.usage as unknown as Record<string, unknown> };
+  });
 }
 
 export type ModelInfo = {
@@ -435,12 +438,10 @@ export type ModelsResponse = {
 export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
-  const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
-    : "https://forge.manus.im/v1/models";
+  const url = "https://api.openai.com/v1/models";
 
   const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
+    headers: { authorization: `Bearer ${ENV.openAiApiKey}` },
   });
 
   if (!response.ok) {
