@@ -23,6 +23,9 @@ export type GenerationErrorCategory = "source_image" | "model_unavailable" | "mo
 
 export function categorizeGenerationError(message: string): { category: GenerationErrorCategory; userMessage: string } {
   const normalized = message.toLowerCase();
+  if (/preserve original logo|original logo does not fit/.test(normalized)) {
+    return { category: "source_image", userMessage: "Logo preservation needs a valid transparent logo. Upload and approve a transparent PNG or WebP in Brand, then retry." };
+  }
   if (/product preservation layout/.test(normalized)) {
     return { category: "source_image", userMessage: "The selected copy is too long for this preserved-product layout. Shorten the copy/specs or choose a larger format, then retry." };
   }

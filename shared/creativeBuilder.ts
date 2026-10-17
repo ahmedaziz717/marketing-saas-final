@@ -375,6 +375,10 @@ export const creativeSetupSchema = z
     preserveProduct: z.boolean().optional(),
     fontFamily: z.string().trim().max(80).optional(),
     preserveFont: z.boolean().default(false),
+    preserveLogo: z.boolean().default(false),
+    logoPosition: z
+      .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
+      .default("top-left"),
     shot: z.enum([
       "product",
       "female",
@@ -552,6 +556,8 @@ export function defaultCreativeSetup(
     products: [],
     productMode: "separate",
     preserveFont: false,
+    preserveLogo: false,
+    logoPosition: "top-left",
     shot: "product",
     mood: "clean",
     artStyle: "realistic",
@@ -602,6 +608,8 @@ export function creativeImageOutputs(setup: CreativeSetup) {
 }
 export function generationSetupIssues(setup: CreativeSetup) {
   const issues: string[] = [];
+  if (setup.preserveLogo && !setup.logoAssetId)
+    issues.push("Choose a saved logo to preserve its original artwork.");
   if (setup.preserveProduct) {
     if (setup.promotionMode === "platform")
       issues.push(

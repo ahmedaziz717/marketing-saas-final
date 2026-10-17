@@ -629,8 +629,8 @@ it("persists product preservation in image drafts and retains it when switching 
 
 it("offers Rubik and keeps font preservation off until explicitly selected", async () => {
   open();
-  section(/Story & Sound/);
-  fireEvent.click(screen.getByRole("button", { name: "Copy & prompt" }));
+  section(/Look & Feel/);
+  fireEvent.click(screen.getByRole("button", { name: "Fonts" }));
   expect(
     (
       screen.getByRole("checkbox", {
@@ -638,9 +638,12 @@ it("offers Rubik and keeps font preservation off until explicitly selected", asy
       }) as HTMLInputElement
     ).checked
   ).toBe(false);
-  fireEvent.change(screen.getByRole("combobox", { name: "Creative font" }), {
-    target: { value: "Rubik" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "Select Rubik" }));
+  expect(
+    screen
+      .getByRole("button", { name: "Select Rubik" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.save).toHaveBeenCalledWith(
@@ -652,4 +655,47 @@ it("offers Rubik and keeps font preservation off until explicitly selected", asy
       })
     )
   );
+});
+
+it("keeps logo imports in Brand and saves original-logo settings independently of product preservation", async () => {
+  api.assets = [
+    {
+      key: "asset:4",
+      name: "Original logo",
+      url: "/logo.png",
+      mediaType: "image",
+      sourceType: "logo",
+      state: "approved",
+      revision: "a".repeat(64),
+    },
+  ];
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  expect(screen.queryByText("Logo import tools")).toBeNull();
+  expect(
+    screen.getByRole("link", { name: /Manage Brand Kit/ }).getAttribute("href")
+  ).toBe("/app/brand");
+  fireEvent.click(screen.getByRole("button", { name: "Select Original logo" }));
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Preserve original logo" })
+  );
+  fireEvent.change(screen.getByRole("combobox", { name: "Logo position" }), {
+    target: { value: "bottom-right" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          logoAssetId: 4,
+          preserveLogo: true,
+          logoPosition: "bottom-right",
+        }),
+      })
+    )
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Select No logo" }));
+  expect(
+    screen.queryByRole("checkbox", { name: "Preserve original logo" })
+  ).toBeNull();
 });

@@ -1,3 +1,8 @@
+import {
+  loadPreservedLogo,
+  prepareLogoPlacement,
+  renderOriginalLogo,
+} from "../lib/logoPreservation";
 import { productOverlayPlacementSchema } from "../../shared/productOverlay";
 import {
   renderProductOverlay,
@@ -306,6 +311,7 @@ export async function runBuilderJob(
   try {
     // Validate every source before making any paid request, including queued jobs.
     const preserved = await loadPreservedProducts(setup, resolved);
+    const preservedLogo = await loadPreservedLogo(setup, resolved);
     if (
       args.rateSnapshots &&
       args.rateSnapshots.length !== creativeImageOutputs(setup).length
@@ -362,7 +368,14 @@ export async function runBuilderJob(
         const productLayers = cutouts.length
           ? await layoutPreservedProducts(cutouts, format, setup.placement)
           : [];
-        const image = await generateSunburstImage({
+        const logoLayout = preservedLogo
+          ? await prepareLogoPlacement(
+              preservedLogo,
+              format,
+              setup.logoPosition
+            )
+          : undefined;
+        let image = await generateSunburstImage({
           modelId: setup.modelId,
           modelOptions: setup.modelOptions,
           rateSnapshot:
@@ -375,6 +388,7 @@ export async function runBuilderJob(
             products: group,
             formatId: format.id,
             hasLogo: !!resolved.logo,
+            logoPlacement: logoLayout,
             adaptMaster: !!master,
           }),
           outputSize: {
@@ -392,6 +406,20 @@ export async function runBuilderJob(
             referenceCapacity(generationModel(setup.modelId)!) > sources.length)
         )
           master = await readGenerationSource(image.storageKey);
+        const originalDesign = { storageKey: image.storageKey, url: image.url };
+        if (preservedLogo && logoLayout) {
+          const png = await renderOriginalLogo(
+            Buffer.from(await storageGetBase64(image.storageKey), "base64"),
+            preservedLogo,
+            logoLayout.placement
+          );
+          const stored = await storagePut(
+            `org-${organizationId}/creatives/${jobId}/original-logo-${randomUUID()}.png`,
+            png,
+            "image/png"
+          );
+          image = { ...image, storageKey: stored.key, url: stored.url };
+        }
         generated.push({
           organizationId: organizationId,
           briefId: briefId,
@@ -420,6 +448,18 @@ export async function runBuilderJob(
           imageUrl: image.url,
           imageStorageKey: image.storageKey,
           renderMetadata: {
+            ...(preservedLogo && logoLayout
+              ? {
+                  logoPreservation: {
+                    method: "original_logo_v1" as const,
+                    ...logoLayout.placement,
+                    sourceKey: preservedLogo.sourceKey,
+                    sha256: preservedLogo.sha256,
+                    designStorageKey: originalDesign.storageKey,
+                    designUrl: originalDesign.url,
+                  },
+                }
+              : {}),
             ...(productLayers.length
               ? {
                   productPreservation: {
@@ -557,15 +597,17 @@ export async function builderImageQuote(
   setup: CreativeSetup,
   resolved: Awaited<ReturnType<typeof loadInputs>>
 ) {
+  let preservedLogo;
   try {
     await loadPreservedProducts(setup, resolved);
+    preservedLogo = await loadPreservedLogo(setup, resolved);
   } catch (error) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
         error instanceof Error
           ? error.message
-          : "Product cutout could not be checked.",
+          : "Original artwork could not be checked.",
     });
   }
   const model = await resolveModel(db, setup.modelId, "image");
@@ -612,6 +654,13 @@ export async function builderImageQuote(
           products: group,
           formatId: format.id,
           hasLogo: !!resolved.logo,
+          logoPlacement: preservedLogo
+            ? await prepareLogoPlacement(
+                preservedLogo,
+                format,
+                setup.logoPosition
+              )
+            : undefined,
           adaptMaster: false,
         }),
         originalImages: sources,

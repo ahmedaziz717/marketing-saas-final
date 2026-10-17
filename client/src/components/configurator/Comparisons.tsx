@@ -358,6 +358,12 @@ function describe(
       ? (context.logos.find(l => l.id === c.image.logoAssetId)?.name ??
         "No logo")
       : "Via source reference / prompt",
+    "Preserve logo":
+      image && c.image.logoAssetId
+        ? c.image.preserveLogo
+          ? `Original artwork · ${c.image.logoPosition || "top-left"}`
+          : "AI composition"
+        : "Not applicable",
     Headline: image ? c.image.copy.headline || "Not set" : "Not applicable",
     Subheadline: image
       ? c.image.copy.subheadline || "Not set"

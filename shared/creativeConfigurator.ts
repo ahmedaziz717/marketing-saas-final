@@ -155,6 +155,7 @@ export const configuratorSections = [
       { id: "style", title: "Art style" },
       { id: "mood", title: "Mood" },
       { id: "composition", title: "Composition" },
+      { id: "fonts", title: "Fonts" },
     ],
   },
   {
