@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock("./ChannelConnections", () => ({ channelInput: "input" }));
@@ -31,22 +32,22 @@ it("explains ratios and example pixel sizes while showing each image’s actual 
     />
   );
   expect(
-    screen.getByRole("option", { name: /Square · 1:1 · e.g. 1080 × 1080 px/ })
+    screen.getByRole("radio", { name: /Square · 1:1 · e.g. 1080 × 1080 px/ })
   ).toBeTruthy();
   expect(
-    screen.getByRole("option", { name: /Portrait · 4:5 · e.g. 1080 × 1350 px/ })
+    screen.getByRole("radio", { name: /Portrait · 4:5 · e.g. 1080 × 1350 px/ })
   ).toBeTruthy();
   expect(
-    screen.getByRole("option", {
+    screen.getByRole("radio", {
       name: /Stories \/ Reels · 9:16 · e.g. 1080 × 1920 px/,
     })
   ).toBeTruthy();
   expect(
-    screen.getByRole("option", {
+    screen.getByRole("radio", {
       name: /Landscape · 1.91:1 · e.g. 1200 × 628 px/,
     })
   ).toBeTruthy();
-  fireEvent.change(screen.getByRole("combobox", { name: "Asset dimensions" }), {
+  changeField(screen.getByRole("radiogroup", { name: "Asset dimensions" }), {
     target: { value: "square" },
   });
   expect(screen.queryByRole("button", { name: /Portrait image/ })).toBeNull();
@@ -56,7 +57,7 @@ it("explains ratios and example pixel sizes while showing each image’s actual 
   expect(
     screen.getByRole("button", { name: /Large square/ }).textContent
   ).toContain("1:1 · 1200 × 1200 px");
-  fireEvent.change(screen.getByRole("combobox", { name: "Asset dimensions" }), {
+  changeField(screen.getByRole("radiogroup", { name: "Asset dimensions" }), {
     target: { value: "portrait" },
   });
   expect(screen.queryByRole("button", { name: /Small square/ })).toBeNull();

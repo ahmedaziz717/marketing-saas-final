@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -326,7 +327,8 @@ export function ModelPricingAdmin() {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search models, makers, or providers…"
         />
-        <select
+        <VisualSelect
+          density="compact"
           aria-label="Model type"
           className="h-10 rounded-xl border bg-background px-3"
           value={kind}
@@ -334,8 +336,9 @@ export function ModelPricingAdmin() {
         >
           <option value="image">Images</option>
           <option value="video">Videos</option>
-        </select>
-        <select
+        </VisualSelect>
+        <VisualSelect
+          density="compact"
           aria-label="Provider"
           className="h-10 rounded-xl border bg-background px-3"
           value={provider}
@@ -344,7 +347,7 @@ export function ModelPricingAdmin() {
           <option value="all">All providers</option>
           <option value="openai">OpenAI</option>
           <option value="higgsfield">Higgsfield</option>
-        </select>
+        </VisualSelect>
       </div>
       <p className="text-sm text-muted-foreground">
         Offer this model: turn it on to include it in apps and workflows. Turn
@@ -399,9 +402,10 @@ export function ModelPricingAdmin() {
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <label className="space-y-1 text-xs">
+                <ChoiceField className="space-y-1 text-xs">
                   <span>Image quality</span>
-                  <select
+                  <VisualSelect
+                    density="compact"
                     className="h-10 w-full rounded-lg border bg-background px-2"
                     value={estimateForm.quality}
                     onChange={e =>
@@ -417,11 +421,12 @@ export function ModelPricingAdmin() {
                     <option value="high">High</option>
                     <option value="xhigh">Extra high · Image 2.5</option>
                     <option value="max">Maximum · Image 2.5</option>
-                  </select>
-                </label>
-                <label className="space-y-1 text-xs">
+                  </VisualSelect>
+                </ChoiceField>
+                <ChoiceField className="space-y-1 text-xs">
                   <span>Image dimensions</span>
-                  <select
+                  <VisualSelect
+                    density="compact"
                     className="h-10 w-full rounded-lg border bg-background px-2"
                     value={estimateForm.size}
                     onChange={e =>
@@ -446,8 +451,8 @@ export function ModelPricingAdmin() {
                     <option value="1536x864">
                       Wide 16:9 canvas · 1536 × 864
                     </option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 {(
                   [
                     ["textInputTokens", "Text input tokens"],
@@ -516,9 +521,10 @@ export function ModelPricingAdmin() {
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <label className="space-y-1 text-xs">
+                <ChoiceField className="space-y-1 text-xs">
                   <span>Video duration</span>
-                  <select
+                  <VisualSelect
+                    density="compact"
                     className="h-10 w-full rounded-lg border bg-background px-2"
                     value={videoForm.duration}
                     onChange={e =>
@@ -537,17 +543,18 @@ export function ModelPricingAdmin() {
                         {n} seconds
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 {(
                   [
                     ["resolution", "resolution", "Video resolution"],
                     ["aspectRatio", "aspect_ratio", "Aspect ratio"],
                   ] as const
                 ).map(([field, key, label]) => (
-                  <label key={field} className="space-y-1 text-xs">
+                  <ChoiceField key={field} className="space-y-1 text-xs">
                     <span>{label}</span>
-                    <select
+                    <VisualSelect
+                      density="compact"
                       className="h-10 w-full rounded-lg border bg-background px-2"
                       value={videoForm[field]}
                       onChange={e =>
@@ -560,12 +567,13 @@ export function ModelPricingAdmin() {
                           {value}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 ))}
-                <label className="space-y-1 text-xs">
+                <ChoiceField className="space-y-1 text-xs">
                   <span>Audio</span>
-                  <select
+                  <VisualSelect
+                    density="compact"
                     className="h-10 w-full rounded-lg border bg-background px-2"
                     value={videoForm.sound}
                     onChange={e =>
@@ -579,8 +587,8 @@ export function ModelPricingAdmin() {
                     <option value="default">Model default</option>
                     <option value="on">On</option>
                     <option value="off">Off</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 <label className="space-y-1 text-xs">
                   <span>Source clip (seconds)</span>
                   <Input
@@ -909,9 +917,10 @@ export function ModelPricingAdmin() {
                 });
             }}
           >
-            <label className="block space-y-1 text-sm">
+            <ChoiceField className="block space-y-1 text-sm">
               <span>Provider route</span>
-              <select
+              <VisualSelect
+                density="compact"
                 className="h-10 w-full rounded-lg border bg-background px-2"
                 value={form.routeId}
                 onChange={e => {
@@ -959,8 +968,8 @@ export function ModelPricingAdmin() {
                     {r.name}
                   </option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             {(
               [
                 ["markup", "Markup override (%)"],

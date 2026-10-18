@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
@@ -27,7 +28,7 @@ const props = {
 it("requires an explicit fetch and submits the account, dates, dimensions and thresholds", () => {
   render(<AdvertisingCopyReport {...props} />);
   expect(api.mutate).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Copy report objective"), {
+  changeField(screen.getByLabelText("Copy report objective"), {
     target: { value: "roas" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Analyze copy" }));
@@ -54,7 +55,7 @@ it("hides stale results when comparison settings change", () => {
   };
   render(<AdvertisingCopyReport {...props} />);
   expect(screen.getByText("Loaded copy results")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Copy report minimum purchases"), {
+  changeField(screen.getByLabelText("Copy report minimum purchases"), {
     target: { value: "10" },
   });
   expect(screen.queryByText("Loaded copy results")).toBeNull();

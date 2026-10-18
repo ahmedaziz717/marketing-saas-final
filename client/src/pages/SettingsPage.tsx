@@ -1,3 +1,5 @@
+import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { SettingsLayout } from "@/components/SettingsLayout";
 import {
   settingsSectionForPath,
@@ -85,7 +87,7 @@ function RoleSelect({
   disabled?: boolean;
 }) {
   return (
-    <select
+    <VisualSelect
       aria-label="Workspace role"
       className="rounded-xl border bg-background p-2 text-sm"
       value={value}
@@ -100,7 +102,7 @@ function RoleSelect({
           {r[0].toUpperCase() + r.slice(1)}
         </option>
       ))}
-    </select>
+    </VisualSelect>
   );
 }
 function Settings() {
@@ -535,10 +537,13 @@ function Settings() {
                       ["email", "Email app"],
                       ["link", "Copy link"],
                     ].map(([value, label]) => (
-                      <label
-                        key={value}
-                        className="flex items-center gap-2 text-sm"
-                      >
+                      <label key={value} className="choice-radio-card">
+                        <span className="choice-radio-art">
+                          <ChoiceVisual
+                            label={label}
+                            context="Share invitation"
+                          />
+                        </span>
                         <input
                           type="radio"
                           name="delivery"

@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -393,7 +394,7 @@ function Studio({
           </p>
         </div>
         <div className="optimization-header-actions">
-          <select
+          <VisualSelect
             aria-label="Saved optimization plans"
             value={workflowId ?? ""}
             onChange={e => go(e.target.value || undefined)}
@@ -404,7 +405,7 @@ function Studio({
                 {p.name}
               </option>
             ))}
-          </select>
+          </VisualSelect>
           <Button variant="outline" disabled={busy} onClick={() => persist()}>
             <Save size={16} /> Save plan
           </Button>
@@ -655,9 +656,9 @@ function Studio({
                     Inspect or manage imported history →
                   </Link>
                 </div>
-                <label className="insight-label">
+                <ChoiceField className="insight-label">
                   Minimum classification confidence
-                  <select
+                  <VisualSelect
                     aria-label="Minimum classification confidence"
                     value={settings.minimumConfidence}
                     onChange={e =>
@@ -667,8 +668,8 @@ function Studio({
                     <option value={0}>Include all classifications</option>
                     <option value={0.5}>50% · moderate and above</option>
                     <option value={0.8}>80% · high confidence only</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 <p className="insight-caption">
                   This filters how confidently an ad was classified. It is
                   separate from confidence in a performance result. Missing

@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { trpc } from "@/lib/trpc";
@@ -43,9 +44,9 @@ export function WorkflowAppPicker({
           onChange={e => setSearch(e.target.value)}
         />
       </label>
-      <label>
+      <ChoiceField>
         App
-        <select
+        <VisualSelect
           value={selected}
           disabled={disabled}
           onChange={e => onSelect(e.target.value)}
@@ -64,6 +65,21 @@ export function WorkflowAppPicker({
                   <option
                     key={app.id}
                     value={`builtin:${app.id}`}
+                    data-image={
+                      app.id === "image-creator"
+                        ? "/studio-art/type-image.webp"
+                        : ["product-video", "creator-video"].includes(app.id)
+                          ? "/studio-art/video.webp"
+                          : undefined
+                    }
+                    data-description={app.unavailable}
+                    data-visual={
+                      app.family === "activate"
+                        ? app.id.includes("social")
+                          ? "facebook"
+                          : "meta"
+                        : undefined
+                    }
                     disabled={!app.nodeType}
                   >
                     {app.name}
@@ -82,8 +98,8 @@ export function WorkflowAppPicker({
                 </option>
               ))}
           </optgroup>
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       {apps.isLoading && (
         <p className="wf-setting-help">
           Loading workspace Apps… Built-in Apps are available in the picker.

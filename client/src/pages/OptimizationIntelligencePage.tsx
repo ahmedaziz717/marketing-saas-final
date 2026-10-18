@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { copyTaxonomy, type CopyDimension } from "@shared/copyTaxonomy";
 import { CopyTaxonomyReference } from "@/components/CopyTags";
 import { useState } from "react";
@@ -128,9 +129,9 @@ function Intelligence() {
       ) : (
         <>
           <section className="rounded-xl border bg-card p-4 space-y-4">
-            <label className="block text-sm">
+            <ChoiceField className="block text-sm">
               Connected Meta ad account
-              <select
+              <VisualSelect
                 className={channelInput + " mt-1 w-full"}
                 value={connectionId}
                 onChange={e => {
@@ -148,8 +149,8 @@ function Intelligence() {
                       {c.name}
                     </option>
                   ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             {connectionId && (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -247,9 +248,9 @@ function Intelligence() {
                   onChange={range => range && setQuery({ ...query, range })}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="text-sm">
+                  <ChoiceField className="text-sm">
                     Granularity
-                    <select
+                    <VisualSelect
                       className={channelInput + " mt-1 w-full"}
                       value={query.grain}
                       onChange={e =>
@@ -272,11 +273,11 @@ function Intelligence() {
                       <option value="hourly">
                         Ad / hour / day (account timezone)
                       </option>
-                    </select>
-                  </label>
-                  <label className="text-sm">
+                    </VisualSelect>
+                  </ChoiceField>
+                  <ChoiceField className="text-sm">
                     Minimum label confidence
-                    <select
+                    <VisualSelect
                       className={channelInput + " mt-1 w-full"}
                       value={query.minimumConfidence}
                       onChange={e =>
@@ -290,8 +291,8 @@ function Intelligence() {
                       <option value={0.6}>60%+</option>
                       <option value={0.8}>80%+</option>
                       <option value={1}>Verified / exact</option>
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 </div>
                 <fieldset>
                   <legend className="text-sm font-medium">
@@ -313,7 +314,7 @@ function Intelligence() {
                         {title(d)} ×
                       </Button>
                     ))}
-                    <select
+                    <VisualSelect
                       aria-label="Add dimension"
                       className={channelInput}
                       value=""
@@ -342,7 +343,7 @@ function Intelligence() {
                             {title(d)}
                           </option>
                         ))}
-                    </select>
+                    </VisualSelect>
                   </div>
                 </fieldset>
                 <fieldset>
@@ -350,7 +351,7 @@ function Intelligence() {
                     Filter combinations (AND between dimensions)
                   </legend>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <select
+                    <VisualSelect
                       aria-label="Filter dimension"
                       className={channelInput}
                       value={filterDimension}
@@ -363,7 +364,7 @@ function Intelligence() {
                           {title(d)}
                         </option>
                       ))}
-                    </select>
+                    </VisualSelect>
                     <input
                       aria-label="Filter values"
                       className={channelInput}
@@ -541,7 +542,7 @@ function Intelligence() {
                       Source ads and classifications
                     </h2>
                     <CopyTaxonomyReference />
-                    <select
+                    <VisualSelect
                       aria-label="Source ad"
                       className={channelInput + " w-full"}
                       value={selectedAd}
@@ -553,7 +554,7 @@ function Intelligence() {
                           {a.name} · {a.id}
                         </option>
                       ))}
-                    </select>
+                    </VisualSelect>
                     {data.sourceAds
                       .filter(a => a.id === selectedAd)
                       .map(a => (
@@ -606,7 +607,7 @@ function Intelligence() {
                               <h3 className="font-medium">
                                 Reviewed classification
                               </h3>
-                              <select
+                              <VisualSelect
                                 aria-label="Override dimension"
                                 className={channelInput + " w-full"}
                                 value={overrideDimension}
@@ -621,7 +622,7 @@ function Intelligence() {
                                     {title(d)}
                                   </option>
                                 ))}
-                              </select>
+                              </VisualSelect>
                               <input
                                 aria-label="Reviewed labels"
                                 className={channelInput + " w-full"}

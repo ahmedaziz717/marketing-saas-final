@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   cleanup,
   fireEvent,
@@ -402,7 +403,7 @@ it("compares at most three models and never invokes generation", () => {
 });
 it("duplicates a build, preserves its snapshot, highlights changes, and swaps without overwriting a cloud draft", async () => {
   open();
-  fireEvent.change(screen.getByLabelText("Creative name"), {
+  changeField(screen.getByLabelText("Creative name"), {
     target: { value: "Original build" },
   });
   clickJourney(screen.getByRole("button", { name: "Duplicate & compare" }));
@@ -678,11 +679,11 @@ it("opens a failed request in Studio and detaches a new version from its old lin
 });
 it("preserves each type's name and setup when switching Image/Video", () => {
   open();
-  fireEvent.change(screen.getByLabelText("Creative name"), {
+  changeField(screen.getByLabelText("Creative name"), {
     target: { value: "My image" },
   });
   clickJourney(screen.getByRole("button", { name: "Select Video" }));
-  fireEvent.change(screen.getByLabelText("Creative name"), {
+  changeField(screen.getByLabelText("Creative name"), {
     target: { value: "My film" },
   });
   clickJourney(screen.getByRole("button", { name: "Select Image" }));
@@ -836,7 +837,7 @@ it("previews a generated version without changing settings or generating, and re
   ];
   open();
   const name = screen.getByRole("textbox", { name: "Creative name" });
-  fireEvent.change(name, { target: { value: "Keep my current draft" } });
+  changeField(name, { target: { value: "Keep my current draft" } });
   clickJourney(
     screen.getByRole("button", { name: "Preview Previous lamp square" })
   );
@@ -1088,7 +1089,7 @@ it("keeps logo imports in Brand and saves original-logo settings independently o
   clickJourney(
     screen.getByRole("checkbox", { name: "Preserve original logo" })
   );
-  fireEvent.change(screen.getByRole("combobox", { name: "Logo position" }), {
+  changeField(screen.getByRole("radiogroup", { name: "Logo position" }), {
     target: { value: "bottom-right" },
   });
   clickJourney(screen.getByRole("button", { name: "Save draft" }));

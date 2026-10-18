@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { channelInput } from "@/components/ChannelConnections";
@@ -46,9 +47,10 @@ export function DateRangeFilter({
   }, [value?.since, value?.until, timezone]);
   return (
     <div className="flex min-w-0 flex-wrap items-end gap-3">
-      <label className="text-sm">
+      <ChoiceField className="text-sm">
         {label}
-        <select
+        <VisualSelect
+          density="compact"
           aria-label={label}
           className={channelInput + " mt-1 block"}
           value={period}
@@ -75,8 +77,8 @@ export function DateRangeFilter({
           ))}
           {allowAll && <option value="all">All dates</option>}
           <option value="custom">Custom date range</option>
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       {period === "custom" && (
         <>
           <label className="text-sm">

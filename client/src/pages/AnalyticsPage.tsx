@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { AdvertisingCopyReport } from "@/components/AdvertisingCopyReport";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { useQueries } from "@tanstack/react-query";
@@ -460,9 +461,9 @@ function Analytics() {
             }}
           />
         </div>
-        <label className="text-xs">
+        <ChoiceField className="text-xs">
           Channel
-          <select
+          <VisualSelect
             aria-label="Analytics channel"
             className={channelInput + " mt-1"}
             value={selectedChannel}
@@ -482,11 +483,11 @@ function Analytics() {
                 {channelNames[c as keyof typeof channelNames]}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="text-xs">
+          </VisualSelect>
+        </ChoiceField>
+        <ChoiceField className="text-xs">
           Account
-          <select
+          <VisualSelect
             aria-label="Analytics account"
             className={channelInput + " mt-1"}
             value={selectedAccount}
@@ -498,8 +499,8 @@ function Analytics() {
                 {c.name} / {channelNames[c.channel]}
               </option>
             ))}
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

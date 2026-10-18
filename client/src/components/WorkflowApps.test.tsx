@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   cleanup,
   fireEvent,
@@ -387,14 +388,14 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
   expect(screen.getByRole("alert").textContent).toContain("Audience:");
   expect(screen.getByRole("textbox", { name: "Audience" })).toBeTruthy();
   expect(api.quote).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Audience"), {
+  changeField(screen.getByLabelText("Audience"), {
     target: { value: "Independent founders" },
   });
   clickJourney(
     screen.getByRole("button", { name: /^Next (category|section)$/ })
   );
   expect(screen.getByRole("textbox", { name: "Caption" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Caption"), {
+  changeField(screen.getByLabelText("Caption"), {
     target: { value: "Reviewed caption" },
   });
   clickJourney(screen.getByRole("button", { name: "Previous category" }));
@@ -439,7 +440,7 @@ it("invalidates an estimate after an edit and accepts a zero-credit quote", asyn
   clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   await screen.findByRole("button", { name: "Confirm & run App" });
   clickJourney(screen.getByRole("button", { name: "Edit Content: Copy" }));
-  fireEvent.change(screen.getByLabelText("Caption"), {
+  changeField(screen.getByLabelText("Caption"), {
     target: { value: "Changed after estimate" },
   });
   reviewApp();
@@ -500,14 +501,14 @@ it("supports legacy text and image inputs without republishing", async () => {
   image.title = "Reference image";
   api.app.graph = { nodes: [text, image], edges: [] };
   openApp();
-  fireEvent.change(screen.getByLabelText("Campaign brief"), {
+  changeField(screen.getByLabelText("Campaign brief"), {
     target: { value: "Updated legacy brief" },
   });
   clickJourney(
     screen.getByRole("button", { name: /^Next (category|section)$/ })
   );
   expect(
-    screen.getByRole("combobox", { name: "Reference image" })
+    screen.getByRole("radiogroup", { name: "Reference image" })
   ).toBeTruthy();
   reviewApp();
   clickJourney(screen.getByRole("button", { name: "Review credits & run" }));

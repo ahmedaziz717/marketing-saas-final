@@ -60,7 +60,7 @@ afterEach(() => {
 it("defaults to a compact rail, keeps account switching visible, and remembers explicit expansion", () => {
   setup();
   expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-  expect(screen.getByRole("combobox", { name: "Switch account" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Switch account" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
   expect(localStorage.getItem(SIDEBAR_PREFERENCE_KEY)).toBe("true");
   cleanup();

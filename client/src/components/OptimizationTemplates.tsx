@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -34,7 +35,8 @@ export function OptimizationTemplates({
         workflows. Your copies can be edited without changing the originals.
       </p>
       <div className="flex flex-wrap gap-3">
-        <select
+        <VisualSelect
+          density="compact"
           aria-label="Template Meta account"
           className={channelInput}
           value={connectionId}
@@ -48,7 +50,7 @@ export function OptimizationTemplates({
                 {c.name}
               </option>
             ))}
-        </select>
+        </VisualSelect>
         <Button
           disabled={!connectionId || install.isPending}
           onClick={() =>

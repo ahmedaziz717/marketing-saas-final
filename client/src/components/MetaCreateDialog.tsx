@@ -1,3 +1,5 @@
+import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { ExternalLink, CheckCircle2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -396,10 +398,13 @@ export function MetaCreateDialog({
                         </legend>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {metaObjectives.map(([value, label]) => (
-                            <label
-                              key={value}
-                              className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${form.objective === value ? "border-primary bg-primary/5" : ""}`}
-                            >
+                            <label key={value} className="choice-radio-card">
+                              <span className="choice-radio-art">
+                                <ChoiceVisual
+                                  label={label}
+                                  context="Campaign objective"
+                                />
+                              </span>
                               <input
                                 type="radio"
                                 name="meta-objective"
@@ -419,9 +424,9 @@ export function MetaCreateDialog({
                           in Meta Ads Manager.
                         </p>
                       )}
-                      <label className="block space-y-2 text-sm font-medium">
+                      <ChoiceField className="block space-y-2 text-sm font-medium">
                         Budget structure
-                        <select
+                        <VisualSelect
                           className={channelInput}
                           value={form.budgetMode}
                           onChange={e => {
@@ -439,8 +444,8 @@ export function MetaCreateDialog({
                           <option value="campaign">
                             Campaign budget · distribute across ad sets
                           </option>
-                        </select>
-                      </label>
+                        </VisualSelect>
+                      </ChoiceField>
                       <p className="text-xs text-muted-foreground">
                         Auction buying. Reservation buying and experiments are
                         available in Meta Ads Manager.
@@ -457,9 +462,9 @@ export function MetaCreateDialog({
                           : "Budget set here"}
                       </div>
                       {goals.length ? (
-                        <label className="block space-y-2 text-sm font-medium">
+                        <ChoiceField className="block space-y-2 text-sm font-medium">
                           Performance goal
-                          <select
+                          <VisualSelect
                             className={channelInput}
                             value={goal}
                             onChange={e =>
@@ -474,8 +479,8 @@ export function MetaCreateDialog({
                                 {l}
                               </option>
                             ))}
-                          </select>
-                        </label>
+                          </VisualSelect>
+                        </ChoiceField>
                       ) : (
                         <p
                           role="status"
@@ -503,17 +508,17 @@ export function MetaCreateDialog({
                     <>
                       {budgetVisible && (
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block space-y-2 text-sm">
+                          <ChoiceField className="block space-y-2 text-sm">
                             Budget type
-                            <select
+                            <VisualSelect
                               className={channelInput}
                               value={budgetType}
                               onChange={e => setBudgetType(e.target.value)}
                             >
                               <option value="daily">Daily</option>
                               <option value="lifetime">Lifetime</option>
-                            </select>
-                          </label>
+                            </VisualSelect>
+                          </ChoiceField>
                           <label className="block space-y-2 text-sm">
                             Budget ({currency})
                             <input
@@ -529,9 +534,9 @@ export function MetaCreateDialog({
                       )}
                       {(budgetVisible || (!isCampaign && cbo)) && (
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block space-y-2 text-sm">
+                          <ChoiceField className="block space-y-2 text-sm">
                             Bid strategy
-                            <select
+                            <VisualSelect
                               className={channelInput}
                               disabled={cbo}
                               value={strategy}
@@ -551,8 +556,8 @@ export function MetaCreateDialog({
                               <option value="LOWEST_COST_WITH_BID_CAP">
                                 Bid cap
                               </option>
-                            </select>
-                          </label>
+                            </VisualSelect>
+                          </ChoiceField>
                           {!isCampaign &&
                             strategy !== "LOWEST_COST_WITHOUT_CAP" && (
                               <label className="block space-y-2 text-sm">
@@ -617,9 +622,9 @@ export function MetaCreateDialog({
                                 onChange={e => setCountries(e.target.value)}
                               />
                             </label>
-                            <label className="block space-y-2 text-sm">
+                            <ChoiceField className="block space-y-2 text-sm">
                               Audience type
-                              <select
+                              <VisualSelect
                                 className={channelInput}
                                 value={form.audienceMode}
                                 onChange={e =>
@@ -636,8 +641,8 @@ export function MetaCreateDialog({
                                   Advantage+ audience
                                 </option>
                                 <option value="manual">Manual audience</option>
-                              </select>
-                            </label>
+                              </VisualSelect>
+                            </ChoiceField>
                             {form.audienceMode === "advantage" && (
                               <p className="text-xs text-muted-foreground">
                                 Meta can expand beyond included audience
@@ -683,9 +688,9 @@ export function MetaCreateDialog({
                                     }
                                   />
                                 </label>
-                                <label className="space-y-2 text-sm">
+                                <ChoiceField className="space-y-2 text-sm">
                                   Gender
-                                  <select
+                                  <VisualSelect
                                     className={channelInput}
                                     value={form.genders?.[0] ?? ""}
                                     onChange={e =>
@@ -699,8 +704,8 @@ export function MetaCreateDialog({
                                     <option value="">All</option>
                                     <option value="1">Men</option>
                                     <option value="2">Women</option>
-                                  </select>
-                                </label>
+                                  </VisualSelect>
+                                </ChoiceField>
                               </div>
                             )}
                             {audiences.error ? (
@@ -780,7 +785,7 @@ export function MetaCreateDialog({
                           </section>
                           <section className="rounded-2xl border p-4 space-y-4">
                             <h3 className="font-semibold">Placements</h3>
-                            <select
+                            <VisualSelect
                               aria-label="Placements"
                               className={channelInput}
                               value={form.placements}
@@ -799,7 +804,7 @@ export function MetaCreateDialog({
                                 Advantage+ automatic placements
                               </option>
                               <option value="manual">Choose placements</option>
-                            </select>
+                            </VisualSelect>
                             {form.placements === "manual" && (
                               <div className="grid grid-cols-2 gap-3">
                                 {metaPlacementOptions.map(([id, label]) => (
@@ -838,9 +843,9 @@ export function MetaCreateDialog({
                               <h3 className="font-semibold">
                                 Conversion tracking
                               </h3>
-                              <label className="block space-y-2 text-sm">
+                              <ChoiceField className="block space-y-2 text-sm">
                                 Dataset / Meta Pixel
-                                <select
+                                <VisualSelect
                                   className={channelInput}
                                   value={form.pixelId ?? ""}
                                   onChange={e =>
@@ -855,17 +860,17 @@ export function MetaCreateDialog({
                                       {p.name || p.id}
                                     </option>
                                   ))}
-                                </select>
-                              </label>
+                                </VisualSelect>
+                              </ChoiceField>
                               {pixels.error && (
                                 <p role="alert" className="text-xs">
                                   {pixels.error.message}
                                 </p>
                               )}
                               <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="block space-y-2 text-sm">
+                                <ChoiceField className="block space-y-2 text-sm">
                                   Conversion event
-                                  <select
+                                  <VisualSelect
                                     className={channelInput}
                                     value={form.conversionEvent ?? "PURCHASE"}
                                     onChange={e =>
@@ -880,11 +885,11 @@ export function MetaCreateDialog({
                                         {v.toLowerCase().replaceAll("_", " ")}
                                       </option>
                                     ))}
-                                  </select>
-                                </label>
-                                <label className="block space-y-2 text-sm">
+                                  </VisualSelect>
+                                </ChoiceField>
+                                <ChoiceField className="block space-y-2 text-sm">
                                   Attribution
-                                  <select
+                                  <VisualSelect
                                     className={channelInput}
                                     value={form.attribution ?? ""}
                                     onChange={e =>
@@ -909,8 +914,8 @@ export function MetaCreateDialog({
                                     <option value="7d_click_1d_view">
                                       7-day click, 1-day view
                                     </option>
-                                  </select>
-                                </label>
+                                  </VisualSelect>
+                                </ChoiceField>
                               </div>
                             </section>
                           )}

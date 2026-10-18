@@ -364,6 +364,55 @@ try {
         report.error = `Expanded preview, first choice card and category rail must fit above the footer: ${JSON.stringify(layout)}`;
       }
     }
+    if (
+      item.width > 700 &&
+      [
+        "creative-editor",
+        "creative-video",
+        "insights-studio",
+        "optimization-studio",
+        "studio-ad-setup",
+      ].includes(item.page)
+    ) {
+      const sticky = await page("Runtime.evaluate", {
+        expression: `(async () => {
+          const root = document.querySelector('.cfg-root');
+          const rail = root?.querySelector('.journey-overview');
+          const nav = root?.querySelector('.journey-sections');
+          if (!rail || !nav) return {passed: false, error: 'Missing shared category rail'};
+          const scrolls = [];
+          for (let el = root; el; el = el.parentElement) {
+            if (el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)) scrolls.push(el);
+          }
+          if (!scrolls.length) scrolls.push(document.scrollingElement);
+          const positions = scrolls.map(el => el.scrollTop);
+          const before = rail.getBoundingClientRect().top;
+          scrolls.forEach(el => el.scrollTop = Math.min(el.scrollHeight - el.clientHeight, el.scrollTop + 460));
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const rect = rail.getBoundingClientRect(), navRect = nav.getBoundingClientRect();
+          const footer = root.querySelector('.cfg-bottom, .activation-footer')?.getBoundingClientRect();
+          const panel = rail.closest('.journey-panel').getBoundingClientRect();
+          const enoughRoom = panel.bottom - rect.height > navRect.bottom + 16;
+          const stuck = getComputedStyle(rail).position === 'sticky';
+          const offsets = Math.abs(parseFloat(getComputedStyle(root).getPropertyValue('--cfg-sections-height')) - navRect.height) < 1;
+          const clearHeader = !enoughRoom || rect.top >= navRect.bottom - 1;
+          const clearFooter = !footer || rect.bottom <= footer.top - 4;
+          const moved = scrolls.some((el, i) => el.scrollTop > positions[i] + 10);
+          const result = {passed: stuck && offsets && clearHeader && clearFooter, before, top: rect.top, bottom: rect.bottom, navBottom: navRect.bottom, footerTop: footer?.top, moved, enoughRoom};
+          scrolls.forEach((el, i) => el.scrollTop = positions[i]);
+          return result;
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      report.stickyNavigation = sticky.result.value;
+      if (!sticky.result.value?.passed) {
+        report.passed = false;
+        report.error =
+          "Sticky categories overlap navigation or footer: " +
+          JSON.stringify(sticky.result.value);
+      }
+    }
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
     const image = await page("Page.captureScreenshot", { format: "png" });
     await writeFile(

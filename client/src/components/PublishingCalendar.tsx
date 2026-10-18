@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { studioContentHref } from "@shared/contentWorkflow";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -119,7 +120,7 @@ export function ContentPlanEditor({ onClose }: { onClose: () => void }) {
             key={i}
             className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
           >
-            <select
+            <VisualSelect
               aria-label={"Day for slot " + (i + 1)}
               className={channelInput}
               value={slot.day}
@@ -136,7 +137,7 @@ export function ContentPlanEditor({ onClose }: { onClose: () => void }) {
                   {d}
                 </option>
               ))}
-            </select>
+            </VisualSelect>
             <input
               aria-label={"Time for slot " + (i + 1)}
               type="time"
@@ -330,9 +331,9 @@ export function PublishingCalendar({
   };
   return (
     <section className="min-w-0 space-y-5" aria-label="Publishing calendar">
-      <label className="block max-w-md text-sm">
+      <ChoiceField className="block max-w-md text-sm">
         Campaign plan
-        <select
+        <VisualSelect
           aria-label="Filter by campaign plan"
           className={channelInput + " mt-1"}
           value={campaignPlan}
@@ -344,8 +345,8 @@ export function PublishingCalendar({
               {p.name}
             </option>
           ))}
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto flex flex-wrap gap-2">
           {(["week", "month", "list"] as const).map(v => (
@@ -386,7 +387,7 @@ export function PublishingCalendar({
         </Button>
       </div>
       <div className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-3">
-        <select
+        <VisualSelect
           className={channelInput}
           aria-label="Publishing channel"
           value={channel}
@@ -396,8 +397,8 @@ export function PublishingCalendar({
           <option value="all">All channels</option>
           <option value="facebook">Facebook - organic</option>
           <option value="meta_ads">Meta Ads - paid</option>
-        </select>
-        <select
+        </VisualSelect>
+        <VisualSelect
           className={channelInput}
           aria-label="Publication status"
           value={status}
@@ -409,7 +410,7 @@ export function PublishingCalendar({
               {statusLabel(s)}
             </option>
           ))}
-        </select>
+        </VisualSelect>
         <input
           className={channelInput}
           aria-label="Search publications"
@@ -732,7 +733,7 @@ export function PublishingCalendar({
           <Label htmlFor="draft-page">
             Facebook Page (optional for drafts)
           </Label>
-          <select
+          <VisualSelect
             id="draft-page"
             className={channelInput}
             value={draftConnection}
@@ -746,7 +747,7 @@ export function PublishingCalendar({
                   {c.name}
                 </option>
               ))}
-          </select>
+          </VisualSelect>
           <p className="text-xs text-muted-foreground">
             Uses the configured AI service and may incur usage charges. Existing
             drafts are not replaced.

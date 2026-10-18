@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { presetRange } from "@shared/reportDates";
 import { useState } from "react";
@@ -231,7 +232,7 @@ function SocialMedia() {
               >
                 Facebook Page
               </label>
-              <select
+              <VisualSelect
                 id="social-page"
                 className={channelInput + " mt-2 max-w-md"}
                 value={connectionId}
@@ -242,7 +243,7 @@ function SocialMedia() {
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </VisualSelect>
               {connectionId && (
                 <FacebookPosts key={connectionId} connectionId={connectionId} />
               )}

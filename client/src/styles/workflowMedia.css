@@ -187,7 +187,7 @@
   font-weight: 600;
   font-size: 12px;
 }
-.wf-media .wf-media-content label {
+.wf-media .wf-media-content :is(label, .choice-field) {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -201,15 +201,15 @@
   height: 15px;
   accent-color: var(--wm-accent);
 }
-.wf-media-content label span {
+.wf-media-content :is(label, .choice-field) span {
   min-width: 0;
 }
-.wf-media-content label strong,
-.wf-media-content label small {
+.wf-media-content :is(label, .choice-field) strong,
+.wf-media-content :is(label, .choice-field) small {
   display: block;
   overflow-wrap: anywhere;
 }
-.wf-media-content label small {
+.wf-media-content :is(label, .choice-field) small {
   color: var(--wm-muted);
   margin-top: 3px;
   max-height: 70px;

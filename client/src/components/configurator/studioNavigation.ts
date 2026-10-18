@@ -59,9 +59,14 @@ export function useStudioNavigation() {
           document.querySelector(".evoke-toolbar")?.getBoundingClientRect()
             .height ?? 0,
         header: visible(".cfg-heading")?.getBoundingClientRect().height ?? 0,
-        sections: visible(".cfg-sections")?.getBoundingClientRect().height ?? 0,
+        sections:
+          visible(".cfg-sections, .journey-sections")?.getBoundingClientRect()
+            .height ?? 0,
         categories:
           visible(".cfg-categories")?.getBoundingClientRect().height ?? 0,
+        footer:
+          visible(".cfg-bottom, .activation-footer")?.getBoundingClientRect()
+            .height ?? 0,
       };
       Object.entries(heights).forEach(([name, height]) =>
         node.style.setProperty(`--cfg-${name}-height`, `${height}px`)
@@ -71,7 +76,9 @@ export function useStudioNavigation() {
     const watch = () => {
       resize.disconnect();
       node
-        .querySelectorAll(".cfg-heading, .cfg-sections, .cfg-categories")
+        .querySelectorAll(
+          ".cfg-heading, .cfg-sections, .journey-sections, .cfg-categories, .cfg-bottom, .activation-footer"
+        )
         .forEach(element => resize.observe(element));
       const toolbar = document.querySelector(".evoke-toolbar");
       if (toolbar) resize.observe(toolbar);

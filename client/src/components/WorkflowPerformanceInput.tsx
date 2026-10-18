@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { trpc } from "@/lib/trpc";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { parsePerformanceInput } from "@shared/workflowInputs";
@@ -28,9 +29,9 @@ export function WorkflowPerformanceInput({
       <legend className="px-1 text-sm font-medium">
         Required analysis inputs
       </legend>
-      <label className="block text-sm">
+      <ChoiceField className="block text-sm">
         Meta ad account *
-        <select
+        <VisualSelect
           aria-label="Meta ad account"
           className="mt-1 w-full"
           value={selected?.connectionId ?? ""}
@@ -67,8 +68,8 @@ export function WorkflowPerformanceInput({
               {c.name}
             </option>
           ))}
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       {connections.error && <p role="alert">{connections.error.message}</p>}
       {!connections.isLoading && !connections.error && !accounts.length && (
         <p>

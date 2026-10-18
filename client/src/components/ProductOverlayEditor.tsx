@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -210,9 +211,9 @@ function OverlayControls({
         )}
 
         {layers.length > 1 && (
-          <label className="block text-sm">
+          <ChoiceField className="block text-sm">
             Product layer
-            <select
+            <VisualSelect
               className="mt-1 w-full rounded border bg-background p-2"
               value={selected}
               onChange={e => setSelected(Number(e.target.value))}
@@ -222,8 +223,8 @@ function OverlayControls({
                   Product {i + 1}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
         )}
         {(["width", "left", "top"] as const).map(field => (
           <label key={field} className="block text-sm">

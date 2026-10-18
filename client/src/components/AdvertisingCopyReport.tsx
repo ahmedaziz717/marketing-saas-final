@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "./ui/button";
@@ -38,9 +39,9 @@ export function AdvertisingCopyReport({
         EvokeLoop. Tags are saved automatically.
       </p>
       <div className="flex flex-wrap items-end gap-3 text-sm">
-        <label>
+        <ChoiceField>
           Compare performance by
-          <select
+          <VisualSelect
             aria-label="Copy report objective"
             className="block rounded border bg-background p-2"
             value={objective}
@@ -48,8 +49,8 @@ export function AdvertisingCopyReport({
           >
             <option value="cpa">Purchase CPA</option>
             <option value="roas">Purchase ROAS</option>
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <label>
           Minimum impressions
           <input

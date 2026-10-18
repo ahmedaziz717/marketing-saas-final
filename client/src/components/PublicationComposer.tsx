@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { metaWebsiteCallToActions } from "@shared/metaCallToAction";
 import { scrollStudioChoices } from "./configurator/studioNavigation";
 import { ActivationComposerStudio } from "./activation/ActivationComposerStudio";
@@ -841,7 +842,7 @@ export function PublicationComposer({
                       <Label htmlFor={fieldId("pub-ad-platform")}>
                         Advertising channel
                       </Label>
-                      <select
+                      <VisualSelect
                         id={fieldId("pub-ad-platform")}
                         className={channelInput + " bg-card"}
                         value={connectedAccounts.length ? platform : ""}
@@ -855,7 +856,7 @@ export function PublicationComposer({
                         {!!connectedAccounts.length && (
                           <option value="meta_ads">Meta Ads</option>
                         )}
-                      </select>
+                      </VisualSelect>
                       <p className="mt-2 text-xs text-muted-foreground">
                         Choose from the advertising channels connected to this
                         workspace.
@@ -925,7 +926,7 @@ export function PublicationComposer({
                       </div>
                     ) : (
                       <>
-                        <select
+                        <VisualSelect
                           id={fieldId("pub-destination")}
                           className={channelInput}
                           value={connectionId}
@@ -960,7 +961,7 @@ export function PublicationComposer({
                                 : " (read only)"}
                             </option>
                           ))}
-                        </select>
+                        </VisualSelect>
                       </>
                     )}
                     {connections.error ? (
@@ -1150,7 +1151,7 @@ export function PublicationComposer({
                       </div>
                     )}
                     {channel === "meta_ads" && !studio && (
-                      <select
+                      <VisualSelect
                         aria-label="Ad format"
                         className={channelInput + " mb-3"}
                         value={
@@ -1176,7 +1177,7 @@ export function PublicationComposer({
                           Placement images · 1:1, 4:5, 9:16
                         </option>
                         <option value="carousel">Carousel · 2–10 images</option>
-                      </select>
+                      </VisualSelect>
                     )}
                     {!placement && (
                       <Button
@@ -1541,7 +1542,7 @@ export function PublicationComposer({
                         <Label htmlFor={fieldId("pub-cta")}>
                           Call to action
                         </Label>
-                        <select
+                        <VisualSelect
                           id={fieldId("pub-cta")}
                           className={channelInput}
                           value={content.callToAction}
@@ -1554,7 +1555,7 @@ export function PublicationComposer({
                               {option.label}
                             </option>
                           ))}
-                        </select>
+                        </VisualSelect>
                       </div>
                       {!multipleTextOptions && (
                         <div className="sm:col-span-2">

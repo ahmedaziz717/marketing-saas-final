@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
 import { studioContentHref } from "@shared/contentWorkflow";
 import {
@@ -395,7 +396,7 @@ export function AssetWorkbench({
               onChange={event => setSearch(event.target.value)}
               placeholder="Search names and headlines..."
             />
-            <select
+            <VisualSelect
               aria-label="Asset type"
               className="h-10 max-w-full rounded-xl border bg-background px-3 text-sm"
               value={type}
@@ -406,10 +407,10 @@ export function AssetWorkbench({
                   {item.label}
                 </option>
               ))}
-            </select>
+            </VisualSelect>
           </div>
           <div className="mb-5 flex flex-wrap gap-3">
-            <select
+            <VisualSelect
               aria-label="Channel size match"
               className="min-w-0 max-w-full rounded-xl border p-2"
               value={channelFilter}
@@ -421,8 +422,8 @@ export function AssetWorkbench({
                   {channel.label}
                 </option>
               ))}
-            </select>
-            <select
+            </VisualSelect>
+            <VisualSelect
               aria-label="Asset size"
               className="min-w-0 max-w-full rounded-xl border p-2"
               value={sizeFilter}
@@ -434,7 +435,7 @@ export function AssetWorkbench({
                   {assetFormatFilterLabel(f)}
                 </option>
               ))}
-            </select>
+            </VisualSelect>
           </div>
           {sizeFilter !== "all" && (
             <p className="mb-3 text-xs text-muted-foreground sm:hidden">

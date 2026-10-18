@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import PlatformAdminLayout from "@/components/PlatformAdminLayout";
@@ -321,9 +322,10 @@ function WebsiteAdministration() {
               <h3 className="font-semibold">
                 Update request from {selected.name}
               </h3>
-              <label className="block text-sm">
+              <ChoiceField className="block text-sm">
                 Status
-                <select
+                <VisualSelect
+                  density="compact"
                   className="mt-2 block w-full rounded-lg border bg-background p-2"
                   value={requestState}
                   onChange={e =>
@@ -335,8 +337,8 @@ function WebsiteAdministration() {
                       {s.replaceAll("_", " ")}
                     </option>
                   ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               <label className="block text-sm">
                 Internal outcome / next step
                 <Textarea

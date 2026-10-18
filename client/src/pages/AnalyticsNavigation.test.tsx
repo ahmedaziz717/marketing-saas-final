@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   act,
   cleanup,
@@ -76,8 +77,8 @@ it("overall view exposes channel/account filters without duplicating section nav
     screen.getByRole("heading", { name: "Analytics overview" })
   ).toBeTruthy();
   expect(screen.getByLabelText("Analytics channel")).toBeTruthy();
-  expect(screen.getByRole("option", { name: /Test Page/ })).toBeTruthy();
-  expect(screen.getByRole("option", { name: /Test Ads/ })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /Test Page/ })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /Test Ads/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Advertising" })).toBeNull();
   expect(requests.current.map(q => q.queryKey[2])).toEqual(["page1", "ads1"]);
 });
@@ -86,7 +87,7 @@ it("advertising view requests only ad accounts and ignores incompatible saved se
   expect(
     screen.getByRole("heading", { name: "Advertising analytics" })
   ).toBeTruthy();
-  expect(screen.queryByRole("option", { name: /Test Page/ })).toBeNull();
+  expect(screen.queryByRole("radio", { name: /Test Page/ })).toBeNull();
   expect(requests.current.map(q => q.queryKey[2])).toEqual(["ads1"]);
 });
 it("responds to route changes and history navigation instead of keeping a stale initial tab", () => {
@@ -104,7 +105,7 @@ it("responds to route changes and history navigation instead of keeping a stale 
 });
 it("channel filtering resets account and updates the shareable URL", () => {
   const router = setup("/app/analytics?account=ads1");
-  fireEvent.change(screen.getByLabelText("Analytics channel"), {
+  changeField(screen.getByLabelText("Analytics channel"), {
     target: { value: "facebook" },
   });
   expect(router.history?.at(-1)).toBe("/app/analytics?channel=facebook");
@@ -121,7 +122,7 @@ it("restores date/compare from URL and applies changed dates explicitly", () => 
     (screen.getByLabelText("Compare previous period") as HTMLInputElement)
       .checked
   ).toBe(true);
-  fireEvent.change(screen.getByLabelText("Analytics start date"), {
+  changeField(screen.getByLabelText("Analytics start date"), {
     target: { value: "2026-09-05" },
   });
   expect(requests.current[0].queryKey[3].since).toBe("2026-09-01");

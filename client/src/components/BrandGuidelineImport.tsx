@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 import {
@@ -137,9 +138,9 @@ export function BrandGuidelineImport({
             disabled={disabled}
             onChange={e => setDraft({ ...draft, text: e.target.value })}
           />
-          <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <ChoiceField className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             Apply text
-            <select
+            <VisualSelect
               aria-label="How to apply PDF text"
               className="rounded-md border bg-background p-2"
               value={mode}
@@ -148,8 +149,8 @@ export function BrandGuidelineImport({
             >
               <option value="append">Add to current brand voice</option>
               <option value="replace">Replace current brand voice</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <p
             className={`mt-2 text-xs ${over ? "text-destructive" : "text-muted-foreground"}`}
             role={over ? "alert" : undefined}

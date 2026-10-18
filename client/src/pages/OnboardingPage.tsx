@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { BusinessProfileForm } from "@/components/BusinessProfileForm";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -14,13 +15,6 @@ import { WebsiteImportWizard } from "@/components/WebsiteImportWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 
 export default function OnboardingPage() {
@@ -187,22 +181,18 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <Label>Role</Label>
-                  <Select
+                  <VisualSelect
+                    aria-label="Teammate role"
                     value={inviteRole}
                     onValueChange={value =>
                       setInviteRole(value as typeof inviteRole)
                     }
                   >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="creator">Creator</SelectItem>
-                      <SelectItem value="reviewer">Reviewer</SelectItem>
-                      <SelectItem value="publisher">Publisher</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="admin">Admin</option>
+                    <option value="creator">Creator</option>
+                    <option value="reviewer">Reviewer</option>
+                    <option value="publisher">Publisher</option>
+                  </VisualSelect>
                 </div>
               </div>
               <div className="mt-7 flex flex-wrap gap-3">

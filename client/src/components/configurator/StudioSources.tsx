@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Link } from "wouter";
 import {
@@ -300,9 +301,9 @@ export function StudioSources({
       {tab === "catalog" && (
         <>
           {isImage && (
-            <label className="cfg-field">
+            <ChoiceField className="cfg-field">
               <span>Product arrangement</span>
-              <select
+              <VisualSelect
                 value={image.productMode}
                 onChange={e => {
                   if (
@@ -319,8 +320,8 @@ export function StudioSources({
               >
                 <option value="separate">One creative set per product</option>
                 <option value="together">Combine up to three products</option>
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
           )}
           <div className="cfg-card-grid">
             {isImage
@@ -581,9 +582,9 @@ export function StudioSources({
                   ? "Business promotion selected"
                   : "Use business promotion"}
               </button>
-              <label className="cfg-field">
+              <ChoiceField className="cfg-field">
                 <span>Promotion type</span>
-                <select
+                <VisualSelect
                   value={image.promotion?.kind ?? "platform"}
                   onChange={e =>
                     updateImage({
@@ -605,8 +606,8 @@ export function StudioSources({
                       {p.name}
                     </option>
                   ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               <label className="cfg-field">
                 <span>Offering name</span>
                 <input

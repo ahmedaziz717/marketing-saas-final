@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { offeringTypes, offeringLabels } from "@shared/businessProfile";
 import { useState } from "react";
 import { catalogEntrySchema, type CatalogEntry } from "@shared/catalog";
@@ -79,7 +80,7 @@ export function CatalogEntryForm({
       }}
     >
       <Label htmlFor="entry-type">What are you offering?</Label>
-      <select
+      <VisualSelect
         id="entry-type"
         className="w-full rounded-lg border p-3"
         value={
@@ -122,7 +123,7 @@ export function CatalogEntryForm({
             {offeringLabels[type]}
           </option>
         ))}
-      </select>
+      </VisualSelect>
       <div className="grid gap-4 sm:grid-cols-2">
         {field("name", "Name")}
         {field("category", "Category")}
@@ -196,7 +197,7 @@ export function CatalogEntryForm({
                     ? "Pricing model"
                     : "Delivery"}
               </Label>
-              <select
+              <VisualSelect
                 id={"service-" + key}
                 className="w-full rounded-lg border p-2"
                 value={entry.serviceDetails![key]}
@@ -220,7 +221,7 @@ export function CatalogEntryForm({
                     {v.replaceAll("_", " ")}
                   </option>
                 ))}
-              </select>
+              </VisualSelect>
             </div>
           ))}
           {(["duration", "area", "packages"] as const).map(key => (

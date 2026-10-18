@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -55,17 +56,17 @@ it("asks for a connected ad account, carries preset and custom dates, and shows 
     );
   }
   render(<Harness />);
-  expect(screen.queryByRole("option", { name: "Organic Page" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "Organic Page" })).toBeNull();
   expect(
-    screen.queryByRole("option", { name: "Disconnected account" })
+    screen.queryByRole("radio", { name: "Disconnected account" })
   ).toBeNull();
-  fireEvent.change(screen.getByLabelText("Meta ad account"), {
+  changeField(screen.getByLabelText("Meta ad account"), {
     target: { value: cid },
   });
   expect(
     screen.getByText(/Preset dates use America\/Los_Angeles/)
   ).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Date range"), {
+  changeField(screen.getByRole("radiogroup", { name: "Date range" }), {
     target: { value: "7" },
   });
   let selected = JSON.parse(screen.getByTestId("value").textContent!);
@@ -73,13 +74,13 @@ it("asks for a connected ad account, carries preset and custom dates, and shows 
   expect(
     Date.parse(selected.range.until) - Date.parse(selected.range.since)
   ).toBe(6 * 86400000);
-  fireEvent.change(screen.getByLabelText("Date range"), {
+  changeField(screen.getByRole("radiogroup", { name: "Date range" }), {
     target: { value: "custom" },
   });
-  fireEvent.change(screen.getByLabelText("Date range start date"), {
+  changeField(screen.getByLabelText("Date range start date"), {
     target: { value: "2026-09-01" },
   });
-  fireEvent.change(screen.getByLabelText("Date range end date"), {
+  changeField(screen.getByLabelText("Date range end date"), {
     target: { value: "2026-09-30" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Apply date range" }));

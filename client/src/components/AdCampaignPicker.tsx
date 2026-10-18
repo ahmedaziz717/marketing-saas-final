@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Plus, RefreshCw, FolderTree } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -76,12 +77,17 @@ export function AdCampaignPicker({
       <option
         key={row.id}
         value={String(row.id)}
+        data-description={
+          (["ARCHIVED", "DELETED"].includes(row.status ?? "")
+            ? "Unavailable · "
+            : "") +
+          (row.effective_status || row.status || "Status unknown")
+            .toLowerCase()
+            .replaceAll("_", " ")
+        }
         disabled={["ARCHIVED", "DELETED"].includes(row.status ?? "")}
       >
-        {row.name} ·{" "}
-        {(row.effective_status || row.status || "unknown")
-          .toLowerCase()
-          .replaceAll("_", " ")}
+        {row.name}
         {String(row.id) === id && !rows.some(a => String(a.id) === id)
           ? " (selected)"
           : ""}
@@ -112,7 +118,7 @@ export function AdCampaignPicker({
           <RefreshCw size={14} /> Refresh
         </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
+      <div className="grid gap-3 sm:grid-cols-[minmax(180px,1fr)_minmax(280px,1fr)]">
         <label className="space-y-2 text-xs text-muted-foreground">
           Find a campaign or ad set
           <input
@@ -122,9 +128,10 @@ export function AdCampaignPicker({
             onChange={e => setSearch(e.target.value)}
           />
         </label>
-        <label className="space-y-2 text-xs text-muted-foreground">
+        <ChoiceField className="space-y-2 text-xs text-muted-foreground">
           Show
-          <select
+          <VisualSelect
+            density="compact"
             aria-label="Campaign and ad set status"
             className={channelInput}
             value={status}
@@ -133,8 +140,8 @@ export function AdCampaignPicker({
             <option value="active">Active</option>
             <option value="paused">Paused</option>
             <option value="all">All statuses</option>
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,7 +159,8 @@ export function AdCampaignPicker({
             </Button>
           )}
         </div>
-        <select
+        <VisualSelect
+          visual="campaign"
           id="pub-meta-campaign"
           className={channelInput}
           value={campaignId}
@@ -163,7 +171,7 @@ export function AdCampaignPicker({
             {objects.isLoading ? "Loading campaigns…" : "Select a campaign"}
           </option>
           {options(campaigns ?? [], parent, campaignId)}
-        </select>
+        </VisualSelect>
         {!objects.isLoading &&
           !objects.error &&
           !campaigns?.filter(matches).length && (
@@ -194,7 +202,8 @@ export function AdCampaignPicker({
             </Button>
           )}
         </div>
-        <select
+        <VisualSelect
+          visual="ad set"
           id="pub-adset"
           className={channelInput}
           value={adSetId}
@@ -209,7 +218,7 @@ export function AdCampaignPicker({
             selectedAdSet,
             adSetId
           )}
-        </select>
+        </VisualSelect>
         {campaignId &&
           !objects.isLoading &&
           !objects.error &&

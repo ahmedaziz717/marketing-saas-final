@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { Button } from "./ui/button";
 import { FlaskConical } from "lucide-react";
 import { optimizerLibrary } from "@shared/optimizerLibrary";
@@ -68,9 +69,9 @@ export function OptimizationExperiments({
                 onChange={e => edit(p.id, { title: e.target.value })}
               />
             </label>
-            <label className="insight-label">
+            <ChoiceField className="insight-label">
               Plan status
-              <select
+              <VisualSelect
                 aria-label={`Experiment ${i + 1} status`}
                 value={p.status}
                 onChange={e =>
@@ -83,8 +84,8 @@ export function OptimizationExperiments({
                 <option value="ready">Ready for review</option>
                 <option value="in_progress">In progress externally</option>
                 <option value="concluded">Concluded</option>
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             <label className="insight-label insight-full">
               Hypothesis
               <textarea
@@ -115,9 +116,9 @@ export function OptimizationExperiments({
                 onChange={e => edit(p.id, { variant: e.target.value })}
               />
             </label>
-            <label className="insight-label">
+            <ChoiceField className="insight-label">
               Primary metric
-              <select
+              <VisualSelect
                 value={p.metric}
                 onChange={e =>
                   edit(p.id, {
@@ -135,8 +136,8 @@ export function OptimizationExperiments({
                     {label}
                   </option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             <label className="insight-label">
               Planned duration (days)
               <input
@@ -169,9 +170,9 @@ export function OptimizationExperiments({
                 onChange={e => edit(p.id, { outcome: e.target.value })}
               />
             </label>
-            <label className="insight-label">
+            <ChoiceField className="insight-label">
               Recorded decision
-              <select
+              <VisualSelect
                 value={p.decision}
                 onChange={e =>
                   edit(p.id, {
@@ -185,8 +186,8 @@ export function OptimizationExperiments({
                 <option value="adopt_variant">
                   Recommend adopting variant
                 </option>
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
           </div>
           {p.source ? (
             <Button variant="link" onClick={() => onSource(p.source!.runId)}>

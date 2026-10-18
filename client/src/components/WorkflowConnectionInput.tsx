@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { trpc } from "@/lib/trpc";
 
 export function WorkflowConnectionInput({
@@ -33,7 +34,8 @@ export function WorkflowConnectionInput({
     );
   return (
     <div className="space-y-2">
-      <select
+      <VisualSelect
+        visual={channel === "facebook" ? "facebook" : "meta"}
         aria-label={title}
         value={value}
         disabled={disabled || query.isLoading}
@@ -54,7 +56,7 @@ export function WorkflowConnectionInput({
             {c.name}
           </option>
         ))}
-      </select>
+      </VisualSelect>
       {query.error && <p role="alert">{query.error.message}</p>}
       {!query.isLoading && !query.error && !items.length && (
         <p>

@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { withWorkflowMediaFields } from "@shared/workflowMedia";
 import { WorkflowInputControl } from "@/components/WorkflowInputControl";
 import { fieldValueProblem } from "@shared/workflowInputs";
@@ -720,7 +721,7 @@ function WorkflowEditor({
             </Button>
           )}
           {!!runs.length && (
-            <select
+            <VisualSelect
               aria-label="Run history"
               value={shown?.id ?? ""}
               onChange={e => setSelectedRun(e.target.value)}
@@ -735,7 +736,7 @@ function WorkflowEditor({
                   })}
                 </option>
               ))}
-            </select>
+            </VisualSelect>
           )}
         </div>
       </footer>

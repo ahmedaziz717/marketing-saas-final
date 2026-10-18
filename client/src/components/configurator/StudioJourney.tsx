@@ -297,20 +297,25 @@ export function StudioJourney({
         })}
       </nav>
       <div className="journey-mobile-section" hidden={!j.mobile || j.focused}>
-        <label>
-          <span className="sr-only">{label}</span>
-          <select
-            value={j.section}
-            onChange={event => j.navigate(event.target.value)}
-          >
-            {j.sections.map((item, index) => (
-              <option key={item.id} value={item.id}>
-                {String(index + 1).padStart(2, "0")} · {item.title}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={18} aria-hidden="true" />
-        </label>
+        <nav className="journey-mobile-steps" aria-label={label}>
+          {j.sections.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                aria-current={j.section === item.id ? "step" : undefined}
+                onClick={() => j.navigate(item.id)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>
+                  <small>{String(index + 1).padStart(2, "0")}</small>
+                  <strong>{item.title}</strong>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
         <div>
           <span>
             Step {j.sectionIndex + 1} of {j.sections.length}

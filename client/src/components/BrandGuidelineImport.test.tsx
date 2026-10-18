@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   cleanup,
   fireEvent,
@@ -25,7 +26,7 @@ beforeEach(() => {
   });
 });
 async function upload() {
-  fireEvent.change(screen.getByLabelText("Brand guidelines PDF"), {
+  changeField(screen.getByLabelText("Brand guidelines PDF"), {
     target: {
       files: [
         new File(["%PDF-1.7"], "guidelines.pdf", { type: "application/pdf" }),
@@ -52,7 +53,7 @@ it("extracts into an editable preview and applies only after explicit review", a
       name: "guidelines.pdf",
     })
   );
-  fireEvent.change(screen.getByLabelText("Extracted brand guidelines"), {
+  changeField(screen.getByLabelText("Extracted brand guidelines"), {
     target: { value: "Reviewed voice." },
   });
   fireEvent.click(screen.getByRole("button", { name: "Use reviewed text" }));
@@ -76,7 +77,7 @@ it("lets the user replace instead of append and blocks oversized results", async
     ).disabled
   ).toBe(true);
   expect(screen.getByRole("alert").textContent).toContain("Shorten");
-  fireEvent.change(screen.getByLabelText("How to apply PDF text"), {
+  changeField(screen.getByLabelText("How to apply PDF text"), {
     target: { value: "replace" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Use reviewed text" }));
@@ -91,7 +92,7 @@ it("discards imports and reports extraction failures without touching brand voic
   fireEvent.click(screen.getByRole("button", { name: "Discard" }));
   expect(screen.queryByLabelText("Extracted brand guidelines")).toBeNull();
   api.extract.mockRejectedValue(new Error("This PDF is password protected."));
-  fireEvent.change(screen.getByLabelText("Brand guidelines PDF"), {
+  changeField(screen.getByLabelText("Brand guidelines PDF"), {
     target: {
       files: [new File(["%PDF"], "locked.pdf", { type: "application/pdf" })],
     },

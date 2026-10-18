@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -153,9 +154,9 @@ function ApiCatalogForm({
           autoComplete="off"
         />
       </label>
-      <label className="block text-sm">
+      <ChoiceField className="block text-sm">
         Authentication
-        <select
+        <VisualSelect
           className="mt-1 w-full rounded border bg-background p-2"
           value={config.auth.type}
           onChange={e => {
@@ -177,8 +178,8 @@ function ApiCatalogForm({
           <option value="basic">Username and password</option>
           <option value="bearer">Bearer token</option>
           <option value="header">API key header</option>
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       {config.auth.type === "basic" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">

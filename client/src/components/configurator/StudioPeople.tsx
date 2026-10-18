@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Link } from "wouter";
@@ -120,9 +121,10 @@ export function StudioPeople({
         }}
       />
       <div className="cfg-people-filters">
-        <label>
+        <ChoiceField>
           Collection
-          <select
+          <VisualSelect
+            density="compact"
             value={source}
             onChange={e => {
               setSource(e.target.value);
@@ -131,11 +133,12 @@ export function StudioPeople({
           >
             <option value="library">Studio models</option>
             <option value="saved">My saved people</option>
-          </select>
-        </label>
-        <label>
+          </VisualSelect>
+        </ChoiceField>
+        <ChoiceField>
           Age group
-          <select
+          <VisualSelect
+            density="compact"
             value={age}
             onChange={e => {
               setAge(e.target.value);
@@ -148,11 +151,12 @@ export function StudioPeople({
                 {a.label}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
+          </VisualSelect>
+        </ChoiceField>
+        <ChoiceField>
           Hair color
-          <select
+          <VisualSelect
+            density="compact"
             value={hair}
             onChange={e => {
               setHair(e.target.value);
@@ -165,8 +169,8 @@ export function StudioPeople({
                 {h.label}
               </option>
             ))}
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <label>
           Find a person
           <input

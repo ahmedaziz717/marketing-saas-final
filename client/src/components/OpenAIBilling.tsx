@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -75,9 +76,10 @@ export function OpenAIBilling({ range }: { range: DateRange }) {
       {costs.isLoading && <p role="status">Retrieving billing costs…</p>}
       {data && (
         <>
-          <label className="block max-w-xl text-sm">
+          <ChoiceField className="block max-w-xl text-sm">
             OpenAI project
-            <select
+            <VisualSelect
+              density="compact"
               className="mt-1 w-full rounded-xl border bg-background px-3 py-2"
               value={selected}
               onChange={e => setProject(e.target.value)}
@@ -88,8 +90,8 @@ export function OpenAIBilling({ range }: { range: DateRange }) {
                   {id}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <p className="my-3 text-3xl font-semibold">
             {money(rows.reduce((s, r) => s + r.amountUsd, 0))}
           </p>

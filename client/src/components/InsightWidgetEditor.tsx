@@ -1,3 +1,5 @@
+import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useId, useState, type CSSProperties } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,7 +61,10 @@ export function ReportComponentPicker({
           ["details", "Detail tables", "Campaign or post breakdowns"],
         ] as const
       ).map(([key, label, detail]) => (
-        <label key={key}>
+        <label key={key} className="choice-radio-card">
+          <span className="choice-radio-art">
+            <ChoiceVisual label={label} context="Report component" />
+          </span>
           <input
             type="checkbox"
             checked={components.includes(key)}
@@ -244,9 +249,9 @@ export function InsightWidgetEditor({
                 <RotateCcw size={13} />
                 Use automatic title
               </button>
-              <label className="insight-label">
+              <ChoiceField className="insight-label">
                 Widget type
-                <select
+                <VisualSelect
                   aria-label="Widget type"
                   value={draft.kind}
                   onChange={e =>
@@ -256,8 +261,8 @@ export function InsightWidgetEditor({
                   <option value="report">Report components</option>
                   <option value="kpi">Key metric</option>
                   <option value="trend">Trend chart</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               {draft.kind === "report" ? (
                 <>
                   <ReportComponentPicker
@@ -267,7 +272,13 @@ export function InsightWidgetEditor({
                   <fieldset className="insight-widget-metrics">
                     <legend>Metrics to include</legend>
                     {metricChoices.map(m => (
-                      <label key={m}>
+                      <label key={m} className="choice-radio-card">
+                        <span className="choice-radio-art">
+                          <ChoiceVisual
+                            label={insightMetrics[m].label}
+                            context="Metric"
+                          />
+                        </span>
                         <input
                           type="checkbox"
                           checked={setup.metrics.includes(m)}
@@ -288,9 +299,9 @@ export function InsightWidgetEditor({
                     ))}
                   </fieldset>
                   {(draft.components ?? []).includes("trends") && (
-                    <label className="insight-label">
+                    <ChoiceField className="insight-label">
                       Chart metric
-                      <select
+                      <VisualSelect
                         aria-label="Chart metric"
                         value={setup.chartMetric}
                         onChange={e =>
@@ -304,15 +315,15 @@ export function InsightWidgetEditor({
                             {insightMetrics[m].label}
                           </option>
                         ))}
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                   )}
                 </>
               ) : (
                 <>
-                  <label className="insight-label">
+                  <ChoiceField className="insight-label">
                     Account / Page
-                    <select
+                    <VisualSelect
                       aria-label="Account / Page"
                       value={draft.connectionId ?? ""}
                       onChange={e => {
@@ -332,11 +343,11 @@ export function InsightWidgetEditor({
                           {a.name}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="insight-label">
+                    </VisualSelect>
+                  </ChoiceField>
+                  <ChoiceField className="insight-label">
                     Metric
-                    <select
+                    <VisualSelect
                       aria-label="Metric"
                       value={draft.metric}
                       onChange={e =>
@@ -348,8 +359,8 @@ export function InsightWidgetEditor({
                           {insightMetrics[m].label}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 </>
               )}
             </>
@@ -357,9 +368,9 @@ export function InsightWidgetEditor({
           {tab === "dates" && (
             <>
               <div className="insight-form-grid">
-                <label className="insight-label">
+                <ChoiceField className="insight-label">
                   Reporting period
-                  <select
+                  <VisualSelect
                     aria-label="Reporting period"
                     value={setup.period}
                     onChange={e =>
@@ -380,8 +391,8 @@ export function InsightWidgetEditor({
                         {label}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 {setup.period === "days" && (
                   <label className="insight-label">
                     Number of days
@@ -476,9 +487,9 @@ export function InsightWidgetEditor({
               </label>
               {setup.schedule.enabled && (
                 <div className="insight-form-grid">
-                  <label className="insight-label">
+                  <ChoiceField className="insight-label">
                     Frequency
-                    <select
+                    <VisualSelect
                       aria-label="Frequency"
                       value={setup.schedule.frequency}
                       onChange={e =>
@@ -494,12 +505,12 @@ export function InsightWidgetEditor({
                       <option value="daily">Daily</option>
                       <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                   {setup.schedule.frequency === "weekly" && (
-                    <label className="insight-label">
+                    <ChoiceField className="insight-label">
                       Day of week
-                      <select
+                      <VisualSelect
                         aria-label="Day of week"
                         value={setup.schedule.weekday}
                         onChange={e =>
@@ -524,8 +535,8 @@ export function InsightWidgetEditor({
                             {d}
                           </option>
                         ))}
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                   )}
                   {setup.schedule.frequency === "monthly" && (
                     <label className="insight-label">
@@ -572,9 +583,9 @@ export function InsightWidgetEditor({
           {tab === "appearance" && (
             <>
               <div className="insight-form-grid">
-                <label className="insight-label">
+                <ChoiceField className="insight-label">
                   Width
-                  <select
+                  <VisualSelect
                     aria-label="Width"
                     value={draft.size}
                     onChange={e =>
@@ -587,11 +598,11 @@ export function InsightWidgetEditor({
                     <option value="half">Half width</option>
                     <option value="medium">Two thirds</option>
                     <option value="wide">Full width</option>
-                  </select>
-                </label>
-                <label className="insight-label">
+                  </VisualSelect>
+                </ChoiceField>
+                <ChoiceField className="insight-label">
                   Height
-                  <select
+                  <VisualSelect
                     aria-label="Height"
                     value={draft.height}
                     onChange={e =>
@@ -603,8 +614,8 @@ export function InsightWidgetEditor({
                     <option value="compact">Compact · 1 unit</option>
                     <option value="standard">Standard · 2 units</option>
                     <option value="tall">Tall · 3 units</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
               </div>
               <p className="insight-caption">
                 Two compact tiles align with one standard tile; three align with

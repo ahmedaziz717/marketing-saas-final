@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { WorkflowDataResult } from "./WorkflowDataResult";
 import { CopyComparisonSettings } from "./CopyComparisonSettings";
 import {
@@ -948,9 +949,9 @@ export function WorkflowCanvas({
               </div>
             ) : (
               <>
-                <label className="wf-palette-filter">
+                <ChoiceField className="wf-palette-filter">
                   Capabilities
-                  <select
+                  <VisualSelect
                     aria-label="Node section"
                     value={paletteFamily}
                     onChange={e =>
@@ -963,8 +964,8 @@ export function WorkflowCanvas({
                       </option>
                     ))}
                     <option value="all">All sections</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 {Array.from(
                   new Set(Object.values(workflowNodes).map(m => m.group))
                 ).map(group => (
@@ -1114,9 +1115,9 @@ export function WorkflowCanvas({
               )}
               {selectedNode.type === "meta_performance" && (
                 <>
-                  <label>
+                  <ChoiceField>
                     Performance to fetch
-                    <select
+                    <VisualSelect
                       value={
                         selectedNode.config.metaPerformance?.includeHourly ===
                         false
@@ -1133,8 +1134,8 @@ export function WorkflowCanvas({
                     >
                       <option value="both">Daily + hourly (default)</option>
                       <option value="daily">Daily only</option>
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                   <p className="wf-setting-help">
                     Account and dates come from the connected field. Daily
                     totals are always fetched so hourly conversions can be
@@ -1243,9 +1244,9 @@ export function WorkflowCanvas({
                   {(!selectedNode.config.modelId ||
                     selectedNode.config.modelId.startsWith("openai:")) && (
                     <div className="wf-settings-row">
-                      <label>
+                      <ChoiceField>
                         Aspect ratio
-                        <select
+                        <VisualSelect
                           value={selectedNode.config.ratio}
                           onChange={e =>
                             config({
@@ -1260,12 +1261,12 @@ export function WorkflowCanvas({
                           ).map(r => (
                             <option key={r}>{r}</option>
                           ))}
-                        </select>
-                      </label>
+                        </VisualSelect>
+                      </ChoiceField>
                       {selectedNode.type === "generate_video" && (
-                        <label>
+                        <ChoiceField>
                           Resolution
-                          <select
+                          <VisualSelect
                             value={selectedNode.config.resolution}
                             onChange={e =>
                               config({
@@ -1277,8 +1278,8 @@ export function WorkflowCanvas({
                             {["480p", "720p", "1080p"].map(r => (
                               <option key={r}>{r}</option>
                             ))}
-                          </select>
-                        </label>
+                          </VisualSelect>
+                        </ChoiceField>
                       )}
                     </div>
                   )}
@@ -1374,9 +1375,9 @@ export function WorkflowCanvas({
                             })
                           }
                         />
-                        <label>
+                        <ChoiceField>
                           Mood
-                          <select
+                          <VisualSelect
                             value={selectedNode.config.direction.mood}
                             onChange={e =>
                               config({
@@ -1393,11 +1394,11 @@ export function WorkflowCanvas({
                                 {o.name}
                               </option>
                             ))}
-                          </select>
-                        </label>
-                        <label>
+                          </VisualSelect>
+                        </ChoiceField>
+                        <ChoiceField>
                           Style
-                          <select
+                          <VisualSelect
                             value={selectedNode.config.direction.artStyle}
                             onChange={e =>
                               config({
@@ -1414,8 +1415,8 @@ export function WorkflowCanvas({
                                 {o.name}
                               </option>
                             ))}
-                          </select>
-                        </label>
+                          </VisualSelect>
+                        </ChoiceField>
                       </>
                     )}
                   </details>

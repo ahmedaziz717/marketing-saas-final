@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useId } from "react";
 
 export function CreativeDirectionSelect<T extends string>({
@@ -20,7 +21,7 @@ export function CreativeDirectionSelect<T extends string>({
       <label htmlFor={id} className="mb-2 block text-sm font-medium">
         {label}
       </label>
-      <select
+      <VisualSelect
         id={id}
         value={value}
         disabled={disabled}
@@ -33,7 +34,7 @@ export function CreativeDirectionSelect<T extends string>({
             {option.name}
           </option>
         ))}
-      </select>
+      </VisualSelect>
       <p
         id={id + "-hint"}
         className="mt-2 text-xs leading-5 text-muted-foreground"

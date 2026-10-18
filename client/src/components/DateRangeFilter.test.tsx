@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField, allChoiceLabels } from "@/test/choiceControls";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DateRangeFilter } from "./DateRangeFilter";
@@ -16,7 +17,9 @@ it("orders shared presets and applies calendar presets immediately", () => {
       onChange={change}
     />
   );
-  expect(screen.getAllByRole("option").map(x => x.textContent)).toEqual([
+  expect(
+    allChoiceLabels(screen.getByRole("radiogroup", { name: "Date range" }))
+  ).toEqual([
     "Today",
     "Yesterday",
     "Last 7 days",
@@ -30,7 +33,7 @@ it("orders shared presets and applies calendar presets immediately", () => {
     "Last 365 days",
     "Custom date range",
   ]);
-  fireEvent.change(screen.getByLabelText("Date range"), {
+  changeField(screen.getByRole("radiogroup", { name: "Date range" }), {
     target: { value: "last_month" },
   });
   expect(change).toHaveBeenLastCalledWith({
@@ -46,14 +49,14 @@ it("keeps custom drafts unapplied and rejects invalid or overlong ranges inline"
       onChange={change}
     />
   );
-  fireEvent.change(screen.getByLabelText("Date range start date"), {
+  changeField(screen.getByLabelText("Date range start date"), {
     target: { value: "2025-01-01" },
   });
   expect(change).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText("Apply date range"));
   expect(screen.getByRole("alert").textContent).toContain("366 days");
   expect(change).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Date range start date"), {
+  changeField(screen.getByLabelText("Date range start date"), {
     target: { value: "2026-09-05" },
   });
   fireEvent.click(screen.getByText("Apply date range"));

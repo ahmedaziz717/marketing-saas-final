@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import {
@@ -71,7 +72,8 @@ export function ApprovedAssetPicker({
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <select
+          <VisualSelect
+            density="compact"
             aria-label="Asset dimensions"
             className={channelInput + " min-w-0 max-w-full"}
             value={format}
@@ -83,7 +85,7 @@ export function ApprovedAssetPicker({
                 {assetFormatFilterLabel(f)}
               </option>
             ))}
-          </select>
+          </VisualSelect>
         </div>
         {format !== "all" && (
           <p className="text-xs text-muted-foreground sm:hidden">

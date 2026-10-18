@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
@@ -111,8 +112,8 @@ it("keeps rollout and read-only roles gated and lists only connected ad accounts
   state.enabled = true;
   state.role = "viewer";
   view.rerender(<Page />);
-  expect(screen.queryByRole("option", { name: "Social Page" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("Connected Meta ad account"), {
+  expect(screen.queryByRole("radio", { name: "Social Page" })).toBeNull();
+  changeField(screen.getByLabelText("Connected Meta ad account"), {
     target: { value: "meta" },
   });
   expect(
@@ -132,15 +133,15 @@ it("keeps rollout and read-only roles gated and lists only connected ad accounts
 });
 it("keeps unavailable metrics explicit, combines filters, exports the selected query and clears incompatible grains", () => {
   render(<Page />);
-  fireEvent.change(screen.getByLabelText("Connected Meta ad account"), {
+  changeField(screen.getByLabelText("Connected Meta ad account"), {
     target: { value: "meta" },
   });
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
   expect(screen.getByText(/Partial evidence/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Add dimension"), {
+  changeField(screen.getByLabelText("Add dimension"), {
     target: { value: "theme" },
   });
-  fireEvent.change(screen.getByLabelText("Filter values"), {
+  changeField(screen.getByLabelText("Filter values"), {
     target: { value: "direct,educational" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
@@ -150,13 +151,13 @@ it("keeps unavailable metrics explicit, combines filters, exports the selected q
   ]);
   fireEvent.click(screen.getByRole("button", { name: "Export report CSV" }));
   expect(state.export).toHaveBeenCalledWith(state.request);
-  fireEvent.change(screen.getByLabelText("Granularity"), {
+  changeField(screen.getByRole("radiogroup", { name: "Granularity" }), {
     target: { value: "hourly" },
   });
-  fireEvent.change(screen.getByLabelText("Add dimension"), {
+  changeField(screen.getByLabelText("Add dimension"), {
     target: { value: "hour" },
   });
-  fireEvent.change(screen.getByLabelText("Granularity"), {
+  changeField(screen.getByRole("radiogroup", { name: "Granularity" }), {
     target: { value: "daily" },
   });
   expect(state.request.query.dimensions).not.toContain("hour");

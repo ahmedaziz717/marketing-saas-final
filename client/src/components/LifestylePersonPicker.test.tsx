@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
 import {
   cleanup,
@@ -84,14 +85,15 @@ it("preserves a legacy single model, allows more people, and applies only on con
       .getAttribute("aria-pressed")
   ).toBe("true");
   expect(
-    (modal.getByRole("combobox", { name: "Gender" }) as HTMLSelectElement)
-      .disabled
+    modal
+      .getByRole("radiogroup", { name: "Gender" })
+      .getAttribute("aria-disabled") === "true"
   ).toBe(false);
   fireEvent.click(modal.getByRole("button", { name: "Woman · Black 2" }));
   expect(modal.getByText("2 / 4 selected")).toBeTruthy();
   expect(stored().people).toBeUndefined();
   expect(stored().person).toEqual({ kind: "library", id: "female-black-0" });
-  fireEvent.change(modal.getByRole("combobox", { name: "Hair color" }), {
+  changeField(modal.getByRole("radiogroup", { name: "Hair color" }), {
     target: { value: "blonde" },
   });
   expect(
@@ -125,10 +127,10 @@ it("selects up to four across age and gender filters, disables a fifth, and rest
   fireEvent.click(
     modal.getByRole("button", { name: "Remove Woman · Black 4 from selection" })
   );
-  fireEvent.change(modal.getByRole("combobox", { name: "Age group" }), {
+  changeField(modal.getByRole("radiogroup", { name: "Age group" }), {
     target: { value: "child" },
   });
-  fireEvent.change(modal.getByRole("combobox", { name: "Gender" }), {
+  changeField(modal.getByRole("radiogroup", { name: "Gender" }), {
     target: { value: "male" },
   });
   fireEvent.click(modal.getByRole("button", { name: "Boy · 126" }));
@@ -142,11 +144,11 @@ it("opens the full library for legacy kids setups and supports age filters, empt
   render(<Harness shot="child" />);
   const modal = openPicker();
   expect(modal.getByText("500 matching models")).toBeTruthy();
-  fireEvent.change(modal.getByRole("combobox", { name: "Age group" }), {
+  changeField(modal.getByRole("radiogroup", { name: "Age group" }), {
     target: { value: "child" },
   });
   expect(modal.getByText("100 matching models")).toBeTruthy();
-  fireEvent.change(modal.getByRole("textbox", { name: "Search models" }), {
+  changeField(modal.getByRole("textbox", { name: "Search models" }), {
     target: { value: "does not exist" },
   });
   expect(modal.getByText("No models match these filters.")).toBeTruthy();
@@ -166,7 +168,7 @@ it("does not select the same identity twice through favorites, and requires uplo
       .disabled
   ).toBe(true);
   fireEvent.click(modal.getByRole("button", { name: "Upload reference" }));
-  fireEvent.change(modal.getByRole("combobox", { name: "Model age group" }), {
+  changeField(modal.getByRole("radiogroup", { name: "Model age group" }), {
     target: { value: "child" },
   });
   expect(

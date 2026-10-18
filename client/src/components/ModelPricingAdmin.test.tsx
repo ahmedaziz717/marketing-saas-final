@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -68,27 +69,27 @@ it("switches estimator controls with type and combines provider and search filte
   render(<ModelPricingAdmin />);
   expect(
     within(screen.getByLabelText("Model type"))
-      .getAllByRole("option")
+      .getAllByRole("radio")
       .map(o => o.textContent)
   ).toEqual(["Images", "Videos"]);
   expect(screen.getByText("Image estimate settings")).toBeTruthy();
   expect(screen.queryByText("Video estimate settings")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Provider"), {
+  changeField(screen.getByLabelText("Provider"), {
     target: { value: "openai" },
   });
   expect(screen.getByText("OpenAI image")).toBeTruthy();
   expect(screen.queryByText("Higgsfield image")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Model type"), {
+  changeField(screen.getByLabelText("Model type"), {
     target: { value: "video" },
   });
   expect(screen.queryByText("Image estimate settings")).toBeNull();
   expect(screen.getByText("Video estimate settings")).toBeTruthy();
   expect(screen.getByText("No models match these filters.")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Provider"), {
+  changeField(screen.getByLabelText("Provider"), {
     target: { value: "higgsfield" },
   });
   expect(screen.getByText("Kling video")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Video duration"), {
+  changeField(screen.getByRole("radiogroup", { name: "Video duration" }), {
     target: { value: "10" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Apply video settings" }));
@@ -97,7 +98,7 @@ it("switches estimator controls with type and combines provider and search filte
       videoEstimate: expect.objectContaining({ duration: 10 }),
     })
   );
-  fireEvent.change(screen.getByLabelText("Search models"), {
+  changeField(screen.getByLabelText("Search models"), {
     target: { value: "unknown" },
   });
   expect(screen.getByText("No models match these filters.")).toBeTruthy();

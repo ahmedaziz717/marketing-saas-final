@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -92,10 +93,10 @@ it("publishes the same authored grouping in the Studio preview while preserving 
   }
   render(<Harness />);
   clickJourney(screen.getByRole("button", { name: "+ Add field" }));
-  fireEvent.change(screen.getByLabelText("Studio section"), {
+  changeField(screen.getByRole("radiogroup", { name: "Studio section" }), {
     target: { value: "setup" },
   });
-  fireEvent.change(screen.getByLabelText("Category tab"), {
+  changeField(screen.getByLabelText("Category tab"), {
     target: { value: "Campaign context" },
   });
   const graph = JSON.parse(screen.getByTestId("graph").textContent!);
@@ -146,13 +147,13 @@ it("stores image sources and content policy on the workflow field and previews i
     );
   }
   render(<Harness />);
-  fireEvent.change(screen.getByLabelText("New field type"), {
+  changeField(screen.getByLabelText("New field type"), {
     target: { value: "asset" },
   });
   clickJourney(screen.getByRole("button", { name: "+ Add field" }));
   clickJourney(screen.getByLabelText("Offer image upload"));
   clickJourney(screen.getByLabelText("Allow product images"));
-  fireEvent.change(screen.getByLabelText("Price"), {
+  changeField(screen.getByRole("radiogroup", { name: "Price" }), {
     target: { value: "never" },
   });
   const field = JSON.parse(screen.getByTestId("graph").textContent!).nodes[0]
@@ -189,7 +190,7 @@ it("connects a product field's image and content to the selected generation unit
     );
   }
   render(<Harness />);
-  fireEvent.change(screen.getByLabelText("New field type"), {
+  changeField(screen.getByLabelText("New field type"), {
     target: { value: "product" },
   });
   clickJourney(screen.getByRole("button", { name: "+ Add field" }));

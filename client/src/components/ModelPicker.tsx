@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ModelSettingTiles } from "./configurator/ModelSettingTiles";
 import { useState } from "react";
 import { Search, ChevronDown, Check, Sparkles } from "lucide-react";
@@ -113,7 +114,8 @@ export function ModelPicker({
                 className="pl-9"
               />
             </div>
-            <select
+            <VisualSelect
+              density="compact"
               aria-label="Model maker"
               value={maker}
               onChange={e => setMaker(e.target.value)}
@@ -123,7 +125,7 @@ export function ModelPicker({
               {makers.map(m => (
                 <option key={m}>{m}</option>
               ))}
-            </select>
+            </VisualSelect>
           </div>
           <div className="grid min-h-0 auto-rows-max gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
             {visible.map(m => (
@@ -274,13 +276,14 @@ export function ModelSettings({
     "sound",
   ]);
   const render = (key: string, p: (typeof fields)[number][1]) => (
-    <label key={key} className="block min-w-0 space-y-1 text-xs">
+    <ChoiceField key={key} className="block min-w-0 space-y-1 text-xs">
       <span className="text-muted-foreground">
         {p.title ||
           key.replaceAll("_", " ").replace(/^./, s => s.toUpperCase())}
       </span>
       {p.enum ? (
-        <select
+        <VisualSelect
+          density="compact"
           disabled={disabled}
           className="h-10 w-full rounded-lg border bg-background px-2 text-sm"
           value={String(values[key] ?? "")}
@@ -303,9 +306,10 @@ export function ModelSettings({
               {key === "duration" ? " seconds" : ""}
             </option>
           ))}
-        </select>
+        </VisualSelect>
       ) : p.type === "boolean" ? (
-        <select
+        <VisualSelect
+          density="compact"
           disabled={disabled}
           className="h-10 w-full rounded-lg border bg-background px-2 text-sm"
           value={values[key] === true ? "yes" : "no"}
@@ -315,7 +319,7 @@ export function ModelSettings({
         >
           <option value="yes">On</option>
           <option value="no">Off</option>
-        </select>
+        </VisualSelect>
       ) : (
         <Input
           disabled={disabled}
@@ -335,7 +339,7 @@ export function ModelSettings({
           }}
         />
       )}
-    </label>
+    </ChoiceField>
   );
   return (
     <div className="space-y-3">
