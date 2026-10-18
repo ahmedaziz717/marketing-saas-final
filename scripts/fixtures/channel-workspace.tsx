@@ -793,6 +793,7 @@ const routeForPage: Record<string, string> = {
   "workflow-library": "/app/creatives/workflows",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
+  "creative-scene": "/app/creatives/studio",
   "creative-people": "/app/creatives/studio",
   "creative-checkpoint": "/app/creatives/studio",
   "creative-video": "/app/creatives/video",
@@ -1414,6 +1415,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       [
         "creative-overview",
         "creative-editor",
+        "creative-scene",
         "creative-checkpoint",
         "creative-video",
       ].includes(which)
@@ -1442,6 +1444,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         );
         check(columns.size === 2, "Mobile overview has two columns");
       }
+      if (which === "creative-scene") await click("Scene");
       if (which === "creative-editor" || which === "creative-checkpoint") {
         await click("Theme");
         if (innerWidth <= 700) {
