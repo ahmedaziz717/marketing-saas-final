@@ -662,7 +662,7 @@ function CatalogContent() {
       <Dialog open={!!editing} onOpenChange={open => !open && setEditing(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-editorial text-4xl font-normal">
+            <DialogTitle className="text-2xl font-semibold">
               Review product truth
             </DialogTitle>
           </DialogHeader>

@@ -4,12 +4,12 @@ The approved desktop and mobile concepts guide this release. One shared journey 
 
 ## Interaction contract
 
-- Desktop shows every category in a wrapping grid, with its actual current value and exploration status.
+- Desktop uses a sticky, roomy category rail beside the choices, with current values, viewed status, icons, and overflow arrows.
 - Mobile starts with a two-column overview. Opening a category shows a focused editor, with All categories and previous/next navigation.
 - Inputs stay mounted when switching between mobile overview and editor. Responsive changes do not discard drafts or in-progress copy suggestions.
-- Leaving a section can show one dismissible reminder listing unseen current choices. Keeping them is separate from viewing them. Exploration never implies validity or approval and never gates generation.
+- Section navigation is immediate. An optional inline review of unviewed choices opens only when requested; no discovery popup interrupts the flow. Exploration never implies validity or approval and never gates generation.
 - Missing required fields are labeled Not set and are not described as valid defaults. Existing validation and execution/approval gates remain authoritative.
-- Preview and summary are compact and expandable. Active creative generation/results open the preview. One sticky Generate action displays the creative's credit estimate.
+- Preview and summary are compact, expanded by default, and collapsible. Active creative generation/results open the preview. One sticky Generate action displays the creative's credit estimate.
 - Keyboard focus, disabled choices, reduced motion, safe-area padding, and dark theme are covered by the shared controls.
 
 ## Route and form audit
@@ -34,13 +34,20 @@ Preserve font remains off by default. Choosing Automatic clears the lock. Enabli
 
 Font previews load independently as they enter view. Loading/failure is visible instead of silently presenting the same fallback as every family. Private custom font names and campaign copy are never sent to the public font service.
 
-## Next batch — not implemented here
+## Follow-up releases
 
-Ahmed explicitly deferred these after requesting them:
+Brand voice now supports 30,000 characters and reviewable PDF imports. Official partner logos, visual selection tiles, and the sticky category rail shipped in PRs #63–64; model portrait proportions were corrected in #65. Issue #61 is the release agenda.
 
-- Increase the Brand voice limit above 4,000 characters, with a counter and clear validation.
-- Allow PDF brand guideline uploads with safe handling and a reviewable extraction before updating the Brand Kit.
+## Saved-state and legacy UI audit — 18 October 2026
 
-- Use official Meta, Facebook, and other partner logos across selectors, Apps, and integrations. Keep the mark visible and recognizable; design cards and backgrounds around it.
+The live route audit found remaining old presentation in state branches and portaled dialogs, rather than a second set of studio routes:
 
-Tracked in GitHub issue #61. Implement only after a separate execute instruction.
+- Activation Studio's saved, failed, uncertain, processing, queued, and published states now share the Calendar review layout: clear state card, explicit next actions, destination/timing, expanded creative preview, optional copy details, and a dated activity timeline. The original provider response remains visible.
+- Activation entry/review section navigation now uses separated lavender tiles, with every section above the panel on mobile. Read-only delivery records omit inactive editor steps, bringing status and recovery higher in the mobile view. Drafts stay mounted when resizing or switching sections.
+- Workspace Dialog, AlertDialog, Sheet and Drawer portals receive the same palette as the workspace. Default action buttons use the violet accent; destructive/status semantics remain distinct. Public marketing styling is unchanged.
+- Campaign-plan, Catalog, website-import and compatibility creative dialogs use the same title scale. Workspace onboarding, invitation and access recovery headings no longer use the old oversized editorial treatment.
+- Creation routes and their compatibility redirects remain as listed above. Brand management, report tables, calendar scheduling and workflow graph authoring retain controls appropriate to their task. The unused LegacyPublishingPage had no production route or imports and has been removed.
+
+Approval roles, revision checks, explicit delivery confirmations, uncertain-delivery reconciliation, and retry-safe checks remain authoritative. Opening a result does not publish or retry anything. Desktop/mobile browser fixtures cover failed, uncertain, completed, processing and queued delivery, in addition to the existing Calendar approval flows; failure recovery is checked above the fold at desktop/laptop sizes.
+
+Recommended next work: preserve safe, actionable provider error details and validate known destination/asset/campaign requirements before submission. The screenshot's generic Meta “Invalid parameter” does not identify a cause; diagnosing it is separate from this visual cleanup. The existing database connection-headroom/deployment-sequencing follow-up remains queued in issue #61.

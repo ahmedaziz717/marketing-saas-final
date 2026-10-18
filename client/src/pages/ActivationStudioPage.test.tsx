@@ -61,7 +61,9 @@ vi.mock("@/components/PublicationComposer", () => ({
       </>
     );
   },
-  PublicationDetails: () => null,
+  PublicationDetails: ({ onEdit }: any) => (
+    <button onClick={onEdit}>Review delivery settings</button>
+  ),
   PublicationStatus: () => null,
 }));
 import ActivationStudioPage from "./ActivationStudioPage";
@@ -303,4 +305,29 @@ it("saving stays in the same mounted editor and preserves local input", () => {
     "Keep my position and text"
   );
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("opens a scheduled activation in review and still allows explicitly editing its timing", () => {
+  api.publication = {
+    id: "saved-id",
+    revision: 3,
+    channel: "facebook",
+    state: "scheduled",
+    content: { title: "Scheduled post" },
+  };
+  setup("?publication=saved-id");
+  expect(
+    screen.getByRole("button", { name: "Review delivery settings" })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Review delivery settings" })
+  );
+  expect(
+    screen.queryByRole("button", { name: "Review delivery settings" })
+  ).toBeNull();
+  expect(api.composer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      studioEntry: expect.objectContaining({ section: "delivery" }),
+    })
+  );
 });

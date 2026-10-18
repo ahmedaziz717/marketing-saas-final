@@ -70,12 +70,12 @@ export default function OnboardingPage() {
     "Invite a role-bound teammate",
   ];
   return (
-    <div className="mx-auto max-w-6xl py-8 md:py-14">
+    <div className="workspace-welcome mx-auto max-w-6xl">
       <div className="mb-10 flex items-center justify-between">
         <div>
           <p className="eyebrow">Workspace setup</p>
-          <h1 className="mt-3 font-editorial text-5xl leading-none md:text-7xl">
-            Build your creative frame.
+          <h1 className="mt-3 text-3xl font-semibold leading-tight">
+            Set up your creative workspace.
           </h1>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
@@ -92,14 +92,14 @@ export default function OnboardingPage() {
       <div className="surface grid overflow-hidden xl:grid-cols-[.62fr_1.38fr]">
         <aside className="bg-[#201c25] p-8 text-white md:p-10">
           <Sparkles className="h-5 w-5 text-violet-300" />
-          <h2 className="mt-8 font-editorial text-4xl leading-none">
+          <h2 className="mt-5 text-3xl font-semibold leading-tight">
             Start with the company’s public truth.
           </h2>
           <p className="mt-5 text-sm leading-6 text-white/55">
             EvokeLoop turns the website into an editable brand kit and reviewed
             offerings before creative work begins.
           </p>
-          <div className="mt-12 space-y-5 text-sm">
+          <div className="mt-8 space-y-5 text-sm">
             {labels.map((label, index) => (
               <div key={label} className="flex gap-3">
                 <span

@@ -177,7 +177,7 @@ function BriefsContent() {
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
               <DialogHeader>
-                <DialogTitle className="font-editorial text-4xl font-normal">
+                <DialogTitle className="text-2xl font-semibold">
                   {editingId ? "Edit campaign plan" : "Create campaign plan"}
                 </DialogTitle>
                 <DialogDescription>

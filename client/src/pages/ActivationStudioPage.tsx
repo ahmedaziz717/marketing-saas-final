@@ -9,7 +9,7 @@ import {
   type ActivationEntry,
   type ActivationSection,
 } from "@/components/activation/ActivationNavigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -53,6 +53,7 @@ function ActivationStudio() {
     params.get("publication") ?? ""
   );
   const [view, setView] = useState<"edit" | "review">("edit");
+  const reviewSavedOnLoad = useRef(!!publicationId && !params.get("section"));
   const [changeChannel, setChangeChannel] = useState(false);
   const [editVisit, setEditVisit] = useState(0);
   const [showChannels, setShowChannels] = useState(
@@ -99,7 +100,13 @@ function ActivationStudio() {
     if (publicationId && publication.data?.id === publicationId) {
       const item = publication.data;
       setSavedDrafts(previous => ({ ...previous, [item.channel]: item }));
-      if (!editablePublication(item.state)) setView("review");
+      if (
+        !editablePublication(item.state) ||
+        (reviewSavedOnLoad.current &&
+          ["approved", "scheduled"].includes(item.state))
+      )
+        setView("review");
+      reviewSavedOnLoad.current = false;
     }
   }, [publicationId, publication.data]);
   const canCompose = ["owner", "admin", "creator", "publisher"].includes(
@@ -259,6 +266,7 @@ function ActivationStudio() {
             <>
               <ActivationSections
                 current="preview"
+                readOnly={!editablePublication(currentRecord.state)}
                 onSelect={section => {
                   if (
                     section !== "preview" &&
@@ -274,7 +282,7 @@ function ActivationStudio() {
                   }
                 }}
               >
-                <section className="cfg-body activation-saved">
+                <section className="activation-result">
                   <PublicationDetails
                     inline
                     item={currentRecord}
@@ -292,7 +300,10 @@ function ActivationStudio() {
                     <Link className="cfg-secondary" href="/app/publishing">
                       View calendar
                     </Link>
-                    <button onClick={() => setChangeChannel(true)}>
+                    <button
+                      className="cfg-secondary"
+                      onClick={() => setChangeChannel(true)}
+                    >
                       Start another activation
                     </button>
                   </div>
