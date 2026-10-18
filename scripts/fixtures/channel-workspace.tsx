@@ -769,6 +769,7 @@ const routeForPage: Record<string, string> = {
   "workflow-library": "/app/creatives/workflows",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
+  "creative-people": "/app/creatives/studio",
   "creative-checkpoint": "/app/creatives/studio",
   "creative-video": "/app/creatives/video",
   "insights-studio": "/app/analytics/studio",
@@ -1236,6 +1237,45 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
   try {
     await pause();
     layout();
+    if (which === "creative-people") {
+      await studioSection("Look & Feel", false);
+      await click("Scene");
+      await click("Select Lifestyle · with people");
+      if (innerWidth <= 700) await click("All categories");
+      await click("People");
+      await chooseVisual(
+        document.querySelector<HTMLSelectElement>(
+          '[data-choice-label="Hair color"] select'
+        )!,
+        "blonde"
+      );
+      const portraits = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '.cfg-people-grid .cfg-card-art [role="img"]'
+        )
+      );
+      check(portraits.length > 0, "The studio model library renders portraits");
+      for (const portrait of portraits) {
+        const bounds = portrait.getBoundingClientRect();
+        check(
+          bounds.width > 0 && Math.abs(bounds.width - bounds.height) < 1,
+          `Model portraits preserve square proportions: ${bounds.width} × ${bounds.height}`
+        );
+      }
+      await pressStudioControl(
+        document.querySelector<HTMLButtonElement>(
+          ".cfg-people-grid .cfg-choice"
+        )!,
+        "Select first model"
+      );
+      check(
+        document
+          .querySelector(".cfg-selection-strip")
+          ?.textContent?.includes("1 / 4 selected"),
+        "Model selection remains available"
+      );
+      layout();
+    }
     if (
       [
         "creative-overview",
