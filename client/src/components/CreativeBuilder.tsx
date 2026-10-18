@@ -1479,7 +1479,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-editorial text-3xl font-normal">
+            <DialogTitle className="text-2xl font-semibold">
               Review your creative setup
             </DialogTitle>
             <DialogDescription>

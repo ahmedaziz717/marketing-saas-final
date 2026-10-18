@@ -59,15 +59,18 @@ export function ActivationSections({
   current,
   onSelect,
   needsChannel = false,
+  readOnly = false,
   children,
 }: {
   current: ActivationSection;
   onSelect: (section: ActivationSection) => void;
   needsChannel?: boolean;
+  readOnly?: boolean;
   children: ReactNode;
 }) {
   return (
     <StudioSections
+      enabled={!readOnly}
       label="Activation sections"
       current={current}
       onSelect={onSelect}

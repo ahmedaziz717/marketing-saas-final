@@ -547,7 +547,7 @@ export function WebsiteImportWizard({
         >
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="font-editorial text-4xl font-normal">
+              <DialogTitle className="text-2xl font-semibold">
                 Edit discovered product
               </DialogTitle>
             </DialogHeader>

@@ -68,7 +68,7 @@ function Form() {
     </StudioSections>
   );
 }
-it("opens the mobile panel directly under its section and preserves inputs through collapse, navigation and resizing", () => {
+it("keeps every mobile section above the panel and preserves inputs through collapse, navigation and resizing", () => {
   render(<Form />);
   expect(screen.getByRole("group", { name: "Studio sections" })).toBeTruthy();
   const input = screen.getByRole("textbox", { name: "Campaign brief" });
@@ -80,8 +80,10 @@ it("opens the mobile panel directly under its section and preserves inputs throu
   fireEvent.click(first);
   fireEvent.click(screen.getByRole("button", { name: /^Look & Feel/ }));
   const panel = screen.getByRole("region", { name: "Look & Feel" });
-  expect(panel.previousElementSibling?.textContent).toContain("Look & Feel");
-  expect(panel.nextElementSibling?.textContent).toContain("Review");
+  expect(panel.previousElementSibling?.getAttribute("aria-label")).toBe(
+    "Studio sections"
+  );
+  expect(panel.previousElementSibling?.textContent).toContain("Review");
   expect(screen.getByRole("textbox")).toBe(input);
   expect((input as HTMLInputElement).value).toBe("Keep my draft");
   expect(

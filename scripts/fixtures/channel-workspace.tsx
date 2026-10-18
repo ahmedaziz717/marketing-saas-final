@@ -486,7 +486,29 @@ function respond(path: string, input: any) {
     return connections;
   }
   if (path === "publishing.list") return { items: posts, truncated: false };
-  if (path === "publishing.history") return [];
+  if (path === "publishing.history")
+    return which.startsWith("activation-")
+      ? [
+          {
+            id: "event-3",
+            action: "publication.queued",
+            author: "Workspace member",
+            at: now - 10000,
+          },
+          {
+            id: "event-2",
+            action: "publication.approved",
+            author: "Workspace member",
+            at: now - 20000,
+          },
+          {
+            id: "event-1",
+            action: "publication.draft_saved",
+            author: "Workspace member",
+            at: now - 30000,
+          },
+        ]
+      : [];
   if (path === "channels.plan")
     return {
       organizationId: 1,
@@ -645,6 +667,8 @@ function respond(path: string, input: any) {
     return ["studio-drafts", "video-studio", "video-ugc"].includes(which)
       ? studioDraftAssets
       : [];
+  if (path === "assetLibrary.list" && which.startsWith("activation-"))
+    return studioDraftAssets;
   if (path === "assetLibrary.list")
     return ["studio-ad-copy", "studio-post-media", "studio-media"].includes(
       which
@@ -810,6 +834,11 @@ const routeForPage: Record<string, string> = {
 
   "advertising-empty": "/app/advertising/meta",
   "social-empty": "/app/social/facebook",
+  "activation-failed": `/app/activate/studio?publication=${id}`,
+  "activation-unknown": `/app/activate/studio?publication=${id}`,
+  "activation-published": `/app/activate/studio?publication=${id}`,
+  "activation-processing": `/app/activate/studio?publication=${id}`,
+  "activation-scheduled": `/app/activate/studio?publication=${id}`,
   publishing: "/app/publishing",
   "publishing-live": "/app/publishing",
   "publishing-approved": "/app/publishing",
@@ -823,6 +852,36 @@ const routeForPage: Record<string, string> = {
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
 });
+if (which.startsWith("activation-")) {
+  connections.liveAds = true;
+  Object.assign(posts[0], {
+    channel: "meta_ads",
+    connectionId: adsId,
+    assetKey: "asset:2",
+    content: contentSchema.parse({
+      title: "Autumn collection campaign",
+      message:
+        "Find a little everyday brilliance. Explore the new collection, made to go wherever the day takes you.",
+      headline: "Made for your every day",
+      description: "Discover the collection",
+      link: "https://example.com/collection",
+      adSetId: "9",
+    }),
+    scheduledAtMs: null,
+    state:
+      which === "activation-unknown"
+        ? "delivery_unknown"
+        : which.replace("activation-", ""),
+    error:
+      which === "activation-failed"
+        ? "Invalid parameter"
+        : which === "activation-unknown"
+          ? "Provider request timed out"
+          : null,
+    result: { retrySafe: which === "activation-failed", deliveryMode: "live" },
+  });
+  if (which === "activation-published") posts[0].externalId = "123456789";
+}
 if (which === "studio-drafts") {
   posts[0].assetKey = "asset:2";
   posts[0].content.campaignPlanId = 7;
@@ -1237,6 +1296,81 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
   try {
     await pause();
     layout();
+    if (which.startsWith("activation-")) {
+      const state = document.querySelector<HTMLElement>(
+        '[aria-label="Delivery status"]'
+      );
+      check(!!state, "Saved activation has a clear delivery status");
+      check(
+        !!document.querySelector('[aria-label="Content preview"]'),
+        "Saved creative remains expanded"
+      );
+      check(
+        document.querySelectorAll(".publication-timeline li").length === 3,
+        "Publication history is a readable timeline"
+      );
+      check(
+        mutations.length === 0,
+        "Opening delivery status does not retry or publish anything"
+      );
+      if (which !== "activation-scheduled")
+        check(
+          !document.querySelector(".cfg-section-button"),
+          "Read-only results do not waste space on inactive editor steps"
+        );
+      check(
+        getComputedStyle(state!).borderRadius === "15px",
+        "Saved activation uses the shared rounded Studio cards"
+      );
+      if (which === "activation-failed") {
+        check(
+          state!.textContent?.includes("Invalid parameter"),
+          "The original provider response remains available"
+        );
+        check(
+          !!button("Retry failed delivery") &&
+            !!button("Return failed item to draft"),
+          "Safe recovery actions are grouped together"
+        );
+        check(
+          getComputedStyle(button("Retry failed delivery")!).backgroundColor ===
+            "rgb(109, 80, 216)",
+          "Recovery action uses the Studio violet theme"
+        );
+        if (innerWidth > 900)
+          check(
+            button("Retry failed delivery")!.getBoundingClientRect().bottom <
+              innerHeight,
+            "Recovery controls fit above the desktop fold"
+          );
+      } else if (which === "activation-unknown") {
+        check(
+          !!button("Verify existing delivery") &&
+            !button("Retry failed delivery"),
+          "An uncertain delivery cannot be retried"
+        );
+      } else if (which === "activation-published") {
+        check(
+          state!.textContent?.includes("Your ad was created paused"),
+          "Ad result explicitly remains paused"
+        );
+        check(
+          !button("Retry failed delivery") && !button("Create paused ad"),
+          "Completed delivery has no duplicate send action"
+        );
+      } else if (which === "activation-processing") {
+        check(
+          state!.textContent?.includes("Delivery is in progress"),
+          "Provider processing is distinguished from a saved draft"
+        );
+      } else {
+        check(
+          state!.textContent?.includes("Your publication is queued"),
+          "Queued delivery has a clear waiting state"
+        );
+      }
+      layout();
+    }
     if (which === "creative-people") {
       await studioSection("Look & Feel", false);
       await click("Scene");
@@ -1421,6 +1555,17 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       post!.click();
       await pause();
       layout();
+      const reviewSurface =
+        document.querySelector<HTMLElement>('[role="dialog"]')!;
+      check(
+        getComputedStyle(reviewSurface).getPropertyValue("--primary").trim() ===
+          "#6d50d8",
+        "Calendar review dialog retains the workspace theme"
+      );
+      check(
+        !!reviewSurface.querySelector(".publication-state-card"),
+        "Calendar and Studio share the delivery review layout"
+      );
       if (role === "creator") {
         check(
           !button("Approve & schedule") &&

@@ -1,3 +1,4 @@
+import "@/styles/studioExperience.css";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, type LucideIcon } from "lucide-react";
 
@@ -112,20 +113,13 @@ export function StudioSections<T extends string>({
       </button>
     );
   };
-  // A stable sibling key preserves form state even when its accordion position changes.
-  const contents = mobile
-    ? items.flatMap((item, index) => [
-        <h2 className="cfg-section-heading" key={item.id}>
-          {button(item, index)}
-        </h2>,
-        ...(item.id === active?.id ? [panel] : []),
-      ])
-    : [
-        <nav key="navigation" className="cfg-sections" aria-label={label}>
-          {items.map(button)}
-        </nav>,
-        panel,
-      ];
+  // Keep the panel mounted and all sections visible on both desktop and mobile.
+  const contents = [
+    <nav key="navigation" className="cfg-sections" aria-label={label}>
+      {items.map(button)}
+    </nav>,
+    panel,
+  ];
   return (
     <div
       className={`cfg-section-layout${mobile ? " is-mobile" : ""}`}

@@ -1,3 +1,5 @@
+import "@/styles/publicationReview.css";
+import { PartnerLogo } from "./PartnerLogo";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { metaWebsiteCallToActions } from "@shared/metaCallToAction";
 import { scrollStudioChoices } from "./configurator/studioNavigation";
@@ -17,6 +19,11 @@ import {
   Building2,
   Radio,
   ClipboardCheck,
+  AlertCircle,
+  CheckCircle2,
+  History,
+  RefreshCw,
+  FilePenLine,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { SavedCopyTags } from "./CopyTags";
@@ -87,7 +94,8 @@ export function PublicationStatus({
             : statusLabel(item.state);
   return (
     <span
-      className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs ${item.state === "scheduled" && item.result?.deliveryMode !== "test" ? "border-blue-200 bg-blue-50 text-blue-900" : item.state === "approved" || item.result?.deliveryMode === "test" ? "border-amber-200 bg-amber-50 text-amber-950" : "bg-muted"}`}
+      data-state={item.state}
+      className={`publication-status inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs ${item.state === "scheduled" && item.result?.deliveryMode !== "test" ? "border-blue-200 bg-blue-50 text-blue-900" : item.state === "approved" || item.result?.deliveryMode === "test" ? "border-amber-200 bg-amber-50 text-amber-950" : "bg-muted"}`}
     >
       {label}
     </span>
@@ -1903,7 +1911,7 @@ function PublicationDetailsSurface({
   if (inline)
     return (
       <section
-        className="studio-delivery-record space-y-4"
+        className="studio-delivery-record publication-review"
         aria-label="Activation status"
       >
         {children}
@@ -1916,7 +1924,7 @@ function PublicationDetailsSurface({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="publication-review max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
         {children}
       </DialogContent>
     </Dialog>
@@ -2085,15 +2093,501 @@ export function PublicationDetails({
           ? "Time selected — not scheduled"
           : "Publish timing"
         : "Selected publishing time";
+  const uncertain = item.state === "delivery_unknown";
+  const failed = item.state === "failed";
+  const delivered = item.state === "published";
+  const testSchedule =
+    item.state === "scheduled" && item.result?.deliveryMode === "test";
+  const inProgress = ["publishing", "processing"].includes(item.state);
+  const StateIcon =
+    failed || uncertain
+      ? AlertCircle
+      : delivered
+        ? CheckCircle2
+        : item.state === "scheduled" || inProgress
+          ? Clock3
+          : ClipboardCheck;
+  const stateHeading = failed
+    ? "Delivery needs attention"
+    : uncertain
+      ? "Check delivery before continuing"
+      : delivered
+        ? social
+          ? "Your post is published"
+          : "Your ad was created paused"
+        : inProgress
+          ? "Delivery is in progress"
+          : testSchedule
+            ? "Test schedule saved"
+            : item.state === "scheduled"
+              ? hasTime
+                ? "Ready for the scheduled time"
+                : "Your publication is queued"
+              : item.state === "approved"
+                ? "Approved and ready to activate"
+                : item.state === "needs_review"
+                  ? "Ready for publishing review"
+                  : item.state === "changes_requested"
+                    ? "Changes requested"
+                    : item.state === "rejected"
+                      ? "Publication needs revision"
+                      : item.state === "cancelled"
+                        ? "Publication cancelled"
+                        : "Your draft is saved";
+  const stateDescription = uncertain
+    ? "The provider has not confirmed the outcome. Check Meta before continuing so the same content is not sent twice."
+    : failed
+      ? item.result?.retrySafe === true
+        ? "Review the response below. Edit the draft to fix the issue, or retry once it is resolved."
+        : "Review the provider response and check the destination in Meta. A retry is not available for this delivery."
+      : delivered
+        ? social
+          ? "The provider confirmed delivery. Your saved creative and activity are below."
+          : "The ad is paused in Meta. This delivery does not activate a campaign or change its budget."
+        : inProgress
+          ? "The provider is processing this publication. The status will update when the result is confirmed."
+          : testSchedule
+            ? "This is a test schedule. Nothing will be sent to the channel."
+            : item.state === "scheduled"
+              ? "Your delivery is being tracked here. The status will update automatically."
+              : item.state === "approved"
+                ? "Approval is saved. Confirm delivery below to send or schedule this publication."
+                : ["changes_requested", "rejected"].includes(item.state)
+                  ? "Update the draft using the review feedback, then submit it for approval again."
+                  : item.state === "cancelled"
+                    ? "This publication is cancelled in EvokeLoop. Existing content in Meta is unchanged."
+                    : "Review the creative, destination and timing before confirming delivery.";
+  const showActions =
+    (!canPublish && !delivered) ||
+    (canEdit && editablePublication(item.state)) ||
+    (canPublish &&
+      (reviewable || uncertain || (failed && item.result?.retrySafe === true)));
   const ConfirmHeader = inline ? "div" : DialogHeader;
   const ConfirmTitle = inline ? "h3" : DialogTitle;
   const ConfirmDescription = inline ? "p" : DialogDescription;
   return (
     <PublicationDetailsSurface inline={inline} busy={busy} onClose={onClose}>
-      <div className="studio-delivery-content space-y-4">
-        {inline ? (
-          <>
-            <h2>{item.content.title}</h2>
+      <div className="studio-delivery-content">
+        <header className="publication-heading">
+          {inline ? (
+            <div>
+              <span className="publication-eyebrow">
+                {channelNames[item.channel]} · Activation
+              </span>
+              <h2>{item.content.title}</h2>
+            </div>
+          ) : (
+            <DialogHeader className="pr-8">
+              <DialogTitle>{item.content.title}</DialogTitle>
+              <DialogDescription>
+                {channelNames[item.channel]} publication. Approval applies to
+                this caption, asset version, destination and schedule.
+              </DialogDescription>
+            </DialogHeader>
+          )}
+          <PublicationStatus item={item} />
+        </header>
+        <div className="publication-layout">
+          <div className="publication-main">
+            <section
+              className="publication-state-card"
+              data-state={item.state}
+              aria-label="Delivery status"
+            >
+              <span className="publication-state-icon">
+                <StateIcon size={24} aria-hidden="true" />
+              </span>
+              <div>
+                <h3>{stateHeading}</h3>
+                <p>{stateDescription}</p>
+                {item.error && (
+                  <div className="publication-provider-error" role="alert">
+                    <strong>Provider response</strong>
+                    <p>{item.error}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+            {showActions && (
+              <section
+                className="publication-actions-card"
+                aria-label="Publication actions"
+              >
+                <h3>
+                  {item.state === "failed" || item.state === "delivery_unknown"
+                    ? "Resolve delivery"
+                    : "Next steps"}
+                </h3>
+                <div className="flex flex-wrap gap-2 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
+                  {canEdit && editablePublication(item.state) && (
+                    <Link
+                      href={studioContentHref(item.channel, { id: item.id })}
+                    >
+                      <Button variant="outline" disabled={busy}>
+                        Edit content in Studio
+                      </Button>
+                    </Link>
+                  )}
+                  {canEdit && editablePublication(item.state) && (
+                    <Button variant="outline" disabled={busy} onClick={onEdit}>
+                      {item.state === "scheduled" && hasTime
+                        ? "Change schedule"
+                        : "Delivery settings"}
+                    </Button>
+                  )}
+                  {canEdit &&
+                    ["draft", "changes_requested", "rejected"].includes(
+                      item.state
+                    ) &&
+                    !(social && canPublish && item.state === "draft") && (
+                      <Button
+                        className="h-auto min-h-9 max-w-full whitespace-normal py-2"
+                        disabled={busy || timeExpired}
+                        onClick={() => submit.mutate(version)}
+                      >
+                        Submit for publishing approval
+                      </Button>
+                    )}
+                  {canPublish &&
+                    ["draft", "needs_review"].includes(item.state) && (
+                      <Button
+                        disabled={
+                          busy || (social && (!connections.data || timeExpired))
+                        }
+                        onClick={() =>
+                          social
+                            ? setConfirmDelivery("approve")
+                            : review.mutate({
+                                ...version,
+                                decision: "approved",
+                                note,
+                              })
+                        }
+                      >
+                        {social ? approvalLabel : "Approve publication"}
+                      </Button>
+                    )}
+                </div>
+                {canPublish &&
+                  (item.state === "approved" ||
+                    (item.state === "scheduled" &&
+                      item.result?.deliveryMode === "test" &&
+                      live)) && (
+                    <Button
+                      className="h-auto min-h-10 whitespace-normal py-2"
+                      disabled={busy || !connections.data || timeExpired}
+                      onClick={() => setConfirmDelivery("queue")}
+                    >
+                      {deliveryLabel}
+                    </Button>
+                  )}
+                {confirmDelivery && (
+                  <PublicationDetailsSurface
+                    inline={inline}
+                    busy={busy}
+                    onClose={() => setConfirmDelivery(null)}
+                  >
+                    <div className="rounded-xl border p-4 space-y-4">
+                      <ConfirmHeader>
+                        <ConfirmTitle>
+                          {confirmDelivery === "approve"
+                            ? approvalLabel
+                            : deliveryLabel}
+                        </ConfirmTitle>
+                        <ConfirmDescription>
+                          {live
+                            ? social
+                              ? hasTime
+                                ? "Confirm the Page and time below. The post will publish automatically at that time."
+                                : "This will publish the post to the Facebook Page below as soon as it is processed."
+                              : "Create this approved ad in Meta with its status set to paused?"
+                            : "Save this as a test schedule? No content will be sent."}
+                        </ConfirmDescription>
+                      </ConfirmHeader>
+                      <dl className="space-y-3 rounded-xl border bg-muted/40 p-4 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground">
+                            {social ? "Facebook Page" : "Destination"}
+                          </dt>
+                          <dd className="font-medium break-words">
+                            {destinationName}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">
+                            {hasTime ? "Publish at" : "Timing"}
+                          </dt>
+                          <dd className="font-medium">{formattedTime}</dd>
+                        </div>
+                      </dl>
+                      <p className="break-words text-sm">
+                        {item.content.title}
+                      </p>
+                      {timeExpired && (
+                        <p role="alert" className="text-sm text-destructive">
+                          The selected time has passed. Go back and choose a new
+                          time.
+                        </p>
+                      )}
+                      <div className="flex flex-wrap justify-end gap-3 [&_button]:h-auto [&_button]:min-h-10 [&_button]:whitespace-normal [&_button]:py-2">
+                        <Button
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => setConfirmDelivery(null)}
+                        >
+                          Go back
+                        </Button>
+                        <Button
+                          disabled={busy || timeExpired || !connections.data}
+                          onClick={() => {
+                            const action = confirmDelivery;
+                            setConfirmDelivery(null);
+                            if (action === "approve")
+                              review.mutate({
+                                ...version,
+                                decision: "approved",
+                                note,
+                                delivery: {
+                                  confirm: true,
+                                  mode: live ? "live" : "test",
+                                },
+                              });
+                            else
+                              queue.mutate({
+                                ...version,
+                                confirm: true,
+                                mode: live ? "live" : "test",
+                              });
+                          }}
+                        >
+                          {confirmDelivery === "approve"
+                            ? approvalLabel
+                            : deliveryLabel}
+                        </Button>
+                      </div>
+                    </div>
+                  </PublicationDetailsSurface>
+                )}
+                {canPublish && reviewable && (
+                  <details className="rounded-xl border p-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Request changes or reject
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                      <Label htmlFor="publication-feedback">
+                        Review feedback
+                      </Label>
+                      <textarea
+                        id="publication-feedback"
+                        className={channelInput}
+                        value={note}
+                        onChange={e => setNote(e.target.value)}
+                        maxLength={2000}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          disabled={busy || !note.trim()}
+                          onClick={() =>
+                            review.mutate({
+                              ...version,
+                              decision: "changes_requested",
+                              note,
+                            })
+                          }
+                        >
+                          Request changes
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={busy || !note.trim()}
+                          onClick={() =>
+                            review.mutate({
+                              ...version,
+                              decision: "rejected",
+                              note,
+                            })
+                          }
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  </details>
+                )}
+                {canPublish &&
+                  editablePublication(item.state) &&
+                  item.state !== "cancelled" && (
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Cancel this publication in EvokeLoop? This does not delete anything in Meta."
+                          )
+                        )
+                          cancel.mutate({ ...version, confirm: true });
+                      }}
+                    >
+                      Cancel publication
+                    </Button>
+                  )}
+                {canPublish &&
+                  item.state === "failed" &&
+                  item.result?.retrySafe === true && (
+                    <div className="publication-recovery">
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          resetFailed.mutate({ ...version, confirm: true })
+                        }
+                      >
+                        <FilePenLine size={16} aria-hidden="true" />
+                        Return failed item to draft
+                      </Button>
+                      <Button
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Retry this definitively failed delivery?"
+                            )
+                          )
+                            retry.mutate({ ...version, confirm: true });
+                        }}
+                      >
+                        <RefreshCw size={16} aria-hidden="true" />
+                        Retry failed delivery
+                      </Button>
+                    </div>
+                  )}
+                {canPublish && item.state === "delivery_unknown" && (
+                  <div className="space-y-3 rounded-xl border p-4">
+                    <p className="text-sm">
+                      Automatic retries are blocked to avoid duplicates. Check
+                      Meta first. When the object exists, enter its ID to verify
+                      the result.
+                    </p>
+                    <Label htmlFor="publication-remote-id">
+                      Existing Meta object ID
+                    </Label>
+                    <input
+                      id="publication-remote-id"
+                      className={channelInput}
+                      value={externalId}
+                      onChange={e => setExternalId(e.target.value)}
+                    />
+                    <Button
+                      disabled={busy || !externalId}
+                      onClick={() =>
+                        reconcile.mutate({
+                          ...version,
+                          externalId,
+                          confirm: true,
+                        })
+                      }
+                    >
+                      Verify existing delivery
+                    </Button>
+                  </div>
+                )}
+                {!canPublish && (
+                  <p className="text-xs text-muted-foreground">
+                    An owner, administrator or publisher must approve and
+                    schedule the final publication. Asset reviewers do not
+                    automatically have publishing permission.
+                  </p>
+                )}
+              </section>
+            )}
+            <section
+              aria-label="Publishing schedule"
+              className="publication-schedule"
+            >
+              <div className="publication-destination">
+                <PartnerLogo
+                  slug={social ? "facebook" : "meta"}
+                  name={social ? "Facebook" : "Meta"}
+                  size={36}
+                />
+                <div>
+                  <span>{social ? "Facebook Page" : "Ad account"}</span>
+                  <strong>{destinationName}</strong>
+                </div>
+              </div>
+              <p className="publication-timing-label">
+                <CalendarDays size={16} aria-hidden="true" />
+                {scheduleHeading}
+              </p>
+              <p>
+                {!hasTime && !awaitingActivation
+                  ? "Immediate publishing"
+                  : formattedTime}
+              </p>
+              {social &&
+                item.state === "scheduled" &&
+                item.result?.deliveryMode !== "test" && (
+                  <p className="text-muted-foreground">
+                    {hasTime
+                      ? "This post will publish automatically at the scheduled time. No further action is needed."
+                      : "This post is queued to publish. No further action is needed."}
+                  </p>
+                )}
+              {social && item.state === "approved" && live && (
+                <p className="text-muted-foreground">
+                  Approval is saved.{" "}
+                  {hasTime
+                    ? "Schedule the post to activate publishing at the selected time."
+                    : "Choose Publish now to activate publishing, or select a future time in Delivery settings."}
+                </p>
+              )}
+              {social &&
+                ["draft", "needs_review"].includes(item.state) &&
+                live && (
+                  <p className="text-muted-foreground">
+                    {canPublish
+                      ? hasTime
+                        ? "Approve & schedule confirms this post and its publishing time together."
+                        : "Approve & publish now confirms this post for immediate publishing."
+                      : "A publisher must approve and schedule this post before it can publish."}
+                  </p>
+                )}
+            </section>
+            {awaitingActivation && timeExpired && (
+              <div
+                role="alert"
+                className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+              >
+                The selected time has passed. Choose a new time in Delivery
+                settings, or clear it to explicitly publish now.
+              </div>
+            )}
+            {item.channel === "meta_ads" && (
+              <p className="rounded-xl border p-3 text-sm">
+                Meta ad delivery creates a paused image ad only. No budget or
+                campaign activation is performed.
+              </p>
+            )}
+            {connections.data && !live && (
+              <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                Live {item.channel === "facebook" ? "social" : "advertising"}{" "}
+                delivery is disabled in this environment. Test schedules cannot
+                send, including after live delivery is later enabled; they must
+                be explicitly re-queued.
+              </p>
+            )}
+            {item.externalId && (
+              <p className="break-all text-sm">
+                Meta object ID: {item.externalId}
+              </p>
+            )}
+          </div>
+          <aside
+            className="publication-preview-column"
+            aria-label="Saved creative"
+          >
             <ContentPreview
               channel={item.channel}
               content={item.content}
@@ -2102,442 +2596,168 @@ export function PublicationDetails({
               )}
               assets={reviewAssets.data ?? []}
             />
-          </>
-        ) : (
-          <DialogHeader className="pr-8">
-            <DialogTitle>{item.content.title}</DialogTitle>
-            <DialogDescription>
-              {channelNames[item.channel]} publication. Approval applies to this
-              caption, asset version, destination and schedule.
-            </DialogDescription>
-          </DialogHeader>
-        )}
-        <PublicationStatus item={item} />
-        <p className="text-sm">
-          {social ? "Facebook Page" : "Destination"}: {destinationName}
-        </p>
-        <section
-          aria-label="Publishing schedule"
-          className="rounded-xl border bg-muted/40 p-4 text-sm space-y-1"
-        >
-          <p className="font-medium">{scheduleHeading}</p>
-          <p>
-            {!hasTime && !awaitingActivation
-              ? "Immediate publishing"
-              : formattedTime}
-          </p>
-          {social &&
-            item.state === "scheduled" &&
-            item.result?.deliveryMode !== "test" && (
-              <p className="text-muted-foreground">
-                {hasTime
-                  ? "This post will publish automatically at the scheduled time. No further action is needed."
-                  : "This post is queued to publish. No further action is needed."}
+            {reviewAssets.error && (
+              <p role="alert">
+                Creative assets could not be loaded.{" "}
+                <button
+                  type="button"
+                  onClick={() => void reviewAssets.refetch()}
+                >
+                  Try again
+                </button>
               </p>
             )}
-          {social && item.state === "approved" && live && (
-            <p className="text-muted-foreground">
-              Approval is saved.{" "}
-              {hasTime
-                ? "Schedule the post to activate publishing at the selected time."
-                : "Choose Publish now to activate publishing, or select a future time in Delivery settings."}
-            </p>
-          )}
-          {social && ["draft", "needs_review"].includes(item.state) && live && (
-            <p className="text-muted-foreground">
-              {canPublish
-                ? hasTime
-                  ? "Approve & schedule confirms this post and its publishing time together."
-                  : "Approve & publish now confirms this post for immediate publishing."
-                : "A publisher must approve and schedule this post before it can publish."}
-            </p>
-          )}
-        </section>
-        {awaitingActivation && timeExpired && (
-          <div
-            role="alert"
-            className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
-          >
-            The selected time has passed. Choose a new time in Delivery
-            settings, or clear it to explicitly publish now.
-          </div>
-        )}
-        <p className="whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-sm">
-          {item.content.message || "No caption"}
-        </p>
-        {item.content.copyTags && (
-          <SavedCopyTags tags={item.content.copyTags} />
-        )}
-        {item.channel === "meta_ads" && (
-          <div className="rounded-xl border p-4 space-y-2 text-sm">
-            <p>
-              <strong>Headline:</strong> {item.content.headline}
-            </p>
-            <p>
-              <strong>Description:</strong> {item.content.description || "None"}
-            </p>
-            {item.content.textVariants &&
-              Object.entries(item.content.textVariants).map(
-                ([label, values]) => (
-                  <div key={label}>
-                    <strong>Additional {label}</strong>
-                    {values.map((text, i) => (
-                      <p className="whitespace-pre-wrap" key={i}>
-                        {i + 2}. {text}
-                      </p>
-                    ))}
+            <details className="publication-copy-details">
+              <summary>Copy & asset details</summary>
+              <div className="space-y-4">
+                <p className="whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-sm">
+                  {item.content.message || "No caption"}
+                </p>
+                {item.content.copyTags && (
+                  <SavedCopyTags tags={item.content.copyTags} />
+                )}
+                {item.channel === "meta_ads" && (
+                  <div className="rounded-xl border p-4 space-y-2 text-sm">
+                    <p>
+                      <strong>Headline:</strong> {item.content.headline}
+                    </p>
+                    <p>
+                      <strong>Description:</strong>{" "}
+                      {item.content.description || "None"}
+                    </p>
+                    {item.content.textVariants &&
+                      Object.entries(item.content.textVariants).map(
+                        ([label, values]) => (
+                          <div key={label}>
+                            <strong>Additional {label}</strong>
+                            {values.map((text, i) => (
+                              <p className="whitespace-pre-wrap" key={i}>
+                                {i + 2}. {text}
+                              </p>
+                            ))}
+                          </div>
+                        )
+                      )}
                   </div>
-                )
-              )}
-          </div>
-        )}
-        {item.content.link && (
-          <p className="break-all text-sm">
-            Destination URL: {item.content.link}
-          </p>
-        )}
-        {!!item.content.carouselAssetKeys?.length && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {item.content.carouselAssetKeys.map((key, index) => {
-              const a = reviewAssets.data?.find(a => a.key === key);
-              return (
-                <div key={key}>
-                  <img
-                    src={a?.url}
-                    alt={a?.name ?? "Carousel card"}
-                    className="h-32 w-full rounded-lg object-contain"
-                  />
-                  <p className="text-xs">
-                    Card {index + 1} · {a?.name ?? key}
+                )}
+                {item.content.link && (
+                  <p className="break-all text-sm">
+                    Destination URL: {item.content.link}
                   </p>
-                  <Link
-                    href={"/app/library?asset=" + encodeURIComponent(key)}
-                    className="text-xs text-primary"
-                  >
-                    Review asset
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {item.content.placementAssetKeys && (
-          <div className="grid grid-cols-3 gap-3">
-            {placementSlots.map(slot => {
-              const a = reviewAssets.data?.find(
-                a => a.key === item.content.placementAssetKeys?.[slot.key]
-              );
-              return (
-                <div key={slot.key}>
-                  <img
-                    src={a?.url}
-                    alt={a?.name ?? slot.label}
-                    className="h-32 w-full rounded-lg object-contain"
-                  />
-                  <p className="text-xs">
-                    {slot.label} · {slot.ratio}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {item.assetKey &&
-          !item.content.placementAssetKeys &&
-          !item.content.carouselAssetKeys?.length && (
-            <Link
-              href={"/app/library?asset=" + encodeURIComponent(item.assetKey)}
-              className="text-sm text-primary"
-            >
-              Review attached asset
-            </Link>
-          )}
-        {item.channel === "meta_ads" && (
-          <p className="rounded-xl border p-3 text-sm">
-            Meta ad delivery creates a paused image ad only. No budget or
-            campaign activation is performed.
-          </p>
-        )}
-        {connections.data && !live && (
-          <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-            Live {item.channel === "facebook" ? "social" : "advertising"}{" "}
-            delivery is disabled in this environment. Test schedules cannot
-            send, including after live delivery is later enabled; they must be
-            explicitly re-queued.
-          </p>
-        )}
-        {item.error && (
-          <p role="alert" className="break-words rounded-xl border p-3 text-sm">
-            {item.error}
-          </p>
-        )}
-        {item.externalId && (
-          <p className="break-all text-sm">Meta object ID: {item.externalId}</p>
-        )}
-        <div className="flex flex-wrap gap-2 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
-          {canEdit && editablePublication(item.state) && (
-            <Link href={studioContentHref(item.channel, { id: item.id })}>
-              <Button variant="outline" disabled={busy}>
-                Edit content in Studio
-              </Button>
-            </Link>
-          )}
-          {canEdit && editablePublication(item.state) && (
-            <Button variant="outline" disabled={busy} onClick={onEdit}>
-              {item.state === "scheduled" && hasTime
-                ? "Change schedule"
-                : "Delivery settings"}
-            </Button>
-          )}
-          {canEdit &&
-            ["draft", "changes_requested", "rejected"].includes(item.state) &&
-            !(social && canPublish && item.state === "draft") && (
-              <Button
-                className="h-auto min-h-9 max-w-full whitespace-normal py-2"
-                disabled={busy || timeExpired}
-                onClick={() => submit.mutate(version)}
-              >
-                Submit for publishing approval
-              </Button>
-            )}
-          {canPublish && ["draft", "needs_review"].includes(item.state) && (
-            <Button
-              disabled={busy || (social && (!connections.data || timeExpired))}
-              onClick={() =>
-                social
-                  ? setConfirmDelivery("approve")
-                  : review.mutate({ ...version, decision: "approved", note })
-              }
-            >
-              {social ? approvalLabel : "Approve publication"}
-            </Button>
-          )}
-        </div>
-        {canPublish &&
-          (item.state === "approved" ||
-            (item.state === "scheduled" &&
-              item.result?.deliveryMode === "test" &&
-              live)) && (
-            <Button
-              className="h-auto min-h-10 whitespace-normal py-2"
-              disabled={busy || !connections.data || timeExpired}
-              onClick={() => setConfirmDelivery("queue")}
-            >
-              {deliveryLabel}
-            </Button>
-          )}
-        {confirmDelivery && (
-          <PublicationDetailsSurface
-            inline={inline}
-            busy={busy}
-            onClose={() => setConfirmDelivery(null)}
+                )}
+                {!!item.content.carouselAssetKeys?.length && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {item.content.carouselAssetKeys.map((key, index) => {
+                      const a = reviewAssets.data?.find(a => a.key === key);
+                      return (
+                        <div key={key}>
+                          <img
+                            src={a?.url}
+                            alt={a?.name ?? "Carousel card"}
+                            className="h-32 w-full rounded-lg object-contain"
+                          />
+                          <p className="text-xs">
+                            Card {index + 1} · {a?.name ?? key}
+                          </p>
+                          <Link
+                            href={
+                              "/app/library?asset=" + encodeURIComponent(key)
+                            }
+                            className="text-xs text-primary"
+                          >
+                            Review asset
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {item.content.placementAssetKeys && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {placementSlots.map(slot => {
+                      const a = reviewAssets.data?.find(
+                        a =>
+                          a.key === item.content.placementAssetKeys?.[slot.key]
+                      );
+                      return (
+                        <div key={slot.key}>
+                          <img
+                            src={a?.url}
+                            alt={a?.name ?? slot.label}
+                            className="h-32 w-full rounded-lg object-contain"
+                          />
+                          <p className="text-xs">
+                            {slot.label} · {slot.ratio}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {item.assetKey &&
+                  !item.content.placementAssetKeys &&
+                  !item.content.carouselAssetKeys?.length && (
+                    <Link
+                      href={
+                        "/app/library?asset=" +
+                        encodeURIComponent(item.assetKey)
+                      }
+                      className="text-sm text-primary"
+                    >
+                      Review attached asset
+                    </Link>
+                  )}
+              </div>
+            </details>
+          </aside>
+          <section
+            className="publication-history"
+            aria-label="Publication history"
           >
-            <div className="rounded-xl border p-4 space-y-4">
-              <ConfirmHeader>
-                <ConfirmTitle>
-                  {confirmDelivery === "approve"
-                    ? approvalLabel
-                    : deliveryLabel}
-                </ConfirmTitle>
-                <ConfirmDescription>
-                  {live
-                    ? social
-                      ? hasTime
-                        ? "Confirm the Page and time below. The post will publish automatically at that time."
-                        : "This will publish the post to the Facebook Page below as soon as it is processed."
-                      : "Create this approved ad in Meta with its status set to paused?"
-                    : "Save this as a test schedule? No content will be sent."}
-                </ConfirmDescription>
-              </ConfirmHeader>
-              <dl className="space-y-3 rounded-xl border bg-muted/40 p-4 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">
-                    {social ? "Facebook Page" : "Destination"}
-                  </dt>
-                  <dd className="font-medium break-words">{destinationName}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">
-                    {hasTime ? "Publish at" : "Timing"}
-                  </dt>
-                  <dd className="font-medium">{formattedTime}</dd>
-                </div>
-              </dl>
-              <p className="break-words text-sm">{item.content.title}</p>
-              {timeExpired && (
-                <p role="alert" className="text-sm text-destructive">
-                  The selected time has passed. Go back and choose a new time.
-                </p>
-              )}
-              <div className="flex flex-wrap justify-end gap-3 [&_button]:h-auto [&_button]:min-h-10 [&_button]:whitespace-normal [&_button]:py-2">
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setConfirmDelivery(null)}
-                >
-                  Go back
-                </Button>
-                <Button
-                  disabled={busy || timeExpired || !connections.data}
-                  onClick={() => {
-                    const action = confirmDelivery;
-                    setConfirmDelivery(null);
-                    if (action === "approve")
-                      review.mutate({
-                        ...version,
-                        decision: "approved",
-                        note,
-                        delivery: {
-                          confirm: true,
-                          mode: live ? "live" : "test",
-                        },
-                      });
-                    else
-                      queue.mutate({
-                        ...version,
-                        confirm: true,
-                        mode: live ? "live" : "test",
-                      });
-                  }}
-                >
-                  {confirmDelivery === "approve"
-                    ? approvalLabel
-                    : deliveryLabel}
-                </Button>
-              </div>
-            </div>
-          </PublicationDetailsSurface>
-        )}
-        {canPublish && reviewable && (
-          <details className="rounded-xl border p-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              Request changes or reject
-            </summary>
-            <div className="mt-3 space-y-3">
-              <Label htmlFor="publication-feedback">Review feedback</Label>
-              <textarea
-                id="publication-feedback"
-                className={channelInput}
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                maxLength={2000}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  disabled={busy || !note.trim()}
-                  onClick={() =>
-                    review.mutate({
-                      ...version,
-                      decision: "changes_requested",
-                      note,
-                    })
-                  }
-                >
-                  Request changes
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy || !note.trim()}
-                  onClick={() =>
-                    review.mutate({ ...version, decision: "rejected", note })
-                  }
-                >
-                  Reject
-                </Button>
-              </div>
-            </div>
-          </details>
-        )}
-        {canPublish &&
-          editablePublication(item.state) &&
-          item.state !== "cancelled" && (
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Cancel this publication in EvokeLoop? This does not delete anything in Meta."
-                  )
-                )
-                  cancel.mutate({ ...version, confirm: true });
-              }}
-            >
-              Cancel publication
-            </Button>
-          )}
-        {canPublish &&
-          item.state === "failed" &&
-          item.result?.retrySafe === true && (
-            <Button
-              disabled={busy}
-              onClick={() => {
-                if (window.confirm("Retry this definitively failed delivery?"))
-                  retry.mutate({ ...version, confirm: true });
-              }}
-            >
-              Retry failed delivery
-            </Button>
-          )}
-        {canPublish &&
-          item.state === "failed" &&
-          item.result?.retrySafe === true && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => resetFailed.mutate({ ...version, confirm: true })}
-            >
-              Return failed item to draft
-            </Button>
-          )}
-        {canPublish && item.state === "delivery_unknown" && (
-          <div className="space-y-3 rounded-xl border p-4">
-            <p className="text-sm">
-              Automatic retries are blocked to avoid duplicates. Check Meta
-              first. When the object exists, enter its ID to verify the result.
-            </p>
-            <Label htmlFor="publication-remote-id">
-              Existing Meta object ID
-            </Label>
-            <input
-              id="publication-remote-id"
-              className={channelInput}
-              value={externalId}
-              onChange={e => setExternalId(e.target.value)}
-            />
-            <Button
-              disabled={busy || !externalId}
-              onClick={() =>
-                reconcile.mutate({ ...version, externalId, confirm: true })
-              }
-            >
-              Verify existing delivery
-            </Button>
-          </div>
-        )}
-        {!canPublish && (
-          <p className="text-xs text-muted-foreground">
-            An owner, administrator or publisher must approve and schedule the
-            final publication. Asset reviewers do not automatically have
-            publishing permission.
-          </p>
-        )}
-        <div className="border-t pt-4">
-          <h3 className="font-semibold">Publication history</h3>
-          {history.error ? (
-            <p>History could not be loaded.</p>
-          ) : (
-            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-              {history.data?.map(h => (
-                <p key={h.id} className="text-xs">
-                  {statusLabel(h.action.replace("publication.", ""))} -{" "}
-                  {h.author ?? "Workspace member"} -{" "}
-                  {new Date(h.at).toLocaleString()}
-                </p>
-              ))}
-            </div>
-          )}
+            <h3>
+              <History size={18} aria-hidden="true" />
+              Publication history
+            </h3>
+            {history.isLoading ? (
+              <p role="status">Loading publication history…</p>
+            ) : history.error ? (
+              <p role="alert">
+                History could not be loaded.{" "}
+                <button type="button" onClick={() => void history.refetch()}>
+                  Try again
+                </button>
+              </p>
+            ) : history.data?.length ? (
+              <ol
+                className="publication-timeline"
+                tabIndex={0}
+                aria-label="Publication history events"
+              >
+                {history.data.map(h => (
+                  <li key={h.id}>
+                    <span
+                      className="publication-timeline-dot"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <strong>
+                        {statusLabel(h.action.replace("publication.", ""))}
+                      </strong>
+                      <span>{h.author ?? "Workspace member"}</span>
+                    </div>
+                    <time dateTime={new Date(h.at).toISOString()}>
+                      {new Date(h.at).toLocaleString()}
+                    </time>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>
+                No publication activity yet. Saved changes and delivery updates
+                will appear here.
+              </p>
+            )}
+          </section>
         </div>
       </div>
     </PublicationDetailsSurface>

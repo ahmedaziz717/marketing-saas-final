@@ -26,6 +26,8 @@ const api = vi.hoisted(() => ({
   review: vi.fn(),
   queue: vi.fn(),
   submit: vi.fn(),
+  retry: vi.fn(),
+  resetFailed: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({ organizationId: 1, membership: { role: api.role } }),
@@ -103,9 +105,9 @@ vi.mock("@/lib/trpc", () => ({
       },
       history: { useQuery: () => ({ data: [] }) },
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      retry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      retry: { useMutation: () => ({ mutate: api.retry, isPending: false }) },
       resetFailed: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        useMutation: () => ({ mutate: api.resetFailed, isPending: false }),
       },
       reconcile: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
@@ -953,3 +955,77 @@ function clickJourney(element: HTMLElement) {
   });
   if (keep) fireEvent.click(keep);
 }
+
+it("keeps recovery explicit and preserves the provider error for a retry-safe failure", () => {
+  const item = deliveryItem({
+    state: "failed",
+    error: "Invalid parameter",
+    result: { retrySafe: true },
+  });
+  showDetails(item);
+  expect(
+    screen.getByRole("region", { name: "Delivery status" }).textContent
+  ).toContain("Delivery needs attention");
+  expect(screen.getByRole("alert").textContent).toContain("Invalid parameter");
+  expect(api.retry).not.toHaveBeenCalled();
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Retry failed delivery" })
+  );
+  expect(api.retry).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Retry failed delivery" })
+  );
+  expect(api.retry).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: item.id,
+      revision: item.revision,
+      confirm: true,
+    })
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Return failed item to draft" })
+  );
+  expect(api.resetFailed).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: item.id,
+      revision: item.revision,
+      confirm: true,
+    })
+  );
+  confirm.mockRestore();
+});
+it("never exposes a retry for an unknown delivery and retains provider verification", () => {
+  showDetails(
+    deliveryItem({ state: "delivery_unknown", error: "Request timed out" })
+  );
+  expect(
+    screen.getByRole("region", { name: "Delivery status" }).textContent
+  ).toContain("Check Meta before continuing");
+  expect(
+    screen.queryByRole("button", { name: "Retry failed delivery" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Return failed item to draft" })
+  ).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Verify existing delivery" })
+  ).toBeTruthy();
+});
+it("hides publisher recovery controls from creators", () => {
+  api.role = "creator";
+  showDetails(
+    deliveryItem({
+      state: "failed",
+      error: "Invalid parameter",
+      result: { retrySafe: true },
+    })
+  );
+  expect(
+    screen.queryByRole("button", { name: "Retry failed delivery" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Return failed item to draft" })
+  ).toBeNull();
+});

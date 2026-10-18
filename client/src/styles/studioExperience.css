@@ -1,8 +1,10 @@
 /* Shared studio language: quiet lavender surfaces, visible choices, one focused editor. */
-.cfg-root:has(.studio-journey),
+.cfg-root.cfg-root,
 .create-workspace {
   --cfg-bg: #f4f3f8;
   --cfg-surface: #fff;
+  --cfg-panel: #fff;
+  --cfg-ink: #222132;
   --cfg-text: #222132;
   --cfg-muted: #69687b;
   --cfg-line: #dedde8;
@@ -19,10 +21,12 @@
   background: var(--cfg-bg);
   color: var(--cfg-text);
 }
-.dark .cfg-root:has(.studio-journey),
+.dark .cfg-root.cfg-root,
 .dark .create-workspace {
   --cfg-bg: #171620;
   --cfg-surface: #211f2d;
+  --cfg-panel: #211f2d;
+  --cfg-ink: #f4f1fc;
   --cfg-text: #f4f1fc;
   --cfg-muted: #b8b2cb;
   --cfg-line: #3c354f;
@@ -1843,4 +1847,70 @@
 }
 .studio-collection-filter[open] .choice-select {
   margin-top: 8px;
+}
+
+/* Entry and saved-result screens use the same section tiles as Studio editors. */
+.cfg-root .cfg-section-layout {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.cfg-root .cfg-sections {
+  display: grid;
+  gap: 7px;
+  padding-block: 6px;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: var(--cfg-bg);
+  box-shadow: none;
+}
+.cfg-root .cfg-sections .cfg-section-button {
+  padding: 13px 12px;
+  min-height: 64px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 12px;
+  background: var(--cfg-panel);
+  color: var(--cfg-muted);
+}
+.cfg-root .cfg-sections .cfg-section-button strong {
+  color: var(--cfg-ink);
+}
+.cfg-root .cfg-sections .cfg-section-button[aria-current="step"] {
+  background: color-mix(in srgb, var(--cfg-violet) 9%, var(--cfg-panel));
+  border-color: var(--cfg-violet);
+  color: var(--cfg-violet);
+}
+.cfg-root .cfg-section-panel > .cfg-body {
+  border: 1px solid var(--cfg-line);
+  border-radius: 16px;
+  padding: 18px;
+}
+@media (max-width: 700px) {
+  .cfg-root .cfg-sections {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 0;
+    margin-bottom: 14px;
+  }
+  .cfg-root .cfg-sections .cfg-section-button {
+    min-height: 66px;
+    padding: 10px;
+    gap: 7px;
+  }
+  .cfg-root .cfg-sections .cfg-section-button strong {
+    font-size: 12px;
+  }
+  .cfg-root .cfg-sections .cfg-section-button > svg {
+    width: 17px;
+  }
+  .cfg-root .cfg-sections .cfg-section-chevron {
+    display: none;
+  }
+  .cfg-root .cfg-section-layout.is-mobile .cfg-section-panel > .cfg-body {
+    padding: 14px;
+    border: 1px solid var(--cfg-line);
+    border-radius: 14px;
+  }
 }

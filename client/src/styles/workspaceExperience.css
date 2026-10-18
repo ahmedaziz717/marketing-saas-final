@@ -1,6 +1,13 @@
 /* The workspace uses one visual system. Status colors and chart series remain semantic. */
 .evoke-shell[data-workflow],
-.evoke-shell [data-workflow] {
+.evoke-shell [data-workflow],
+body:has(.evoke-shell)
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="drawer-content"]
+  ) {
   --workflow-color: #6d50d8;
   --workflow-soft: #eeebf8;
   --primary: #6d50d8;
@@ -23,7 +30,15 @@
   --sidebar-accent-foreground: #6d50d8;
 }
 .dark .evoke-shell[data-workflow],
-.dark .evoke-shell [data-workflow] {
+.dark .evoke-shell [data-workflow],
+.dark
+  body:has(.evoke-shell)
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="drawer-content"]
+  ) {
   --workflow-color: #b29afa;
   --workflow-soft: #302641;
   --primary: #9878ef;
@@ -214,4 +229,75 @@
     flex-wrap: wrap;
     gap: 10px;
   }
+}
+
+/* Portals live outside the sidebar provider; keep forms and review surfaces cohesive. */
+body:has(.evoke-shell)
+  :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+  border-radius: 18px;
+}
+body:has(.evoke-shell)
+  :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+  font-family: inherit;
+  font-size: clamp(20px, 2vw, 25px);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+body:has(.evoke-shell)
+  [data-slot="dialog-content"]
+  :is([data-slot="button"], [data-slot="input"], [data-slot="textarea"]) {
+  border-radius: 9px;
+}
+.evoke-shell .workspace-welcome {
+  padding-block: 24px;
+}
+.evoke-shell .workspace-welcome h1 {
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.evoke-shell .workspace-welcome aside {
+  color: var(--foreground);
+  background: linear-gradient(140deg, var(--accent), var(--card));
+}
+.evoke-shell .workspace-welcome aside h2 {
+  font-size: 25px;
+  line-height: 1.25;
+  font-weight: 600;
+}
+.evoke-shell .workspace-welcome aside p,
+.evoke-shell .workspace-welcome aside span {
+  color: var(--muted-foreground);
+}
+.evoke-shell .workspace-welcome aside svg {
+  color: var(--primary);
+}
+
+/* The original Button default used the marketing teal instead of the workspace accent. */
+.evoke-shell [data-slot="button"][data-variant="default"],
+body:has(.evoke-shell)
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="drawer-content"]
+  )
+  [data-slot="button"][data-variant="default"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.evoke-shell [data-slot="button"][data-variant="default"]:hover:not(:disabled),
+body:has(.evoke-shell)
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="drawer-content"]
+  )
+  [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 88%, #222132);
 }
