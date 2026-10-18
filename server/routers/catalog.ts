@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -14,7 +15,7 @@ import {
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
-import { appendActivity } from "../lib/activity";
+import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import {
   editedProductProvenance,
   productDedupeKey,
@@ -28,6 +29,39 @@ import { serviceDetailsSchema } from "../../shared/catalog";
 const organizationInput = z.object({
   organizationId: z.number().int().positive(),
 });
+const catalogFilters = z.object({
+  search: z.string().max(300).default(""),
+  kind: z.enum(["all", "products", "services"]).default("all"),
+  status: z.enum(["all", "pending", "approved", "rejected"]).default("all"),
+  category: z.string().max(240).default("all"),
+});
+
+function catalogWhere(
+  organizationId: number,
+  filter: z.infer<typeof catalogFilters>
+) {
+  // Treat search text literally, so selection has the same scope as the list.
+  const search = `%${filter.search.replace(/[\\%_]/g, "\\$&")}%`;
+  return and(
+    eq(products.organizationId, organizationId),
+    filter.kind === "services"
+      ? eq(products.recordType, "service")
+      : filter.kind === "products"
+        ? ne(products.recordType, "service")
+        : undefined,
+    filter.status !== "all" ? eq(products.status, filter.status) : undefined,
+    filter.category !== "all"
+      ? eq(products.category, filter.category)
+      : undefined,
+    filter.search
+      ? or(
+          ilike(products.name, search),
+          ilike(products.sku, search),
+          ilike(products.category, search)
+        )
+      : undefined
+  );
+}
 const editableProduct = z.object({
   recordType: z
     .enum([
@@ -133,37 +167,14 @@ export const catalogRouter = router({
     .input(
       organizationInput.extend({
         offset: z.number().int().min(0).default(0),
-        search: z.string().max(300).default(""),
-        kind: z.enum(["all", "products", "services"]).default("all"),
-        status: z
-          .enum(["all", "pending", "approved", "rejected"])
-          .default("all"),
-        category: z.string().max(240).default("all"),
+        ...catalogFilters.shape,
       })
     )
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const filters = and(
-        eq(products.organizationId, input.organizationId),
-        input.kind === "services"
-          ? eq(products.recordType, "service")
-          : input.kind === "products"
-            ? ne(products.recordType, "service")
-            : undefined,
-        input.status !== "all" ? eq(products.status, input.status) : undefined,
-        input.category !== "all"
-          ? eq(products.category, input.category)
-          : undefined,
-        input.search
-          ? or(
-              ilike(products.name, `%${input.search}%`),
-              ilike(products.sku, `%${input.search}%`),
-              ilike(products.category, `%${input.search}%`)
-            )
-          : undefined
-      );
+      const filters = catalogWhere(input.organizationId, input);
       const catalog = await db
         .select()
         .from(products)
@@ -350,10 +361,19 @@ export const catalogRouter = router({
 
   bulkReview: protectedProcedure
     .input(
-      organizationInput.extend({
-        productIds: z.array(z.number().int().positive()).min(1).max(200),
-        decision: z.enum(["approved", "rejected"]),
-      })
+      organizationInput
+        .extend({
+          productIds: z
+            .array(z.number().int().positive())
+            .min(1)
+            .max(200)
+            .optional(),
+          filter: catalogFilters.optional(),
+          decision: z.enum(["approved", "rejected"]),
+        })
+        .refine(input => Boolean(input.productIds) !== Boolean(input.filter), {
+          message: "Choose product IDs or all matching entries",
+        })
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
@@ -363,43 +383,54 @@ export const catalogRouter = router({
       ]);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const owned = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(
-          and(
-            eq(products.organizationId, input.organizationId),
-            inArray(products.id, input.productIds)
-          )
-        );
-      if (owned.length !== new Set(input.productIds).size)
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "One or more products do not belong to this workspace",
-        });
-      await db
-        .update(products)
-        .set({
-          status: input.decision,
-          reviewedByUserId: ctx.user.id,
-          reviewedAtMs: Date.now(),
-          updatedAtMs: Date.now(),
-        })
-        .where(
-          and(
-            eq(products.organizationId, input.organizationId),
-            inArray(products.id, input.productIds)
-          )
-        );
-      await appendActivity({
-        organizationId: input.organizationId,
-        actorUserId: ctx.user.id,
-        action: `catalog.bulk_${input.decision}`,
-        entityType: "product_batch",
-        entityId: input.productIds.join(","),
-        payload: { count: input.productIds.length },
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        const productIds = Array.from(new Set(input.productIds ?? []));
+        const where = input.filter
+          ? catalogWhere(input.organizationId, input.filter)
+          : and(
+              eq(products.organizationId, input.organizationId),
+              inArray(products.id, productIds)
+            );
+        if (!input.filter) {
+          const owned = await tx
+            .select({ id: products.id })
+            .from(products)
+            .where(where);
+          if (owned.length !== productIds.length)
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "One or more products do not belong to this workspace",
+            });
+        }
+        const now = Date.now();
+        const updated = await tx
+          .update(products)
+          .set({
+            status: input.decision,
+            reviewedByUserId: ctx.user.id,
+            reviewedAtMs: now,
+            updatedAtMs: now,
+          })
+          .where(where)
+          .returning({ id: products.id });
+        if (updated.length)
+          await appendActivity(
+            {
+              organizationId: input.organizationId,
+              actorUserId: ctx.user.id,
+              action: `catalog.bulk_${input.decision}`,
+              entityType: "product_batch",
+              entityId: randomUUID(),
+              payload: {
+                count: updated.length,
+                productIds: updated.map(product => product.id),
+                ...(input.filter ? { filter: input.filter } : {}),
+              },
+            },
+            tx
+          );
+        return { updated: updated.length };
       });
-      return { updated: input.productIds.length };
     }),
 
   deleteProduct: protectedProcedure

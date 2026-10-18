@@ -114,14 +114,14 @@ export function CatalogSources({
                 </span>
               </p>
             </div>
-            <Link href="/app/settings/catalog" className="text-sm text-primary">
+            <Link href="/app/catalog" className="text-sm text-primary">
               View catalog
             </Link>
           </div>
           <OfferingDiscovery organizationId={organizationId} />
           <div className="grid gap-4 md:grid-cols-3">
             <Link
-              href="/app/settings/catalog/import"
+              href="/app/catalog/import"
               className="surface p-6 hover:border-primary"
             >
               <Globe className="mb-4 text-primary" />
@@ -212,7 +212,7 @@ export function CatalogSources({
                 }
               />
               <Link
-                href="/app/settings/catalog/import"
+                href="/app/catalog/import"
                 className="text-sm text-primary"
               >
                 View scan and progress

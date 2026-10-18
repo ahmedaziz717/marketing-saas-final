@@ -141,9 +141,9 @@ export const PRODUCT_FEATURES = [
     name: "Catalog & offerings",
     stage: "create",
     availability: "available",
-    href: "/app/settings/catalog",
+    href: "/app/catalog",
     description:
-      "Manage products, services, subscriptions, and import sources in Settings.",
+      "Manage products, services, subscriptions, and import sources in your Product Catalog.",
   },
   {
     id: "advertising",

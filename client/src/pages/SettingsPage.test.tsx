@@ -108,6 +108,9 @@ it("hides administrative actions from creators and labels unimplemented settings
 
 it("keeps platform website administration out of ordinary workspace-owner settings", () => {
   renderSettings();
+  expect(
+    screen.queryByRole("link", { name: "Catalog & offerings" })
+  ).toBeNull();
   expect(document.querySelector('a[href="/app/platform/website"]')).toBeNull();
 });
 it("keeps platform controls out of customer settings even for platform staff", () => {
