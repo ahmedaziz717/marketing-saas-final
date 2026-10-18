@@ -331,9 +331,10 @@ try {
       item.width > 700
     ) {
       const spacing = await page("Runtime.evaluate", {
-        expression: `(() => {
+        expression: `(async () => {
           window.scrollTo(0, 0);
           for (let el = document.querySelector('.cfg-root'); el; el = el.parentElement) el.scrollTop = 0;
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
           const rect = selector => {
             const r = document.querySelector(selector)?.getBoundingClientRect();
             return r && {top: r.top, bottom: r.bottom, height: r.height};
@@ -343,9 +344,10 @@ try {
             expanded: document.querySelector('.journey-summary')?.dataset.expanded === 'true',
             choices: rect('.journey-editor .cfg-card'),
             footer: rect('.cfg-bottom'),
-            categories: rect('.journey-categories')
+            categories: rect('.journey-rail-scroll')
           };
         })()`,
+        awaitPromise: true,
         returnByValue: true,
       });
       const layout = spacing.result.value;
@@ -361,7 +363,7 @@ try {
           layout.categories.bottom > layout.footer.top)
       ) {
         report.passed = false;
-        report.error = `Expanded preview, first choice card and category rail must fit above the footer: ${JSON.stringify(layout)}`;
+        report.error = `Expanded preview, first choice card and visible category viewport must fit above the footer: ${JSON.stringify(layout)}`;
       }
     }
     if (
@@ -411,6 +413,49 @@ try {
         report.error =
           "Sticky categories overlap navigation or footer: " +
           JSON.stringify(sticky.result.value);
+      }
+      const categoryRail = await page("Runtime.evaluate", {
+        expression: `(async () => {
+          const rail = document.querySelector('.journey-rail-scroll');
+          const cards = Array.from(rail.querySelectorAll('.journey-category'));
+          const up = document.querySelector('[aria-label="Scroll categories up"]');
+          const down = document.querySelector('[aria-label="Scroll categories down"]');
+          const wait = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const shown = button => button.getClientRects().length > 0;
+          await wait();
+          const original = rail.scrollTop;
+          const roomy = cards.every(card => card.getBoundingClientRect().height >= 70 && card.querySelector('.journey-category-icon svg'));
+          rail.scrollTop = 0;
+          await wait();
+          const overflows = rail.scrollHeight > rail.clientHeight + 2;
+          const start = !shown(up) && shown(down) === overflows;
+          let scrollButtonWorks = true;
+          let end = true;
+          let lastReachable = true;
+          if (overflows) {
+            down.click();
+            await new Promise(r => setTimeout(r, 450));
+            scrollButtonWorks = rail.scrollTop > 0 && shown(up);
+            rail.scrollTop = rail.scrollHeight;
+            await wait();
+            end = shown(up) && !shown(down);
+            const last = cards.at(-1).getBoundingClientRect();
+            const viewport = rail.getBoundingClientRect();
+            lastReachable = last.bottom <= viewport.bottom + 1 && last.top >= viewport.top;
+          }
+          rail.scrollTop = original;
+          await wait();
+          return {passed: roomy && start && scrollButtonWorks && end && lastReachable, roomy, overflows, start, scrollButtonWorks, end, lastReachable, height: rail.clientHeight, contentHeight: rail.scrollHeight};
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      report.categoryRail = categoryRail.result.value;
+      if (!categoryRail.result.value?.passed) {
+        report.passed = false;
+        report.error =
+          "Category tiles or overflow navigation failed: " +
+          JSON.stringify(categoryRail.result.value);
       }
     }
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
