@@ -1,3 +1,4 @@
+import "@/styles/workspaceExperience.css";
 import { StudioNavigation } from "./StudioNavigation";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";

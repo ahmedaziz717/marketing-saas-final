@@ -157,6 +157,12 @@ try {
   const results = [];
   const cases = [
     ...[
+      "creative-overview",
+      "creative-editor",
+      "creative-checkpoint",
+      "creative-video",
+      "insights-studio",
+      "optimization-studio",
       "model-picker",
       "brand-kit",
       "directory-creative",
@@ -178,6 +184,7 @@ try {
       "navigation-ten",
       "product-home",
       "studio-overview",
+      "workflow-library",
       "video-studio",
       "video-ugc",
       "studio-drafts",
@@ -291,6 +298,20 @@ try {
         expression: `(() => { const sheets = ${JSON.stringify(sheets)}; for (const el of document.querySelectorAll('[role="img"]')) { const url = el.style.backgroundImage.slice(5, -2); if (sheets[url]) el.style.backgroundImage = 'url("' + sheets[url] + '")'; } })()`,
       });
     }
+    const sources = await page("Runtime.evaluate", {
+      expression: `Array.from(document.querySelectorAll('img')).map(img => img.getAttribute('src')).filter(src => src?.startsWith('/studio-art/'))`,
+      returnByValue: true,
+    });
+    const art = {};
+    for (const src of new Set(sources.result.value ?? [])) {
+      const file = path.join("client/public", src);
+      if (existsSync(file))
+        art[src] =
+          "data:image/webp;base64," + (await readFile(file)).toString("base64");
+    }
+    await page("Runtime.evaluate", {
+      expression: `(() => { const art = ${JSON.stringify(art)}; for (const img of document.querySelectorAll('img')) { if (art[img.getAttribute('src')]) img.src = art[img.getAttribute('src')]; } })()`,
+    });
     await new Promise(resolve => setTimeout(resolve, 60));
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
     const image = await page("Page.captureScreenshot", { format: "png" });

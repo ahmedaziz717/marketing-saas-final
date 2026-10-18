@@ -76,13 +76,11 @@ import InsightsStudioPage from "./InsightsStudioPage";
 beforeEach(() => {
   state.options.canEdit = true;
   state.report = null;
-  state.save
-    .mockReset()
-    .mockImplementation(async x => ({
-      ...x,
-      id: "972349b0-04a3-454d-a052-21e3c237fb30",
-      revision: 1,
-    }));
+  state.save.mockReset().mockImplementation(async x => ({
+    ...x,
+    id: "972349b0-04a3-454d-a052-21e3c237fb30",
+    revision: 1,
+  }));
   state.run
     .mockReset()
     .mockResolvedValue({ id: "363ffaae-ed97-4bcc-b339-c13d6b92b3ef" });
@@ -106,20 +104,24 @@ it("keeps report direction in section categories and submits the full setup once
   fireEvent.change(screen.getByLabelText("Report name"), {
     target: { value: "Weekly team report" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Accounts & dates" }));
-  fireEvent.click(screen.getByRole("button", { name: /Example Ads/ }));
-  fireEvent.click(screen.getByRole("button", { name: /^Schedule & delivery/ }));
-  fireEvent.click(screen.getByLabelText(/Run this report automatically/));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Accounts & dates category" })
+  );
+  clickJourney(screen.getByRole("button", { name: /Example Ads/ }));
+  clickJourney(screen.getByRole("button", { name: /^Schedule & delivery/ }));
+  clickJourney(screen.getByLabelText(/Run this report automatically/));
   fireEvent.change(screen.getByLabelText("Frequency"), {
     target: { value: "monthly" },
   });
   fireEvent.change(screen.getByLabelText(/Day of month/), {
     target: { value: "15" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Notifications & PDF" }));
-  fireEvent.click(screen.getByLabelText(/Email scheduled report results/));
-  fireEvent.click(screen.getByRole("button", { name: /^Review & run/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Save & run report" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Notifications & PDF category" })
+  );
+  clickJourney(screen.getByLabelText(/Email scheduled report results/));
+  clickJourney(screen.getByRole("button", { name: /^Review & run/ }));
+  clickJourney(screen.getByRole("button", { name: "Save & run report" }));
   await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1));
   const input = state.save.mock.calls[0][0];
   expect(input.config.name).toBe("Weekly team report");
@@ -151,15 +153,15 @@ it("requires explicit selection before sending a manual-run email", async () => 
     config: c,
   };
   setup(`/app/analytics/studio?id=${state.report.id}`);
-  fireEvent.click(screen.getByRole("button", { name: /^Review & run/ }));
-  fireEvent.click(screen.getByLabelText(/Also notify selected recipients/));
-  fireEvent.click(screen.getByRole("button", { name: "Save & run report" }));
+  clickJourney(screen.getByRole("button", { name: /^Review & run/ }));
+  clickJourney(screen.getByLabelText(/Also notify selected recipients/));
+  clickJourney(screen.getByRole("button", { name: "Save & run report" }));
   await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1));
   expect(state.run.mock.calls[0][0].notify).toBe(true);
 });
 it("shows a clear validation message and blocks execution before sources are selected", () => {
   setup();
-  fireEvent.click(screen.getByRole("button", { name: /^Review & run/ }));
+  clickJourney(screen.getByRole("button", { name: /^Review & run/ }));
   expect(screen.getByText(/Select at least one account or Page/)).toBeTruthy();
   expect(
     (
@@ -170,3 +172,12 @@ it("shows a clear validation message and blocks execution before sources are sel
   ).toBe(true);
   expect(state.run).not.toHaveBeenCalled();
 });
+
+// Business-flow checks accept optional discovery prompts; StudioJourney tests cover the prompt itself.
+function clickJourney(element: Element) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

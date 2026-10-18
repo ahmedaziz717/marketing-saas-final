@@ -30,7 +30,6 @@ import AdvertisingPage from "./pages/AdvertisingPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import MeasureDashboardPage from "./pages/MeasureDashboardPage";
 import InsightsStudioPage from "./pages/InsightsStudioPage";
-import LegacyPublishingPage from "./pages/LegacyPublishingPage";
 import PublishingPage from "./pages/PublishingPage";
 import { GlobalQueryFeedback } from "./components/GlobalQueryFeedback";
 import CatalogPage from "./pages/CatalogPage";
@@ -94,7 +93,10 @@ function Router() {
       <Route path="/app/creatives/workflows">
         <CreativeWorkflowsPage />
       </Route>
-      {["images", "ads", "social", "saved", "ugc", "drafts"].map(view => (
+      <Route path="/app/creatives/images">
+        <CreativeConfiguratorPage initialKind="image" />
+      </Route>
+      {["ads", "social", "saved", "ugc", "drafts"].map(view => (
         <Route
           key={view}
           path={"/app/creatives/" + view}
@@ -135,10 +137,9 @@ function Router() {
       <Route path="/app/social" component={ProductOverviewPage} />
       <Route path="/app/social/facebook" component={SocialMediaPage} />
       <Route path="/app/advertising" component={ProductOverviewPage} />
-      <Route
-        path="/app/advertising/meta/legacy"
-        component={LegacyPublishingPage}
-      />
+      <Route path="/app/advertising/meta/legacy">
+        <SettingsRedirect to="/app/advertising/meta" />
+      </Route>
       <Route path="/app/advertising/meta" component={AdvertisingPage} />
       <Route
         path="/app/optimize/intelligence"

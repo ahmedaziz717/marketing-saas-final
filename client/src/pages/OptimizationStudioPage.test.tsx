@@ -131,14 +131,12 @@ it("uses five sections, saves the executable settings, then quotes and starts on
   fireEvent.change(screen.getByLabelText("Goal & context"), {
     target: { value: "Find the next headline to test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: /^Evidence Account/ }));
+  clickJourney(screen.getByRole("button", { name: /^Evidence Account/ }));
   fireEvent.change(screen.getByLabelText("Meta ad account"), {
     target: { value: cid },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: /^Review & run Confirm/ })
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Save & run analysis" }));
+  clickJourney(screen.getByRole("button", { name: /^Review & run Confirm/ }));
+  clickJourney(screen.getByRole("button", { name: "Save & run analysis" }));
   await waitFor(() => expect(state.run).toHaveBeenCalledOnce());
   expect(state.save).toHaveBeenCalledOnce();
   const graph = state.save.mock.calls[0][0].graph;
@@ -205,18 +203,14 @@ it("reopens saved plans, links an exploratory experiment to its source, and pres
       (screen.getByLabelText("Plan title") as HTMLInputElement).value
     ).toBe("Saved plan")
   );
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: /^Recommendations Findings/ })
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Plan exploratory test" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Plan exploratory test" }));
   fireEvent.change(screen.getByLabelText("Hypothesis"), {
     target: { value: "A clearer benefit increases engagement" },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Save experiment plans" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Save experiment plans" }));
   await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
   expect(
     state.save.mock.calls[0][0].graph.optimizationStudio.experiments[0]
@@ -245,3 +239,12 @@ it("does not run paid generation or overwrite advanced processing edits", async 
   expect(screen.queryByRole("button", { name: "Save plan" })).toBeNull();
   expect(state.run).not.toHaveBeenCalled();
 });
+
+// Business-flow checks accept optional discovery prompts; StudioJourney tests cover the prompt itself.
+function clickJourney(element: Element) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

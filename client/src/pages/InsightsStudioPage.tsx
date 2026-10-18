@@ -19,7 +19,10 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Button } from "@/components/ui/button";
-import { StudioSections } from "@/components/configurator/StudioSections";
+import {
+  StudioJourney,
+  useStudioJourney,
+} from "@/components/configurator/StudioJourney";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
 import {
   useStudioNavigation,
@@ -185,8 +188,8 @@ function Studio({
     setError("");
   };
   const select = (id: string) => {
-    setPage(id);
-    scrollStudioChoices(root.current);
+    const target = sections.find(s => s.categories.some(c => c.id === id));
+    if (target) journey.navigate(target.id, id);
   };
   const currentSection =
     sections.find(s => s.categories.some(c => c.id === page)) ?? sections[0];
@@ -207,6 +210,46 @@ function Studio({
     options.data?.connections.filter(c =>
       config.connectionIds.includes(c.id)
     ) ?? [];
+  const categoryValues: Record<string, string> = {
+    purpose: config.name || "Name your report",
+    sources: `${config.connectionIds.length} accounts · ${reportPeriods.find(p => p[0] === config.period)?.[1] || config.period}`,
+    metrics: `${config.metrics.length} metrics selected`,
+    layout:
+      Object.entries(config.sections)
+        .filter(([, enabled]) => enabled)
+        .map(([name]) => name)
+        .join(", ") || "No sections selected",
+    schedule: scheduleDescription(config),
+    delivery: config.delivery.email
+      ? `${config.delivery.recipientUserIds.length} recipients${config.delivery.attachPdf ? " · PDF" : ""}`
+      : "Email off",
+    review:
+      validation.success && !rangeError
+        ? "Ready to review"
+        : "Inputs to complete",
+    results: output.data ? "Report available" : "No report selected",
+    history: `${runs.data?.length ?? 0} runs`,
+  };
+  const journey = useStudioJourney({
+    storageKey: `insights:${organizationId}:${reportId || "new"}`,
+    sections: sections.map(s => ({
+      ...s,
+      categories: s.categories.map(c => ({
+        ...c,
+        value: categoryValues[c.id],
+        needsInput:
+          (c.id === "sources" && !config.connectionIds.length) ||
+          (c.id === "review" && !validation.success),
+      })),
+    })),
+    section: currentSection.id,
+    category: page,
+    initialFocus: !!initialRun,
+    onNavigate: (_, id) => {
+      setPage(id);
+      scrollStudioChoices(root.current);
+    },
+  });
   const saveReport = async (execute = false) => {
     setError("");
     if (!validation.success) {
@@ -314,20 +357,8 @@ function Studio({
           Save report
         </Button>
       </header>
-      <StudioSections
-        label="Insights Studio sections"
-        items={sections}
-        current={currentSection.id}
-        onSelect={id =>
-          select(sections.find(s => s.id === id)!.categories[0].id)
-        }
-      >
+      <StudioJourney journey={journey} label="Insights Studio sections">
         <div className="cfg-body">
-          <StudioCategories
-            items={currentSection.categories}
-            current={page}
-            onSelect={select}
-          />
           {error && (
             <p role="alert" className="insight-notice">
               {error}
@@ -1372,25 +1403,8 @@ function Studio({
               )}
             </>
           )}
-          {!["results", "history", "review"].includes(page) && (
-            <footer className="insight-studio-footer">
-              <Button
-                variant="outline"
-                disabled={pageIndex <= 0}
-                onClick={() => select(pages[pageIndex - 1].id)}
-              >
-                <ArrowLeft size={15} />
-                Back
-              </Button>
-              <span>{pages[pageIndex]?.title}</span>
-              <Button onClick={() => select(pages[pageIndex + 1].id)}>
-                Continue
-                <ArrowRight size={15} />
-              </Button>
-            </footer>
-          )}
         </div>
-      </StudioSections>
+      </StudioJourney>
     </div>
   );
 }

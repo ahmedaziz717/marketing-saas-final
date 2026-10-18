@@ -153,12 +153,10 @@ const baseProps = { onClose: vi.fn(), onSaved: vi.fn() };
 const caption = () =>
   screen.getByLabelText("Post caption") as HTMLTextAreaElement;
 const saveDraft = () =>
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
 function chooseMedia(kind = "photo") {
-  fireEvent.click(
-    screen.getByRole("button", { name: "Browse approved assets" })
-  );
-  fireEvent.click(screen.getByRole("button", { name: `Choose ${kind}` }));
+  clickJourney(screen.getByRole("button", { name: "Browse approved assets" }));
+  clickJourney(screen.getByRole("button", { name: `Choose ${kind}` }));
 }
 function legacy(content: Record<string, unknown> = {}) {
   return {
@@ -177,6 +175,7 @@ function legacy(content: Record<string, unknown> = {}) {
   } as Publication;
 }
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   api.plan = undefined;
   api.brand = undefined;
@@ -223,7 +222,7 @@ it("confirms the Page and time before approving and scheduling in a single reque
   expect(
     screen.queryByRole("button", { name: "Approve publication" })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Approve & schedule" }));
+  clickJourney(screen.getByRole("button", { name: "Approve & schedule" }));
   expect(api.review).not.toHaveBeenCalled();
   expect(api.queue).not.toHaveBeenCalled();
   const confirmation = within(
@@ -231,7 +230,7 @@ it("confirms the Page and time before approving and scheduling in a single reque
   );
   expect(confirmation.getByText("Our Page")).toBeTruthy();
   expect(confirmation.getByText(/America\/New_York/)).toBeTruthy();
-  fireEvent.click(
+  clickJourney(
     confirmation.getByRole("button", { name: "Approve & schedule" })
   );
   expect(api.review).toHaveBeenCalledWith(
@@ -247,14 +246,12 @@ it("confirms the Page and time before approving and scheduling in a single reque
 
 it("makes immediate publishing explicit and allows backing out without an approval or send", () => {
   showDetails(deliveryItem({ scheduledAtMs: null }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Approve & publish now" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Approve & publish now" }));
   const confirmation = within(
     screen.getByRole("dialog", { name: "Approve & publish now" })
   );
   expect(confirmation.getByText(/as soon as it is processed/)).toBeTruthy();
-  fireEvent.click(confirmation.getByRole("button", { name: "Go back" }));
+  clickJourney(confirmation.getByRole("button", { name: "Go back" }));
   expect(api.review).not.toHaveBeenCalled();
   expect(api.queue).not.toHaveBeenCalled();
 });
@@ -263,8 +260,8 @@ it("shows existing approvals as not scheduled and only queues after a separate e
   showDetails(deliveryItem({ state: "approved" }));
   expect(screen.getByText("Approved · Not scheduled")).toBeTruthy();
   expect(api.queue).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Schedule post" }));
+  clickJourney(
     within(screen.getByRole("dialog", { name: "Schedule post" })).getByRole(
       "button",
       { name: "Schedule post" }
@@ -286,7 +283,7 @@ it("shows scheduled posts as automatic with change-schedule controls and no seco
       name: /Schedule post|Approve & schedule|Schedule delivery/,
     })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Change schedule" }));
+  clickJourney(screen.getByRole("button", { name: "Change schedule" }));
   expect(onEdit).toHaveBeenCalledTimes(1);
 });
 
@@ -301,7 +298,7 @@ it("blocks activation when a selected time has passed and keeps delivery setting
     (screen.getByRole("button", { name: "Schedule post" }) as HTMLButtonElement)
       .disabled
   ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Delivery settings" }));
+  clickJourney(screen.getByRole("button", { name: "Delivery settings" }));
   expect(onEdit).toHaveBeenCalledTimes(1);
   expect(api.queue).not.toHaveBeenCalled();
 });
@@ -310,7 +307,7 @@ it("keeps creators on the request-approval flow", () => {
   api.role = "creator";
   showDetails();
   expect(screen.queryByRole("button", { name: /Approve &/ })).toBeNull();
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Submit for publishing approval" })
   );
   expect(api.submit).toHaveBeenCalledTimes(1);
@@ -320,14 +317,14 @@ it("keeps creators on the request-approval flow", () => {
 it("clearly labels test schedules and explicitly confirms test mode", () => {
   api.liveSocial = false;
   showDetails();
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Approve & save test schedule" })
   );
   const confirmation = within(
     screen.getByRole("dialog", { name: "Approve & save test schedule" })
   );
   expect(confirmation.getByText(/No content will be sent/)).toBeTruthy();
-  fireEvent.click(
+  clickJourney(
     confirmation.getByRole("button", { name: "Approve & save test schedule" })
   );
   expect(api.review).toHaveBeenCalledWith(
@@ -369,7 +366,7 @@ it("leads with the caption and automatically moves a preview link when media is 
   expect(screen.getByLabelText("Content preview").textContent).toContain(
     caption().value
   );
-  fireEvent.click(screen.getByRole("button", { name: "Remove media" }));
+  clickJourney(screen.getByRole("button", { name: "Remove media" }));
   expect(
     (screen.getByLabelText("Website preview (optional)") as HTMLInputElement)
       .value
@@ -390,8 +387,8 @@ it("repairs an older photo/link draft before editing and keeps its URL when AI c
   render(<PublicationComposer {...baseProps} item={legacy()} />);
   expect(caption().value).toContain("https://example.com/shop");
   expect(screen.queryByLabelText("Website preview (optional)")).toBeNull();
-  fireEvent.click(screen.getByText("Write caption with AI (optional)"));
-  fireEvent.click(screen.getByRole("button", { name: "Use AI caption" }));
+  clickJourney(screen.getByText("Write caption with AI (optional)"));
+  clickJourney(screen.getByRole("button", { name: "Use AI caption" }));
   expect(caption().value).toBe("New AI caption\n\nhttps://example.com/shop");
   saveDraft();
   expect(api.save.mock.calls[0][0].content.link).toBe("");
@@ -422,11 +419,11 @@ it("adds a valid website link directly to a video caption and hides image-only A
   render(<PublicationComposer {...baseProps} />);
   chooseMedia("video");
   expect(screen.queryByText("Write caption with AI (optional)")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Add website link" }));
+  clickJourney(screen.getByRole("button", { name: "Add website link" }));
   fireEvent.change(screen.getByLabelText("Website URL"), {
     target: { value: "example.com/shop" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Add to caption" }));
+  clickJourney(screen.getByRole("button", { name: "Add to caption" }));
   expect(caption().value).toBe("https://example.com/shop");
   saveDraft();
   expect(api.save.mock.calls[0][0]).toMatchObject({
@@ -437,7 +434,7 @@ it("adds a valid website link directly to a video caption and hides image-only A
 
 it("allows incomplete drafts but shows actionable required fields before continuing", () => {
   render(<PublicationComposer {...baseProps} />);
-  fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
+  clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).not.toHaveBeenCalled();
   expect(
     screen.getAllByText("Choose a connected Facebook Page before continuing.")
@@ -450,11 +447,11 @@ it("allows incomplete drafts but shows actionable required fields before continu
   fireEvent.change(screen.getByLabelText("Social account"), {
     target: { value: "page" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
+  clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).not.toHaveBeenCalled();
   expect(caption().getAttribute("aria-invalid")).toBe("true");
   fireEvent.change(caption(), { target: { value: "Ready for review." } });
-  fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
+  clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).toHaveBeenCalledOnce();
 });
 
@@ -489,7 +486,7 @@ it.each(["media", "link"])(
     render(<PublicationComposer {...baseProps} item={item} />);
     expect(caption().getAttribute("aria-required")).toBe("false");
     expect(screen.queryByText("Your text will appear here.")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
+    clickJourney(screen.getByRole("button", { name: "Save & continue" }));
     expect(api.save).toHaveBeenCalledOnce();
     expect(api.save.mock.calls[0][0].content.message).toBe("");
   }
@@ -503,7 +500,7 @@ it("keeps the destination URL separate for paid ads", () => {
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: "Continue to creative" }));
+  clickJourney(screen.getByRole("button", { name: "Continue to creative" }));
   expect(screen.queryByLabelText("Post caption")).toBeNull();
   fireEvent.change(screen.getByLabelText("Destination URL"), {
     target: { value: "https://example.com/ad" },
@@ -522,25 +519,25 @@ it("keeps a Studio social draft intact across steps and saves timing without app
     />
   );
   expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Select Our Page" }));
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
+  clickJourney(screen.getByRole("button", { name: "Select Our Page" }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
   fireEvent.change(caption(), {
     target: { value: "Our new collection is here." },
   });
-  fireEvent.click(screen.getByRole("button", { name: /Timing Plan delivery/ }));
+  clickJourney(screen.getByRole("button", { name: /Timing Plan delivery/ }));
   fireEvent.change(screen.getByLabelText("Time zone"), {
     target: { value: "UTC" },
   });
   fireEvent.change(screen.getByLabelText("Publish date and time"), {
     target: { value: "2099-06-15T12:30" },
   });
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   expect(caption().value).toBe("Our new collection is here.");
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: /Review & activate Confirm delivery/ })
   );
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   expect(api.save).toHaveBeenCalledWith(
     expect.objectContaining({
       connectionId: "page",
@@ -584,13 +581,13 @@ it("disables read-only Studio accounts and omits expired connections", () => {
 
 it("uses edited Studio timing for existing drafts and blocks dates in the past", () => {
   render(<PublicationComposer {...baseProps} studio item={deliveryItem()} />);
-  fireEvent.click(screen.getByRole("button", { name: /Timing Plan delivery/ }));
+  clickJourney(screen.getByRole("button", { name: /Timing Plan delivery/ }));
   fireEvent.change(screen.getByLabelText("Publish date and time"), {
     target: { value: "2000-01-01T12:00" },
   });
   saveDraft();
   expect(api.save).not.toHaveBeenCalled();
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Select After confirmation" })
   );
   saveDraft();
@@ -608,10 +605,10 @@ it("does not discard the selected ad image when its selected format tile is clic
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: /Creative Assets & format/ })
   );
-  fireEvent.click(screen.getByRole("button", { name: "Select Single image" }));
+  clickJourney(screen.getByRole("button", { name: "Select Single image" }));
   saveDraft();
   expect(api.save).toHaveBeenCalledWith(
     expect.objectContaining({ assetKey: "asset:1" })
@@ -627,15 +624,17 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   const copyCategories = within(
-    screen.getByRole("group", { name: "Section categories" })
+    document.querySelector(".journey-categories") as HTMLElement
   );
   expect(
     copyCategories
       .getAllByRole("button")
       .slice(0, 9)
-      .map(button => button.textContent)
+      .map(
+        button => button.querySelector(".journey-category-name")?.textContent
+      )
   ).toEqual([
     "Messaging style",
     "Messaging angle",
@@ -649,17 +648,17 @@ it("saves copy direction and the selected Meta CTA, preserves them across sectio
   ]);
   expect(
     copyCategories
-      .getByRole("button", { name: "Messaging style" })
-      .getAttribute("aria-pressed")
+      .getByRole("button", { name: "Open Messaging style category" })
+      .getAttribute("aria-current")
   ).toBe("true");
-  fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
-  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
-  fireEvent.click(screen.getByText("Call to action: LEARN MORE"));
-  fireEvent.click(screen.getByRole("button", { name: "Select Subscribe" }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Select Playful" }));
+  clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
+  clickJourney(screen.getByText("Call to action: LEARN MORE"));
+  clickJourney(screen.getByRole("button", { name: "Select Subscribe" }));
+  clickJourney(
     screen.getByRole("button", { name: /Creative Assets & format/ })
   );
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   expect(
     screen
       .getByRole("button", { name: "Select Subscribe" })
@@ -694,25 +693,21 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   expect(screen.queryByRole("group", { name: "Copy attributes" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Select Playful" }));
-  fireEvent.click(screen.getByRole("button", { name: "Selected (1)" }));
+  clickJourney(screen.getByRole("button", { name: "Select Playful" }));
+  clickJourney(screen.getByRole("button", { name: "Selected (1)" }));
   expect(
     screen.queryByRole("button", { name: "Select Provocative" })
   ).toBeNull();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Next: Messaging angle" })
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Previous: Messaging style" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Next category" }));
+  clickJourney(screen.getByRole("button", { name: "Previous category" }));
   expect(
     screen
       .getByRole("button", { name: "Select Playful" })
       .getAttribute("aria-pressed")
   ).toBe("true");
-  fireEvent.click(screen.getByRole("button", { name: "Let AI choose" }));
+  clickJourney(screen.getByRole("button", { name: "Let AI choose" }));
   expect(
     screen
       .getByRole("button", { name: "AI chooses ✓" })
@@ -721,11 +716,11 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
   expect(
     screen.queryByRole("button", { name: /Create copy with AI/ })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Brief" }));
+  clickJourney(screen.getByRole("button", { name: "Open Brief category" }));
   fireEvent.change(screen.getByLabelText("Audience"), {
     target: { value: "My audience" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Fill from brand" }));
+  clickJourney(screen.getByRole("button", { name: "Fill from brand" }));
   expect((screen.getByLabelText("Audience") as HTMLTextAreaElement).value).toBe(
     "My audience"
   );
@@ -736,8 +731,8 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
     screen.getByLabelText("Additional instructions (optional)"),
     { target: { value: "Use only verified claims." } }
   );
-  fireEvent.click(screen.getByRole("button", { name: "Next: Compose" }));
-  fireEvent.click(screen.getByRole("button", { name: "Previous: Brief" }));
+  clickJourney(screen.getByRole("button", { name: "Next category" }));
+  clickJourney(screen.getByRole("button", { name: "Previous category" }));
   expect(
     (
       screen.getByLabelText(
@@ -784,8 +779,8 @@ it("keeps the Studio on Compose after saving and uses the saved revision on subs
       initialAssetKey="asset:1"
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: /Copy Words & AI/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Compose" }));
+  clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
+  clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
   fireEvent.change(caption(), { target: { value: "First draft" } });
   saveDraft();
   await completeSave(1);
@@ -814,8 +809,8 @@ it("saves the reviewed version and publishes once from Studio with the new revis
   const publish = screen.getByRole("button", {
     name: "Publish now",
   });
-  fireEvent.click(publish);
-  fireEvent.click(publish);
+  clickJourney(publish);
+  clickJourney(publish);
   expect(api.save).toHaveBeenCalledOnce();
   expect(api.reviewAsync).not.toHaveBeenCalled();
   await completeSave(3);
@@ -844,7 +839,7 @@ it("uses test mode explicitly and sends creator drafts for approval instead of p
       studioEntry={{ section: "preview", visit: 1 }}
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: "Save test schedule" }));
+  clickJourney(screen.getByRole("button", { name: "Save test schedule" }));
   await completeSave(3);
   expect(api.reviewAsync.mock.calls[0][0].delivery.mode).toBe("test");
   cleanup();
@@ -858,7 +853,7 @@ it("uses test mode explicitly and sends creator drafts for approval instead of p
       studioEntry={{ section: "preview", visit: 1 }}
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+  clickJourney(screen.getByRole("button", { name: "Submit for approval" }));
   await completeSave(3);
   expect(api.submitAsync).toHaveBeenCalledWith(
     expect.objectContaining({ revision: 3 })
@@ -879,13 +874,13 @@ it("keeps the saved draft and shows an inline error when activation fails", asyn
       studioEntry={{ section: "preview", visit: 1 }}
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+  clickJourney(screen.getByRole("button", { name: "Schedule post" }));
   await completeSave(3);
   expect(screen.getByRole("alert").textContent).toContain(
     "Publishing availability changed"
   );
   expect(onSaved.mock.calls.at(-1)![1]).toBeUndefined();
-  fireEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+  clickJourney(screen.getByRole("button", { name: "Schedule post" }));
   expect(api.save.mock.calls.at(-1)![0].revision).toBe(3);
 });
 it("renders delivery status inside Studio without the old review dialog", () => {
@@ -940,7 +935,7 @@ it("creates a Meta ad paused through the same confirmed Studio delivery action",
       /This creates your ad in Meta with its status set to paused/
     )
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Create paused ad" }));
+  clickJourney(screen.getByRole("button", { name: "Create paused ad" }));
   await completeSave(3);
   expect(api.reviewAsync).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -950,3 +945,11 @@ it("creates a Meta ad paused through the same confirmed Studio delivery action",
     })
   );
 });
+
+function clickJourney(element: HTMLElement) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

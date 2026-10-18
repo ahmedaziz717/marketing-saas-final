@@ -1,3 +1,8 @@
+import CreativeWorkflowsPage from "../../client/src/pages/CreativeWorkflowsPage";
+import CreativeConfiguratorPage from "../../client/src/pages/CreativeConfiguratorPage";
+import InsightsStudioPage from "../../client/src/pages/InsightsStudioPage";
+import OptimizationStudioPage from "../../client/src/pages/OptimizationStudioPage";
+import { VideoStudio } from "../../client/src/components/VideoStudio";
 import { useState } from "react";
 import { ThemeProvider } from "../../client/src/contexts/ThemeContext";
 import { defaultVideoSetup } from "../../shared/videoCreation";
@@ -227,7 +232,7 @@ const fixtureModels = [
   generationModels.find(m => m.kind === "image")!,
 ];
 function respond(path: string, input: any) {
-  if (path === "models.catalog")
+  if (path === "models.catalog" || path === "models.studioCatalog")
     return fixtureModels.map(m => ({
       ...m,
       routeId: m.id,
@@ -238,6 +243,14 @@ function respond(path: string, input: any) {
       reason: null,
       direct: false,
     }));
+  if (path === "workflows.availability") return { enabled: true, reason: null };
+  if (
+    path === "workflows.list" ||
+    path === "workflows.listApps" ||
+    path === "insights.runs"
+  )
+    return [];
+  if (path === "creativeBuilder.quote") return { credits: 24, outputs: 1 };
   if (path === "models.credits")
     return {
       remaining: 80,
@@ -307,6 +320,9 @@ function respond(path: string, input: any) {
       brand: {
         status: "active",
         name: "Learn Like This",
+        colors: ["#6d50d8"],
+        fonts: ["Rubik"],
+        voice: "Clear and inviting",
         businessProfile: {
           model: "directory",
           summary:
@@ -408,6 +424,7 @@ function respond(path: string, input: any) {
     return {
       connections: connections.items,
       members: [],
+      recipients: [],
       canEdit: true,
       emailConfigured: false,
     };
@@ -749,6 +766,14 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "workflow-library": "/app/creatives/workflows",
+  "creative-overview": "/app/creatives/studio",
+  "creative-editor": "/app/creatives/studio",
+  "creative-checkpoint": "/app/creatives/studio",
+  "creative-video": "/app/creatives/video",
+  "insights-studio": "/app/analytics/studio",
+  "optimization-studio": "/app/optimize/studio",
+
   "model-picker": "/app/model-picker",
   "studio-media": "/app/creatives/social?new=1",
   "studio-legacy": "/app/creatives/saved?asset=creative%3A42",
@@ -861,6 +886,43 @@ function ModelPickerFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/creatives/workflows")
+    return (
+      <DashboardLayout>
+        <CreativeWorkflowsPage />
+      </DashboardLayout>
+    );
+  if (
+    which.startsWith("creative-") &&
+    ["/app/creatives/studio", "/app/creatives/video"].includes(path)
+  )
+    return (
+      <DashboardLayout>
+        <CreativeConfiguratorPage
+          initialKind={which === "creative-video" ? "video" : "image"}
+        />
+      </DashboardLayout>
+    );
+  if (path === "/app/analytics/studio")
+    return (
+      <DashboardLayout>
+        <InsightsStudioPage />
+      </DashboardLayout>
+    );
+  if (path === "/app/optimize/studio")
+    return (
+      <DashboardLayout>
+        <OptimizationStudioPage />
+      </DashboardLayout>
+    );
+  // Historical component fixtures remain separate from production routes.
+  if (which === "video-studio" || which === "video-ugc")
+    return (
+      <DashboardLayout>
+        <h1>Video component compatibility</h1>
+        <VideoStudio />
+      </DashboardLayout>
+    );
   if (path === "/app/activate/studio")
     return (
       <DashboardLayout>
@@ -954,10 +1016,35 @@ const check = (condition: any, message: string) => {
 };
 const button = (name: string) =>
   Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-    b => b.textContent?.trim() === name || b.getAttribute("aria-label") === name
+    b =>
+      b.textContent?.trim() === name ||
+      b.getAttribute("aria-label") === name ||
+      b.getAttribute("aria-label") === `Open ${name} category`
   );
 async function click(name: string) {
-  const b = button(name);
+  let b = button(name);
+  if (b?.matches(".journey-category") && !b.getClientRects().length) {
+    const overview = button("All categories");
+    if (overview?.getClientRects().length) {
+      overview.click();
+      await pause();
+      b = button(name);
+    }
+  }
+  if (
+    b &&
+    !b.getClientRects().length &&
+    document.querySelector(".studio-journey")
+  ) {
+    const active = document.querySelector<HTMLButtonElement>(
+      '.journey-category[aria-current="true"]'
+    );
+    if (active?.getClientRects().length && !active.disabled) {
+      active.click();
+      await pause();
+      b = button(name);
+    }
+  }
   check(b && !b.disabled, name + " is available");
   b!.scrollIntoView({ block: "center", behavior: "instant" });
   await pause();
@@ -1035,19 +1122,56 @@ async function pressStudioControl(
   control!.click();
   await pause();
 }
-async function studioSection(title: string) {
-  await pressStudioControl(
-    Array.from(
-      document.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Activation sections"] button'
-      )
-    ).find(
-      b =>
-        b.getClientRects().length &&
-        b.querySelector("strong")?.textContent === title
-    ),
-    title
+async function acceptDiscovery() {
+  const keep =
+    button("Keep defaults & continue") ??
+    button("Continue with current choices");
+  if (keep?.getClientRects().length) {
+    keep.click();
+    await pause();
+  }
+}
+async function studioSection(title: string, openCategory = true) {
+  const overview = button("All categories");
+  if (innerWidth <= 700 && overview?.getClientRects().length) {
+    overview.click();
+    await pause();
+  }
+  const select = document.querySelector<HTMLSelectElement>(
+    ".journey-mobile-section select"
   );
+  if (select?.getClientRects().length) {
+    const option = Array.from(select.options).find(o =>
+      o.textContent?.includes(title)
+    );
+    check(option, title + " is available");
+    select.value = option!.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await pause();
+  } else {
+    await pressStudioControl(
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          '.journey-sections button, [aria-label="Activation sections"] button'
+        )
+      ).find(
+        b =>
+          b.getClientRects().length &&
+          b.querySelector("strong")?.textContent === title
+      ),
+      title
+    );
+  }
+  await acceptDiscovery();
+  if (innerWidth <= 700 && openCategory) {
+    const active = document.querySelector<HTMLButtonElement>(
+      '.journey-category[aria-current="true"]'
+    );
+    if (active?.getClientRects().length && !active.disabled) {
+      active.click();
+      await pause();
+    }
+  }
 }
 async function clickPrefix(title: string) {
   await pressStudioControl(
@@ -1101,6 +1225,93 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
   try {
     await pause();
     layout();
+    if (
+      [
+        "creative-overview",
+        "creative-editor",
+        "creative-checkpoint",
+        "creative-video",
+      ].includes(which)
+    ) {
+      await studioSection("Look & Feel", false);
+      const cards = Array.from(
+        document.querySelectorAll<HTMLElement>(".journey-category")
+      );
+      check(
+        cards.length === (which === "creative-video" ? 6 : 7),
+        "Every Look & Feel category is visible"
+      );
+      check(
+        cards.every(c => c.getClientRects().length),
+        "Categories are visible without opening a hidden strip"
+      );
+      if (innerWidth <= 700) {
+        check(
+          !document
+            .querySelector<HTMLElement>(".journey-editor")!
+            .getClientRects().length,
+          "Mobile starts with the overview"
+        );
+        const columns = new Set(
+          cards.map(c => Math.round(c.getBoundingClientRect().left))
+        );
+        check(columns.size === 2, "Mobile overview has two columns");
+      }
+      if (which === "creative-editor" || which === "creative-checkpoint") {
+        await click("Theme");
+        if (innerWidth <= 700) {
+          check(
+            !document
+              .querySelector<HTMLElement>(".journey-overview")!
+              .getClientRects().length,
+            "Focused editor hides category overview"
+          );
+          if (which === "creative-checkpoint") await click("All categories");
+        }
+      }
+      if (which === "creative-checkpoint") {
+        await click("Continue to next section");
+        check(
+          document
+            .querySelector('[role="dialog"]')
+            ?.textContent?.includes("Keep these defaults?"),
+          "Leaving a section reviews its remaining defaults"
+        );
+      }
+      check(
+        document.querySelectorAll(".cfg-bottom .cfg-primary").length === 1,
+        "One Generate action"
+      );
+      check(mutations.length === 0, "Exploration never starts generation");
+      layout();
+    }
+    if (which === "insights-studio" || which === "optimization-studio") {
+      check(
+        !!document.querySelector(".studio-journey"),
+        "Studio uses the shared journey"
+      );
+      const cards = Array.from(
+        document.querySelectorAll<HTMLElement>(".journey-category")
+      );
+      check(
+        cards.length === 2 && cards.every(c => c.getClientRects().length),
+        "All starting categories are visible"
+      );
+      await click(
+        which === "insights-studio" ? "Report purpose" : "What to improve"
+      );
+      check(
+        !!document
+          .querySelector<HTMLElement>(".journey-editor")
+          ?.getClientRects().length,
+        "Category opens the editor"
+      );
+      check(
+        mutations.length === 0,
+        "Navigation never runs a report or analysis"
+      );
+      layout();
+    }
     if (which === "model-picker") {
       await click("Browse 500 models");
       layout();
@@ -1432,6 +1643,14 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         !mutations.includes("video.generate"),
         "Saving creator video never starts generation"
       );
+      layout();
+    }
+    if (which === "workflow-library") {
+      check(
+        document.querySelectorAll(".wf-template").length > 0,
+        "Workflow templates render"
+      );
+      check(!mutations.length, "Browsing workflows performs no writes");
       layout();
     }
     if (which === "studio-overview") {

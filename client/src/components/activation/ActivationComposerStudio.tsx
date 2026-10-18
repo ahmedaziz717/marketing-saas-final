@@ -1,3 +1,8 @@
+import {
+  StudioJourney,
+  StudioSummary,
+  useStudioJourney,
+} from "../configurator/StudioJourney";
 import { StudioCopyComposer } from "./StudioCopyComposer";
 import { scrollStudioChoices } from "../configurator/studioNavigation";
 import { CopyDirectionTiles } from "./CopyDirectionTiles";
@@ -25,15 +30,17 @@ import type {
 import { channelNames } from "@shared/channels";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { placementSlots, type PlacementSlot } from "@shared/metaPlacements";
-import { copyDimensions, type CopyDimension } from "@shared/copyTaxonomy";
+import {
+  copyDimensions,
+  copyTaxonomy,
+  type CopyDimension,
+} from "@shared/copyTaxonomy";
 import { StudioCard } from "../configurator/StudioCard";
 import { ContentPreview } from "../ContentPreview";
 import { AdCampaignPicker } from "../AdCampaignPicker";
 import { CampaignPlanSelect } from "../CampaignPlanSelect";
 import { StudioAssetTiles } from "./StudioAssetTiles";
 import {
-  ActivationCategories,
-  ActivationSections,
   activationSections,
   copyDirectionCategories,
   normalizeCopyCategory,
@@ -44,6 +51,7 @@ import {
 type Account = { id: string; name: string; details: ConnectionDetails };
 type Props = {
   organizationId: number;
+  draftId?: string;
   role: string;
   channel: Channel;
   section: ActivationSection;
@@ -137,8 +145,8 @@ export function ActivationComposerStudio(p: Props) {
         a.purpose === "finished"
     )
   );
-  const items =
-    p.section === "setup"
+  const getItems = (section: ActivationSection) =>
+    section === "setup"
       ? [
           { id: "channel", title: "Channel" },
           { id: "account", title: meta ? "Ad account" : "Facebook Page" },
@@ -160,142 +168,174 @@ export function ActivationComposerStudio(p: Props) {
             : []),
           { id: "details", title: meta ? "Ad details" : "Post details" },
         ]
-      : p.section === "creative"
+      : section === "creative"
         ? [
             ...(meta ? [{ id: "format", title: "Ad format" }] : []),
             { id: "assets", title: "Approved assets" },
           ]
-        : p.section === "copy"
+        : section === "copy"
           ? [
               ...copyDirectionCategories,
               { id: "brief", title: "Brief" },
               { id: "compose", title: "Compose" },
             ]
-          : p.section === "delivery"
+          : section === "delivery"
             ? [{ id: "schedule", title: "Delivery time" }]
             : [{ id: "summary", title: "Final check" }];
-  const chooseCategory = (value: string) => {
-    if (value === "channel") p.onChangeChannel?.();
-    else {
-      setCategories(previous => ({ ...previous, [p.section]: value }));
-      scrollStudioChoices(p.scrollBody.current);
-    }
+  const items = getItems(p.section);
+  const values: Record<string, string> = {
+    channel: channelNames[p.channel],
+    account: account?.name || "Choose an account",
+    page: account?.details.pageId || "Choose a Page",
+    campaign: p.content.adSetId ? "Ad set selected" : "Choose an ad set",
+    details: p.content.title || "Add a name",
+    format:
+      p.format === "single"
+        ? "Single image or video"
+        : p.format === "carousel"
+          ? "Carousel"
+          : "By placement",
+    assets: `${keys.length} approved assets`,
+    brief: p.content.copyInstructions || "Brand context",
+    compose: p.content.message ? "Copy added" : "Add your copy",
+    schedule: p.local
+      ? `${p.local.replace("T", " · ")} · ${p.timezone}`
+      : "After final confirmation",
+    summary: Object.keys(p.errors).length
+      ? "Inputs to complete"
+      : "Review before activating",
   };
+  copyDimensions.forEach(dimension => {
+    values[dimension] =
+      copyTaxonomy[dimension].values
+        .filter(value =>
+          p.content.copyDirection?.[dimension]?.includes(value.id)
+        )
+        .map(value => value.label)
+        .join(", ") || "AI recommendation";
+  });
+  const journey = useStudioJourney({
+    storageKey: `activation:${p.organizationId}:${p.channel}:${p.draftId || "new"}`,
+    sections: activationSections.map(section => ({
+      ...section,
+      initialCategory: categories[section.id],
+      categories: getItems(section.id).map(item => ({
+        ...item,
+        value: values[item.id],
+        needsInput:
+          (item.id === "account" && !account) ||
+          (item.id === "campaign" && !p.content.adSetId) ||
+          (item.id === "page" && !account?.details.pageId),
+      })),
+    })),
+    section: p.section,
+    category,
+    initialFocus: !!p.entry?.category,
+    onNavigate: (section, value) => {
+      if (value === "channel") {
+        p.onChangeChannel?.();
+        return;
+      }
+      setCategories(previous => ({ ...previous, [section]: value }));
+      p.onSection(section as ActivationSection);
+      scrollStudioChoices(
+        p.scrollBody.current?.closest(".cfg-root") as HTMLElement | null
+      );
+    },
+  });
+  useEffect(() => {
+    if (p.entry?.category && p.active !== false) journey.reveal();
+  }, [p.entry, p.active]);
+  const chooseCategory = (value: string) => journey.navigate(p.section, value);
   const field = (name: keyof PublicationContent, value: string) =>
     p.setContent(previous => ({ ...previous, [name]: value }));
   const heading =
     items.find(item => item.id === category)?.title ?? items[0].title;
-  const nextCategory = items
-    .slice(items.findIndex(item => item.id === category) + 1)
-    .find(item => !("disabled" in item && item.disabled));
-  const previousCategory = items
-    .slice(
-      0,
-      items.findIndex(item => item.id === category)
-    )
-    .reverse()
-    .find(item => !("disabled" in item && item.disabled));
-  const previousSection =
-    activationSections[
-      activationSections.findIndex(section => section.id === p.section) - 1
-    ];
-  const goPrevious = () =>
-    previousCategory
-      ? chooseCategory(previousCategory.id)
-      : previousSection && p.onSection(previousSection.id);
-  const nextSection =
-    activationSections[
-      activationSections.findIndex(section => section.id === p.section) + 1
-    ];
-  const goNext = () =>
-    nextCategory
-      ? chooseCategory(nextCategory.id)
-      : nextSection && p.onSection(nextSection.id);
   return (
     <div className="activation-composer">
       <fieldset disabled={p.pending} className="cfg-workspace">
-        <div
-          className="cfg-stage activation-preview"
-          hidden={
-            (p.section === "copy" && category === "compose") ||
-            p.section === "preview"
-          }
+        <StudioSummary
+          subtitle={`${p.content.title || "Your activation"} · ${channelNames[p.channel]}`}
         >
-          <ContentPreview
-            channel={p.channel}
-            content={p.content}
-            asset={selectedAsset}
-            assets={p.assets}
-          />
-          <div className="cfg-build activation-summary">
-            <span className="cfg-eyebrow">Your activation</span>
-            <h3>{p.content.title || (meta ? "Your ad" : "Your post")}</h3>
-            <div className="cfg-summary">
-              {[
-                {
-                  title: "Channel",
-                  value: channelNames[p.channel],
-                  section: "setup",
-                  category: "channel",
-                },
-                {
-                  title: "Account",
-                  value: account?.name || "Choose an account",
-                  section: "setup",
-                  category: "account",
-                },
-                {
-                  title: "Creative",
-                  value: keys.length
-                    ? `${keys.length} approved asset${keys.length === 1 ? "" : "s"}`
-                    : "No media selected",
-                  section: "creative",
-                  category: "assets",
-                },
-                {
-                  title: "Copy",
-                  value: p.content.message
-                    ? "Copy added"
-                    : "Choose your direction",
-                  section: "copy",
-                  category: "messaging_style",
-                },
-                {
-                  title: "Timing",
-                  value: p.local
-                    ? `${p.local.replace("T", " · ")} · ${p.timezone}`
-                    : "After final confirmation",
-                  section: "delivery",
-                  category: "schedule",
-                },
-              ].map(item => (
-                <button
-                  key={item.title}
-                  type="button"
-                  onClick={() => {
-                    if (item.category === "channel") p.onChangeChannel?.();
-                    else {
-                      setCategories(previous => ({
-                        ...previous,
-                        [item.section]: item.category,
-                      }));
-                      p.onSection(item.section as ActivationSection);
-                    }
-                  }}
-                >
-                  <span>{item.title}</span>
-                  <strong>{item.value}</strong>
-                </button>
-              ))}
+          <div
+            className="cfg-stage activation-preview"
+            hidden={
+              (p.section === "copy" && category === "compose") ||
+              p.section === "preview"
+            }
+          >
+            <ContentPreview
+              channel={p.channel}
+              content={p.content}
+              asset={selectedAsset}
+              assets={p.assets}
+            />
+            <div className="cfg-build activation-summary">
+              <span className="cfg-eyebrow">Your activation</span>
+              <h3>{p.content.title || (meta ? "Your ad" : "Your post")}</h3>
+              <div className="cfg-summary">
+                {[
+                  {
+                    title: "Channel",
+                    value: channelNames[p.channel],
+                    section: "setup",
+                    category: "channel",
+                  },
+                  {
+                    title: "Account",
+                    value: account?.name || "Choose an account",
+                    section: "setup",
+                    category: "account",
+                  },
+                  {
+                    title: "Creative",
+                    value: keys.length
+                      ? `${keys.length} approved asset${keys.length === 1 ? "" : "s"}`
+                      : "No media selected",
+                    section: "creative",
+                    category: "assets",
+                  },
+                  {
+                    title: "Copy",
+                    value: p.content.message
+                      ? "Copy added"
+                      : "Choose your direction",
+                    section: "copy",
+                    category: "messaging_style",
+                  },
+                  {
+                    title: "Timing",
+                    value: p.local
+                      ? `${p.local.replace("T", " · ")} · ${p.timezone}`
+                      : "After final confirmation",
+                    section: "delivery",
+                    category: "schedule",
+                  },
+                ].map(item => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={() => {
+                      if (item.category === "channel") p.onChangeChannel?.();
+                      else {
+                        journey.navigate(item.section, item.category);
+                      }
+                    }}
+                  >
+                    <span>{item.title}</span>
+                    <strong>{item.value}</strong>
+                  </button>
+                ))}
+              </div>
+              <p>
+                {meta
+                  ? "Ads are delivered to Meta paused. Review and launch from Meta Ads Manager."
+                  : "Saving a draft does not publish it. Review and confirm delivery when ready."}
+              </p>
             </div>
-            <p>
-              {meta
-                ? "Ads are delivered to Meta paused. Review and launch from Meta Ads Manager."
-                : "Saving a draft does not publish it. Review and confirm delivery when ready."}
-            </p>
           </div>
-        </div>
-        <ActivationSections current={p.section} onSelect={p.onSection}>
+        </StudioSummary>
+        <StudioJourney journey={journey} label="Activation sections">
           {copyBusy && !(p.section === "copy" && category === "compose") && (
             <div className="studio-background-copy" role="status">
               <span className="studio-small-spinner" /> Copy is generating. It
@@ -303,8 +343,7 @@ export function ActivationComposerStudio(p: Props) {
               <button
                 type="button"
                 onClick={() => {
-                  setCategories(previous => ({ ...previous, copy: "compose" }));
-                  p.onSection("copy");
+                  journey.navigate("copy", "compose");
                 }}
               >
                 View progress
@@ -312,11 +351,6 @@ export function ActivationComposerStudio(p: Props) {
             </div>
           )}
           <div className="cfg-body activation-fields" ref={p.scrollBody}>
-            <ActivationCategories
-              items={items}
-              current={category}
-              onSelect={chooseCategory}
-            />
             <div className="cfg-content-title">
               <div>
                 <span className="cfg-eyebrow">
@@ -900,11 +934,7 @@ export function ActivationComposerStudio(p: Props) {
                         <button
                           type="button"
                           onClick={() => {
-                            setCategories(previous => ({
-                              ...previous,
-                              [row.section]: row.category,
-                            }));
-                            p.onSection(row.section as ActivationSection);
+                            journey.navigate(row.section, row.category);
                           }}
                         >
                           Edit {row.title.toLowerCase()}
@@ -943,7 +973,7 @@ export function ActivationComposerStudio(p: Props) {
               </p>
             ))}
           </div>
-        </ActivationSections>
+        </StudioJourney>
         <div className="cfg-actions activation-footer">
           <button type="button" onClick={p.onClose}>
             Cancel
@@ -954,35 +984,13 @@ export function ActivationComposerStudio(p: Props) {
           <button type="button" disabled={copyBusy} onClick={() => p.onSave()}>
             {p.pending ? "Saving…" : "Save draft"}
           </button>
-          {(previousCategory || previousSection) && (
-            <button
-              type="button"
-              onClick={goPrevious}
-              aria-label={`Previous: ${previousCategory?.title ?? previousSection?.title}`}
-            >
-              Previous
-            </button>
-          )}
           {p.section !== "preview" ? (
             <button
               type="button"
               className="cfg-primary"
-              onClick={goNext}
-              aria-label={
-                p.section === "copy"
-                  ? `Next: ${nextCategory?.title ?? nextSection?.title}`
-                  : undefined
-              }
+              onClick={() => journey.navigate("preview", "summary")}
             >
-              {p.section === "copy"
-                ? nextCategory?.id === "compose"
-                  ? "Continue to compose"
-                  : nextCategory
-                    ? "Next"
-                    : "Continue to timing"
-                : nextCategory
-                  ? `Continue to ${nextCategory.title.toLowerCase()}`
-                  : `Continue to ${nextSection?.title.toLowerCase()}`}
+              Review & activate
             </button>
           ) : (
             <button

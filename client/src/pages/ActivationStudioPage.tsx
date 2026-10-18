@@ -170,7 +170,6 @@ function ActivationStudio() {
             <h1>
               Activation Studio<span>Made to reach people</span>
             </h1>
-            <span className="cfg-pilot">Preview app</span>
           </div>
           <p>
             Turn your creative into a post or ad. Choose where, refine the
