@@ -821,7 +821,7 @@
   padding: 18px;
   margin-bottom: 20px;
 }
-.insight-layout-editor > label {
+.insight-layout-editor > :is(label, .choice-field) {
   flex: 1;
   min-width: 200px;
 }
@@ -1224,7 +1224,7 @@
   line-height: 1.7;
   color: var(--muted-foreground);
 }
-.insight-component-picker > label {
+.insight-component-picker > :is(label, .choice-field) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1249,7 +1249,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.insight-widget-metrics label,
+.insight-widget-metrics :is(label, .choice-field),
 .insight-widget-check {
   display: flex;
   align-items: center;
@@ -1302,7 +1302,7 @@
   gap: 12px;
   margin-top: 12px;
 }
-.insight-custom-colors label {
+.insight-custom-colors :is(label, .choice-field) {
   display: flex;
   flex-direction: column;
   gap: 8px;

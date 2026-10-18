@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { copyComparisonSchema } from "@shared/copyEvidence";
 import type { WorkflowNode } from "@shared/creativeWorkflow";
 import { copyDimensions, copyTaxonomy } from "@shared/copyTaxonomy";
@@ -38,9 +39,9 @@ export function CopyComparisonSettings({
           </label>
         ))}
       </fieldset>
-      <label>
+      <ChoiceField>
         Comparison objective
-        <select
+        <VisualSelect
           value={settings.objective}
           onChange={e =>
             onChange({
@@ -53,8 +54,8 @@ export function CopyComparisonSettings({
         >
           <option value="cpa">Lowest purchase CPA</option>
           <option value="roas">Highest purchase ROAS</option>
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       <label>
         Minimum impressions per value
         <input

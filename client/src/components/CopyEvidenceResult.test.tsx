@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { CopyEvidenceResult } from "./CopyEvidenceResult";
@@ -132,7 +133,7 @@ it("lets readers explore dimensions and supporting copy while keeping technical 
   };
   render(<CopyEvidenceResult data={data} />);
   expect(screen.getByRole("heading", { name: "Copy analysis" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Copy dimension"), {
+  changeField(screen.getByLabelText("Copy dimension"), {
     target: { value: "offer" },
   });
   expect(
@@ -144,13 +145,13 @@ it("lets readers explore dimensions and supporting copy while keeping technical 
   expect(screen.getAllByText("Saving money")[0]).toBeTruthy();
   const technical = screen.getByText(/Ad: 123456789/).closest("details");
   expect(technical?.open).toBe(false);
-  fireEvent.change(screen.getByLabelText("Copy field"), {
+  changeField(screen.getByRole("radiogroup", { name: "Copy field" }), {
     target: { value: "subheadline" },
   });
   expect(
     screen.getByText(/External image subheadlines are not extracted/)
   ).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Search classified ads"), {
+  changeField(screen.getByLabelText("Search classified ads"), {
     target: { value: "not present" },
   });
   expect(screen.getByText("No ads match this search.")).toBeTruthy();

@@ -73,6 +73,8 @@ const icons: Record<string, LucideIcon> = {
   mood: Smile,
   composition: PanelLeft,
   message: Type,
+  font: Type,
+  fonts: Type,
   direction: Compass,
   audio: AudioLines,
   subtitles: Subtitles,

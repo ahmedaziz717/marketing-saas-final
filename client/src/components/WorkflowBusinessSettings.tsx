@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { OptimizationNodeSettings } from "./OptimizationNodeSettings";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -46,11 +47,11 @@ export function WorkflowBusinessSettings({
       <OptimizationNodeSettings node={node} onChange={onChange} />
       {meta.channel && (
         <>
-          <label>
+          <ChoiceField>
             {meta.channel === "facebook"
               ? "Connected Facebook Page"
               : "Connected Meta ad account"}
-            <select
+            <VisualSelect
               value={config.connectionId ?? ""}
               onChange={e =>
                 onChange({
@@ -67,8 +68,8 @@ export function WorkflowBusinessSettings({
                   {c.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           {!connections.isLoading && !choices.length && (
             <Link href="/app/settings/integrations" className="wf-setting-help">
               Connect{" "}
@@ -82,20 +83,20 @@ export function WorkflowBusinessSettings({
       {["meta_ad", "meta_activate", "meta_report"].includes(node.type) &&
         config.connectionId && (
           <>
-            <label>
+            <ChoiceField>
               Show campaigns and ads
-              <select
+              <VisualSelect
                 value={status}
                 onChange={e => setStatus(e.target.value as typeof status)}
               >
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
                 <option value="all">All statuses</option>
-              </select>
-            </label>
-            <label>
+              </VisualSelect>
+            </ChoiceField>
+            <ChoiceField>
               Campaign
-              <select
+              <VisualSelect
                 value={config.campaignId ?? ""}
                 onChange={e =>
                   onChange({
@@ -115,12 +116,12 @@ export function WorkflowBusinessSettings({
                     {String(c.name)}
                   </option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             {node.type === "meta_ad" && (
-              <label>
+              <ChoiceField>
                 Existing ad set
-                <select
+                <VisualSelect
                   value={config.adSetId ?? ""}
                   onChange={e =>
                     onChange({ adSetId: e.target.value || undefined })
@@ -138,13 +139,13 @@ export function WorkflowBusinessSettings({
                         {String(a.name)}
                       </option>
                     ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
             )}
             {node.type === "meta_activate" && (
-              <label>
+              <ChoiceField>
                 Existing ad
-                <select
+                <VisualSelect
                   value={config.adId ?? ""}
                   onChange={e =>
                     onChange({ adId: e.target.value || undefined })
@@ -162,8 +163,8 @@ export function WorkflowBusinessSettings({
                         {String(a.name)} · {String(a.status)}
                       </option>
                     ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
             )}
             {objects.isLoading && <small>Loading from Meta…</small>}
             {objects.error && <p role="alert">{objects.error.message}</p>}
@@ -207,9 +208,9 @@ export function WorkflowBusinessSettings({
               />
             </label>
           )}
-          <label>
+          <ChoiceField>
             Delivery time
-            <select
+            <VisualSelect
               value={config.scheduledAtMs ? "scheduled" : "now"}
               onChange={e =>
                 onChange({
@@ -221,8 +222,8 @@ export function WorkflowBusinessSettings({
             >
               <option value="now">After publication approval</option>
               <option value="scheduled">Schedule for later</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           {!!config.scheduledAtMs && (
             <>
               <label>
@@ -261,9 +262,9 @@ export function WorkflowBusinessSettings({
       )}
       {["meta_report", "facebook_report"].includes(node.type) && (
         <>
-          <label>
+          <ChoiceField>
             Reporting period
-            <select
+            <VisualSelect
               value={config.datePreset ?? "30"}
               onChange={e =>
                 onChange({
@@ -277,8 +278,8 @@ export function WorkflowBusinessSettings({
                 </option>
               ))}
               <option value="custom">Custom date range</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           {config.datePreset === "custom" && (
             <div className="wf-date-fields">
               <label>
@@ -348,9 +349,9 @@ export function WorkflowBusinessSettings({
       )}
       {node.type === "optimize_metric" && (
         <>
-          <label>
+          <ChoiceField>
             Objective metric
-            <select
+            <VisualSelect
               value={config.metric ?? "roas"}
               onChange={e =>
                 onChange({ metric: e.target.value as typeof config.metric })
@@ -375,11 +376,11 @@ export function WorkflowBusinessSettings({
                   {m.replace(/([A-Z])/g, " $1").replaceAll("_", " ")}
                 </option>
               ))}
-            </select>
-          </label>
-          <label>
+            </VisualSelect>
+          </ChoiceField>
+          <ChoiceField>
             Target direction
-            <select
+            <VisualSelect
               value={config.goalDirection ?? "at_least"}
               onChange={e =>
                 onChange({
@@ -389,8 +390,8 @@ export function WorkflowBusinessSettings({
             >
               <option value="at_least">At least</option>
               <option value="at_most">At most</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <label>
             Target value
             <Input

@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { MetaChangeDialog } from "@/components/MetaChangeDialog";
 import { studioContentHref } from "@shared/contentWorkflow";
@@ -154,9 +155,9 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
         </Button>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
+        <ChoiceField className="text-sm">
           Current status
-          <select
+          <VisualSelect
             aria-label="Filter by status"
             className={channelInput + " mt-1 block"}
             value={status}
@@ -171,8 +172,8 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
             <option value="all">All statuses</option>
             <option value="archived">Archived</option>
             <option value="deleted">Deleted</option>
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <DateRangeFilter
           value={range}
           allowAll
@@ -190,7 +191,7 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
           ? `Showing items with impressions from ${range.since} through ${range.until}, using the ad account’s reporting time zone.`
           : "All dates includes items that have not delivered yet."}
       </p>
-      <select
+      <VisualSelect
         aria-label="Filter by campaign"
         className={channelInput + " max-w-md"}
         value={campaign}
@@ -205,7 +206,7 @@ function CampaignObjects({ connectionId }: { connectionId: string }) {
             {String(c.name)}
           </option>
         ))}
-      </select>
+      </VisualSelect>
       {query.isLoading ? (
         <p role="status">Loading campaigns, ad sets and ads...</p>
       ) : query.error ? (
@@ -494,7 +495,7 @@ function Advertising() {
               >
                 Meta ad account
               </label>
-              <select
+              <VisualSelect
                 id="advertising-account"
                 className={channelInput + " mt-2 max-w-md"}
                 value={id}
@@ -505,7 +506,7 @@ function Advertising() {
                     {c.name} / {c.details.currency ?? "Currency unavailable"}
                   </option>
                 ))}
-              </select>
+              </VisualSelect>
               {id && <CampaignObjects key={id} connectionId={id} />}
             </>
           )}

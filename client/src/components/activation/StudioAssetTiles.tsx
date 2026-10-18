@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Search } from "lucide-react";
 import type { LibraryAsset } from "@shared/assetLibrary";
@@ -61,9 +62,10 @@ export function StudioAssetTiles({
           />
         </label>
         {!requiredFormat && (
-          <label className="cfg-field">
+          <ChoiceField className="cfg-field">
             <span>Size & ratio</span>
-            <select
+            <VisualSelect
+              density="compact"
               aria-label="Asset dimensions"
               value={format}
               onChange={e => {
@@ -77,13 +79,14 @@ export function StudioAssetTiles({
                   {assetFormatFilterLabel(f)}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
         )}
         {channel === "facebook" && (
-          <label className="cfg-field">
+          <ChoiceField className="cfg-field">
             <span>Media</span>
-            <select
+            <VisualSelect
+              density="compact"
               aria-label="Asset media type"
               value={media}
               onChange={e => {
@@ -94,8 +97,8 @@ export function StudioAssetTiles({
               <option value="all">Images & videos</option>
               <option value="image">Images</option>
               <option value="video">Videos</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
         )}
       </div>
       <p className="activation-help">

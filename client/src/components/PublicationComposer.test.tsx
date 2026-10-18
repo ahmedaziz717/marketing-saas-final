@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   act,
   cleanup,
@@ -350,8 +351,8 @@ it("leads with the caption and automatically moves a preview link when media is 
     ) & Node.DOCUMENT_POSITION_FOLLOWING
   ).toBeTruthy();
   expect(screen.queryByText("Write caption with AI (optional)")).toBeNull();
-  fireEvent.change(caption(), { target: { value: "See our collection." } });
-  fireEvent.change(screen.getByLabelText("Website preview (optional)"), {
+  changeField(caption(), { target: { value: "See our collection." } });
+  changeField(screen.getByLabelText("Website preview (optional)"), {
     target: { value: "https://example.com/shop" },
   });
   chooseMedia();
@@ -420,7 +421,7 @@ it("adds a valid website link directly to a video caption and hides image-only A
   chooseMedia("video");
   expect(screen.queryByText("Write caption with AI (optional)")).toBeNull();
   clickJourney(screen.getByRole("button", { name: "Add website link" }));
-  fireEvent.change(screen.getByLabelText("Website URL"), {
+  changeField(screen.getByLabelText("Website URL"), {
     target: { value: "example.com/shop" },
   });
   clickJourney(screen.getByRole("button", { name: "Add to caption" }));
@@ -444,13 +445,13 @@ it("allows incomplete drafts but shows actionable required fields before continu
   expect(api.save).toHaveBeenCalledOnce();
   expect(api.save.mock.calls[0][0].content.title).toBe("Facebook post");
   api.save.mockClear();
-  fireEvent.change(screen.getByLabelText("Social account"), {
+  changeField(screen.getByRole("radiogroup", { name: "Social account" }), {
     target: { value: "page" },
   });
   clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).not.toHaveBeenCalled();
   expect(caption().getAttribute("aria-invalid")).toBe("true");
-  fireEvent.change(caption(), { target: { value: "Ready for review." } });
+  changeField(caption(), { target: { value: "Ready for review." } });
   clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).toHaveBeenCalledOnce();
 });
@@ -502,7 +503,7 @@ it("keeps the destination URL separate for paid ads", () => {
   );
   clickJourney(screen.getByRole("button", { name: "Continue to creative" }));
   expect(screen.queryByLabelText("Post caption")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Destination URL"), {
+  changeField(screen.getByLabelText("Destination URL"), {
     target: { value: "https://example.com/ad" },
   });
   saveDraft();
@@ -522,14 +523,14 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   clickJourney(screen.getByRole("button", { name: "Select Our Page" }));
   clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
-  fireEvent.change(caption(), {
+  changeField(caption(), {
     target: { value: "Our new collection is here." },
   });
   clickJourney(screen.getByRole("button", { name: /Timing Plan delivery/ }));
-  fireEvent.change(screen.getByLabelText("Time zone"), {
+  changeField(screen.getByLabelText("Time zone"), {
     target: { value: "UTC" },
   });
-  fireEvent.change(screen.getByLabelText("Publish date and time"), {
+  changeField(screen.getByLabelText("Publish date and time"), {
     target: { value: "2099-06-15T12:30" },
   });
   clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
@@ -582,7 +583,7 @@ it("disables read-only Studio accounts and omits expired connections", () => {
 it("uses edited Studio timing for existing drafts and blocks dates in the past", () => {
   render(<PublicationComposer {...baseProps} studio item={deliveryItem()} />);
   clickJourney(screen.getByRole("button", { name: /Timing Plan delivery/ }));
-  fireEvent.change(screen.getByLabelText("Publish date and time"), {
+  changeField(screen.getByLabelText("Publish date and time"), {
     target: { value: "2000-01-01T12:00" },
   });
   saveDraft();
@@ -717,7 +718,7 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
     screen.queryByRole("button", { name: /Create copy with AI/ })
   ).toBeNull();
   clickJourney(screen.getByRole("button", { name: "Open Brief category" }));
-  fireEvent.change(screen.getByLabelText("Audience"), {
+  changeField(screen.getByLabelText("Audience"), {
     target: { value: "My audience" },
   });
   clickJourney(screen.getByRole("button", { name: "Fill from brand" }));
@@ -727,10 +728,9 @@ it("navigates copy categories, filters selected tiles, and saves the brief witho
   expect((screen.getByLabelText("Goal") as HTMLTextAreaElement).value).toBe(
     "Drive sales"
   );
-  fireEvent.change(
-    screen.getByLabelText("Additional instructions (optional)"),
-    { target: { value: "Use only verified claims." } }
-  );
+  changeField(screen.getByLabelText("Additional instructions (optional)"), {
+    target: { value: "Use only verified claims." },
+  });
   clickJourney(screen.getByRole("button", { name: "Next category" }));
   clickJourney(screen.getByRole("button", { name: "Previous category" }));
   expect(
@@ -781,12 +781,12 @@ it("keeps the Studio on Compose after saving and uses the saved revision on subs
   );
   clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
-  fireEvent.change(caption(), { target: { value: "First draft" } });
+  changeField(caption(), { target: { value: "First draft" } });
   saveDraft();
   await completeSave(1);
   expect(screen.getByRole("heading", { name: "Compose" })).toBeTruthy();
   expect(screen.getByText("Saved", { exact: true })).toBeTruthy();
-  fireEvent.change(caption(), { target: { value: "Edited draft" } });
+  changeField(caption(), { target: { value: "Edited draft" } });
   expect(screen.getByText("Unsaved changes", { exact: true })).toBeTruthy();
   saveDraft();
   expect(api.save.mock.calls.at(-1)![0].revision).toBe(1);

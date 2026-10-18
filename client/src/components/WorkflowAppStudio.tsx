@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
 import { useEffect, type ReactNode } from "react";
@@ -331,7 +332,7 @@ export function WorkflowAppStudio({
                         imageKeys={imageKeys}
                       />
                     ) : n.type === "image" ? (
-                      <select
+                      <VisualSelect
                         aria-label={n.title}
                         value={value(n)}
                         onChange={e => onChange(n.id, e.target.value)}
@@ -340,14 +341,18 @@ export function WorkflowAppStudio({
                         {assets.data
                           ?.filter(a => a.mediaType === "image")
                           .map(a => (
-                            <option key={a.key} value={a.key}>
+                            <option
+                              key={a.key}
+                              value={a.key}
+                              data-image={a.url}
+                            >
                               {a.name}
                               {a.width && a.height
                                 ? ` · ${a.width} × ${a.height}`
                                 : ""}
                             </option>
                           ))}
-                      </select>
+                      </VisualSelect>
                     ) : (
                       <textarea
                         aria-label={n.title}

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
@@ -99,7 +100,7 @@ it("resets disclosure confirmation when operator details change", () => {
   );
   const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
   expect(checkbox.checked).toBe(true);
-  fireEvent.change(screen.getByLabelText("Legal operating company"), {
+  changeField(screen.getByLabelText("Legal operating company"), {
     target: { value: "Updated operator" },
   });
   expect(checkbox.checked).toBe(false);
@@ -133,10 +134,10 @@ it("keeps request handling distinct from destructive data deletion", () => {
       .getAttribute("href")
   ).toBe("mailto:requester@example.test");
   fireEvent.click(screen.getByRole("button", { name: "Review request" }));
-  fireEvent.change(screen.getByLabelText("Status"), {
+  changeField(screen.getByRole("radiogroup", { name: "Status" }), {
     target: { value: "under_review" },
   });
-  fireEvent.change(screen.getByLabelText("Internal outcome / next step"), {
+  changeField(screen.getByLabelText("Internal outcome / next step"), {
     target: { value: "Awaiting verified account authority" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save status" }));

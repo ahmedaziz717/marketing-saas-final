@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import {
   CREATIVE_ART_STYLES,
   CREATIVE_MOODS,
@@ -55,9 +56,9 @@ export function VideoCreativeDirection({
           onChange={artStyle => update({ artStyle })}
           disabled={disabled}
         />
-        <label className="text-sm font-medium">
+        <ChoiceField className="text-sm font-medium">
           Visual setting
-          <select
+          <VisualSelect
             value={direction.setting}
             disabled={disabled}
             onChange={e =>
@@ -68,11 +69,11 @@ export function VideoCreativeDirection({
             <option value="product">Product / brand focus</option>
             <option value="lifestyle">Lifestyle · no person</option>
             <option value="people">Lifestyle · with person(s)</option>
-          </select>
-        </label>
-        <label className="text-sm font-medium">
+          </VisualSelect>
+        </ChoiceField>
+        <ChoiceField className="text-sm font-medium">
           Subject placement
-          <select
+          <VisualSelect
             value={direction.placement}
             disabled={disabled}
             onChange={e =>
@@ -86,8 +87,8 @@ export function VideoCreativeDirection({
             <option value="left">Left</option>
             <option value="center">Center</option>
             <option value="right">Right</option>
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
       </div>
       <details className="border-t pt-3">
         <summary className="cursor-pointer text-sm font-medium">

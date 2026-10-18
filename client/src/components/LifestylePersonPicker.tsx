@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Link } from "wouter";
 import { Check, Search, UsersRound, X } from "lucide-react";
@@ -369,9 +370,10 @@ export function LifestylePersonPicker<
                     id="model-filter-fields"
                     className={`${filtersOpen ? "grid" : "hidden"} mt-3 grid-cols-2 gap-3 sm:grid sm:grid-cols-4`}
                   >
-                    <label className="text-xs font-medium">
+                    <ChoiceField className="text-xs font-medium">
                       Gender
-                      <select
+                      <VisualSelect
+                        density="compact"
                         className={selectClass}
                         value={gender}
                         onChange={e => {
@@ -382,11 +384,12 @@ export function LifestylePersonPicker<
                         <option value="any">All genders</option>
                         <option value="female">Female</option>
                         <option value="male">Male</option>
-                      </select>
-                    </label>
-                    <label className="text-xs font-medium">
+                      </VisualSelect>
+                    </ChoiceField>
+                    <ChoiceField className="text-xs font-medium">
                       Age group
-                      <select
+                      <VisualSelect
+                        density="compact"
                         className={selectClass}
                         value={age}
                         onChange={e => {
@@ -400,11 +403,12 @@ export function LifestylePersonPicker<
                             {a.label}
                           </option>
                         ))}
-                      </select>
-                    </label>
-                    <label className="text-xs font-medium">
+                      </VisualSelect>
+                    </ChoiceField>
+                    <ChoiceField className="text-xs font-medium">
                       Hair color
-                      <select
+                      <VisualSelect
+                        density="compact"
                         className={selectClass}
                         value={hair}
                         onChange={e => {
@@ -418,8 +422,8 @@ export function LifestylePersonPicker<
                             {h.label}
                           </option>
                         ))}
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                     <Button
                       type="button"
                       variant="ghost"
@@ -543,9 +547,10 @@ export function LifestylePersonPicker<
                   selecting them.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="text-sm">
+                  <ChoiceField className="text-sm">
                     Model gender
-                    <select
+                    <VisualSelect
+                      density="compact"
                       className={selectClass}
                       value={uploadGender}
                       onChange={e =>
@@ -554,11 +559,12 @@ export function LifestylePersonPicker<
                     >
                       <option value="female">Female</option>
                       <option value="male">Male</option>
-                    </select>
-                  </label>
-                  <label className="text-sm">
+                    </VisualSelect>
+                  </ChoiceField>
+                  <ChoiceField className="text-sm">
                     Model age group
-                    <select
+                    <VisualSelect
+                      density="compact"
                       className={selectClass}
                       value={uploadAge}
                       onChange={e => {
@@ -571,8 +577,8 @@ export function LifestylePersonPicker<
                           {a.label}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 </div>
                 <Input
                   type="file"

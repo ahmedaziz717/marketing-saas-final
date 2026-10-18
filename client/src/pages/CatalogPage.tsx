@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { offeringLabel } from "@shared/businessProfile";
 import { CatalogSources } from "@/components/CatalogSources";
 import { useEffect, useMemo, useState } from "react";
@@ -28,13 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
@@ -364,7 +358,9 @@ function CatalogContent() {
           }}
           placeholder="Search products, SKUs, or categories…"
         />
-        <Select
+        <VisualSelect
+          density="compact"
+          aria-label="Review status"
           value={status}
           disabled={bulk.isPending}
           onValueChange={v => {
@@ -373,20 +369,14 @@ function CatalogContent() {
             clearSelection();
           }}
         >
-          <SelectTrigger
-            className="h-11 w-full xl:w-44"
-            aria-label="Review status"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </VisualSelect>
+        <VisualSelect
+          density="compact"
+          aria-label="Catalog category"
           value={category}
           disabled={bulk.isPending}
           onValueChange={v => {
@@ -395,21 +385,13 @@ function CatalogContent() {
             clearSelection();
           }}
         >
-          <SelectTrigger
-            className="h-11 w-full xl:w-52"
-            aria-label="Catalog category"
-          >
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map(item => (
-              <SelectItem key={item} value={item}>
-                {item}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <option value="all">All categories</option>
+          {categories.map(item => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </VisualSelect>
       </div>
       <div
         className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-3 sm:p-4"
@@ -817,7 +799,7 @@ function CatalogContent() {
                         "ownership",
                         "billingPeriod",
                       ].includes(key) ? (
-                        <select
+                        <VisualSelect
                           id={"edit-service-" + key}
                           className="w-full rounded-lg border p-2"
                           value={editing.serviceDetails![key] ?? ""}
@@ -870,7 +852,7 @@ function CatalogContent() {
                               {v}
                             </option>
                           ))}
-                        </select>
+                        </VisualSelect>
                       ) : (
                         <Input
                           id={"edit-service-" + key}

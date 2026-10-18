@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
@@ -24,13 +25,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
 import {
@@ -341,37 +335,27 @@ function PublishingWorkspace() {
             <div className="grid gap-4 py-3">
               <div>
                 <Label>Approved creative</Label>
-                <Select value={variantId} onValueChange={setVariantId}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Choose a creative" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {overview.data?.variants.map(variant => (
-                      <SelectItem key={variant.id} value={String(variant.id)}>
-                        {variant.name} · {variant.headline}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <VisualSelect value={variantId} onValueChange={setVariantId}>
+                  {overview.data?.variants.map(variant => (
+                    <option key={variant.id} value={String(variant.id)}>
+                      {variant.name} · {variant.headline}
+                    </option>
+                  ))}
+                </VisualSelect>
               </div>
               <div>
                 <Label>Action</Label>
-                <Select
+                <VisualSelect
                   value={action}
                   onValueChange={value =>
                     setAction(value as "create" | "update")
                   }
                 >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="create">Create new paused ad</SelectItem>
-                    <SelectItem value="update">
-                      Update existing ad and pause it
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  <option value="create">Create new paused ad</option>
+                  <option value="update">
+                    Update existing ad and pause it
+                  </option>
+                </VisualSelect>
               </div>
               <div>
                 <Label>Ad name</Label>
@@ -509,8 +493,8 @@ function PublishingWorkspace() {
                           <AlertDialogDescription>
                             This will {request.action} a Meta ad using the
                             approved creative and frozen payload. The ad will be
-                            saved as PAUSED. EvokeLoop will record each API action
-                            in the immutable ledger.
+                            saved as PAUSED. EvokeLoop will record each API
+                            action in the immutable ledger.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

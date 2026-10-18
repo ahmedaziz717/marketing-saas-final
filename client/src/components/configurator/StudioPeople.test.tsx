@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -49,13 +50,13 @@ it("keeps four selections across gender filters and allows replacing one", () =>
 it("combines age, hair and search filters without inventing attributes", () => {
   render(<StudioPeople organizationId={1} selected={[]} onChange={vi.fn()} />);
   const person = LIFESTYLE_PEOPLE.find(p => p.gender === "female")!;
-  fireEvent.change(screen.getByLabelText("Age group"), {
+  changeField(screen.getByRole("radiogroup", { name: "Age group" }), {
     target: { value: person.age },
   });
-  fireEvent.change(screen.getByLabelText("Hair color"), {
+  changeField(screen.getByRole("radiogroup", { name: "Hair color" }), {
     target: { value: person.hair },
   });
-  fireEvent.change(screen.getByLabelText("Search people"), {
+  changeField(screen.getByLabelText("Search people"), {
     target: { value: person.name },
   });
   expect(

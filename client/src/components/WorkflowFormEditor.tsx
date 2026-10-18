@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -101,7 +102,7 @@ export function WorkflowFormEditor({
             Choose what users provide and group fields into Studio sections and
             category tabs. Connect each field to the steps that need it.
           </p>
-          <select
+          <VisualSelect
             aria-label="New field type"
             value={kind}
             onChange={e => setKind(e.target.value as AppField["kind"])}
@@ -111,7 +112,7 @@ export function WorkflowFormEditor({
                 {inputLabels[k]}
               </option>
             ))}
-          </select>
+          </VisualSelect>
           <Button
             onClick={() => {
               if (graph.nodes.length >= 40) {
@@ -195,9 +196,9 @@ export function WorkflowFormEditor({
               }
             />
           </label>
-          <label>
+          <ChoiceField>
             Studio section
-            <select
+            <VisualSelect
               value={f.studio?.section ?? ""}
               onChange={e =>
                 update({
@@ -224,8 +225,8 @@ export function WorkflowFormEditor({
                   {s.title}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <label>
             Category tab
             <input
@@ -271,9 +272,9 @@ export function WorkflowFormEditor({
             </label>
           </div>
           {f.kind === "connection" && (
-            <label>
+            <ChoiceField>
               Destination channel
-              <select
+              <VisualSelect
                 value={f.connectionChannel ?? "facebook"}
                 onChange={e =>
                   update({
@@ -286,11 +287,11 @@ export function WorkflowFormEditor({
               >
                 <option value="facebook">Facebook Page</option>
                 <option value="meta_ads">Meta ad account</option>
-              </select>
+              </VisualSelect>
               <small>
                 Connect this field to the matching post or ad destination port.
               </small>
-            </label>
+            </ChoiceField>
           )}
           {(f.kind === "asset" || f.kind === "product") && (
             <div className="wf-media-settings">
@@ -340,9 +341,9 @@ export function WorkflowFormEditor({
                   uploads can be selected as reference images.
                 </p>
               )}
-              <label>
+              <ChoiceField>
                 Feature bullets
-                <select
+                <VisualSelect
                   value={workflowMediaOptions(f).bullets}
                   onChange={e =>
                     update({
@@ -356,8 +357,8 @@ export function WorkflowFormEditor({
                   <option value="choose">User chooses bullets</option>
                   <option value="all">Feature all catalog bullets</option>
                   <option value="none">Do not feature bullets</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               {(
                 [
                   ["price", "Price"],
@@ -365,9 +366,9 @@ export function WorkflowFormEditor({
                   ["link", "Product link"],
                 ] as const
               ).map(([key, label]) => (
-                <label key={key}>
+                <ChoiceField key={key}>
                   {label}
-                  <select
+                  <VisualSelect
                     value={workflowMediaOptions(f)[key]}
                     onChange={e =>
                       update({
@@ -384,16 +385,16 @@ export function WorkflowFormEditor({
                     <option value="choose">User chooses</option>
                     <option value="always">Always include</option>
                     <option value="never">Never include</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
               ))}
             </div>
           )}
           {isChoiceField(f) && (
             <>
-              <label>
+              <ChoiceField>
                 Available choices
-                <select
+                <VisualSelect
                   value={f.source}
                   onChange={e =>
                     update({
@@ -413,8 +414,8 @@ export function WorkflowFormEditor({
                     </>
                   )}
                   <option value="custom">My own list</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               {f.source === "curated" && (
                 <details>
                   <summary>
@@ -655,9 +656,9 @@ export function WorkflowFormEditor({
             )}
           <details>
             <summary>Conditional visibility</summary>
-            <label>
+            <ChoiceField>
               Show when
-              <select
+              <VisualSelect
                 value={f.visibleWhen?.fieldId ?? ""}
                 onChange={e =>
                   update({
@@ -675,8 +676,8 @@ export function WorkflowFormEditor({
                       {n.title}
                     </option>
                   ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             {f.visibleWhen && (
               <label>
                 Equals (choice ID or value)

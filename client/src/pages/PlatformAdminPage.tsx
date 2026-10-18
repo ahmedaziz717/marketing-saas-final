@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -350,7 +351,8 @@ function Administration() {
           )}
           {tab !== "OpenAI billing" && (
             <Field label="Account">
-              <select
+              <VisualSelect
+                density="compact"
                 className={field}
                 value={selected ?? ""}
                 onChange={e =>
@@ -371,7 +373,7 @@ function Administration() {
                     {a.organization.name}
                   </option>
                 ))}
-              </select>
+              </VisualSelect>
             </Field>
           )}
         </div>
@@ -597,7 +599,8 @@ function Administration() {
                   setHistory([]);
                 }}
               />
-              <select
+              <VisualSelect
+                density="compact"
                 aria-label="Filter tier"
                 className={field}
                 value={tierFilter}
@@ -613,8 +616,9 @@ function Administration() {
                     {t.name}
                   </option>
                 ))}
-              </select>
-              <select
+              </VisualSelect>
+              <VisualSelect
+                density="compact"
                 aria-label="Filter account status"
                 className={field}
                 value={statusFilter}
@@ -628,7 +632,7 @@ function Administration() {
                 <option value="enabled">AI enabled</option>
                 <option value="paused">AI paused</option>
                 <option value="invited">Invitation pending</option>
-              </select>
+              </VisualSelect>
             </div>
             <div className="my-5 overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -763,7 +767,8 @@ function Administration() {
                   />
                 </Field>
                 <Field label="Tier">
-                  <select
+                  <VisualSelect
+                    density="compact"
                     className={field}
                     value={newAccount.tierId}
                     onChange={e =>
@@ -775,7 +780,7 @@ function Administration() {
                         {t.name}
                       </option>
                     ))}
-                  </select>
+                  </VisualSelect>
                 </Field>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -850,7 +855,8 @@ function Administration() {
                     }}
                   >
                     <Field label="Tier">
-                      <select
+                      <VisualSelect
+                        density="compact"
                         className={field}
                         value={account.tierId}
                         onChange={e =>
@@ -863,7 +869,7 @@ function Administration() {
                             {t.name}
                           </option>
                         ))}
-                      </select>
+                      </VisualSelect>
                     </Field>
                     <label className="flex gap-2 text-sm">
                       <input
@@ -1200,9 +1206,10 @@ function Administration() {
               future requests; historical estimates retain their pricing
               snapshot.
             </p>
-            <label className="block text-sm">
+            <ChoiceField className="block text-sm">
               Choose a provider rate
-              <select
+              <VisualSelect
+                density="compact"
                 className={field + " mt-2 w-full"}
                 value={`${rate.provider}/${rate.model}/${rate.kind}`}
                 onChange={e => {
@@ -1221,8 +1228,8 @@ function Administration() {
                     {r.provider} / {r.model} · {r.kind}
                   </option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             <a
               href="/admin/models"
               className="mt-3 inline-block text-sm text-primary underline"
@@ -1287,7 +1294,8 @@ function Administration() {
               />
             </Field>
             <Field label="Request type">
-              <select
+              <VisualSelect
+                density="compact"
                 className={field}
                 value={rate.kind}
                 onChange={e =>
@@ -1301,7 +1309,7 @@ function Administration() {
                 <option>image</option>
                 <option>video</option>
                 <option>other</option>
-              </select>
+              </VisualSelect>
             </Field>
             <Field label="Markup override (%; blank uses global default)">
               <Input
@@ -1465,7 +1473,8 @@ function Administration() {
             }}
           >
             <Field label="Entry type">
-              <select
+              <VisualSelect
+                density="compact"
                 className={field}
                 value={finance.kind}
                 onChange={e =>
@@ -1477,7 +1486,7 @@ function Administration() {
               >
                 <option value="revenue">Revenue received</option>
                 <option value="cost">Other cost</option>
-              </select>
+              </VisualSelect>
             </Field>
             <NumberField
               label="Amount (USD)"

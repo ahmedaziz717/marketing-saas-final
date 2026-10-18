@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { copyTaxonomy, type CopyDimension } from "@shared/copyTaxonomy";
 import { CopyTagTable, CopyTaxonomyReference } from "./CopyTags";
@@ -287,9 +288,9 @@ function CopyDimensionReport({ data: r }: { data: LiveCopyAnalysis }) {
         copy effect is not estimable here. Multiple-value groups overlap; do not
         add their totals.
       </p>
-      <label className="block font-medium">
+      <ChoiceField className="block font-medium">
         Copy field
-        <select
+        <VisualSelect
           aria-label="Copy field"
           className="ml-3 rounded border bg-background p-2"
           value={field}
@@ -300,8 +301,8 @@ function CopyDimensionReport({ data: r }: { data: LiveCopyAnalysis }) {
               {copyFieldNames[f]}
             </option>
           ))}
-        </select>
-      </label>
+        </VisualSelect>
+      </ChoiceField>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-left text-sm">
           <thead className="bg-muted">
@@ -340,9 +341,9 @@ function CopyDimensionReport({ data: r }: { data: LiveCopyAnalysis }) {
         </table>
       </div>
       <div className="rounded-lg border p-4 space-y-3">
-        <label className="font-medium">
+        <ChoiceField className="font-medium">
           Compare by
-          <select
+          <VisualSelect
             aria-label="Copy dimension"
             className="ml-3 rounded border bg-background p-2"
             value={dimension}
@@ -353,8 +354,8 @@ function CopyDimensionReport({ data: r }: { data: LiveCopyAnalysis }) {
                 {copyTaxonomy[d].label}
               </option>
             ))}
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <p className="text-xs text-muted-foreground">
           {copyTaxonomy[dimension].question}{" "}
           {current?.excludedAds ?? source.ads.length} ads excluded because this

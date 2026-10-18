@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
 import { StudioFonts } from "@/components/configurator/StudioFonts";
 import {
@@ -130,11 +131,11 @@ function Field({
   help?: string;
 }) {
   return (
-    <label className="cfg-field">
+    <ChoiceField className="cfg-field">
       <span>{title}</span>
       {children}
       {help && <small>{help}</small>}
-    </label>
+    </ChoiceField>
   );
 }
 export default function CreativeConfiguratorPage({
@@ -963,7 +964,7 @@ function Configurator({
                 title={property.title || key.replaceAll("_", " ")}
                 help={property.description}
               >
-                <select
+                <VisualSelect
                   value={String(
                     (video.modelOptions?.[key] ?? property.default ?? false) ===
                       true
@@ -977,7 +978,7 @@ function Configurator({
                 >
                   <option value="false">Off</option>
                   <option value="true">On</option>
-                </select>
+                </VisualSelect>
               </Field>
             ))
           ) : (
@@ -1164,9 +1165,9 @@ function Configurator({
                 the subject.
               </p>
               {image.preserveLogo && (
-                <label className="cfg-logo-position">
+                <ChoiceField className="cfg-logo-position">
                   Logo position
-                  <select
+                  <VisualSelect
                     aria-label="Logo position"
                     value={image.logoPosition ?? "top-left"}
                     onChange={e =>
@@ -1180,8 +1181,8 @@ function Configurator({
                     <option value="top-right">Top right</option>
                     <option value="bottom-left">Bottom left</option>
                     <option value="bottom-right">Bottom right</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
               )}
             </div>
           )}
@@ -1514,15 +1515,20 @@ function Configurator({
           ])}
           <div className="cfg-filters">
             <Field title="Model maker">
-              <select value={maker} onChange={e => setMaker(e.target.value)}>
+              <VisualSelect
+                density="compact"
+                value={maker}
+                onChange={e => setMaker(e.target.value)}
+              >
                 <option value="all">All makers</option>
                 {makers.map(m => (
                   <option key={m}>{m}</option>
                 ))}
-              </select>
+              </VisualSelect>
             </Field>
             <Field title="Input capability">
-              <select
+              <VisualSelect
+                density="compact"
                 value={capability}
                 onChange={e => setCapability(e.target.value)}
               >
@@ -1532,7 +1538,7 @@ function Configurator({
                 {!isImage && (
                   <option value="video">Requires source video</option>
                 )}
-              </select>
+              </VisualSelect>
             </Field>
             <Field title="Maximum starting credits">
               <input

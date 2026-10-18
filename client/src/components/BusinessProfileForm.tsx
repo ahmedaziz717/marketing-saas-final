@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -76,9 +77,9 @@ export function BusinessProfileForm({
         disabled={disabled || save.isPending || suggest.isPending}
         className="grid gap-4 sm:grid-cols-2"
       >
-        <label className="text-sm">
+        <ChoiceField className="text-sm">
           Business model
-          <select
+          <VisualSelect
             className={channelInput + " mt-1"}
             value={profile.model}
             onChange={e => update("model", e.target.value)}
@@ -88,8 +89,8 @@ export function BusinessProfileForm({
                 {businessModelLabels[m]}
               </option>
             ))}
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         <label className="text-sm">
           Website
           <input

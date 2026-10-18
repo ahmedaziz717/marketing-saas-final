@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { datePresets } from "@shared/reportDates";
 import { type WorkflowNode } from "@shared/creativeWorkflow";
 import {
@@ -41,9 +42,9 @@ export function OptimizationNodeSettings({
     <>
       {node.type === "start_trigger" && (
         <>
-          <label>
+          <ChoiceField>
             Start mode
-            <select
+            <VisualSelect
               value={trigger.kind}
               onChange={e =>
                 onChange({
@@ -59,13 +60,13 @@ export function OptimizationNodeSettings({
                   {k.replaceAll("_", " ")}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           {trigger.kind === "scheduled" && (
             <>
-              <label>
+              <ChoiceField>
                 Weekday
-                <select
+                <VisualSelect
                   value={trigger.weekday}
                   onChange={e =>
                     onChange({
@@ -86,8 +87,8 @@ export function OptimizationNodeSettings({
                       {d}
                     </option>
                   ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               <label>
                 Hour (0–23)
                 <input
@@ -116,9 +117,9 @@ export function OptimizationNodeSettings({
             </>
           )}
           {trigger.kind === "event" && (
-            <label>
+            <ChoiceField>
               Event
-              <select
+              <VisualSelect
                 value={trigger.event}
                 onChange={e =>
                   onChange({
@@ -136,8 +137,8 @@ export function OptimizationNodeSettings({
                 ].map(k => (
                   <option key={k}>{k}</option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
           )}
           <p className="wf-setting-help">
             Save and publish a version, then enable its trigger in the App.
@@ -148,9 +149,9 @@ export function OptimizationNodeSettings({
       )}
       {node.type === "run_workflow" && (
         <>
-          <label>
+          <ChoiceField>
             Required output
-            <select
+            <VisualSelect
               value={node.config.outputType ?? "any"}
               onChange={e => onChange({ outputType: e.target.value as any })}
             >
@@ -165,8 +166,8 @@ export function OptimizationNodeSettings({
               ].map(t => (
                 <option key={t}>{t}</option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <p className="wf-setting-help">
             Pinned versions run inside this workflow with the same tenant
             permissions. Add typed input mappings below using the child App
@@ -234,9 +235,9 @@ export function OptimizationNodeSettings({
             />{" "}
             Measure only connected delivered publications
           </label>
-          <label>
+          <ChoiceField>
             Reporting window
-            <select
+            <VisualSelect
               value={node.config.datePreset ?? "custom"}
               onChange={e => onChange({ datePreset: e.target.value as any })}
             >
@@ -246,8 +247,8 @@ export function OptimizationNodeSettings({
                 </option>
               ))}
               <option value="custom">Custom date range</option>
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           <DateRangeFilter
             value={analysis.range}
             onChange={range =>
@@ -258,9 +259,9 @@ export function OptimizationNodeSettings({
               })
             }
           />
-          <label>
+          <ChoiceField>
             Granularity
-            <select
+            <VisualSelect
               value={analysis.grain}
               onChange={e =>
                 onChange({
@@ -271,11 +272,11 @@ export function OptimizationNodeSettings({
               {["daily", "placement", "hourly"].map(g => (
                 <option key={g}>{g}</option>
               ))}
-            </select>
-          </label>
-          <label>
+            </VisualSelect>
+          </ChoiceField>
+          <ChoiceField>
             Dimensions (select up to four)
-            <select
+            <VisualSelect
               multiple
               value={analysis.dimensions}
               onChange={e =>
@@ -292,15 +293,15 @@ export function OptimizationNodeSettings({
               {dimensionNames.map(d => (
                 <option key={d}>{d}</option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
         </>
       )}
       {node.type === "optimize_dimension" && (
         <>
-          <label>
+          <ChoiceField>
             Optimizer
-            <select
+            <VisualSelect
               value={optimizer.kind}
               onChange={e =>
                 onChange({
@@ -316,8 +317,8 @@ export function OptimizationNodeSettings({
                   {optimizerLibrary[k].name}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
           {optimizer.kind === "weekday_time" ? (
             <>
               <p className="wf-setting-help">
@@ -325,9 +326,9 @@ export function OptimizationNodeSettings({
                 step calculates a report; it does not generate ads or change
                 delivery.
               </p>
-              <label>
+              <ChoiceField>
                 Comparison
-                <select
+                <VisualSelect
                   value={scheduling.comparison}
                   onChange={e =>
                     onChange({
@@ -348,23 +349,23 @@ export function OptimizationNodeSettings({
                   </option>
                   <option value="weekday">Weekdays</option>
                   <option value="hour">Hours</option>
-                </select>
-              </label>
-              <label>
+                </VisualSelect>
+              </ChoiceField>
+              <ChoiceField>
                 Analysis objective
-                <select value="cost_per_purchase" disabled>
+                <VisualSelect value="cost_per_purchase" disabled>
                   <option value="cost_per_purchase">
                     Lowest cost per attributed purchase (CPA)
                   </option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               <p className="wf-setting-help">
                 ROAS remains visible as context. Aggregate revenue alone cannot
                 support a ROAS confidence estimate.
               </p>
-              <label>
+              <ChoiceField>
                 Probability required to propose a test
-                <select
+                <VisualSelect
                   value={scheduling.testProbability}
                   onChange={e =>
                     onChange({
@@ -388,12 +389,12 @@ export function OptimizationNodeSettings({
                         {+(v * 100).toFixed(1)}%{v === 0.95 ? " (default)" : ""}
                       </option>
                     ))}
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               {scheduling.comparison !== "hour" && (
-                <label>
+                <ChoiceField>
                   Observed dates required per weekday
-                  <select
+                  <VisualSelect
                     value={scheduling.minimumWeekdayObservations}
                     onChange={e =>
                       onChange({
@@ -413,8 +414,8 @@ export function OptimizationNodeSettings({
                         {v} dates{v === 2 ? " (default)" : ""}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
               )}
               <p className="wf-setting-help">
                 These decision rules control when a test is proposed. They do
@@ -440,9 +441,9 @@ export function OptimizationNodeSettings({
             </>
           ) : (
             <>
-              <label>
+              <ChoiceField>
                 Mode
-                <select
+                <VisualSelect
                   value={optimizer.mode}
                   onChange={e =>
                     onChange({
@@ -457,8 +458,8 @@ export function OptimizationNodeSettings({
                   <option value="analyze_generate">
                     Analyze + generate candidates
                   </option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               <label>
                 Verified brief
                 <textarea

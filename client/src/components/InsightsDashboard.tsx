@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -207,7 +208,7 @@ export function InsightsDashboard({
         </div>
         <div className="insight-actions">
           {!editing && !!layouts.data?.length && (
-            <select
+            <VisualSelect
               aria-label="Saved dashboard layout"
               value={current?.id || ""}
               onChange={e => setId(e.target.value)}
@@ -217,7 +218,7 @@ export function InsightsDashboard({
                   {l.name}
                 </option>
               ))}
-            </select>
+            </VisualSelect>
           )}
           {!editing ? (
             <Button variant="outline" onClick={() => setEditing(true)}>
@@ -433,9 +434,9 @@ export function InsightsDashboard({
             </p>
           ) : (
             <>
-              <label className="insight-label">
+              <ChoiceField className="insight-label">
                 Report
-                <select
+                <VisualSelect
                   aria-label="Report"
                   value={chosenReport?.id || ""}
                   onChange={e => {
@@ -449,11 +450,11 @@ export function InsightsDashboard({
                       {r.config.name}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="insight-label">
+                </VisualSelect>
+              </ChoiceField>
+              <ChoiceField className="insight-label">
                 Widget type
-                <select
+                <VisualSelect
                   aria-label="Widget type"
                   value={kind}
                   onChange={e =>
@@ -463,8 +464,8 @@ export function InsightsDashboard({
                   <option value="report">Report components</option>
                   <option value="kpi">Key metric</option>
                   <option value="trend">Trend chart</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
               {kind === "report" && (
                 <>
                   <ReportComponentPicker
@@ -506,9 +507,9 @@ export function InsightsDashboard({
               )}
               {kind !== "report" && (
                 <>
-                  <label className="insight-label">
+                  <ChoiceField className="insight-label">
                     Account / Page
-                    <select
+                    <VisualSelect
                       aria-label="Account / Page"
                       value={chosenAccount?.id || ""}
                       onChange={e => setAccountChoice(e.target.value)}
@@ -518,11 +519,11 @@ export function InsightsDashboard({
                           {a.name}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="insight-label">
+                    </VisualSelect>
+                  </ChoiceField>
+                  <ChoiceField className="insight-label">
                     Metric
-                    <select
+                    <VisualSelect
                       aria-label="Metric"
                       value={chosenMetric || ""}
                       onChange={e => setMetric(e.target.value as InsightMetric)}
@@ -532,8 +533,8 @@ export function InsightsDashboard({
                           {insightMetrics[m].label}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 </>
               )}
               <p className="insight-caption">

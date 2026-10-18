@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState, type ReactNode } from "react";
 import { Brush, Palette, Search, X, type LucideIcon } from "lucide-react";
 import { CREATIVE_THEME_GROUPS } from "@shared/creativeThemes";
@@ -81,9 +82,14 @@ export function StudioChoicePicker({
       <div className="studio-choice-toolbar">
         <h3>{title}</h3>
         {availableGroups.length > 0 && (
-          <label className="studio-collection-filter">
-            <span className="sr-only">{title} collection</span>
-            <select
+          <details className="studio-collection-filter">
+            <summary>
+              Collections ·{" "}
+              {availableGroups.find(g => g.id === activeGroup)?.title ?? "All"}
+            </summary>
+            <VisualSelect
+              density="compact"
+              aria-label={`${title} collection`}
               value={activeGroup}
               onChange={event => setGroup(event.target.value)}
             >
@@ -93,8 +99,8 @@ export function StudioChoicePicker({
                   {g.title}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </details>
         )}
         <p aria-live="polite">
           {visible.length} {visible.length === 1 ? "choice" : "choices"}

@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
 import {
@@ -758,11 +759,11 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
               {!setup.modelId && (
                 <div className="grid grid-cols-2 gap-4">
                   {["create", "extend"].includes(setup.mode) && (
-                    <label className="text-sm font-medium">
+                    <ChoiceField className="text-sm font-medium">
                       {setup.mode === "extend"
                         ? "Extension length"
                         : "Duration"}
-                      <select
+                      <VisualSelect
                         className={field}
                         value={setup.duration}
                         onChange={e =>
@@ -776,13 +777,13 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                             </option>
                           )
                         )}
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                   )}
                   {setup.mode === "create" && (
-                    <label className="text-sm font-medium">
+                    <ChoiceField className="text-sm font-medium">
                       Aspect ratio
-                      <select
+                      <VisualSelect
                         className={field}
                         value={setup.aspectRatio}
                         onChange={e =>
@@ -804,12 +805,12 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                                   : ""}
                           </option>
                         ))}
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                   )}
-                  <label className="text-sm font-medium">
+                  <ChoiceField className="text-sm font-medium">
                     Resolution
-                    <select
+                    <VisualSelect
                       className={field}
                       value={setup.resolution}
                       onChange={e =>
@@ -822,12 +823,12 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       {videoResolutions.map(resolution => (
                         <option key={resolution}>{resolution}</option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                   {setup.mode !== "motion" && (
-                    <label className="text-sm font-medium">
+                    <ChoiceField className="text-sm font-medium">
                       Bitrate
-                      <select
+                      <VisualSelect
                         className={field}
                         value={setup.bitrate}
                         onChange={e =>
@@ -838,8 +839,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                       >
                         <option value="default">Automatic</option>
                         <option value="high">High</option>
-                      </select>
-                    </label>
+                      </VisualSelect>
+                    </ChoiceField>
                   )}
                 </div>
               )}

@@ -50,6 +50,8 @@ import {
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { AppearanceToggle } from "./AppearanceToggle";
 import { Button } from "./ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { VisualSelect } from "./choices/VisualSelect";
 
 export const SIDEBAR_PREFERENCE_KEY = "evokeloop-sidebar-expanded";
 export default function DashboardLayout({
@@ -241,25 +243,51 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <div className="workspace-account-switcher">
               <Building2 size={16} aria-hidden="true" />
               {workspaces.length > 1 ? (
-                <select
-                  aria-label="Switch account"
-                  value={organizationId ?? ""}
-                  onChange={event => {
-                    if (user) {
-                      rememberWorkspace(user.id, Number(event.target.value));
-                      window.location.assign("/app");
-                    }
-                  }}
-                >
-                  {workspaces.map(workspace => (
-                    <option
-                      key={workspace.organization.id}
-                      value={workspace.organization.id}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Switch account"
+                      className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold"
                     >
-                      {workspace.organization.name}
-                    </option>
-                  ))}
-                </select>
+                      <span className="truncate">
+                        {organization?.name || "Workspace"}
+                      </span>
+                      <ChevronDown size={14} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-80 max-w-[calc(100vw-24px)] max-h-[70dvh] overflow-y-auto"
+                  >
+                    <h2 className="mb-3 text-sm font-semibold">
+                      Choose a workspace
+                    </h2>
+                    <VisualSelect
+                      aria-label="Workspace"
+                      density="compact"
+                      value={organizationId ?? ""}
+                      onChange={event => {
+                        if (user) {
+                          rememberWorkspace(
+                            user.id,
+                            Number(event.target.value)
+                          );
+                          window.location.assign("/app");
+                        }
+                      }}
+                    >
+                      {workspaces.map(workspace => (
+                        <option
+                          key={workspace.organization.id}
+                          value={workspace.organization.id}
+                        >
+                          {workspace.organization.name}
+                        </option>
+                      ))}
+                    </VisualSelect>
+                  </PopoverContent>
+                </Popover>
               ) : (
                 <span>{organization?.name || "Workspace"}</span>
               )}

@@ -1137,31 +1137,18 @@ async function studioSection(title: string, openCategory = true) {
     overview.click();
     await pause();
   }
-  const select = document.querySelector<HTMLSelectElement>(
-    ".journey-mobile-section select"
+  await pressStudioControl(
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '.journey-mobile-steps button, .journey-sections button, [aria-label="Activation sections"] button'
+      )
+    ).find(
+      b =>
+        b.getClientRects().length &&
+        b.querySelector("strong")?.textContent === title
+    ),
+    title
   );
-  if (select?.getClientRects().length) {
-    const option = Array.from(select.options).find(o =>
-      o.textContent?.includes(title)
-    );
-    check(option, title + " is available");
-    select.value = option!.value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    await pause();
-  } else {
-    await pressStudioControl(
-      Array.from(
-        document.querySelectorAll<HTMLButtonElement>(
-          '.journey-sections button, [aria-label="Activation sections"] button'
-        )
-      ).find(
-        b =>
-          b.getClientRects().length &&
-          b.querySelector("strong")?.textContent === title
-      ),
-      title
-    );
-  }
   await acceptDiscovery();
   if (innerWidth <= 700 && openCategory) {
     const active = document.querySelector<HTMLButtonElement>(
@@ -1181,11 +1168,35 @@ async function clickPrefix(title: string) {
     title
   );
 }
+async function chooseVisual(select: HTMLSelectElement, value: string) {
+  const root = select.closest(".choice-select");
+  check(!!root, "Choice is rendered as visual tiles");
+  const find = () =>
+    Array.from(root!.querySelectorAll<HTMLButtonElement>(".choice-tile")).find(
+      b => b.dataset.value === value
+    );
+  let tile = find();
+  while (!tile) {
+    const more = Array.from(
+      root!.querySelectorAll<HTMLButtonElement>("button")
+    ).find(b => b.textContent?.startsWith("Show more"));
+    check(more, "Choice is available: " + value);
+    more!.click();
+    await pause();
+    tile = find();
+  }
+  await pressStudioControl(tile, "Select " + tile.getAttribute("aria-label"));
+}
 async function fillControl(selector: string, value: string) {
   const el = document.querySelector<
     HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
   >(selector)!;
   check(!!el, selector + " is present");
+  if (el.closest(".choice-select"))
+    return chooseVisual(
+      el.closest(".choice-select")!.querySelector("select")!,
+      value
+    );
   const proto =
     el instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
@@ -1338,12 +1349,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "Selected models survive reopening"
       );
       if (innerWidth < 640) await click("Model filters");
-      const age = Array.from(document.querySelectorAll("label"))
+      const age = Array.from(document.querySelectorAll("label, .choice-field"))
         .find(l => l.textContent?.startsWith("Age group"))!
         .querySelector("select")!;
-      age.value = "child";
-      age.dispatchEvent(new Event("change", { bubbles: true }));
-      await pause();
+      await chooseVisual(age, "child");
       check(
         document.body.textContent?.includes("100 matching models"),
         "Kids filter works"
@@ -1474,7 +1483,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "analytics-ads" || which === "analytics-social") {
       const account = document.querySelector<HTMLSelectElement>(
-        '[aria-label="Analytics account"]'
+        '[data-choice-label="Analytics account"] select'
       )!;
       check(
         account.options.length === 2,
@@ -1755,7 +1764,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "Approved assets are inline"
       );
       const sizes = document.querySelector<HTMLSelectElement>(
-        '[aria-label="Asset dimensions"]'
+        '[data-choice-label="Asset dimensions"] select'
       )!;
       check(
         sizes.textContent?.includes("9:16 · e.g. 1080 × 1920 px"),
@@ -1797,9 +1806,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       const select = async (selector: string, value: string) => {
         const el = document.querySelector<HTMLSelectElement>(selector)!;
         check(!!el, "Selector available: " + selector);
-        el.value = value;
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        await pause();
+        await chooseVisual(el, value);
       };
       check(
         !!document.querySelector('[aria-label="Activation sections"]'),
@@ -1809,7 +1816,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       await click("Campaign & ad set");
       check(
         document.querySelector<HTMLSelectElement>(
-          '[aria-label="Campaign and ad set status"]'
+          '[data-choice-label=\"Campaign and ad set status\"] select'
         )?.value === "active",
         "Campaigns default to Active"
       );
@@ -1830,14 +1837,20 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "Ad sets are scoped to selected campaign"
       );
       await select("#pub-adset", "11");
-      await select('[aria-label="Campaign and ad set status"]', "all");
+      await select(
+        '[data-choice-label=\"Campaign and ad set status\"] select',
+        "all"
+      );
       await select("#pub-meta-campaign", "8");
       check(
         document.querySelector<HTMLSelectElement>("#pub-adset")?.value === "",
         "Changing campaign clears its ad set"
       );
       await select("#pub-adset", "9");
-      await select('[aria-label="Campaign and ad set status"]', "active");
+      await select(
+        '[data-choice-label=\"Campaign and ad set status\"] select',
+        "active"
+      );
       check(
         document.querySelector<HTMLSelectElement>("#pub-adset")?.value === "9",
         "Explicit paused selection survives status filtering"
@@ -1877,22 +1890,20 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       if (which === "studio-ad-create") {
         layout();
       } else {
-        const budgetLabel = Array.from(dialog().querySelectorAll("label")).find(
-          l => l.textContent?.trim() === "Budget (USD)"
-        )!;
+        const budgetLabel = Array.from(
+          dialog().querySelectorAll("label, .choice-field")
+        ).find(l => l.textContent?.trim() === "Budget (USD)")!;
         const amount = budgetLabel.querySelector("input")!;
         Object.getOwnPropertyDescriptor(
           HTMLInputElement.prototype,
           "value"
         )!.set!.call(amount, "20");
         amount.dispatchEvent(new Event("input", { bubbles: true }));
-        const pixelLabel = Array.from(dialog().querySelectorAll("label")).find(
-          l => l.textContent?.includes("Dataset / Meta Pixel")
-        )!;
+        const pixelLabel = Array.from(
+          dialog().querySelectorAll("label, .choice-field")
+        ).find(l => l.textContent?.includes("Dataset / Meta Pixel"))!;
         const pixel = pixelLabel.querySelector("select")!;
-        pixel.value = "88";
-        pixel.dispatchEvent(new Event("change", { bubbles: true }));
-        await pause();
+        await chooseVisual(pixel, "88");
         await click("Review settings");
         check(
           dialog().textContent?.includes("USD 20 / day"),
@@ -2156,15 +2167,13 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "asset-library") {
       const sizes = document.querySelector<HTMLSelectElement>(
-        '[aria-label="Asset size"]'
+        '[data-choice-label="Asset size"] select'
       )!;
       check(
         sizes.textContent?.includes("4:5 · e.g. 1080 × 1350 px"),
         "Library uses the same clear size labels as the picker"
       );
-      sizes.value = "portrait";
-      sizes.dispatchEvent(new Event("change", { bubbles: true }));
-      await pause();
+      await chooseVisual(sizes, "portrait");
       layout();
     }
     if (which === "brand-kit") {

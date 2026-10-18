@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   cleanup,
   fireEvent,
@@ -125,14 +126,14 @@ it("uses five sections, saves the executable settings, then quotes and starts on
       .getByRole("navigation", { name: "Optimization Studio sections" })
       .querySelectorAll("button")
   ).toHaveLength(5);
-  fireEvent.change(screen.getByLabelText("Plan title"), {
+  changeField(screen.getByLabelText("Plan title"), {
     target: { value: "Purchase efficiency" },
   });
-  fireEvent.change(screen.getByLabelText("Goal & context"), {
+  changeField(screen.getByLabelText("Goal & context"), {
     target: { value: "Find the next headline to test" },
   });
   clickJourney(screen.getByRole("button", { name: /^Evidence Account/ }));
-  fireEvent.change(screen.getByLabelText("Meta ad account"), {
+  changeField(screen.getByLabelText("Meta ad account"), {
     target: { value: cid },
   });
   clickJourney(screen.getByRole("button", { name: /^Review & run Confirm/ }));
@@ -207,7 +208,7 @@ it("reopens saved plans, links an exploratory experiment to its source, and pres
     screen.getByRole("button", { name: /^Recommendations Findings/ })
   );
   clickJourney(screen.getByRole("button", { name: "Plan exploratory test" }));
-  fireEvent.change(screen.getByLabelText("Hypothesis"), {
+  changeField(screen.getByLabelText("Hypothesis"), {
     target: { value: "A clearer benefit increases engagement" },
   });
   clickJourney(screen.getByRole("button", { name: "Save experiment plans" }));

@@ -819,14 +819,14 @@
   flex-direction: column;
   gap: 18px;
 }
-.wf-inspector-body label {
+.wf-inspector-body :is(label, .choice-field) {
   display: flex;
   flex-direction: column;
   gap: 7px;
   font-size: 11px;
   font-weight: 550;
 }
-.wf-inspector-body label > input,
+.wf-inspector-body :is(label, .choice-field) > input,
 .wf-inspector-body select,
 .wf-inspector-body textarea {
   font-size: 12px;
@@ -852,7 +852,7 @@
   display: flex;
   gap: 12px;
 }
-.wf-settings-row > label {
+.wf-settings-row > :is(label, .choice-field) {
   flex: 1;
 }
 .wf-inspector-body .wf-checkbox {
@@ -878,7 +878,7 @@
   justify-content: space-between;
   cursor: pointer;
 }
-.wf-direction[open] > label {
+.wf-direction[open] > :is(label, .choice-field) {
   margin-top: 14px;
 }
 .wf-direction .creative-theme-picker {
@@ -1411,7 +1411,7 @@
   font-weight: 600;
   margin-bottom: 22px;
 }
-.wf-app-form label {
+.wf-app-form :is(label, .choice-field) {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1528,8 +1528,8 @@
   line-height: 1.5;
   margin: 8px 0 14px;
 }
-.wf-form-editor label,
-.wf-form-field > label {
+.wf-form-editor :is(label, .choice-field),
+.wf-form-field > :is(label, .choice-field) {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -1592,7 +1592,7 @@
   border-radius: 8px;
   margin: 8px 0;
 }
-.wf-choice-list label {
+.wf-choice-list :is(label, .choice-field) {
   font-weight: 400;
   margin: 8px 0;
 }

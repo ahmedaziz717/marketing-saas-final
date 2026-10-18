@@ -1,3 +1,5 @@
+import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
 import { DEFAULT_IMAGE_MODEL } from "@shared/modelCatalog";
@@ -384,7 +386,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
           <label className="sr-only" htmlFor="saved-creative-setup">
             Saved setups
           </label>
-          <select
+          <VisualSelect
             id="saved-creative-setup"
             className={selectClass + " sm:w-64"}
             value={saved?.briefId ?? ""}
@@ -406,7 +408,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 {draft.name}
               </option>
             ))}
-          </select>
+          </VisualSelect>
           <Button
             variant="ghost"
             disabled={busy || !canEdit}
@@ -695,9 +697,9 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   : `${setup.products.length} selected`}
               </span>
             </div>
-            <label className="mb-3 block text-sm">
+            <ChoiceField className="mb-3 block text-sm">
               Promotion type
-              <select
+              <VisualSelect
                 className={selectClass + " mt-1"}
                 value={
                   setup.promotionMode === "platform"
@@ -745,8 +747,8 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                       {t.name}
                     </option>
                   ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
             {setup.promotionMode === "platform" && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -986,10 +988,17 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 {setup.products.length > 1 && (
                   <div className="mt-4 flex flex-wrap gap-3">
                     {(["separate", "together"] as const).map(mode => (
-                      <label
-                        key={mode}
-                        className="flex items-center gap-2 text-sm"
-                      >
+                      <label key={mode} className="choice-radio-card">
+                        <span className="choice-radio-art">
+                          <ChoiceVisual
+                            label={
+                              mode === "separate"
+                                ? "Separate products"
+                                : "Products together"
+                            }
+                            context="Product arrangement"
+                          />
+                        </span>
                         <input
                           name="product-mode"
                           type="radio"
@@ -1028,13 +1037,13 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label>
+              <ChoiceField>
                 <span className={`${labelClass} mt-5`}>
                   {setup.promotionMode === "platform"
                     ? "Visual setting"
                     : "Product setting"}
                 </span>
-                <select
+                <VisualSelect
                   className={selectClass}
                   value={isPeopleShot(setup.shot) ? "multiple" : setup.shot}
                   onChange={event =>
@@ -1053,15 +1062,15 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   </option>
                   <option value="lifestyle">Lifestyle · no person</option>
                   <option value="multiple">Lifestyle · with person(s)</option>
-                </select>
-              </label>
-              <label>
+                </VisualSelect>
+              </ChoiceField>
+              <ChoiceField>
                 <span className={`${labelClass} mt-5`}>
                   {setup.promotionMode === "platform"
                     ? "Subject placement"
                     : "Product placement"}
                 </span>
-                <select
+                <VisualSelect
                   className={selectClass}
                   value={setup.placement}
                   onChange={event =>
@@ -1076,8 +1085,8 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                   <option value="left">Left</option>
                   <option value="center">Center</option>
                   <option value="right">Right</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
             </div>
             {isPeopleShot(setup.shot) && (
               <LifestylePersonPicker
@@ -1247,9 +1256,9 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
             {active?.product ? (
               <>
                 {selected.length > 1 && (
-                  <label className="mb-4 block">
+                  <ChoiceField className="mb-4 block">
                     <span className="sr-only">Product to inspect</span>
-                    <select
+                    <VisualSelect
                       className={selectClass}
                       value={active.selection.productId}
                       onChange={event =>
@@ -1264,8 +1273,8 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                           {item.product?.name ?? "Unavailable product"}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                 )}
                 <div className="group relative grid aspect-[4/3] place-items-center overflow-hidden rounded-xl bg-white p-4">
                   {activeImage ? (

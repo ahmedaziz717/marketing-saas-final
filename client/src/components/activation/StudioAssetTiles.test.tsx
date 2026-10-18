@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LibraryAsset } from "@shared/assetLibrary";
@@ -40,7 +41,7 @@ it("only shows approved finished assets inline, filters by dimensions and select
   );
   expect(screen.queryByRole("button", { name: "Select Draft" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Select Source" })).toBeNull();
-  fireEvent.change(screen.getByRole("combobox", { name: "Asset dimensions" }), {
+  changeField(screen.getByRole("radiogroup", { name: "Asset dimensions" }), {
     target: { value: "portrait" },
   });
   expect(

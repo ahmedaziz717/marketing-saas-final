@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
 import {
+  changeField,
+  selectedChoice,
+  allChoiceLabels,
+} from "@/test/choiceControls";
+import {
   cleanup,
   fireEvent,
   render,
@@ -107,7 +112,7 @@ describe("Creative Builder controls", () => {
     expect(screen.getByText(/124 themes available/)).toBeTruthy();
     expect(screen.queryByLabelText("Search theme choices")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
-    fireEvent.change(screen.getByLabelText("Search theme choices"), {
+    changeField(screen.getByLabelText("Search theme choices"), {
       target: { value: "Cyber Monday" },
     });
     fireEvent.click(
@@ -117,13 +122,13 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(CREATIVE_THEMES["cyber-monday"].direction);
-    fireEvent.change(screen.getByLabelText("Main prompt"), {
+    changeField(screen.getByLabelText("Main prompt"), {
       target: {
         value:
           "Create a precise premium commerce composition with generous safe space.",
       },
     });
-    fireEvent.change(screen.getByLabelText("Theme prompt"), {
+    changeField(screen.getByLabelText("Theme prompt"), {
       target: {
         value:
           "Use electric cyan data light with a restrained violet retail-event atmosphere.",
@@ -172,15 +177,15 @@ describe("Creative Builder controls", () => {
     expect(
       (screen.getByLabelText("Theme prompt") as HTMLTextAreaElement).value
     ).toBe(savedSetup.themePrompt);
-    expect((screen.getByLabelText("Mood") as HTMLSelectElement).value).toBe(
-      "premium"
-    );
     expect(
-      (screen.getByLabelText("Art style") as HTMLSelectElement).value
+      selectedChoice(screen.getByRole("radiogroup", { name: "Mood" }))
+    ).toBe("premium");
+    expect(
+      selectedChoice(screen.getByRole("radiogroup", { name: "Art style" }))
     ).toBe("editorial");
-    expect(
-      (screen.getByLabelText("Product setting") as HTMLSelectElement).value
-    ).toBe("multiple");
+    expect(selectedChoice(screen.getByLabelText("Product setting"))).toBe(
+      "multiple"
+    );
     expect(screen.getByRole("img", { name: "Man · Brown 4" })).toBeTruthy();
     const resetButtons = screen.getAllByRole("button", { name: "Reset" });
     fireEvent.click(resetButtons[0]);
@@ -228,13 +233,13 @@ describe("Creative Builder controls", () => {
     expect(screen.queryByText("300 × 250")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: "Google Display" }));
     expect(screen.getByText("300 × 250")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Headline"), {
+    changeField(screen.getByLabelText("Headline"), {
       target: { value: "My exact headline" },
     });
-    fireEvent.change(screen.getByLabelText("Subheadline"), {
+    changeField(screen.getByLabelText("Subheadline"), {
       target: { value: "My exact subheadline" },
     });
-    fireEvent.change(screen.getByLabelText("Call to action"), {
+    changeField(screen.getByLabelText("Call to action"), {
       target: { value: "My exact CTA" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
@@ -274,23 +279,19 @@ describe("Creative Builder controls", () => {
     );
     fireEvent.click(screen.getByRole("checkbox", { name: /Power 12 W/ }));
     fireEvent.click(screen.getByRole("button", { name: /White brand mark/ }));
-    fireEvent.change(screen.getByLabelText(/Extra direction/), {
+    changeField(screen.getByLabelText(/Extra direction/), {
       target: { value: "Warm window light" },
     });
     expect(CREATIVE_MOODS).toHaveLength(8);
     expect(CREATIVE_ART_STYLES).toHaveLength(8);
-    fireEvent.change(screen.getByLabelText("Mood"), {
+    changeField(screen.getByRole("radiogroup", { name: "Mood" }), {
       target: { value: "vibrant" },
     });
-    fireEvent.change(screen.getByLabelText("Art style"), {
+    changeField(screen.getByRole("radiogroup", { name: "Art style" }), {
       target: { value: "animation" },
     });
     const setting = screen.getByLabelText("Product setting");
-    expect(
-      Array.from((setting as HTMLSelectElement).options).map(
-        option => option.text
-      )
-    ).toEqual([
+    expect(allChoiceLabels(setting)).toEqual([
       "Product only",
       "Lifestyle · no person",
       "Lifestyle · with person(s)",
@@ -298,12 +299,12 @@ describe("Creative Builder controls", () => {
     expect(
       screen.queryByRole("button", { name: "Browse 500 models" })
     ).toBeNull();
-    fireEvent.change(setting, { target: { value: "multiple" } });
+    changeField(setting, { target: { value: "multiple" } });
     fireEvent.click(screen.getByRole("button", { name: "Browse 500 models" }));
     fireEvent.click(screen.getByRole("button", { name: "Woman · Black 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Use 1 model" }));
     expect(screen.getByRole("img", { name: "Woman · Black 1" })).toBeTruthy();
-    fireEvent.change(setting, {
+    changeField(setting, {
       target: { value: "lifestyle" },
     });
     expect(
@@ -346,7 +347,7 @@ describe("Creative Builder controls", () => {
   it("keeps selections when product search filters the list", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Studio lamp/ }));
-    fireEvent.change(
+    changeField(
       screen.getByRole("textbox", { name: "Search products or SKU" }),
       { target: { value: "SHELF" } }
     );
@@ -371,7 +372,7 @@ describe("Creative Builder controls", () => {
     );
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Refresh copy/ }));
-    fireEvent.change(screen.getByLabelText("Headline"), {
+    changeField(screen.getByLabelText("Headline"), {
       target: { value: "Keep my newer edit" },
     });
     finish({ headline: "Stale response", subheadline: "Stale", cta: "Stale" });
@@ -439,19 +440,19 @@ it("defaults a directory to a catalog-free workflow and saves a listing brief", 
   render(<CreativeBuilder onGenerated={vi.fn()} />);
   await waitFor(() =>
     expect(
-      (screen.getByLabelText("Promotion type") as HTMLSelectElement).value
+      selectedChoice(screen.getByRole("radiogroup", { name: "Promotion type" }))
     ).toBe("platform")
   );
   expect(screen.queryByLabelText("Search products or SKU")).toBeNull();
   expect(screen.queryByText(/Approve products in your/)).toBeNull();
   expect(screen.getByText(/3 images/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Promotion type"), {
+  changeField(screen.getByRole("radiogroup", { name: "Promotion type" }), {
     target: { value: "listing" },
   });
-  fireEvent.change(screen.getByLabelText("Provider / listing name"), {
+  changeField(screen.getByLabelText("Provider / listing name"), {
     target: { value: "Music teacher" },
   });
-  fireEvent.change(
+  changeField(
     screen.getByLabelText("What should this promotion communicate?"),
     {
       target: {

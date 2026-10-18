@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { PartnerLogo } from "./PartnerLogo";
 import { WorkflowDataResult } from "./WorkflowDataResult";
 import { StudioImagePreview } from "./configurator/StudioImagePreview";
@@ -387,9 +388,9 @@ function WorkflowAppRunnerSession({
             {latest && <span>· {workflowRunStatusLabel(latest)}</span>}
           </h3>
           {runs.length > 1 && (
-            <label>
+            <ChoiceField>
               Run history{" "}
-              <select
+              <VisualSelect
                 aria-label="App run history"
                 value={latest?.id ?? ""}
                 onChange={e => setSelectedRun(e.target.value)}
@@ -400,8 +401,8 @@ function WorkflowAppRunnerSession({
                     {workflowRunStatusLabel(r)}
                   </option>
                 ))}
-              </select>
-            </label>
+              </VisualSelect>
+            </ChoiceField>
           )}
           {latest && (
             <ol className="wf-result-progress" aria-label="Run steps">

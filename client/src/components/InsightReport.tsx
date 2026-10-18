@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import {
   Area,
@@ -249,9 +250,9 @@ export function PinInsightDialog({
             )}
           </>
         )}
-        <label className="insight-label">
+        <ChoiceField className="insight-label">
           Dashboard
-          <select
+          <VisualSelect
             aria-label="Dashboard"
             value={surface}
             onChange={e => {
@@ -261,12 +262,12 @@ export function PinInsightDialog({
           >
             <option value="measure">Measure dashboard</option>
             <option value="main">Main dashboard</option>
-          </select>
-        </label>
+          </VisualSelect>
+        </ChoiceField>
         {!!layouts.data?.length && (
-          <label className="insight-label">
+          <ChoiceField className="insight-label">
             Saved layout
-            <select
+            <VisualSelect
               aria-label="Saved layout"
               value={layoutId || layouts.data[0].id}
               onChange={e => setLayoutId(e.target.value)}
@@ -276,8 +277,8 @@ export function PinInsightDialog({
                   {l.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </VisualSelect>
+          </ChoiceField>
         )}
         {layouts.error && (
           <p role="alert">Layouts could not be loaded. Try again.</p>

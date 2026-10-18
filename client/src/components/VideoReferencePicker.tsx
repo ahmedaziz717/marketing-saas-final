@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Check, Film, Search, Upload } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -128,7 +129,8 @@ export function VideoReferencePicker({
             />
           </label>
           {tab === "assets" && (
-            <select
+            <VisualSelect
+              density="compact"
               aria-label="Reference origin"
               className="h-11 rounded-lg border bg-background px-3 text-sm"
               value={origin}
@@ -137,7 +139,7 @@ export function VideoReferencePicker({
               <option value="all">All assets</option>
               <option value="generated">AI generated</option>
               <option value="uploaded">Uploaded</option>
-            </select>
+            </VisualSelect>
           )}
           <Button variant="outline" className="h-11" onClick={onUpload}>
             <Upload size={16} className="mr-2" />

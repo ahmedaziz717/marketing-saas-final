@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -232,7 +233,7 @@ export function AssetUploadDialog({
           )}
           <div>
             <Label htmlFor="workflow-purpose">Purpose</Label>
-            <select
+            <VisualSelect
               id="workflow-purpose"
               className={fieldClass}
               value={purpose}
@@ -243,12 +244,12 @@ export function AssetUploadDialog({
             >
               <option value="finished">Finished image or video</option>
               <option value="source">Brand / product source material</option>
-            </select>
+            </VisualSelect>
           </div>
           {purpose === "source" && (
             <div>
               <Label htmlFor="workflow-source">Source type</Label>
-              <select
+              <VisualSelect
                 id="workflow-source"
                 className={fieldClass}
                 value={sourceType}
@@ -261,7 +262,7 @@ export function AssetUploadDialog({
                 <option value="logo">Logo</option>
                 <option value="product">Product image</option>
                 <option value="reference">Reference</option>
-              </select>
+              </VisualSelect>
             </div>
           )}
           <label className="flex gap-2 text-sm">
@@ -287,7 +288,7 @@ export function AssetUploadDialog({
           )}
           <div>
             <Label htmlFor="workflow-disposition">After upload</Label>
-            <select
+            <VisualSelect
               id="workflow-disposition"
               className={fieldClass}
               value={disposition}
@@ -303,7 +304,7 @@ export function AssetUploadDialog({
                   Approve and add to Asset Library
                 </option>
               )}
-            </select>
+            </VisualSelect>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
               {disposition === "draft"
                 ? "Your work is saved, but stays out of the shared library until submitted."

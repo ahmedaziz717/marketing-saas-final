@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -565,9 +566,9 @@ function Studio({
                   </p>
                 )}
                 <div className="insight-form-grid">
-                  <label className="insight-label">
+                  <ChoiceField className="insight-label">
                     Reporting period
-                    <select
+                    <VisualSelect
                       value={config.period}
                       onChange={e =>
                         update({
@@ -580,8 +581,8 @@ function Studio({
                           {label}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </VisualSelect>
+                  </ChoiceField>
                   <label className="insight-label">
                     Report timezone
                     <input
@@ -792,9 +793,9 @@ function Studio({
                         </span>
                       </label>
                     ))}
-                    <label className="insight-label">
+                    <ChoiceField className="insight-label">
                       Preferred trend metric
-                      <select
+                      <VisualSelect
                         value={config.chartMetric}
                         onChange={e =>
                           update({
@@ -807,12 +808,12 @@ function Studio({
                             {insightMetrics[key].label}
                           </option>
                         ))}
-                      </select>
+                      </VisualSelect>
                       <small>
                         For other channels, the first selected metric with daily
                         data is used.
                       </small>
-                    </label>
+                    </ChoiceField>
                   </div>
                   <div
                     className="insight-paper-preview"
@@ -883,9 +884,9 @@ function Studio({
                 {config.schedule.enabled && (
                   <>
                     <div className="insight-form-grid">
-                      <label className="insight-label">
+                      <ChoiceField className="insight-label">
                         Frequency
-                        <select
+                        <VisualSelect
                           value={config.schedule.frequency}
                           onChange={e =>
                             update({
@@ -900,12 +901,12 @@ function Studio({
                           <option value="daily">Daily</option>
                           <option value="weekly">Weekly</option>
                           <option value="monthly">Monthly</option>
-                        </select>
-                      </label>
+                        </VisualSelect>
+                      </ChoiceField>
                       {config.schedule.frequency === "weekly" && (
-                        <label className="insight-label">
+                        <ChoiceField className="insight-label">
                           Day of week
-                          <select
+                          <VisualSelect
                             value={config.schedule.weekday}
                             onChange={e =>
                               update({
@@ -929,8 +930,8 @@ function Studio({
                                 {d}
                               </option>
                             ))}
-                          </select>
-                        </label>
+                          </VisualSelect>
+                        </ChoiceField>
                       )}
                       {config.schedule.frequency === "monthly" && (
                         <label className="insight-label">

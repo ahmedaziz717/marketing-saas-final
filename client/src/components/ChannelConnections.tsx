@@ -1,3 +1,4 @@
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { PartnerLogo } from "./PartnerLogo";
 import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -363,7 +364,7 @@ export function MetaConnectionSelection() {
                     ? "Facebook Page"
                     : "Ad account"}
                 </Label>
-                <select
+                <VisualSelect
                   id="meta-account-choice"
                   className={channelInput}
                   value={accountId}
@@ -378,13 +379,13 @@ export function MetaConnectionSelection() {
                       {a.name} ({a.id})
                     </option>
                   ))}
-                </select>
+                </VisualSelect>
                 {query.data.purpose === "meta_ads" && (
                   <>
                     <Label htmlFor="meta-page-choice">
                       Facebook Page for ads
                     </Label>
-                    <select
+                    <VisualSelect
                       id="meta-page-choice"
                       className={channelInput}
                       value={pageId}
@@ -396,7 +397,7 @@ export function MetaConnectionSelection() {
                           {p.name}
                         </option>
                       ))}
-                    </select>
+                    </VisualSelect>
                   </>
                 )}
                 {!query.data.pages.length && (

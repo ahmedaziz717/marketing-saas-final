@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
 import {
   cleanup,
@@ -135,15 +136,15 @@ it("combines catalog photos and assets, generates an editable prompt, undoes it,
     screen.getByRole("img", { name: "Reference 2: Warm living room" })
   ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Browse themes" }));
-  fireEvent.change(screen.getByLabelText("Search theme choices"), {
+  changeField(screen.getByLabelText("Search theme choices"), {
     target: { value: "Holiday" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Select Holiday" }));
   expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Mood"), {
+  changeField(screen.getByRole("radiogroup", { name: "Mood" }), {
     target: { value: "warm" },
   });
-  fireEvent.change(screen.getByLabelText("Art style"), {
+  changeField(screen.getByRole("radiogroup", { name: "Art style" }), {
     target: { value: "cinematic" },
   });
   fireEvent.click(
@@ -163,7 +164,7 @@ it("combines catalog photos and assets, generates an editable prompt, undoes it,
   expect(
     (screen.getByLabelText(/Describe your video/) as HTMLTextAreaElement).value
   ).toBe("");
-  fireEvent.change(screen.getByLabelText(/Describe your video/), {
+  changeField(screen.getByLabelText(/Describe your video/), {
     target: { value: "My edited camera direction." },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
@@ -188,7 +189,7 @@ it("preserves edits made while a prompt is generating", async () => {
   fireEvent.click(
     screen.getByRole("button", { name: /^Generate prompt from images/ })
   );
-  fireEvent.change(screen.getByLabelText(/Describe your video/), {
+  changeField(screen.getByLabelText(/Describe your video/), {
     target: { value: "Keep my latest edit" },
   });
   finish({ prompt: "A stale generated prompt" });

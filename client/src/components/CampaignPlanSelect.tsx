@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Link } from "wouter";
@@ -25,9 +26,9 @@ export function CampaignPlanSelect({
     { enabled: !!organizationId }
   );
   return (
-    <label className="block text-sm">
+    <ChoiceField className="block text-sm">
       Campaign plan <span className="text-muted-foreground">(optional)</span>
-      <select
+      <VisualSelect
         className={channelInput + " mt-1"}
         value={value ?? ""}
         onChange={e => {
@@ -47,7 +48,7 @@ export function CampaignPlanSelect({
             {p.name}
           </option>
         ))}
-      </select>
+      </VisualSelect>
       <span className="mt-1 block text-xs text-muted-foreground">
         Keep related content together.{" "}
         <Link
@@ -63,6 +64,6 @@ export function CampaignPlanSelect({
           Plans could not be loaded. Your current selection is retained.
         </span>
       )}
-    </label>
+    </ChoiceField>
   );
 }

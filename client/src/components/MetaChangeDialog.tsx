@@ -1,3 +1,4 @@
+import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { MetaCreateDialog } from "./MetaCreateDialog";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -293,9 +294,9 @@ function MetaEditDialog({
             </label>
             {kind === "create_campaign" && (
               <>
-                <label className="block text-sm">
+                <ChoiceField className="block text-sm">
                   Objective
-                  <select
+                  <VisualSelect
                     className={channelInput}
                     value={objective}
                     onChange={e =>
@@ -308,11 +309,11 @@ function MetaEditDialog({
                     <option value="OUTCOME_TRAFFIC">
                       Traffic · website clicks
                     </option>
-                  </select>
-                </label>
-                <label className="block text-sm">
+                  </VisualSelect>
+                </ChoiceField>
+                <ChoiceField className="block text-sm">
                   Budget ownership
-                  <select
+                  <VisualSelect
                     className={channelInput}
                     value={mode}
                     onChange={e => {
@@ -324,8 +325,8 @@ function MetaEditDialog({
                     <option value="campaign">
                       CBO · Advantage campaign budget
                     </option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 <fieldset>
                   <legend className="text-sm font-medium">
                     Special ad categories
@@ -377,9 +378,9 @@ function MetaEditDialog({
               </label>
             )}
             {editing && (
-              <label className="block text-sm">
+              <ChoiceField className="block text-sm">
                 Delivery
-                <select
+                <VisualSelect
                   className={channelInput}
                   value={status}
                   onChange={e => setStatus(e.target.value as typeof status)}
@@ -387,8 +388,8 @@ function MetaEditDialog({
                   <option value="">Keep current status</option>
                   <option value="PAUSED">Pause</option>
                   <option value="ACTIVE">Activate · may begin spending</option>
-                </select>
-              </label>
+                </VisualSelect>
+              </ChoiceField>
             )}
             {adset && (
               <>
@@ -403,9 +404,9 @@ function MetaEditDialog({
                     onChange={e => setCountries(e.target.value)}
                   />
                 </label>
-                <label className="block text-sm">
+                <ChoiceField className="block text-sm">
                   Audience automation
-                  <select
+                  <VisualSelect
                     className={channelInput}
                     value={audience}
                     onChange={e =>
@@ -415,11 +416,11 @@ function MetaEditDialog({
                     <option value="keep">Keep current</option>
                     <option value="advantage">Advantage+ audience</option>
                     <option value="manual">Manual audience</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
+                  </VisualSelect>
+                </ChoiceField>
+                <ChoiceField className="block text-sm">
                   Placements
-                  <select
+                  <VisualSelect
                     className={channelInput}
                     value={placements}
                     onChange={e =>
@@ -429,12 +430,12 @@ function MetaEditDialog({
                     <option value="keep">Keep current</option>
                     <option value="automatic">Automatic placements</option>
                     <option value="facebook_feed">Facebook Feed only</option>
-                  </select>
-                </label>
+                  </VisualSelect>
+                </ChoiceField>
                 {kind === "create_adset" && (
-                  <label className="block text-sm">
+                  <ChoiceField className="block text-sm">
                     Purchase pixel (required for Sales)
-                    <select
+                    <VisualSelect
                       className={channelInput}
                       value={pixel}
                       onChange={e => setPixel(e.target.value)}
@@ -445,9 +446,9 @@ function MetaEditDialog({
                           {p.name || p.id}
                         </option>
                       ))}
-                    </select>
+                    </VisualSelect>
                     {pixels.error && <p role="alert">{pixels.error.message}</p>}
-                  </label>
+                  </ChoiceField>
                 )}
               </>
             )}

@@ -1,13 +1,22 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronUp,
   Compass,
   Eye,
   type LucideIcon,
 } from "lucide-react";
+import { studioCategoryIcon } from "./studioCategoryIcons";
 import "@/styles/studioExperience.css";
 
 export type JourneyCategory = {
@@ -210,6 +219,101 @@ export function StudioJourney({
 }) {
   const panelId = useId();
   const root = useRef<HTMLDivElement>(null);
+  const overview = useRef<HTMLDivElement>(null);
+  const railScroll = useRef<HTMLDivElement>(null);
+  const railContent = useRef<HTMLDivElement>(null);
+  const railId = useId();
+  const [overflow, setOverflow] = useState({ up: false, down: false });
+  useLayoutEffect(() => {
+    const rail = overview.current;
+    const viewport = railScroll.current;
+    const content = railContent.current;
+    if (!rail || !viewport || !content || j.mobile) {
+      setOverflow(previous =>
+        previous.up || previous.down ? { up: false, down: false } : previous
+      );
+      return;
+    }
+    const studio = root.current?.closest(".cfg-root");
+    let frame = 0;
+    let revealCurrent = true;
+    const measure = () => {
+      frame = 0;
+      if (!rail.getClientRects().length) return;
+      const footer = studio
+        ?.querySelector(".cfg-bottom, .activation-footer")
+        ?.getBoundingClientRect();
+      const bottom = Math.min(
+        window.innerHeight,
+        footer && footer.top >= 0 ? footer.top : window.innerHeight
+      );
+      // The expanded preview takes room initially; the rail grows as it scrolls away.
+      const height = Math.max(
+        144,
+        Math.floor(bottom - Math.max(0, rail.getBoundingClientRect().top) - 12)
+      );
+      rail.style.setProperty("--journey-rail-height", `${height}px`);
+      if (revealCurrent) {
+        const active = content.querySelector<HTMLElement>(
+          j.reviewOpen
+            ? ".journey-review-panel"
+            : '.journey-category[aria-current="true"]'
+        );
+        if (active) {
+          const bounds = active.getBoundingClientRect();
+          const visible = viewport.getBoundingClientRect();
+          if (j.reviewOpen) viewport.scrollTop += bounds.top - visible.top - 30;
+          else if (bounds.bottom > visible.bottom - 30)
+            viewport.scrollTop += bounds.bottom - visible.bottom + 30;
+          else if (bounds.top < visible.top + 30)
+            viewport.scrollTop -= visible.top + 30 - bounds.top;
+        }
+        revealCurrent = false;
+      }
+      const up = viewport.scrollTop > 2;
+      const down =
+        viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 2;
+      setOverflow(previous =>
+        previous.up === up && previous.down === down ? previous : { up, down }
+      );
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const resize =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(schedule);
+    [rail, viewport, content, studio].forEach(node => {
+      if (node) resize?.observe(node);
+    });
+    studio
+      ?.querySelectorAll(
+        ".cfg-heading, .journey-sections, .cfg-bottom, .activation-footer"
+      )
+      .forEach(node => resize?.observe(node));
+    window.addEventListener("scroll", schedule, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", schedule);
+    measure();
+    return () => {
+      resize?.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [j.section, j.category, j.mobile, j.reviewOpen]);
+  const scrollCategories = (direction: number) => {
+    const viewport = railScroll.current;
+    viewport?.scrollBy({
+      top: direction * Math.max(84, viewport.clientHeight * 0.7),
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  };
   const viewed = j.eligible.length - j.unseen.length;
   const progress = `${viewed} of ${j.eligible.length} categories viewed`;
   const reviewId = useId();
@@ -220,6 +324,7 @@ export function StudioJourney({
     >
       {j.active.categories.map(item => {
         const seen = j.memory.viewed.includes(item.id);
+        const Icon = studioCategoryIcon(item.id, item.title);
         return (
           <button
             type="button"
@@ -231,6 +336,9 @@ export function StudioJourney({
             aria-current={j.category === item.id ? "true" : undefined}
             onClick={() => j.navigate(j.section, item.id)}
           >
+            <span className="journey-category-icon" aria-hidden="true">
+              <Icon size={20} strokeWidth={1.7} />
+            </span>
             <span className="journey-category-name">
               {item.title}
               <span
@@ -297,20 +405,25 @@ export function StudioJourney({
         })}
       </nav>
       <div className="journey-mobile-section" hidden={!j.mobile || j.focused}>
-        <label>
-          <span className="sr-only">{label}</span>
-          <select
-            value={j.section}
-            onChange={event => j.navigate(event.target.value)}
-          >
-            {j.sections.map((item, index) => (
-              <option key={item.id} value={item.id}>
-                {String(index + 1).padStart(2, "0")} · {item.title}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={18} aria-hidden="true" />
-        </label>
+        <nav className="journey-mobile-steps" aria-label={label}>
+          {j.sections.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                aria-current={j.section === item.id ? "step" : undefined}
+                onClick={() => j.navigate(item.id)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>
+                  <small>{String(index + 1).padStart(2, "0")}</small>
+                  <strong>{item.title}</strong>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
         <div>
           <span>
             Step {j.sectionIndex + 1} of {j.sections.length}
@@ -321,7 +434,11 @@ export function StudioJourney({
         </div>
       </div>
       <div className="journey-panel">
-        <div className="journey-overview" hidden={j.mobile && j.focused}>
+        <div
+          className="journey-overview"
+          ref={overview}
+          hidden={j.mobile && j.focused}
+        >
           <div className="journey-heading">
             <div>
               <h2>{j.active.title}</h2>
@@ -344,39 +461,82 @@ export function StudioJourney({
               </div>
             </div>
           </div>
-          {cards}
-          {j.reviewOpen && (
-            <section
-              id={reviewId}
-              className="journey-review-panel"
-              aria-label="Review unviewed choices"
+          <div className="journey-rail-body">
+            <div
+              id={railId}
+              ref={railScroll}
+              className="journey-rail-scroll"
+              role="region"
+              aria-label={`${j.active.title} categories`}
+              tabIndex={j.mobile ? undefined : 0}
             >
-              <h3>Your current choices</h3>
-              <p>Explore any category whenever you like.</p>
-              <div className="journey-review-list">
-                {j.unseen.map(item => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => j.explore(item.id)}
+              <div ref={railContent} className="journey-rail-content">
+                {cards}
+                {j.reviewOpen && (
+                  <section
+                    id={reviewId}
+                    className="journey-review-panel"
+                    aria-label="Review unviewed choices"
                   >
-                    <span>{item.title}</span>
-                    <strong>
-                      {item.needsInput ? "Not set · Required" : item.value}
-                    </strong>
-                    <ArrowRight size={14} />
-                  </button>
-                ))}
+                    <h3>Your current choices</h3>
+                    <p>Explore any category whenever you like.</p>
+                    <div className="journey-review-list">
+                      {j.unseen.map(item => (
+                        <button
+                          type="button"
+                          key={item.id}
+                          onClick={() => j.explore(item.id)}
+                        >
+                          <span>{item.title}</span>
+                          <strong>
+                            {item.needsInput
+                              ? "Not set · Required"
+                              : item.value}
+                          </strong>
+                          <ArrowRight size={14} />
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="journey-review-close"
+                      onClick={j.dismiss}
+                    >
+                      Close review
+                    </button>
+                  </section>
+                )}
               </div>
+            </div>
+            <div
+              className="journey-scroll-cue is-up"
+              hidden={!overflow.up || j.mobile}
+            >
               <button
                 type="button"
-                className="journey-review-close"
-                onClick={j.dismiss}
+                aria-label="Scroll categories up"
+                title="More categories above"
+                aria-controls={railId}
+                onClick={() => scrollCategories(-1)}
               >
-                Close review
+                <ChevronUp size={18} aria-hidden="true" />
               </button>
-            </section>
-          )}
+            </div>
+            <div
+              className="journey-scroll-cue is-down"
+              hidden={!overflow.down || j.mobile}
+            >
+              <button
+                type="button"
+                aria-label="Scroll categories down"
+                title="More categories below"
+                aria-controls={railId}
+                onClick={() => scrollCategories(1)}
+              >
+                <ChevronDown size={18} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </div>
         <div className="journey-focus-heading" hidden={!j.mobile || !j.focused}>
           <button type="button" onClick={j.overview}>

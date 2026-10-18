@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField } from "@/test/choiceControls";
 import {
   cleanup,
   fireEvent,
@@ -101,7 +102,7 @@ it("keeps report direction in section categories and submits the full setup once
       .getByRole("navigation", { name: "Insights Studio sections" })
       .querySelectorAll("button")
   ).toHaveLength(5);
-  fireEvent.change(screen.getByLabelText("Report name"), {
+  changeField(screen.getByLabelText("Report name"), {
     target: { value: "Weekly team report" },
   });
   clickJourney(
@@ -110,10 +111,10 @@ it("keeps report direction in section categories and submits the full setup once
   clickJourney(screen.getByRole("button", { name: /Example Ads/ }));
   clickJourney(screen.getByRole("button", { name: /^Schedule & delivery/ }));
   clickJourney(screen.getByLabelText(/Run this report automatically/));
-  fireEvent.change(screen.getByLabelText("Frequency"), {
+  changeField(screen.getByRole("radiogroup", { name: "Frequency" }), {
     target: { value: "monthly" },
   });
-  fireEvent.change(screen.getByLabelText(/Day of month/), {
+  changeField(screen.getByLabelText(/Day of month/), {
     target: { value: "15" },
   });
   clickJourney(

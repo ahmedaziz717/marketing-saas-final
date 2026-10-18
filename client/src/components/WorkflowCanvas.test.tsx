@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { changeField, allChoiceLabels } from "@/test/choiceControls";
 import { useState } from "react";
 import {
   cleanup,
@@ -99,10 +100,13 @@ it("exposes copy-evidence wiring, source requirements and editable purchase comp
   expect(
     screen.getByText(/Account totals and weekday\/hour reports/)
   ).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Comparison objective"), {
-    target: { value: "roas" },
-  });
-  fireEvent.change(screen.getByLabelText("Minimum purchases per value"), {
+  changeField(
+    screen.getByRole("radiogroup", { name: "Comparison objective" }),
+    {
+      target: { value: "roas" },
+    }
+  );
+  changeField(screen.getByLabelText("Minimum purchases per value"), {
     target: { value: "8" },
   });
   fireEvent.click(screen.getByLabelText("Emotional tone"));
@@ -148,7 +152,7 @@ it("updates node settings, runs one step, and removes connected edges on deletio
   fireEvent.click(
     screen.getByRole("button", { name: "Settings for Generate image" })
   );
-  fireEvent.change(screen.getByLabelText("Aspect ratio"), {
+  changeField(screen.getByRole("radiogroup", { name: "Aspect ratio" }), {
     target: { value: "9:16" },
   });
   expect(graph().nodes.find(n => n.id === "image")!.config.ratio).toBe("9:16");
@@ -160,7 +164,7 @@ it("updates node settings, runs one step, and removes connected edges on deletio
 });
 it("adds searchable steps and exposes compact optional creative direction", () => {
   render(<Harness initial={{ nodes: [], edges: [] }} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "Generate image" },
   });
   const library = screen.getByRole("complementary");
@@ -173,7 +177,7 @@ it("adds searchable steps and exposes compact optional creative direction", () =
     screen.getByRole("checkbox", { name: "Apply a theme and style" })
   );
   expect(graph().nodes[0].config.direction?.theme).toBe("spotlight");
-  fireEvent.change(screen.getByLabelText("Mood"), {
+  changeField(screen.getByRole("radiogroup", { name: "Mood" }), {
     target: { value: "premium" },
   });
   expect(graph().nodes[0].config.direction?.mood).toBe("premium");
@@ -186,23 +190,24 @@ it("offers built-in and custom Apps and configures executable built-ins", () => 
   fireEvent.click(
     screen.getByRole("button", { name: "Settings for Run an App" })
   );
-  expect(screen.getByRole("option", { name: "Image creator" })).toBeTruthy();
-  expect(screen.getByRole("option", { name: /Custom review/ })).toBeTruthy();
+  allChoiceLabels(screen.getByRole("radiogroup", { name: "App" }));
+  expect(screen.getByRole("radio", { name: "Image creator" })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /Custom review/ })).toBeTruthy();
   expect(
-    (screen.getByRole("option", { name: /Creator video/ }) as HTMLOptionElement)
+    (screen.getByRole("radio", { name: /Creator video/ }) as HTMLOptionElement)
       .disabled
   ).toBe(true);
-  fireEvent.change(screen.getByLabelText("App"), {
+  changeField(screen.getByRole("radiogroup", { name: "App" }), {
     target: { value: "builtin:image-creator" },
   });
   expect(graph().nodes[0].type).toBe("generate_image");
   expect(graph().nodes[0].config.builtinAppId).toBe("image-creator");
-  expect(screen.getByLabelText("Aspect ratio")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Aspect ratio"), {
+  expect(screen.getByRole("radiogroup", { name: "Aspect ratio" })).toBeTruthy();
+  changeField(screen.getByRole("radiogroup", { name: "Aspect ratio" }), {
     target: { value: "9:16" },
   });
   expect(graph().nodes[0].config.ratio).toBe("9:16");
-  fireEvent.change(screen.getByLabelText("App"), {
+  changeField(screen.getByRole("radiogroup", { name: "App" }), {
     target: { value: "00000000-0000-4000-8000-000000000001" },
   });
   expect(graph().nodes[0].type).toBe("app");
@@ -215,7 +220,7 @@ it("offers built-in and custom Apps and configures executable built-ins", () => 
 it("adds and configures an App field directly on the workflow canvas", () => {
   render(<Harness initial={{ nodes: [], edges: [] }} />);
   fireEvent.click(screen.getByRole("button", { name: "Fields" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "theme" },
   });
   fireEvent.click(screen.getByRole("button", { name: /Theme System choices/ }));
@@ -240,7 +245,7 @@ it("builds scheduling from public fields and steps, exposes working settings and
     screen.getByText("How to build this scheduling workflow")
   ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Fields" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "Account & date range" },
   });
   fireEvent.click(
@@ -250,7 +255,7 @@ it("builds scheduling from public fields and steps, exposes working settings and
   expect(graph().nodes[0].config.inputType).toBe("data");
   fireEvent.click(screen.getByRole("button", { name: "Add step" }));
   fireEvent.click(screen.getByRole("button", { name: "Steps" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "Fetch live Meta" },
   });
   fireEvent.click(
@@ -258,30 +263,34 @@ it("builds scheduling from public fields and steps, exposes working settings and
       name: /Fetch live Meta performance Read fresh/,
     })
   );
-  expect(screen.getByLabelText("Performance to fetch")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Performance to fetch"), {
-    target: { value: "daily" },
-  });
+  expect(
+    screen.getByRole("radiogroup", { name: "Performance to fetch" })
+  ).toBeTruthy();
+  changeField(
+    screen.getByRole("radiogroup", { name: "Performance to fetch" }),
+    {
+      target: { value: "daily" },
+    }
+  );
   expect(graph().nodes[1].config.metaPerformance?.includeHourly).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Add step" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "Optimization engine" },
   });
   fireEvent.click(
     screen.getByRole("button", { name: /Optimization engine Reusable/ })
   );
-  fireEvent.change(screen.getByLabelText("Optimizer"), {
+  changeField(screen.getByRole("radiogroup", { name: "Optimizer" }), {
     target: { value: "weekday_time" },
   });
   expect(screen.queryByLabelText("Verified brief")).toBeNull();
   expect(screen.queryByLabelText("Mode")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Comparison"), {
+  changeField(screen.getByLabelText("Comparison"), {
     target: { value: "weekday" },
   });
-  fireEvent.change(
-    screen.getByLabelText("Probability required to propose a test"),
-    { target: { value: "0.9" } }
-  );
+  changeField(screen.getByLabelText("Probability required to propose a test"), {
+    target: { value: "0.9" },
+  });
   expect(graph().nodes[2].config.optimizer?.scheduling).toMatchObject({
     comparison: "weekday",
     testProbability: 0.9,
@@ -307,7 +316,7 @@ it("builds scheduling from public fields and steps, exposes working settings and
     })
   );
   fireEvent.click(screen.getByRole("button", { name: "Add step" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Search steps" }), {
+  changeField(screen.getByRole("textbox", { name: "Search steps" }), {
     target: { value: "Collect and preview" },
   });
   fireEvent.click(
