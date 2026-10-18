@@ -1,3 +1,5 @@
+import { brandPdfInput, brandVoiceSchema } from "../../shared/brandGuidelines";
+import { extractBrandPdf } from "../lib/brandPdf";
 import sharp from "sharp";
 import {
   discoverDriveLogos,
@@ -26,7 +28,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 const brandInput = z.object({
   organizationId: z.number().int().positive(),
   name: z.string().min(2).max(160),
-  voice: z.string().max(4000).optional().default(""),
+  voice: brandVoiceSchema.optional().default(""),
   colors: z
     .array(z.string().regex(/^#[0-9a-fA-F]{6}$/))
     .min(1)
@@ -39,6 +41,15 @@ const brandInput = z.object({
 });
 
 export const brandRouter = router({
+  extractGuidelines: protectedProcedure
+    .input(brandPdfInput)
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+      ]);
+      return extractBrandPdf(input.base64, input.organizationId);
+    }),
   discoverDriveLogos: protectedProcedure
     .input(
       z.object({

@@ -257,13 +257,7 @@ export function ActivationComposerStudio(p: Props) {
         <StudioSummary
           subtitle={`${p.content.title || "Your activation"} · ${channelNames[p.channel]}`}
         >
-          <div
-            className="cfg-stage activation-preview"
-            hidden={
-              (p.section === "copy" && category === "compose") ||
-              p.section === "preview"
-            }
-          >
+          <div className="cfg-stage activation-preview">
             <ContentPreview
               channel={p.channel}
               content={p.content}

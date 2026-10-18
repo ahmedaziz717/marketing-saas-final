@@ -1,3 +1,4 @@
+import { partnerLogoSrc } from "../../shared/partnerLogos";
 import React from "react";
 import { ArrowRight, Globe2 } from "lucide-react";
 
@@ -94,7 +95,7 @@ export const integrationGroups = [
 export function ProviderLogo({ id }: { id: string }) {
   return (
     <span className={`provider-logo provider-logo-${id}`} aria-hidden="true">
-      <img src={`/integrations/${id}.svg`} alt="" width={40} height={40} />
+      <img src={partnerLogoSrc(id)} alt="" width={40} height={40} />
     </span>
   );
 }

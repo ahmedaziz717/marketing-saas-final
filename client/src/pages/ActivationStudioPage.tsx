@@ -1,3 +1,4 @@
+import { PartnerLogo } from "@/components/PartnerLogo";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -381,7 +382,15 @@ function ActivationStudio() {
                           }
                           media={
                             <div className={`activation-channel-art ${value}`}>
-                              <Icon size={62} />
+                              <PartnerLogo
+                                slug={
+                                  value === "meta_ads" ? "meta" : "facebook"
+                                }
+                                name={
+                                  value === "meta_ads" ? "Meta" : "Facebook"
+                                }
+                                size={88}
+                              />
                               <span>
                                 {value === "meta_ads"
                                   ? "Paid advertising"

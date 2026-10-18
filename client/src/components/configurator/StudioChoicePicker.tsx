@@ -4,7 +4,6 @@ import { CREATIVE_THEME_GROUPS } from "@shared/creativeThemes";
 import { CREATIVE_ART_STYLES } from "@shared/creativeBuilder";
 import { ChoiceArt } from "./ChoiceArt";
 import { StudioCard } from "./StudioCard";
-import { StudioCategories } from "./StudioCategories";
 import "@/styles/studioChoices.css";
 
 export type StudioChoice = {
@@ -79,16 +78,24 @@ export function StudioChoicePicker({
   );
   return (
     <div className="studio-choice-picker" role="group" aria-label={title}>
-      {availableGroups.length > 0 && (
-        <StudioCategories
-          compact
-          label={`${title} collections`}
-          items={[{ id: "all", title: "All collections" }, ...availableGroups]}
-          current={activeGroup}
-          onSelect={setGroup}
-        />
-      )}
       <div className="studio-choice-toolbar">
+        <h3>{title}</h3>
+        {availableGroups.length > 0 && (
+          <label className="studio-collection-filter">
+            <span className="sr-only">{title} collection</span>
+            <select
+              value={activeGroup}
+              onChange={event => setGroup(event.target.value)}
+            >
+              <option value="all">All collections</option>
+              {availableGroups.map(g => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <p aria-live="polite">
           {visible.length} {visible.length === 1 ? "choice" : "choices"}
           <small>

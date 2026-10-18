@@ -17,6 +17,7 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Button } from "@/components/ui/button";
 import {
   StudioJourney,
+  StudioSetupSummary,
   useStudioJourney,
 } from "@/components/configurator/StudioJourney";
 import {
@@ -409,6 +410,25 @@ function Studio({
           </Button>
         </div>
       </header>
+      <StudioSetupSummary
+        title="Plan preview & summary"
+        name={name || "Your optimization plan"}
+        icon={section.icon}
+        items={[
+          {
+            title: "Account",
+            value: categoryValues.source,
+            category: "source",
+          },
+          { title: "Focus", value: categoryValues.focus, category: "focus" },
+          {
+            title: "Evidence",
+            value: categoryValues.quality,
+            category: "quality",
+          },
+        ]}
+        onNavigate={select}
+      />
       <StudioJourney journey={journey} label="Optimization Studio sections">
         <div className="cfg-body">
           {error && (

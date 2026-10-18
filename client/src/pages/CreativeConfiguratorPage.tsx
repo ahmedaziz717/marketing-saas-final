@@ -2027,16 +2027,20 @@ function Configurator({
                   />
                 </Field>
                 <div className="cfg-summary">
-                  {summary.map(s => (
-                    <button
-                      key={s.title}
-                      onClick={() => go(s.section, s.category)}
-                    >
-                      <span>{s.title}</span>
-                      <strong>{s.value}</strong>
-                      <ChevronRight size={13} />
-                    </button>
-                  ))}
+                  {summary
+                    .filter(s =>
+                      ["Subject", "Visual", "Output"].includes(s.title)
+                    )
+                    .map(s => (
+                      <button
+                        key={s.title}
+                        onClick={() => go(s.section, s.category)}
+                      >
+                        <span>{s.title}</span>
+                        <strong>{s.value}</strong>
+                        <ChevronRight size={13} />
+                      </button>
+                    ))}
                 </div>
               </>
             }

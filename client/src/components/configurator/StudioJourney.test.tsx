@@ -121,52 +121,36 @@ it("shows every category on mobile, marks only opened categories and preserves i
     ).getByText("Viewed")
   ).toBeTruthy();
 });
-it("shows actual unseen choices once and keeps accepting defaults distinct from viewing them", () => {
+it("navigates immediately without opening a review or changing unviewed choices", () => {
   render(<Fixture />);
   fireEvent.click(screen.getByRole("button", { name: "Open Theme category" }));
   fireEvent.click(screen.getByRole("button", { name: "All categories" }));
   fireEvent.click(
     screen.getByRole("button", { name: /Continue to next section/ })
   );
-  const dialog = screen.getByRole("dialog");
-  expect(within(dialog).getByText("Keep these defaults?")).toBeTruthy();
-  expect(within(dialog).getByText("Rubik")).toBeTruthy();
-  expect(within(dialog).queryByText("People")).toBeNull();
-  fireEvent.click(
-    within(dialog).getByRole("button", { name: "Keep defaults & continue" })
-  );
   expect(screen.queryByRole("dialog")).toBeNull();
-  const memory = JSON.parse(localStorage.getItem("one:journey:v1")!);
-  expect(memory.viewed).toEqual(["theme"]);
-  expect(memory.accepted).toEqual(["look"]);
-  fireEvent.change(screen.getByRole("combobox", { name: "Studio sections" }), {
-    target: { value: "look" },
-  });
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: /Continue with current choices|Keep defaults & continue/,
-    })
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: /Continue to next section/ })
-  );
-  expect(screen.queryByRole("dialog")).toBeNull();
-});
-it("does not describe missing required inputs as usable defaults", () => {
-  render(<Fixture missing />);
-  fireEvent.click(
-    screen.getByRole("button", { name: /Continue to next section/ })
-  );
-  const dialog = screen.getByRole("dialog");
-  expect(within(dialog).getByText("Review these choices?")).toBeTruthy();
-  expect(within(dialog).getByText("Not set")).toBeTruthy();
   expect(
-    within(dialog).queryByRole("button", { name: "Keep defaults & continue" })
+    screen.queryByRole("region", { name: "Review unviewed choices" })
   ).toBeNull();
-  fireEvent.click(
-    within(dialog).getByRole("button", { name: "Explore remaining categories" })
-  );
+  expect(
+    screen.getByRole("button", { name: "Open Summary category" })
+  ).toBeTruthy();
+  expect(JSON.parse(localStorage.getItem("one:journey:v1")!).viewed).toEqual([
+    "theme",
+  ]);
+});
+it("opens an optional inline review with actual values and keeps required inputs distinct", () => {
+  render(<Fixture missing />);
+  fireEvent.click(screen.getByRole("button", { name: "Review" }));
+  const panel = screen.getByRole("region", { name: "Review unviewed choices" });
+  expect(within(panel).getByText("Not set · Required")).toBeTruthy();
+  expect(within(panel).queryByText("People")).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(within(panel).getByRole("button", { name: /Fonts/ }));
   expect(screen.getByRole("textbox")).toBeTruthy();
+  expect(
+    screen.queryByRole("region", { name: "Review unviewed choices" })
+  ).toBeNull();
 });
 it("keeps navigation memory isolated when the workspace or draft changes", () => {
   const { rerender } = render(<Fixture scope="one" />);

@@ -1272,10 +1272,18 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       if (which === "creative-checkpoint") {
         await click("Continue to next section");
         check(
-          document
-            .querySelector('[role="dialog"]')
-            ?.textContent?.includes("Keep these defaults?"),
-          "Leaving a section reviews its remaining defaults"
+          !document.querySelector('[role="dialog"]'),
+          "Section changes never open discovery dialogs"
+        );
+        await studioSection("Look & Feel", false);
+        await click("Review");
+        check(
+          !!document.querySelector('[aria-label="Review unviewed choices"]'),
+          "Review opens only on request"
+        );
+        check(
+          !document.querySelector('[role="dialog"]'),
+          "Optional review stays inline"
         );
       }
       check(

@@ -1,3 +1,4 @@
+import { PartnerLogo } from "@/components/PartnerLogo";
 import "@/styles/workflows.css";
 import "@/styles/studioExperience.css";
 import { WorkflowApps } from "@/components/WorkflowApps";
@@ -240,7 +241,15 @@ function Studio() {
                     aria-hidden="true"
                   >
                     <div className="studio-app-symbol">
-                      <Icon size={32} strokeWidth={1.5} />
+                      {path === "ads" || path === "social" ? (
+                        <PartnerLogo
+                          slug={path === "ads" ? "meta" : "facebook"}
+                          name={path === "ads" ? "Meta" : "Facebook"}
+                          size={64}
+                        />
+                      ) : (
+                        <Icon size={32} strokeWidth={1.5} />
+                      )}
                     </div>
                     <span className="studio-app-orbit" />
                   </div>
