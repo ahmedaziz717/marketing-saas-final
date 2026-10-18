@@ -247,10 +247,13 @@ export function StudioJourney({
         window.innerHeight,
         footer && footer.top >= 0 ? footer.top : window.innerHeight
       );
-      // The expanded preview takes room initially; the rail grows as it scrolls away.
+      // Keep a useful rail viewport while the large preview scrolls away.
+      // Size from its sticky position instead of squeezing it into the first fold.
       const height = Math.max(
         144,
-        Math.floor(bottom - Math.max(0, rail.getBoundingClientRect().top) - 12)
+        Math.floor(
+          bottom - Math.max(0, parseFloat(getComputedStyle(rail).top) || 0) - 12
+        )
       );
       rail.style.setProperty("--journey-rail-height", `${height}px`);
       if (revealCurrent) {

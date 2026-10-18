@@ -794,6 +794,7 @@ const routeForPage: Record<string, string> = {
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
   "creative-scene": "/app/creatives/studio",
+  "creative-type": "/app/creatives/studio",
   "creative-people": "/app/creatives/studio",
   "creative-checkpoint": "/app/creatives/studio",
   "creative-video": "/app/creatives/video",
@@ -1370,6 +1371,16 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           "Queued delivery has a clear waiting state"
         );
       }
+      layout();
+    }
+    if (which === "creative-type") {
+      await studioSection("Type & Source", false);
+      await click("Creative type");
+      check(
+        document.querySelectorAll(".cfg-bottom .cfg-primary").length === 1,
+        "One Generate action"
+      );
+      check(mutations.length === 0, "Exploration never starts generation");
       layout();
     }
     if (which === "creative-people") {

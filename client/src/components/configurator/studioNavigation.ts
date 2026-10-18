@@ -25,13 +25,27 @@ export function scrollStudioChoices(container: HTMLElement | null) {
             ".cfg-categories, .cfg-content-title, .activation-section-title"
           ) ?? []
         ).find(element => !element.closest("[hidden]"));
-    // Keep the expanded preview visible while the choices already fit on screen.
+    // Keep the preview visible only when the actual choice fits above the action bar.
     if (journey && !mobile) {
       const bounds = journey.getBoundingClientRect();
       const top =
         root?.querySelector(".cfg-heading")?.getBoundingClientRect().bottom ??
         0;
-      if (bounds.top >= top && bounds.top < window.innerHeight - 220) return;
+      const choice =
+        journey.querySelector<HTMLElement>(".journey-editor .cfg-card") ??
+        journey.querySelector<HTMLElement>(".journey-editor");
+      const choiceBounds = choice?.getBoundingClientRect();
+      const footerTop =
+        root
+          ?.querySelector(".cfg-bottom, .activation-footer")
+          ?.getBoundingClientRect().top ?? window.innerHeight;
+      if (
+        bounds.top >= top &&
+        choiceBounds &&
+        choiceBounds.height > 0 &&
+        choiceBounds.bottom <= Math.min(footerTop, window.innerHeight) - 12
+      )
+        return;
     }
     target?.scrollIntoView?.({
       block: "start",
