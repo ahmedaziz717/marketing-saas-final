@@ -55,3 +55,7 @@ Recommended next work: preserve safe, actionable provider error details and vali
 ## Studio height refinement — 18 October 2026
 
 The desktop preview, section navigation and choice artwork regain breathing room. Section tiles show their subtitles and viewed indicators instead of a single compressed line. Preview and artwork heights adapt to the viewport, keeping the first choice card above the sticky action bar on shorter laptops. Square model portraits retain their natural proportions. The mobile overview/focused-editor structure and sticky category rail remain shared across all four studios.
+
+## Larger tile refinement — 18 October 2026
+
+The follow-up request makes the desktop height increase more substantial: 112px section tiles, 96px category tiles, and large preview/gallery image areas. Gallery tiles also gain width so the artwork keeps useful proportions. The initial expanded preview can occupy more of the page; choosing a category automatically brings the actual choice card above the sticky action bar when needed. The rail uses the space at its sticky position rather than shrinking to fit below the expanded preview. Mobile keeps its existing focused editor, and model portraits stay square. Browser checks cover both the initial gallery entrance and full-tile visibility after navigation.

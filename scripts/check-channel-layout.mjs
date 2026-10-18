@@ -160,6 +160,7 @@ try {
       "creative-overview",
       "creative-editor",
       "creative-scene",
+      "creative-type",
       "creative-people",
       "creative-checkpoint",
       "creative-video",
@@ -221,6 +222,7 @@ try {
       "activation-failed",
       "creative-editor",
       "creative-scene",
+      "creative-type",
       "creative-people",
       "creative-video",
       "studio-ad-copy",
@@ -228,6 +230,7 @@ try {
       "optimization-studio",
     ].map(page => ({ width: 1366, height: 768, role: "owner", page })),
     { width: 1820, height: 943, role: "owner", page: "creative-scene" },
+    { width: 1820, height: 943, role: "owner", page: "creative-type" },
     { width: 768, height: 1024, role: "owner", page: "creative-scene" },
     { width: 320, height: 568, role: "creator", page: "publishing" },
     { width: 375, height: 750, role: "creator", page: "billing-usage" },
@@ -336,6 +339,7 @@ try {
       [
         "creative-editor",
         "creative-scene",
+        "creative-type",
         "creative-video",
         "insights-studio",
         "optimization-studio",
@@ -343,6 +347,32 @@ try {
       ].includes(item.page) &&
       item.width > 700
     ) {
+      if (
+        [
+          "creative-editor",
+          "creative-scene",
+          "creative-type",
+          "creative-video",
+        ].includes(item.page)
+      ) {
+        // A real section/category click in the fixture should reveal the full tile.
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const navigation = await page("Runtime.evaluate", {
+          expression: `(() => {
+            const card = document.querySelector('.journey-editor .cfg-card')?.getBoundingClientRect();
+            const nav = document.querySelector('.journey-sections')?.getBoundingClientRect();
+            const footer = document.querySelector('.cfg-bottom')?.getBoundingClientRect();
+            return {top: card?.top, bottom: card?.bottom, navBottom: nav?.bottom, footerTop: footer?.top,
+              passed: !!card && !!nav && !!footer && card.top >= nav.bottom && card.bottom <= footer.top};
+          })()`,
+          returnByValue: true,
+        });
+        report.choiceNavigation = navigation.result.value;
+        if (!navigation.result.value?.passed) {
+          report.passed = false;
+          report.error = `Category navigation must reveal the taller choice without sticky controls covering it: ${JSON.stringify(navigation.result.value)}`;
+        }
+      }
       const spacing = await page("Runtime.evaluate", {
         expression: `(async () => {
           window.scrollTo(0, 0);
@@ -371,33 +401,38 @@ try {
       report.aboveFold = layout;
       if (
         !layout?.sections ||
-        layout.sections.height < 70 ||
+        layout.sections.height < 104 ||
         (item.width > 1000 && !layout.sectionDetailsVisible) ||
-        (["creative-editor", "creative-scene", "creative-video"].includes(
-          item.page
-        ) &&
+        ([
+          "creative-editor",
+          "creative-scene",
+          "creative-type",
+          "creative-video",
+        ].includes(item.page) &&
           (!layout.previewArt ||
-            layout.previewArt.height < (item.height >= 800 ? 140 : 100) ||
+            layout.previewArt.height < 200 ||
             !layout.artwork ||
-            layout.artwork.height < (item.height >= 800 ? 160 : 120)))
+            layout.artwork.height < 250))
       ) {
         report.passed = false;
         report.error = `Studio sections, preview and artwork need comfortable height and visible section detail: ${JSON.stringify(layout)}`;
       }
       if (
-        ["creative-editor", "creative-scene", "creative-video"].includes(
-          item.page
-        ) &&
+        [
+          "creative-editor",
+          "creative-scene",
+          "creative-type",
+          "creative-video",
+        ].includes(item.page) &&
         (!layout?.expanded ||
           layout.preview?.top < 64 ||
           !layout.choices ||
           !layout.footer ||
           !layout.categories ||
-          layout.choices.bottom > layout.footer.top ||
-          layout.categories.bottom > layout.footer.top)
+          layout.choices.top + 48 > layout.footer.top)
       ) {
         report.passed = false;
-        report.error = `Expanded preview, first choice card and visible category viewport must fit above the footer: ${JSON.stringify(layout)}`;
+        report.error = `Expanded preview stays open and the choice gallery begins above the footer: ${JSON.stringify(layout)}`;
       }
     }
     if (
@@ -405,6 +440,7 @@ try {
       [
         "creative-editor",
         "creative-scene",
+        "creative-type",
         "creative-video",
         "insights-studio",
         "optimization-studio",
@@ -459,7 +495,7 @@ try {
           const shown = button => button.getClientRects().length > 0;
           await wait();
           const original = rail.scrollTop;
-          const roomy = cards.every(card => card.getBoundingClientRect().height >= 70 && card.querySelector('.journey-category-icon svg'));
+          const roomy = cards.every(card => card.getBoundingClientRect().height >= 90 && card.querySelector('.journey-category-icon svg'));
           rail.scrollTop = 0;
           await wait();
           const overflows = rail.scrollHeight > rail.clientHeight + 2;

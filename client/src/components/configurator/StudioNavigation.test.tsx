@@ -188,3 +188,54 @@ it("scrolls to the visible mobile section when another preserved draft is hidden
     behavior: "auto",
   });
 });
+
+it.each([
+  {
+    name: "reveals a tall choice covered by the action bar",
+    bottom: 860,
+    scrolls: true,
+  },
+  {
+    name: "keeps the expanded preview visible when the choice already fits",
+    bottom: 620,
+    scrolls: false,
+  },
+])("$name", ({ bottom, scrolls }) => {
+  mobile = false;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 0;
+  });
+  vi.stubGlobal("innerHeight", 768);
+  const { container } = render(
+    <div className="cfg-root">
+      <header className="cfg-heading">Creative Studio</header>
+      <div className="studio-journey">
+        <div className="journey-editor">
+          <article className="cfg-card">Image</article>
+        </div>
+      </div>
+      <footer className="cfg-bottom">Generate</footer>
+    </div>
+  );
+  const root = container.firstElementChild as HTMLElement;
+  const bounds = (selector: string, top: number, bottom: number) => {
+    vi.spyOn(
+      root.querySelector(selector)!,
+      "getBoundingClientRect"
+    ).mockReturnValue({ top, bottom, height: bottom - top } as DOMRect);
+  };
+  bounds(".cfg-heading", 64, 120);
+  bounds(".studio-journey", 300, 1000);
+  bounds(".cfg-card", 400, bottom);
+  bounds(".cfg-bottom", 696, 760);
+  const journey = root.querySelector<HTMLElement>(".studio-journey")!;
+  journey.scrollIntoView = vi.fn();
+  scrollStudioChoices(root);
+  if (scrolls)
+    expect(journey.scrollIntoView).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "auto",
+    });
+  else expect(journey.scrollIntoView).not.toHaveBeenCalled();
+});
