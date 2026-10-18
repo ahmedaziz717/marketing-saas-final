@@ -159,6 +159,7 @@ try {
     ...[
       "creative-overview",
       "creative-editor",
+      "creative-scene",
       "creative-people",
       "creative-checkpoint",
       "creative-video",
@@ -219,12 +220,15 @@ try {
     ...[
       "activation-failed",
       "creative-editor",
+      "creative-scene",
       "creative-people",
       "creative-video",
       "studio-ad-copy",
       "insights-studio",
       "optimization-studio",
     ].map(page => ({ width: 1366, height: 768, role: "owner", page })),
+    { width: 1820, height: 943, role: "owner", page: "creative-scene" },
+    { width: 768, height: 1024, role: "owner", page: "creative-scene" },
     { width: 320, height: 568, role: "creator", page: "publishing" },
     { width: 375, height: 750, role: "creator", page: "billing-usage" },
     { width: 375, height: 750, role: "creator", page: "publishing" },
@@ -331,6 +335,7 @@ try {
     if (
       [
         "creative-editor",
+        "creative-scene",
         "creative-video",
         "insights-studio",
         "optimization-studio",
@@ -351,6 +356,10 @@ try {
             preview: rect('.journey-summary'),
             expanded: document.querySelector('.journey-summary')?.dataset.expanded === 'true',
             choices: rect('.journey-editor .cfg-card'),
+            artwork: rect('.journey-editor .cfg-card-art'),
+            previewArt: rect('.journey-summary .cfg-preview'),
+            sections: rect('.journey-sections > button'),
+            sectionDetailsVisible: [...document.querySelectorAll('.journey-sections small, .journey-section-progress')].every(el => el.getBoundingClientRect().height > 0),
             footer: rect('.cfg-bottom'),
             categories: rect('.journey-rail-scroll')
           };
@@ -361,7 +370,24 @@ try {
       const layout = spacing.result.value;
       report.aboveFold = layout;
       if (
-        ["creative-editor", "creative-video"].includes(item.page) &&
+        !layout?.sections ||
+        layout.sections.height < 70 ||
+        (item.width > 1000 && !layout.sectionDetailsVisible) ||
+        (["creative-editor", "creative-scene", "creative-video"].includes(
+          item.page
+        ) &&
+          (!layout.previewArt ||
+            layout.previewArt.height < (item.height >= 800 ? 140 : 100) ||
+            !layout.artwork ||
+            layout.artwork.height < (item.height >= 800 ? 160 : 120)))
+      ) {
+        report.passed = false;
+        report.error = `Studio sections, preview and artwork need comfortable height and visible section detail: ${JSON.stringify(layout)}`;
+      }
+      if (
+        ["creative-editor", "creative-scene", "creative-video"].includes(
+          item.page
+        ) &&
         (!layout?.expanded ||
           layout.preview?.top < 64 ||
           !layout.choices ||
@@ -378,6 +404,7 @@ try {
       item.width > 700 &&
       [
         "creative-editor",
+        "creative-scene",
         "creative-video",
         "insights-studio",
         "optimization-studio",

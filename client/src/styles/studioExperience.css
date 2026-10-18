@@ -1308,6 +1308,9 @@
     padding: 10px 18px;
   }
   .cfg-root:has(.studio-journey) {
+    /* Use the available height without flattening previews or choice artwork. */
+    --journey-preview-height: clamp(100px, calc(50dvh - 292px), 184px);
+    --journey-art-height: clamp(120px, calc(50dvh - 264px), 208px);
     padding: 0;
   }
   .cfg-root:has(.studio-journey) .cfg-heading .cfg-back {
@@ -1332,11 +1335,11 @@
     white-space: nowrap;
   }
   .cfg-root .journey-editor .cfg-card-art {
-    height: 120px;
+    height: var(--journey-art-height);
     min-height: 0;
     aspect-ratio: auto;
   }
-  /* Portrait sprite cells are square; the compact gallery height distorts faces. */
+  /* Portrait sprite cells stay square independently of the gallery height. */
   .cfg-root .journey-editor .cfg-people-grid .cfg-card-art {
     height: auto;
     aspect-ratio: 1;
@@ -1376,17 +1379,21 @@
     padding-block: 4px;
   }
   .journey-sections > button {
-    min-height: 40px;
-    padding: 7px 10px;
-    gap: 8px;
-    border-radius: 9px;
+    min-height: 76px;
+    padding: 12px;
+    gap: 10px;
+    border-radius: 12px;
   }
-  .journey-sections small,
+  .journey-sections > button > svg {
+    width: 22px;
+    height: 22px;
+  }
   .journey-section-progress {
-    display: none;
+    flex-wrap: wrap;
+    margin-top: 6px;
   }
   .journey-sections b {
-    align-self: center;
+    align-self: flex-start;
   }
   .journey-panel {
     display: grid;
@@ -1602,21 +1609,22 @@
     .cfg-preview
     > .cfg-art {
     min-height: 0;
-    height: 100px;
+    height: var(--journey-preview-height);
   }
   .journey-summary:not([data-forced="true"]) .cfg-preview > img {
-    padding: 6px 8px 32px;
+    padding: 10px 12px 44px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-preview-caption {
-    left: 12px;
-    right: 12px;
-    bottom: 10px;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-preview-caption strong {
-    font-size: 15px;
+    font-size: 18px;
     margin-top: 4px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-build {
+    align-self: center;
     padding: 0;
   }
   .journey-summary:not([data-forced="true"]) .cfg-build-top {
@@ -1635,11 +1643,12 @@
     padding: 0 0 5px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-summary {
-    margin: 8px 0 0;
-    gap: 5px;
+    margin: 12px 0 0;
+    gap: 8px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-summary button {
-    padding: 3px 19px 3px 8px;
+    min-height: 48px;
+    padding: 8px 20px 8px 10px;
   }
   .journey-summary:not([data-forced="true"]) .cfg-summary strong {
     font-size: 11px;
@@ -1690,6 +1699,50 @@
   }
   .cfg-root:has(.studio-journey) .cfg-bottom {
     padding: 10px 16px;
+  }
+}
+@media (min-width: 1001px) {
+  /* Share one heading row so extra height belongs to the choices themselves. */
+  .journey-editor
+    .cfg-body:has(> .cfg-content-title + .cfg-choice-count):not(
+      :has(> .cfg-content-title .cfg-search)
+    ) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 14px;
+    align-items: center;
+  }
+  .journey-editor
+    .cfg-body:has(> .cfg-content-title + .cfg-choice-count):not(
+      :has(> .cfg-content-title .cfg-search)
+    )
+    > .cfg-content-title {
+    grid-column: 1;
+    margin: 0 0 8px;
+  }
+  .journey-editor
+    .cfg-body:has(> .cfg-content-title + .cfg-choice-count):not(
+      :has(> .cfg-content-title .cfg-search)
+    )
+    > .cfg-choice-count {
+    grid-column: 2;
+    margin: 0 0 8px;
+    align-items: center;
+  }
+  .journey-editor
+    .cfg-body:has(> .cfg-content-title + .cfg-choice-count):not(
+      :has(> .cfg-content-title .cfg-search)
+    )
+    > .cfg-card-grid {
+    grid-column: 1 / -1;
+  }
+  .journey-editor
+    .cfg-body:has(> .cfg-content-title + .cfg-choice-count):not(
+      :has(> .cfg-content-title .cfg-search)
+    )
+    > .cfg-content-title
+    h2 {
+    margin: 0;
   }
 }
 @media (min-width: 701px) and (max-width: 1000px) {

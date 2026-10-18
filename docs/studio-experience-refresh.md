@@ -9,7 +9,7 @@ The approved desktop and mobile concepts guide this release. One shared journey 
 - Inputs stay mounted when switching between mobile overview and editor. Responsive changes do not discard drafts or in-progress copy suggestions.
 - Section navigation is immediate. An optional inline review of unviewed choices opens only when requested; no discovery popup interrupts the flow. Exploration never implies validity or approval and never gates generation.
 - Missing required fields are labeled Not set and are not described as valid defaults. Existing validation and execution/approval gates remain authoritative.
-- Preview and summary are compact, expanded by default, and collapsible. Active creative generation/results open the preview. One sticky Generate action displays the creative's credit estimate.
+- Desktop preview and summary are expanded by default and collapsible, with comfortable heights that adapt to the available screen height. Active creative generation/results open the preview. One sticky Generate action displays the creative's credit estimate.
 - Keyboard focus, disabled choices, reduced motion, safe-area padding, and dark theme are covered by the shared controls.
 
 ## Route and form audit
@@ -51,3 +51,7 @@ The live route audit found remaining old presentation in state branches and port
 Approval roles, revision checks, explicit delivery confirmations, uncertain-delivery reconciliation, and retry-safe checks remain authoritative. Opening a result does not publish or retry anything. Desktop/mobile browser fixtures cover failed, uncertain, completed, processing and queued delivery, in addition to the existing Calendar approval flows; failure recovery is checked above the fold at desktop/laptop sizes.
 
 Recommended next work: preserve safe, actionable provider error details and validate known destination/asset/campaign requirements before submission. The screenshot's generic Meta “Invalid parameter” does not identify a cause; diagnosing it is separate from this visual cleanup. The existing database connection-headroom/deployment-sequencing follow-up remains queued in issue #61.
+
+## Studio height refinement — 18 October 2026
+
+The desktop preview, section navigation and choice artwork regain breathing room. Section tiles show their subtitles and viewed indicators instead of a single compressed line. Preview and artwork heights adapt to the viewport, keeping the first choice card above the sticky action bar on shorter laptops. Square model portraits retain their natural proportions. The mobile overview/focused-editor structure and sticky category rail remain shared across all four studios.
