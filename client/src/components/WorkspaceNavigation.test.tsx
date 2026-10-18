@@ -254,7 +254,7 @@ it("keeps library filters, Brand, and administrative Settings distinct", () => {
   expect(workspacePageLabel("/app/settings/company")).toBe("Brand");
   expect(workspacePageLabel("/app/brand")).toBe("Brand");
   expect(workspacePageLabel("/app/settings/catalog/import")).toBe(
-    "Product Catalog / Import website"
+    "Catalog / Import website"
   );
   expect(workspaceSection("/app/settings/company")).toBe("Brand");
   expect(screen.getByRole("link", { name: "Brand" }).getAttribute("href")).toBe(
@@ -273,12 +273,12 @@ it.each([
   { mobile: false, compact: true },
   { mobile: true, compact: true },
 ])(
-  "puts Product Catalog directly above Brand and navigates in $mobile/$compact mode",
+  "puts Catalog directly above Brand and navigates in $mobile/$compact mode",
   ({ mobile, compact }) => {
     viewport.mobile = mobile;
     const router = setup("/app/settings/team", compact);
     fireEvent.click(screen.getByRole("button", { name: "Open drawer" }));
-    const catalog = screen.getByRole("link", { name: "Product Catalog" });
+    const catalog = screen.getByRole("link", { name: "Catalog" });
     expect(catalog.closest("li")?.nextElementSibling?.textContent).toBe(
       "Brand"
     );
@@ -302,7 +302,7 @@ it.each([
       "/app/import",
     ]) {
       expect(workspaceSection(path)).toBe("Catalog");
-      expect(workspacePageLabel(path)).toMatch(/^Product Catalog/);
+      expect(workspacePageLabel(path)).toMatch(/^Catalog/);
     }
   }
 );

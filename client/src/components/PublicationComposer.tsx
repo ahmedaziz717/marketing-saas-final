@@ -580,6 +580,7 @@ export function PublicationComposer({
   if (studio && organizationId)
     return (
       <ActivationComposerStudio
+        draftId={id}
         organizationId={organizationId}
         role={membership?.role ?? ""}
         channel={channel}

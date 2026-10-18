@@ -48,15 +48,15 @@ it("adds a reusable field, connects it, and previews the same default", () => {
     );
   }
   render(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "+ Add field" }));
-  fireEvent.click(screen.getByLabelText("AI prompt writer"));
+  clickJourney(screen.getByRole("button", { name: "+ Add field" }));
+  clickJourney(screen.getByLabelText("AI prompt writer"));
   const g = JSON.parse(screen.getByTestId("graph").textContent!);
   expect(g.nodes[1].config.field.kind).toBe("theme");
   expect(g.edges[0].port).toBe("text");
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Select Product Spotlight" })
   );
-  fireEvent.click(screen.getByRole("button", { name: "Toggle preview" }));
+  clickJourney(screen.getByRole("button", { name: "Toggle preview" }));
   expect(
     screen
       .getByRole("button", { name: "Select Product Spotlight" })
@@ -91,7 +91,7 @@ it("publishes the same authored grouping in the Studio preview while preserving 
     );
   }
   render(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "+ Add field" }));
+  clickJourney(screen.getByRole("button", { name: "+ Add field" }));
   fireEvent.change(screen.getByLabelText("Studio section"), {
     target: { value: "setup" },
   });
@@ -103,12 +103,12 @@ it("publishes the same authored grouping in the Studio preview while preserving 
     section: "setup",
     category: "Campaign context",
   });
-  fireEvent.click(screen.getByRole("button", { name: "Toggle preview" }));
+  clickJourney(screen.getByRole("button", { name: "Toggle preview" }));
   expect(screen.getByRole("heading", { name: "Campaign helper" })).toBeTruthy();
   expect(
     screen
-      .getByRole("button", { name: "Campaign context" })
-      .getAttribute("aria-pressed")
+      .getByRole("button", { name: "Open Campaign context category" })
+      .getAttribute("aria-current")
   ).toBe("true");
   expect(
     screen
@@ -118,7 +118,7 @@ it("publishes the same authored grouping in the Studio preview while preserving 
   expect(
     screen.queryByRole("button", { name: /^Direction Audience/ })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Review inputs" }));
+  clickJourney(screen.getByRole("button", { name: "Next section" }));
   expect(
     (
       screen.getByRole("button", {
@@ -149,9 +149,9 @@ it("stores image sources and content policy on the workflow field and previews i
   fireEvent.change(screen.getByLabelText("New field type"), {
     target: { value: "asset" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "+ Add field" }));
-  fireEvent.click(screen.getByLabelText("Offer image upload"));
-  fireEvent.click(screen.getByLabelText("Allow product images"));
+  clickJourney(screen.getByRole("button", { name: "+ Add field" }));
+  clickJourney(screen.getByLabelText("Offer image upload"));
+  clickJourney(screen.getByLabelText("Allow product images"));
   fireEvent.change(screen.getByLabelText("Price"), {
     target: { value: "never" },
   });
@@ -163,7 +163,7 @@ it("stores image sources and content policy on the workflow field and previews i
     productImages: false,
     price: "never",
   });
-  fireEvent.click(screen.getByRole("button", { name: "Toggle preview" }));
+  clickJourney(screen.getByRole("button", { name: "Toggle preview" }));
   expect(screen.queryByRole("button", { name: "Product images" })).toBeNull();
   expect(screen.getByRole("button", { name: "Upload image" })).toHaveProperty(
     "disabled",
@@ -192,11 +192,20 @@ it("connects a product field's image and content to the selected generation unit
   fireEvent.change(screen.getByLabelText("New field type"), {
     target: { value: "product" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "+ Add field" }));
-  fireEvent.click(screen.getByLabelText("Generate image"));
+  clickJourney(screen.getByRole("button", { name: "+ Add field" }));
+  clickJourney(screen.getByLabelText("Generate image"));
   expect(
     JSON.parse(screen.getByTestId("graph").textContent!)
       .edges.map((e: any) => e.port)
       .sort()
   ).toEqual(["image", "text"]);
 });
+
+// Business-flow checks accept optional discovery prompts; StudioJourney tests cover the prompt itself.
+function clickJourney(element: Element) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

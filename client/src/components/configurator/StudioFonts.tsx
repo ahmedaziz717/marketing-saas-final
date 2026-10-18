@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { CREATIVE_FONT_GROUPS } from "@shared/creativeFonts";
 
@@ -30,23 +30,6 @@ export function StudioFonts({
         : (groups[group as keyof typeof groups] ?? [])
     )
   ).filter(name => name.toLowerCase().includes(search.toLowerCase()));
-  // Fetch only the fixed preview text. Never send campaign copy or custom brand fonts.
-  const families = fonts
-    .filter(name => knownFonts.includes(name))
-    .sort()
-    .join("|");
-  useEffect(() => {
-    if (!families) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    const params = new URLSearchParams();
-    families.split("|").forEach(name => params.append("family", name));
-    params.set("display", "swap");
-    params.set("text", sample);
-    link.href = `https://fonts.googleapis.com/css2?${params}`;
-    document.head.appendChild(link);
-    return () => link.remove();
-  }, [families]);
   return (
     <section aria-label="Creative font choices" className="cfg-fonts">
       <div className="cfg-preserve-setting">
@@ -54,13 +37,22 @@ export function StudioFonts({
           <input
             type="checkbox"
             checked={preserve}
-            onChange={e => onChange({ preserveFont: e.target.checked })}
+            disabled={!font && !brandFonts.length}
+            onChange={e =>
+              onChange({
+                preserveFont: e.target.checked,
+                ...(e.target.checked && !font
+                  ? { fontFamily: brandFonts[0] }
+                  : {}),
+              })
+            }
           />
           Preserve selected font
         </label>
         <p className="cfg-help">
-          Off by default. Let the creative mix complementary fonts, or turn on
-          to keep your chosen family consistent. Review generated lettering.
+          {preserve
+            ? `Ask AI to use ${font || brandFonts[0] || "your selected font"} throughout the creative, while keeping the visual styling. Generated letterforms can vary; review the result.`
+            : "Off by default. Select a font and turn this on to keep one family throughout the creative. Leave it off to allow complementary fonts."}
         </p>
       </div>
       <div className="cfg-family-tabs" aria-label="Font categories">
@@ -84,7 +76,7 @@ export function StudioFonts({
           className={`cfg-font-tile${!font ? " is-selected" : ""}`}
           aria-label="Select Automatic typography"
           aria-pressed={!font}
-          onClick={() => onChange({ fontFamily: "" })}
+          onClick={() => onChange({ fontFamily: "", preserveFont: false })}
         >
           <span className="cfg-font-sample">
             <Sparkles size={26} aria-hidden="true" />
@@ -114,12 +106,7 @@ export function StudioFonts({
               aria-pressed={font === name}
               onClick={() => onChange({ fontFamily: name })}
             >
-              <span
-                className="cfg-font-sample"
-                style={{ fontFamily: `${JSON.stringify(name)}, ${fallback}` }}
-              >
-                {sample}
-              </span>
+              <FontSample name={name} fallback={fallback} />
               <strong>{name}</strong>
               <span>{category || "Brand font · local preview"}</span>
               {font === name && (
@@ -135,5 +122,98 @@ export function StudioFonts({
       </div>
       {!fonts.length && <p className="cfg-help">No fonts match this search.</p>}
     </section>
+  );
+}
+
+// Isolate each request: a failed family must not replace every tile with a fallback.
+const fontLoads = new Map<string, Promise<boolean>>();
+function loadPreviewFont(name: string) {
+  if (!fontLoads.has(name)) {
+    fontLoads.set(
+      name,
+      new Promise<boolean>(resolve => {
+        const link = document.createElement("link");
+        const timer = window.setTimeout(() => finish(false), 10000);
+        const finish = (loaded: boolean) => {
+          window.clearTimeout(timer);
+          if (!loaded) link.remove();
+          resolve(loaded);
+        };
+        link.rel = "stylesheet";
+        const params = new URLSearchParams({
+          family: name,
+          display: "swap",
+          text: sample,
+        });
+        link.href = `https://fonts.googleapis.com/css2?${params}`;
+        link.onerror = () => finish(false);
+        link.onload = () => {
+          if (!document.fonts) {
+            finish(false);
+            return;
+          }
+          document.fonts.load(`25px ${JSON.stringify(name)}`, sample).then(
+            faces => finish(faces.length > 0),
+            () => finish(false)
+          );
+        };
+        document.head.appendChild(link);
+      })
+    );
+  }
+  return fontLoads.get(name)!;
+}
+function FontSample({ name, fallback }: { name: string; fallback: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [state, setState] = useState<
+    "loading" | "loaded" | "unavailable" | "local"
+  >("loading");
+  useEffect(() => {
+    let mounted = true;
+    const load = () => {
+      if (!knownFonts.includes(name)) {
+        // A local family may fall back; FontFaceSet.check cannot verify an installed font.
+        setState("local");
+        return;
+      }
+      loadPreviewFont(name).then(ok => {
+        if (mounted) setState(ok ? "loaded" : "unavailable");
+      });
+    };
+    if (typeof IntersectionObserver === "undefined" || !ref.current) load();
+    const observer =
+      typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver(
+            entries => {
+              if (entries.some(entry => entry.isIntersecting)) {
+                observer?.disconnect();
+                load();
+              }
+            },
+            { rootMargin: "160px" }
+          )
+        : null;
+    if (ref.current) observer?.observe(ref.current);
+    return () => {
+      mounted = false;
+      observer?.disconnect();
+    };
+  }, [name]);
+  return (
+    <span ref={ref} className="cfg-font-sample-wrap">
+      <span
+        className="cfg-font-sample"
+        style={{ fontFamily: `${JSON.stringify(name)}, ${fallback}` }}
+      >
+        {sample}
+      </span>
+      {state !== "loaded" && state !== "local" && (
+        <small className="cfg-font-preview-status">
+          {state === "loading"
+            ? "Loading font preview…"
+            : "Preview unavailable · font choice saved"}
+        </small>
+      )}
+    </span>
   );
 }

@@ -10,13 +10,21 @@ export function scrollStudioChoices(container: HTMLElement | null) {
         '.cfg-section-heading:has([aria-expanded="true"])'
       ) ?? []
     ).find(element => !element.closest("[hidden]"));
-    const target =
-      (mobile && activeHeader) ||
-      Array.from(
-        container?.querySelectorAll<HTMLElement>(
-          ".cfg-categories, .cfg-content-title, .activation-section-title"
-        ) ?? []
-      ).find(element => !element.closest("[hidden]"));
+    const journey = root?.querySelector<HTMLElement>(".studio-journey");
+    const target = journey
+      ? mobile
+        ? journey.querySelector<HTMLElement>(
+            journey.classList.contains("is-focused")
+              ? ".journey-focus-heading"
+              : ".journey-mobile-section"
+          )
+        : journey
+      : (mobile && activeHeader) ||
+        Array.from(
+          container?.querySelectorAll<HTMLElement>(
+            ".cfg-categories, .cfg-content-title, .activation-section-title"
+          ) ?? []
+        ).find(element => !element.closest("[hidden]"));
     target?.scrollIntoView?.({
       block: "start",
       behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches

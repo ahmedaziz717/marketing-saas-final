@@ -139,7 +139,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
   },
   {
     icon: PackageSearch,
-    label: "Product Catalog",
+    label: "Catalog",
     path: "/app/catalog",
     group: "Catalog",
     aliases: ["/app/settings/catalog", "/app/import"],
@@ -201,8 +201,8 @@ export function workspacePageLabel(location: string, search = "") {
     matchesPath("/app/settings/catalog", location)
   )
     return location.endsWith("/import")
-      ? "Product Catalog / Import website"
-      : "Product Catalog";
+      ? "Catalog / Import website"
+      : "Catalog";
   if (location === "/app/brand" || location === "/app/settings/company")
     return "Brand";
   if (location === "/app/settings" || location.startsWith("/app/settings/"))

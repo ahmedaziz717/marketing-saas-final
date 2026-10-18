@@ -234,13 +234,13 @@ beforeEach(() => {
 });
 it("allows a video prompt with zero images, switches Seedance input modes with references, and keeps generation gated by the quote", async () => {
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
   section(/Story & Sound Tell your story/);
   const draft = screen.getByRole("button", {
     name: /Generate prompt from this setup/,
   }) as HTMLButtonElement;
   expect(draft.disabled).toBe(false);
-  fireEvent.click(draft);
+  clickJourney(draft);
   await waitFor(() =>
     expect(api.draftPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -267,10 +267,12 @@ it("allows a video prompt with zero images, switches Seedance input modes with r
     ).toBe(false)
   );
   section(/Type & Source Start with an idea/);
-  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
-  fireEvent.click(screen.getByRole("button", { name: "Select Studio lamp" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
+  clickJourney(screen.getByRole("button", { name: "Select Studio lamp" }));
   expect(screen.getByText("1 image selected")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.videoSave).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -281,9 +283,7 @@ it("allows a video prompt with zero images, switches Seedance input modes with r
       })
     )
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Clear image references" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Clear image references" }));
   expect(screen.getByText("0 images selected")).toBeTruthy();
   expect(api.videoGenerate).not.toHaveBeenCalled();
 });
@@ -303,7 +303,7 @@ it("generates copy from the saved page snapshot and shows which page is being us
   expect(
     screen.getByText("Homeschool quiz", { selector: ".cfg-copy-source strong" })
   ).toBeTruthy();
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: /Generate copy from this setup/ })
   );
   await waitFor(() =>
@@ -317,57 +317,59 @@ it("generates copy from the saved page snapshot and shows which page is being us
       (screen.getByLabelText("Headline · required") as HTMLInputElement).value
     ).toBe("Find your homeschool style")
   );
-  fireEvent.click(screen.getByRole("button", { name: "Review page details" }));
+  clickJourney(screen.getByRole("button", { name: "Review page details" }));
   expect(
     (screen.getByLabelText("Page details") as HTMLTextAreaElement).value
   ).toContain("12 questions");
 });
-it("guides discovery through categories, exposes every option, and remembers visits separately for each creative type", () => {
+it("shows every category with actual choices and remembers viewed status separately for image and video", () => {
   const view = open();
   expect(
-    screen.getByRole("button", { name: /Options map 1\/15 explored/ })
-  ).toBeTruthy();
-  fireEvent.click(
+    screen.getByRole("button", { name: "Open Creative type category" })
+      .textContent
+  ).toContain("Viewed");
+  clickJourney(
     screen.getByRole("button", { name: "Explore next: Subject & sources" })
   );
   expect(
     screen.getByRole("heading", { name: "Subject & sources" })
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Next: Brand & logo" }));
+  clickJourney(screen.getByRole("button", { name: "Next category" }));
   expect(screen.getByRole("heading", { name: "Brand & logo" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /Options map/ }));
-  const map = within(
-    screen.getByRole("region", { name: "All creative categories" })
-  );
+  section(/Look & Feel/);
+  expect(document.querySelectorAll(".journey-category")).toHaveLength(7);
+  const people = screen.getByRole("button", {
+    name: "Open People category",
+  }) as HTMLButtonElement;
+  expect(people.disabled).toBe(true);
+  expect(people.textContent).toContain("Choose a people scene");
+  clickJourney(screen.getByRole("button", { name: "Open Fonts category" }));
   expect(
-    map.getByRole("button", { name: "Explore People" }).textContent
-  ).toContain("Needs people scene");
-  expect(map.queryByRole("button", { name: "Explore Audio" })).toBeNull();
-  fireEvent.click(map.getByRole("button", { name: "Explore Fonts" }));
-  expect(screen.getByRole("heading", { name: "Fonts" })).toBeTruthy();
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Viewed");
   expect(
-    screen
-      .getByRole("button", { name: "Fonts" })
-      .getAttribute("aria-description")
-  ).toBe("Explored");
-  expect(
-    screen.getByRole("button", { name: /Options map 4\/15 explored/ })
-  ).toBeTruthy();
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Automatic");
   view.unmount();
   open();
+  section(/Look & Feel/);
   expect(
-    screen.getByRole("button", { name: /Options map 4\/15 explored/ })
-  ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Viewed");
+  section(/Type & Source/);
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
   expect(
-    screen.getByRole("button", { name: /Options map 1\/16 explored/ })
+    screen.getByRole("button", { name: "Open Brand & logo category" })
+      .textContent
+  ).toContain("Not viewed");
+  section(/Look & Feel/);
+  expect(
+    screen.queryByRole("button", { name: "Open Fonts category" })
+  ).toBeNull();
+  section(/Story & Sound/);
+  expect(
+    screen.getByRole("button", { name: "Open Audio category" })
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /Options map/ }));
-  const videoMap = within(
-    screen.getByRole("region", { name: "All creative categories" })
-  );
-  expect(videoMap.queryByRole("button", { name: "Explore Fonts" })).toBeNull();
-  expect(videoMap.getByRole("button", { name: "Explore Audio" })).toBeTruthy();
 });
 it("compares at most three models and never invokes generation", () => {
   open();
@@ -378,7 +380,7 @@ it("compares at most three models and never invokes generation", () => {
     "GPT Image 2",
     "GPT Image 1",
   ]) {
-    fireEvent.click(screen.getByRole("checkbox", { name: "Compare " + name }));
+    clickJourney(screen.getByRole("checkbox", { name: "Compare " + name }));
   }
   expect(
     (
@@ -387,15 +389,13 @@ it("compares at most three models and never invokes generation", () => {
       }) as HTMLInputElement
     ).checked
   ).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Compare models" }));
+  clickJourney(screen.getByRole("button", { name: "Compare models" }));
   const dialog = within(screen.getByRole("dialog"));
   expect(dialog.getByText("Compare image models")).toBeTruthy();
   expect(
     dialog.getByRole("rowheader", { name: "Starting estimate" })
   ).toBeTruthy();
-  fireEvent.click(
-    dialog.getByRole("checkbox", { name: "Show differences only" })
-  );
+  clickJourney(dialog.getByRole("checkbox", { name: "Show differences only" }));
   expect(dialog.queryByRole("rowheader", { name: "Model maker" })).toBeNull();
   expect(api.generate).not.toHaveBeenCalled();
   expect(api.videoGenerate).not.toHaveBeenCalled();
@@ -405,23 +405,21 @@ it("duplicates a build, preserves its snapshot, highlights changes, and swaps wi
   fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "Original build" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Duplicate & compare" }));
+  clickJourney(screen.getByRole("button", { name: "Duplicate & compare" }));
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Original build · Alternative");
   section(/Look & Feel Make it yours/);
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Select Lifestyle · no people" })
   );
-  fireEvent.click(screen.getByRole("button", { name: "Compare builds" }));
+  clickJourney(screen.getByRole("button", { name: "Compare builds" }));
   const dialog = within(screen.getByRole("dialog"));
   expect(dialog.getByText("Original build")).toBeTruthy();
-  fireEvent.click(
-    dialog.getByRole("checkbox", { name: "Show differences only" })
-  );
+  clickJourney(dialog.getByRole("checkbox", { name: "Show differences only" }));
   expect(dialog.getByRole("rowheader", { name: "Scene" })).toBeTruthy();
   expect(dialog.queryByRole("rowheader", { name: "Theme" })).toBeNull();
-  fireEvent.click(dialog.getByRole("button", { name: "Swap builds" }));
+  clickJourney(dialog.getByRole("button", { name: "Swap builds" }));
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Original build");
@@ -435,24 +433,32 @@ it("duplicates a build, preserves its snapshot, highlights changes, and swaps wi
 it("exposes audio and subtitle categories only for video and does not imply subtitle support", () => {
   open();
   section(/Story & Sound Tell your story/);
-  expect(screen.queryByRole("button", { name: "Subtitles" })).toBeNull();
-  section(/Type & Source Start with an idea/);
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
-  section(/Story & Sound Tell your story/);
-  fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
   expect(
-    screen.getByText(
-      /Subtitle transcription, timing and style selection are not available/
-    )
-  ).toBeTruthy();
+    screen.queryByRole("button", { name: "Open Subtitles category" })
+  ).toBeNull();
+  section(/Type & Source Start with an idea/);
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
+  section(/Story & Sound Tell your story/);
+  const subtitles = screen.getByRole("button", {
+    name: "Open Subtitles category",
+  }) as HTMLButtonElement;
+  expect(subtitles.disabled).toBe(true);
+  expect(subtitles.textContent).toContain("Coming soon");
   expect(api.videoGenerate).not.toHaveBeenCalled();
 });
 afterEach(cleanup);
 function open() {
-  return render(<CreativeConfiguratorPage />);
+  const view = render(<CreativeConfiguratorPage />);
+  const summary = screen.getByRole("button", { name: /Preview & summary/ });
+  if (summary.getAttribute("aria-expanded") === "false") clickJourney(summary);
+  return view;
 }
 function section(name: RegExp) {
-  fireEvent.click(screen.getByRole("button", { name }));
+  clickJourney(screen.getByRole("button", { name }));
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) clickJourney(keep);
 }
 it("shows the shared brand logos in video and saves the choice without changing image branding", async () => {
   api.assets = [
@@ -468,11 +474,11 @@ it("shows the shared brand logos in video and saves the choice without changing 
   ];
   const view = render(<CreativeConfiguratorPage initialKind="video" />);
   const heading = screen.getByRole("heading", { level: 1 }).textContent;
-  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Select Brand wordmark" })
+  clickJourney(
+    screen.getByRole("button", { name: "Open Brand & logo category" })
   );
-  fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+  clickJourney(screen.getByRole("button", { name: "Select Brand wordmark" }));
+  clickJourney(screen.getByRole("button", { name: /Save draft/ }));
   await waitFor(() =>
     expect(api.videoSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -486,16 +492,22 @@ it("shows the shared brand logos in video and saves the choice without changing 
   );
   view.unmount();
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Brand & logo category" })
+  );
   expect(
     screen
       .getByRole("button", { name: "Select Brand wordmark" })
       .getAttribute("aria-pressed")
   ).toBe("true");
-  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
-  fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Creative type category" })
+  );
+  clickJourney(screen.getByRole("button", { name: "Select Image" }));
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
-  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Brand & logo category" })
+  );
   expect(
     screen
       .getByRole("button", { name: "Select No logo" })
@@ -519,7 +531,7 @@ it("keeps video generation, playback and approval in the same Studio layout", as
       ).disabled
     ).toBe(false)
   );
-  fireEvent.click(screen.getByRole("button", { name: "Generate video" }));
+  clickJourney(screen.getByRole("button", { name: "Generate video" }));
   api.videoJob = {
     id: "video-draft",
     setup: config.video,
@@ -529,7 +541,7 @@ it("keeps video generation, playback and approval in the same Studio layout", as
     createdAtMs: 1000,
     cancelRequested: false,
   };
-  fireEvent.click(
+  clickJourney(
     within(screen.getByRole("dialog")).getByRole("button", {
       name: "Confirm · 200 credits",
     })
@@ -574,7 +586,7 @@ it("keeps video generation, playback and approval in the same Studio layout", as
   expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   expect(api.approveLogo).not.toHaveBeenCalled();
   expect(api.videoGenerate).toHaveBeenCalledTimes(1);
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Use these settings as a new draft" })
   );
   expect(
@@ -611,7 +623,7 @@ it("opens a saved video in the shared header and checks an uncertain request wit
   expect(screen.getByRole("alert").textContent).toContain(
     "Waiting for the provider"
   );
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Check same request again" })
   );
   await waitFor(() =>
@@ -622,7 +634,7 @@ it("opens a saved video in the shared header and checks an uncertain request wit
 it("keeps creator-video campaign context in the shared entry point", async () => {
   api.search = "plan=7&type=ugc";
   render(<CreativeConfiguratorPage initialKind="video" />);
-  fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+  clickJourney(screen.getByRole("button", { name: /Save draft/ }));
   await waitFor(() =>
     expect(api.videoSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -653,7 +665,7 @@ it("opens a failed request in Studio and detaches a new version from its old lin
       (screen.getByLabelText("Creative name") as HTMLInputElement).value
     ).toBe("Brand film")
   );
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Use these settings as a new draft" })
   );
   expect(api.route).toHaveBeenCalledWith("/app/creatives/studio", {
@@ -669,15 +681,15 @@ it("preserves each type's name and setup when switching Image/Video", () => {
   fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "My image" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
   fireEvent.change(screen.getByLabelText("Creative name"), {
     target: { value: "My film" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
+  clickJourney(screen.getByRole("button", { name: "Select Image" }));
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("My image");
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("My film");
@@ -686,20 +698,24 @@ it("preserves each type's name and setup when switching Image/Video", () => {
 it("explains the people dependency and unlocks its picker only for people scenes", () => {
   open();
   section(/Look & Feel Make it yours/);
-  fireEvent.click(
-    screen.getByRole("button", { name: /People Needs people scene/ })
-  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Open People category",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
   expect(screen.queryByRole("group", { name: "People gender" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /Choose a scene/ }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Open Scene category" }));
+  clickJourney(
     screen.getByRole("button", { name: "Select Lifestyle · with people" })
   );
-  fireEvent.click(screen.getByRole("button", { name: "People" }));
+  clickJourney(screen.getByRole("button", { name: "Open People category" }));
   expect(screen.getByRole("group", { name: "People gender" })).toBeTruthy();
 });
 it("saves a real workspace draft without invoking generation", async () => {
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -718,11 +734,9 @@ it("requires a valid current quote and explicit confirmation before image genera
   localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
   api.job = { id: 12, status: "queued", variants: [] };
   const view = open();
-  fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
+  clickJourney(screen.getByRole("button", { name: "Generate images" }));
   expect(api.generate).not.toHaveBeenCalled();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Confirm · 174 credits" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
   await waitFor(() =>
     expect(api.generate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -764,7 +778,7 @@ it("disables generation for incomplete source selection even if a cached quote e
 it("opens model details without changing selection or spending credits", () => {
   open();
   section(/AI Model Choose your engine/);
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "More about GPT Image 2.5 Sunburst" })
   );
   expect(screen.getByRole("dialog")).toBeTruthy();
@@ -792,7 +806,9 @@ it("renders selected catalog source photos and titles in video builds", () => {
   config.video.imageKeys = ["product_image:2"];
   localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
   const sources = within(
     screen.getByRole("region", { name: "Selected sources" })
   );
@@ -821,7 +837,7 @@ it("previews a generated version without changing settings or generating, and re
   open();
   const name = screen.getByRole("textbox", { name: "Creative name" });
   fireEvent.change(name, { target: { value: "Keep my current draft" } });
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Preview Previous lamp square" })
   );
   expect(
@@ -832,7 +848,7 @@ it("previews a generated version without changing settings or generating, and re
   expect((name as HTMLInputElement).value).toBe("Keep my current draft");
   expect(api.save).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
-  fireEvent.click(
+  clickJourney(
     screen.getByRole("button", { name: "Use these settings as a new draft" })
   );
   expect((name as HTMLInputElement).value).toBe("Previous lamp · new version");
@@ -855,9 +871,11 @@ it.each(["draft", "needs_review"])(
       },
     ];
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+    clickJourney(
+      screen.getByRole("button", { name: "Open Brand & logo category" })
+    );
     expect(screen.getByRole("img", { name: "Website logo" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Approve & use logo" }));
+    clickJourney(screen.getByRole("button", { name: "Approve & use logo" }));
     const input = {
       organizationId: 1,
       key: "asset:4",
@@ -918,10 +936,8 @@ it("keeps completed generation in the large preview and requires explicit approv
     },
   ];
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Confirm · 174 credits" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Generate images" }));
+  clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
   await waitFor(() =>
     expect(
       screen.getByRole("img", { name: "Fresh creative" }).getAttribute("src")
@@ -938,7 +954,7 @@ it("keeps completed generation in the large preview and requires explicit approv
   ).toBe("/app/activate/studio?asset=creative%3A55");
   // Following the link opens preparation; asset approval remains explicit.
   expect(api.approveLogo).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  clickJourney(screen.getByRole("button", { name: "Approve" }));
   await waitFor(() =>
     expect(api.approveLogo).toHaveBeenCalledWith({
       organizationId: 1,
@@ -960,10 +976,8 @@ it("reports a failed generation in place without navigating or approving", async
     variants: [],
   };
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Generate images" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Confirm · 174 credits" })
-  );
+  clickJourney(screen.getByRole("button", { name: "Generate images" }));
+  clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
   await waitFor(() =>
     expect(screen.getByRole("alert").textContent).toContain(
       "The provider could not finish"
@@ -977,13 +991,15 @@ it("reports a failed generation in place without navigating or approving", async
 
 it("persists product preservation in image drafts and retains it when switching creative types", async () => {
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
   const option = screen.getByRole("checkbox", {
     name: /Preserve original product/,
   });
   expect((option as HTMLInputElement).checked).toBe(false);
-  fireEvent.click(option);
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(option);
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -991,15 +1007,23 @@ it("persists product preservation in image drafts and retains it when switching 
       })
     )
   );
-  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
-  fireEvent.click(screen.getByRole("button", { name: "Select Video" }));
-  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Creative type category" })
+  );
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
   expect(
     screen.queryByRole("checkbox", { name: /Preserve original product/ })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Creative type" }));
-  fireEvent.click(screen.getByRole("button", { name: "Select Image" }));
-  fireEvent.click(screen.getByRole("button", { name: "Subject & sources" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Creative type category" })
+  );
+  clickJourney(screen.getByRole("button", { name: "Select Image" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
   expect(
     (
       screen.getByRole("checkbox", {
@@ -1013,7 +1037,7 @@ it("persists product preservation in image drafts and retains it when switching 
 it("offers Rubik and keeps font preservation off until explicitly selected", async () => {
   open();
   section(/Look & Feel/);
-  fireEvent.click(screen.getByRole("button", { name: "Fonts" }));
+  clickJourney(screen.getByRole("button", { name: "Open Fonts category" }));
   expect(
     (
       screen.getByRole("checkbox", {
@@ -1021,13 +1045,13 @@ it("offers Rubik and keeps font preservation off until explicitly selected", asy
       }) as HTMLInputElement
     ).checked
   ).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Select Rubik" }));
+  clickJourney(screen.getByRole("button", { name: "Select Rubik" }));
   expect(
     screen
       .getByRole("button", { name: "Select Rubik" })
       .getAttribute("aria-pressed")
   ).toBe("true");
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1053,19 +1077,21 @@ it("keeps logo imports in Brand and saves original-logo settings independently o
     },
   ];
   open();
-  fireEvent.click(screen.getByRole("button", { name: "Brand & logo" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Brand & logo category" })
+  );
   expect(screen.queryByText("Logo import tools")).toBeNull();
   expect(
     screen.getByRole("link", { name: /Manage Brand Kit/ }).getAttribute("href")
   ).toBe("/app/brand");
-  fireEvent.click(screen.getByRole("button", { name: "Select Original logo" }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Select Original logo" }));
+  clickJourney(
     screen.getByRole("checkbox", { name: "Preserve original logo" })
   );
   fireEvent.change(screen.getByRole("combobox", { name: "Logo position" }), {
     target: { value: "bottom-right" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
     expect(api.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1077,8 +1103,16 @@ it("keeps logo imports in Brand and saves original-logo settings independently o
       })
     )
   );
-  fireEvent.click(screen.getByRole("button", { name: "Select No logo" }));
+  clickJourney(screen.getByRole("button", { name: "Select No logo" }));
   expect(
     screen.queryByRole("checkbox", { name: "Preserve original logo" })
   ).toBeNull();
 });
+
+function clickJourney(element: HTMLElement) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

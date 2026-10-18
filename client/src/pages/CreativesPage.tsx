@@ -1,6 +1,7 @@
 import "@/styles/workflows.css";
+import "@/styles/studioExperience.css";
 import { WorkflowApps } from "@/components/WorkflowApps";
-import { VideoStudio } from "@/components/VideoStudio";
+import CreativeConfiguratorPage from "./CreativeConfiguratorPage";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import {
   Image,
@@ -19,7 +20,6 @@ import {
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
 import { CreateNavigation } from "@/components/CreateNavigation";
-import { CreativeBuilder } from "@/components/CreativeBuilder";
 import { StudioDrafts } from "@/components/StudioDrafts";
 import { PublicationComposer } from "@/components/PublicationComposer";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -39,7 +39,7 @@ const creationChoices = [
     title: "Creative Studio",
     icon: SlidersHorizontal,
     description:
-      "A new visual studio. Configure images and videos with guided choices, model filters and live credit quotes.",
+      "Explore every creative choice. Shape images and videos with your brand, your direction, and your favorite models.",
   },
   {
     path: "images",
@@ -131,8 +131,14 @@ function Studio() {
         })}
       />
     );
+  if (mode === "images" || mode === "video")
+    return (
+      <CreativeConfiguratorPage
+        initialKind={mode === "video" ? "video" : "image"}
+      />
+    );
   return (
-    <>
+    <div className="create-workspace">
       <PageHeader
         eyebrow="Create"
         title="Create"
@@ -160,48 +166,38 @@ function Studio() {
       )}
       {isDrafts ? (
         <StudioDrafts planId={planId} />
-      ) : mode === "video" ? (
-        <>
-          <Link
-            href={newContentHref}
-            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
-          >
-            <ArrowLeft size={16} />
-            Back to apps
-          </Link>
-          {canCreate ? (
-            <VideoStudio key={organizationId} initialPlanId={planId} />
-          ) : (
-            <p className="surface p-6">
-              Video creation requires a creator role.
-            </p>
-          )}
-        </>
-      ) : mode === "images" ? (
-        <>
-          <Link
-            href={newContentHref}
-            className="mb-5 inline-flex items-center gap-2 text-sm text-primary"
-          >
-            <ArrowLeft size={16} />
-            Back to apps
-          </Link>
-          {canCreate ? (
-            <CreativeBuilder
-              initialPlanId={planId}
-              onGenerated={() =>
-                navigate(studioDraftsHref({ filter: "images", plan: planId }))
-              }
-            />
-          ) : (
-            <p className="surface p-6">
-              Your role can view assets in the library. Image creation requires
-              a creator role.
-            </p>
-          )}
-        </>
       ) : (
         <section aria-labelledby="studio-create-heading">
+          <div className="create-studio-hero">
+            <div>
+              <span className="create-hero-eyebrow">
+                YOUR NEXT GREAT IDEA STARTS HERE
+              </span>
+              <h2>
+                Make something
+                <br />
+                worth noticing.
+              </h2>
+              <p>
+                Bring your brand to life with images and videos. Every choice is
+                yours, from the first idea to the finishing touches.
+              </p>
+              {canCreate && (
+                <Link
+                  href={`/app/creatives/studio${planId ? "?plan=" + planId : ""}`}
+                  className="create-hero-link"
+                >
+                  Open Creative Studio <ArrowRight size={17} />
+                </Link>
+              )}
+            </div>
+            <img
+              src="/studio-art/create-studio-hero.webp"
+              alt=""
+              width="1200"
+              height="800"
+            />
+          </div>
           <div className="studio-section-heading">
             <div>
               <h2 id="studio-create-heading">Your creative toolkit</h2>
@@ -368,7 +364,7 @@ function Studio() {
           }
         />
       )}
-    </>
+    </div>
   );
 }
 export default function CreativesPage() {

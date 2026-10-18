@@ -1,20 +1,20 @@
+import { StudioCategories } from "@/components/configurator/StudioCategories";
 import { StudioFonts } from "@/components/configurator/StudioFonts";
 import {
-  StudioDiscovery,
-  useStudioExploration,
-} from "@/components/configurator/StudioDiscovery";
+  StudioJourney,
+  StudioSummary,
+  useStudioJourney,
+} from "@/components/configurator/StudioJourney";
 import {
   useStudioNavigation,
   scrollStudioChoices,
 } from "@/components/configurator/studioNavigation";
-import { StudioCategories } from "@/components/configurator/StudioCategories";
 import {
   StudioChoicePicker,
   studioThemeChoices,
   studioThemeGroups,
   studioStyleChoices,
 } from "@/components/configurator/StudioChoicePicker";
-import { StudioSections } from "@/components/configurator/StudioSections";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -61,6 +61,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  selectedPeople,
   CREATIVE_ART_STYLES,
   CREATIVE_MOODS,
   CREATIVE_CHANNELS,
@@ -340,15 +341,6 @@ function Configurator({
         : "people"
     : (video.direction?.setting ?? "product");
   const currentSection = configuratorSections.find(s => s.id === section)!;
-  const discovery = useStudioExploration(
-    storageKey,
-    config.kind,
-    category,
-    scene === "people"
-  );
-  const categories = currentSection.categories.filter(c =>
-    isImage ? !["audio", "subtitles"].includes(c.id) : c.id !== "fonts"
-  );
   const products = options.data?.products ?? [];
   const selectedProduct = products.find(
     p => p.id === image.products[0]?.productId
@@ -586,7 +578,7 @@ function Configurator({
     setSavedImage(null);
     setSavedVideo(null);
     setPendingVideoJob(null);
-    discovery.reset();
+    journey.reset();
     update(structuredClone(restored), true);
     go("output", "review");
   }
@@ -659,7 +651,7 @@ function Configurator({
         direction: { ...(video.direction ?? defaultVideoDirection), ...patch },
       });
   }
-  function go(sectionId: string, categoryId?: string) {
+  function navigateCategory(sectionId: string, categoryId: string) {
     setSection(sectionId);
     setCategory(
       categoryId ??
@@ -672,14 +664,8 @@ function Configurator({
     setMaxCredits("");
     scrollStudioChoices(studioRoot.current);
   }
-  function chooseCategory(id: string) {
-    setCategory(id);
-    setTab("all");
-    setSearch("");
-    setMaker("all");
-    setCapability("all");
-    setMaxCredits("");
-    scrollStudioChoices(studioRoot.current);
+  function go(sectionId: string, categoryId?: string) {
+    journey.navigate(sectionId, categoryId);
   }
   function chooseModel(m: NonNullable<typeof models.data>[number]) {
     const def = generationModel(m.routeId)!;
@@ -1820,6 +1806,88 @@ function Configurator({
       category: "format",
     },
   ];
+  const categoryValues: Record<string, string> = {
+    type: isImage ? "Image" : "Video",
+    source: isImage
+      ? image.promotionMode === "platform"
+        ? image.promotion?.title || "Page promotion"
+        : `${image.products.length + (image.sourceAssetKeys?.length ?? 0)} selected sources`
+      : `${video.imageKeys.length} reference images`,
+    brand: options.data?.brand?.name || "No Brand Kit",
+    scene:
+      scene === "people"
+        ? "Lifestyle with people"
+        : scene === "product"
+          ? "Product spotlight"
+          : "Lifestyle",
+    people: `${selectedPeople(setup).length} selected`,
+    theme: theme.name,
+    style:
+      CREATIVE_ART_STYLES.find(item => item.id === direction.artStyle)?.name ||
+      direction.artStyle,
+    mood:
+      CREATIVE_MOODS.find(item => item.id === direction.mood)?.name ||
+      direction.mood,
+    composition:
+      direction.placement === "auto"
+        ? "Automatic"
+        : `${direction.placement} placement`,
+    fonts: `${image.fontFamily || "Automatic"}${image.preserveFont ? " · Preserve on" : ""}`,
+    message: isImage
+      ? image.copy.headline || "No headline yet"
+      : video.prompt || "No prompt yet",
+    direction: direction.extraDirection || "Creative defaults",
+    audio: video.sound ? "Audio on" : "Audio off",
+    subtitles: "Coming soon",
+    model: selectedModel?.name || model?.name || "Choose a model",
+    settings: Object.keys(
+      (isImage ? image.modelOptions : video.modelOptions) ?? {}
+    ).length
+      ? "Custom model settings"
+      : "Model defaults",
+    format: isImage
+      ? `${image.formatIds.length} sizes · ${outputCount(image)} images`
+      : `${video.duration}s · ${video.resolution}`,
+    review: issues.length
+      ? `${issues.length} items to complete`
+      : "Ready to review",
+  };
+  const journey = useStudioJourney({
+    storageKey: `${storageKey}:${config.kind}`,
+    sections: configuratorSections.map((item, i) => ({
+      ...item,
+      icon: sectionIcons[i],
+      categories: item.categories
+        .filter(c =>
+          isImage ? !["audio", "subtitles"].includes(c.id) : c.id !== "fonts"
+        )
+        .map(c => ({
+          ...c,
+          value: categoryValues[c.id],
+          disabled:
+            (c.id === "people" && scene !== "people") || c.id === "subtitles",
+          reason:
+            c.id === "subtitles" ? "Coming soon" : "Choose a people scene",
+          needsInput:
+            (c.id === "model" && !model) ||
+            (c.id === "brand" && !options.data?.brand) ||
+            (c.id === "review" && issues.length > 0),
+        })),
+    })),
+    section,
+    category,
+    onNavigate: navigateCategory,
+    initialFocus: !!requestedVideoId,
+  });
+  useEffect(() => {
+    const available = journey.active.categories.find(
+      c => c.id === category && !c.disabled
+    );
+    if (!available) {
+      const first = journey.active.categories.find(c => !c.disabled);
+      if (first) setCategory(first.id);
+    }
+  }, [config.kind, scene, section, category]);
   if (!canCreate)
     return (
       <div className="surface p-8">
@@ -1851,6 +1919,24 @@ function Configurator({
           </p>
         </div>
         <div className="cfg-actions">
+          <div className="journey-kind" role="group" aria-label="Creative type">
+            {(["image", "video"] as const).map(kind => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={config.kind === kind}
+                disabled={busy || !videoOpened}
+                onClick={() => update({ ...config, kind })}
+              >
+                {kind === "image" ? (
+                  <Image size={15} />
+                ) : (
+                  <Clapperboard size={15} />
+                )}{" "}
+                {kind === "image" ? "Image" : "Video"}
+              </button>
+            ))}
+          </div>
           <button
             disabled={busy}
             onClick={duplicateForComparison}
@@ -1904,174 +1990,143 @@ function Configurator({
         disabled={busy || (!videoOpened && !videoDetail.error)}
         className="cfg-workspace"
       >
-        <StudioPreview
-          key={config.kind + ":" + (savedImage?.briefId ?? "new")}
-          summary={
-            <>
-              <div className="cfg-build-top">
-                <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
-                <span
-                  className={`cfg-draft-status${storageOk ? " is-saved" : ""}`}
-                >
-                  {storageOk
-                    ? "Remembered in this browser"
-                    : "Browser storage unavailable · save a draft"}
-                </span>
-              </div>
-              <Field title="Creative name">
-                <input
-                  aria-label="Creative name"
-                  value={isImage ? image.name : video.title}
-                  maxLength={160}
-                  onChange={e =>
-                    isImage
-                      ? updateImage({ name: e.target.value })
-                      : updateVideo({ title: e.target.value })
-                  }
-                />
-              </Field>
-              <div className="cfg-summary">
-                {summary.map(s => (
-                  <button
-                    key={s.title}
-                    onClick={() => go(s.section, s.category)}
-                  >
-                    <span>{s.title}</span>
-                    <strong>{s.value}</strong>
-                    <ChevronRight size={13} />
-                  </button>
-                ))}
-              </div>
-              <div className="cfg-estimate">
-                <span>
-                  <small>Generation total</small>
-                  <strong>{quoteLabel}</strong>
-                  <small aria-live="polite">{creditDetail}</small>
-                </span>
-                <button
-                  className="cfg-primary"
-                  onClick={() => go("output", "review")}
-                >
-                  Review configuration <ArrowRight size={16} />
-                </button>
-              </div>
-            </>
+        <StudioSummary
+          subtitle={`${isImage ? image.name : video.title} · ${isImage ? "Image" : "Video"}`}
+          thumbnail={preview}
+          forceOpen={
+            !!pendingImageJob ||
+            !!pendingVideoJob ||
+            !!savedImage ||
+            !!savedVideo
           }
-          organizationId={organizationId!}
-          role={membership?.role ?? ""}
-          jobId={isImage ? pendingImageJob : null}
-          videoJobId={isImage ? null : pendingVideoJob}
-          videoJob={videoDetail.data}
-          videoLoadError={videoDetail.error?.message}
-          referenceUrl={preview}
-          onSettled={() => {
-            if (isImage) setPendingImageJob(null);
-            void utils.assetLibrary.studioList.invalidate();
-            void utils.models.credits.invalidate();
-            void utils.video.list.invalidate();
-          }}
-          kind={config.kind}
-          briefId={savedImage?.briefId}
-          assets={assets.data ?? []}
-          videos={videos.data ?? []}
-          reuse={trial => {
-            setSavedImage(null);
-            setSavedVideo(null);
-            setPendingVideoJob(null);
-            discovery.reset();
-            update(
-              {
-                ...configRef.current,
-                ...(trial.imageSetup
-                  ? {
-                      kind: "image",
-                      image: {
-                        ...trial.imageSetup,
-                        name:
-                          trial.imageSetup.name.slice(0, 140) +
-                          " · new version",
-                      },
-                    }
-                  : {}),
-                ...(trial.videoSetup
-                  ? {
-                      kind: "video",
-                      video: {
-                        ...trial.videoSetup,
-                        title:
-                          trial.videoSetup.title.slice(0, 140) +
-                          " · new version",
-                      },
-                    }
-                  : {}),
-              },
-              true
-            );
-            toast.success(
-              "Settings loaded into a new draft. Review them before generating."
-            );
-          }}
         >
-          <div className="cfg-preview" style={{ background: theme.palette[0] }}>
-            {preview ? (
-              <img src={preview} alt="Selected source reference" />
-            ) : (
-              <ChoiceArt
-                name={theme.name}
-                type={scene === "people" ? "people" : config.kind}
-                palette={theme.palette}
-              />
-            )}
-            <span className="cfg-preview-label">
-              {preview ? "Source reference" : "Visual inspiration"}
-            </span>
-            <div className="cfg-preview-caption">
-              <span>
-                {isImage ? "STILL / " : "MOTION / "}
-                {theme.name}
+          <StudioPreview
+            key={config.kind + ":" + (savedImage?.briefId ?? "new")}
+            summary={
+              <>
+                <div className="cfg-build-top">
+                  <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
+                  <span
+                    className={`cfg-draft-status${storageOk ? " is-saved" : ""}`}
+                  >
+                    {storageOk
+                      ? "Remembered in this browser"
+                      : "Browser storage unavailable · save a draft"}
+                  </span>
+                </div>
+                <Field title="Creative name">
+                  <input
+                    aria-label="Creative name"
+                    value={isImage ? image.name : video.title}
+                    maxLength={160}
+                    onChange={e =>
+                      isImage
+                        ? updateImage({ name: e.target.value })
+                        : updateVideo({ title: e.target.value })
+                    }
+                  />
+                </Field>
+                <div className="cfg-summary">
+                  {summary.map(s => (
+                    <button
+                      key={s.title}
+                      onClick={() => go(s.section, s.category)}
+                    >
+                      <span>{s.title}</span>
+                      <strong>{s.value}</strong>
+                      <ChevronRight size={13} />
+                    </button>
+                  ))}
+                </div>
+              </>
+            }
+            organizationId={organizationId!}
+            role={membership?.role ?? ""}
+            jobId={isImage ? pendingImageJob : null}
+            videoJobId={isImage ? null : pendingVideoJob}
+            videoJob={videoDetail.data}
+            videoLoadError={videoDetail.error?.message}
+            referenceUrl={preview}
+            onSettled={() => {
+              if (isImage) setPendingImageJob(null);
+              void utils.assetLibrary.studioList.invalidate();
+              void utils.models.credits.invalidate();
+              void utils.video.list.invalidate();
+            }}
+            kind={config.kind}
+            briefId={savedImage?.briefId}
+            assets={assets.data ?? []}
+            videos={videos.data ?? []}
+            reuse={trial => {
+              setSavedImage(null);
+              setSavedVideo(null);
+              setPendingVideoJob(null);
+              journey.reset();
+              update(
+                {
+                  ...configRef.current,
+                  ...(trial.imageSetup
+                    ? {
+                        kind: "image",
+                        image: {
+                          ...trial.imageSetup,
+                          name:
+                            trial.imageSetup.name.slice(0, 140) +
+                            " · new version",
+                        },
+                      }
+                    : {}),
+                  ...(trial.videoSetup
+                    ? {
+                        kind: "video",
+                        video: {
+                          ...trial.videoSetup,
+                          title:
+                            trial.videoSetup.title.slice(0, 140) +
+                            " · new version",
+                        },
+                      }
+                    : {}),
+                },
+                true
+              );
+              toast.success(
+                "Settings loaded into a new draft. Review them before generating."
+              );
+            }}
+          >
+            <div
+              className="cfg-preview"
+              style={{ background: theme.palette[0] }}
+            >
+              {preview ? (
+                <img src={preview} alt="Selected source reference" />
+              ) : (
+                <ChoiceArt
+                  name={theme.name}
+                  type={scene === "people" ? "people" : config.kind}
+                  palette={theme.palette}
+                />
+              )}
+              <span className="cfg-preview-label">
+                {preview ? "Source reference" : "Visual inspiration"}
               </span>
-              <strong>
-                {isImage
-                  ? image.copy.headline || "Your story starts here."
-                  : video.title}
-              </strong>
+              <div className="cfg-preview-caption">
+                <span>
+                  {isImage ? "STILL / " : "MOTION / "}
+                  {theme.name}
+                </span>
+                <strong>
+                  {isImage
+                    ? image.copy.headline || "Your story starts here."
+                    : video.title}
+                </strong>
+              </div>
             </div>
-          </div>
-        </StudioPreview>
-        <StudioSections
-          label="Studio sections"
-          current={section}
-          items={discovery.sections.map((s, i) => ({
-            ...s,
-            icon: sectionIcons[i],
-            progress: {
-              explored: s.categories.filter(c => c.available && c.explored)
-                .length,
-              total: s.categories.filter(c => c.available).length,
-            },
-          }))}
-          onSelect={id => go(id)}
-        >
+          </StudioPreview>
+        </StudioSummary>
+        <StudioJourney journey={journey}>
           <div className="cfg-body">
-            <StudioDiscovery
-              discovery={discovery}
-              current={category}
-              onSelect={go}
-            />
-            <StudioCategories
-              items={categories.map(c => ({
-                ...c,
-                explored: discovery.sections
-                  .find(s => s.id === section)
-                  ?.categories.find(item => item.id === c.id)?.explored,
-                hint:
-                  c.id === "people" && scene !== "people"
-                    ? "Needs people scene"
-                    : undefined,
-              }))}
-              current={category}
-              onSelect={chooseCategory}
-            />
             <div className="cfg-content-title">
               <div>
                 <span className="cfg-eyebrow">{currentSection.title}</span>
@@ -2112,7 +2167,7 @@ function Configurator({
               content()
             )}
           </div>
-        </StudioSections>
+        </StudioJourney>
       </fieldset>
       {error && (
         <div role="alert" className="cfg-problems">
@@ -2148,19 +2203,6 @@ function Configurator({
               </span>
             </div>
             <div className="cfg-actions">
-              <button
-                className="cfg-next-section"
-                disabled={busy}
-                onClick={() => {
-                  const next = discovery.following;
-                  go(next?.section ?? "output", next?.id ?? "review");
-                }}
-              >
-                {discovery.following
-                  ? `Next: ${discovery.following.title}`
-                  : "Review configuration"}{" "}
-                <ChevronRight size={15} />
-              </button>
               <button
                 className="cfg-primary"
                 disabled={!ready}
@@ -2281,7 +2323,7 @@ function Configurator({
                       "This draft cannot be opened in Creative Studio."
                     );
                   update({ ...config, kind: "image", image: parsed.data });
-                  discovery.reset("image");
+                  journey.reset();
                   setSavedImage({ briefId: d.id, updatedAtMs: d.updatedAtMs });
                   setDraftsOpen(false);
                   go("type");
@@ -2311,7 +2353,7 @@ function Configurator({
                       kind: "video",
                       video: videoWithSources(parsed.data),
                     });
-                    discovery.reset("video");
+                    journey.reset();
                     setSavedVideo({ id: d.id, revision: d.revision });
                     setPendingVideoJob(null);
                     setDraftsOpen(false);

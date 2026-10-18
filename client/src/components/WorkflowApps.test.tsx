@@ -224,7 +224,7 @@ it("renders a completed published copy report as evidence tables without rerunni
     savedRun([{ type: "data", name: "Copy report", data }]),
   ];
   const { container } = openApp();
-  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
+  clickJourney(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(
     screen.getByRole("heading", { name: "Copy evidence report" })
   ).toBeTruthy();
@@ -268,7 +268,7 @@ it("preserves the formatted optimizer report for existing published Apps", () =>
     ]),
   ];
   const { container } = openApp();
-  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
+  clickJourney(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("More comparable ads are needed.")).toBeTruthy();
   expect(screen.getByText("Insufficient evidence")).toBeTruthy();
   expect(screen.queryByText(/\d+% confidence/)).toBeNull();
@@ -305,7 +305,7 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
     ]),
   ];
   const { container } = openApp();
-  fireEvent.click(screen.getByRole("button", { name: /^Results Progress/ }));
+  clickJourney(screen.getByRole("button", { name: /^Results Progress/ }));
   expect(screen.getByText("Generated copy")).toBeTruthy();
   expect(
     screen.getByRole("img", { name: "Generated image" }).getAttribute("src")
@@ -368,7 +368,7 @@ function formApp() {
   };
 }
 function reviewApp() {
-  fireEvent.click(screen.getByRole("button", { name: /^Review & run Check/ }));
+  clickJourney(screen.getByRole("button", { name: /^Review & run Check/ }));
 }
 it("validates in the correct Studio category, preserves inputs, and runs the exact reviewed version and credit quote", async () => {
   formApp();
@@ -383,19 +383,21 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
   ).toBe(true);
   expect(screen.queryByLabelText("Ad budget")).toBeNull();
   reviewApp();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   expect(screen.getByRole("alert").textContent).toContain("Audience:");
   expect(screen.getByRole("textbox", { name: "Audience" })).toBeTruthy();
   expect(api.quote).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("Audience"), {
     target: { value: "Independent founders" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  clickJourney(
+    screen.getByRole("button", { name: /^Next (category|section)$/ })
+  );
   expect(screen.getByRole("textbox", { name: "Caption" })).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Caption"), {
     target: { value: "Reviewed caption" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  clickJourney(screen.getByRole("button", { name: "Previous category" }));
   expect((screen.getByLabelText("Audience") as HTMLTextAreaElement).value).toBe(
     "Independent founders"
   );
@@ -405,7 +407,7 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
       "Reviewed caption"
     )
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   await screen.findByRole("button", { name: "Confirm & run App" });
   expect(api.run).not.toHaveBeenCalled();
   const quoted = api.quote.mock.calls[0][0];
@@ -416,7 +418,7 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
     appVersionId: "app-v1",
   });
   expect(quoted.inputs).toContainEqual({ id: "channel", value: "organic" });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm & run App" }));
+  clickJourney(screen.getByRole("button", { name: "Confirm & run App" }));
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
   expect(api.run.mock.calls[0][0]).toEqual({
     ...quoted,
@@ -434,9 +436,9 @@ it("invalidates an estimate after an edit and accepts a zero-credit quote", asyn
   api.quote.mockResolvedValue({ credits: 0 });
   openApp();
   reviewApp();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   await screen.findByRole("button", { name: "Confirm & run App" });
-  fireEvent.click(screen.getByRole("button", { name: "Edit Content: Copy" }));
+  clickJourney(screen.getByRole("button", { name: "Edit Content: Copy" }));
   fireEvent.change(screen.getByLabelText("Caption"), {
     target: { value: "Changed after estimate" },
   });
@@ -444,8 +446,8 @@ it("invalidates an estimate after an edit and accepts a zero-credit quote", asyn
   expect(
     screen.queryByRole("button", { name: "Confirm & run App" })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(
     await screen.findByRole("button", { name: "Confirm & run App" })
   );
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
@@ -462,14 +464,14 @@ it("shows run failures without losing reviewed inputs and reuses the request ide
   api.run.mockRejectedValueOnce(new Error("Connection interrupted"));
   openApp();
   reviewApp();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
-  fireEvent.click(
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(
     await screen.findByRole("button", { name: "Confirm & run App" })
   );
   await waitFor(() =>
     expect(screen.getByRole("alert").textContent).toBe("Connection interrupted")
   );
-  fireEvent.click(screen.getByRole("button", { name: "Confirm & run App" }));
+  clickJourney(screen.getByRole("button", { name: "Confirm & run App" }));
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
   expect(api.run.mock.calls[1][0]).toEqual(api.run.mock.calls[0][0]);
 });
@@ -480,10 +482,8 @@ it("keeps an active run in Results and exposes stopping without another run", as
   expect(
     screen.queryByRole("button", { name: "Review credits & run" })
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "View run progress" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Stop after current step" })
-  );
+  clickJourney(screen.getByRole("button", { name: "View run progress" }));
+  clickJourney(screen.getByRole("button", { name: "Stop after current step" }));
   await waitFor(() =>
     expect(api.stop).toHaveBeenCalledWith({
       organizationId: 1,
@@ -503,12 +503,14 @@ it("supports legacy text and image inputs without republishing", async () => {
   fireEvent.change(screen.getByLabelText("Campaign brief"), {
     target: { value: "Updated legacy brief" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  clickJourney(
+    screen.getByRole("button", { name: /^Next (category|section)$/ })
+  );
   expect(
     screen.getByRole("combobox", { name: "Reference image" })
   ).toBeTruthy();
   reviewApp();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   await screen.findByRole("button", { name: "Confirm & run App" });
   expect(api.quote.mock.calls[0][0].inputs).toEqual([
     { id: "brief", text: "Updated legacy brief" },
@@ -520,7 +522,7 @@ it("resets inputs and credit confirmation when opening another App version", asy
   api.app.graph.nodes[1].config.field.defaultValue = "Default audience";
   const rendered = openApp();
   reviewApp();
-  fireEvent.click(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
   await screen.findByRole("button", { name: "Confirm & run App" });
   rendered.rerender(
     <WorkflowAppRunner
@@ -536,3 +538,12 @@ it("resets inputs and credit confirmation when opening another App version", asy
   ).toBeNull();
   expect(api.run).not.toHaveBeenCalled();
 });
+
+// Business-flow checks accept optional discovery prompts; StudioJourney tests cover the prompt itself.
+function clickJourney(element: Element) {
+  fireEvent.click(element);
+  const keep = screen.queryByRole("button", {
+    name: /^(Keep defaults & continue|Continue with current choices)$/,
+  });
+  if (keep) fireEvent.click(keep);
+}

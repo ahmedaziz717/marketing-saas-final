@@ -1,0 +1,217 @@
+/* The workspace uses one visual system. Status colors and chart series remain semantic. */
+.evoke-shell[data-workflow],
+.evoke-shell [data-workflow] {
+  --workflow-color: #6d50d8;
+  --workflow-soft: #eeebf8;
+  --primary: #6d50d8;
+  --primary-foreground: #fff;
+  --ring: #6d50d8;
+  --accent: #eeebf8;
+  --accent-foreground: #5139aa;
+  --background: #f4f3f8;
+  --foreground: #222132;
+  --card: #fff;
+  --card-foreground: #222132;
+  --muted: #eeedf5;
+  --muted-foreground: #69687b;
+  --border: #dedde8;
+  --input: #dedde8;
+  --sidebar: #fcfbfe;
+  --sidebar-foreground: #4d4860;
+  --sidebar-border: #e4e0ed;
+  --sidebar-accent: #eeebf8;
+  --sidebar-accent-foreground: #6d50d8;
+}
+.dark .evoke-shell[data-workflow],
+.dark .evoke-shell [data-workflow] {
+  --workflow-color: #b29afa;
+  --workflow-soft: #302641;
+  --primary: #9878ef;
+  --primary-foreground: #fff;
+  --ring: #b29afa;
+  --accent: #302641;
+  --accent-foreground: #cbb7ff;
+  --background: #171620;
+  --foreground: #f4f1fc;
+  --card: #211f2d;
+  --card-foreground: #f4f1fc;
+  --muted: #2d273d;
+  --muted-foreground: #b8b2cb;
+  --border: #3c354f;
+  --input: #3c354f;
+  --sidebar: #1c1926;
+  --sidebar-foreground: #d1c9e3;
+  --sidebar-border: #3c354f;
+  --sidebar-accent: #302641;
+  --sidebar-accent-foreground: #b29afa;
+}
+.evoke-shell #workspace-content {
+  min-width: 0;
+}
+.evoke-shell .evoke-toolbar {
+  background: var(--card);
+  border-color: var(--border);
+}
+.evoke-shell .surface,
+.evoke-shell [data-slot="card"] {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: 0 2px 8px #30224a04;
+}
+.evoke-shell [data-slot="button"],
+.evoke-shell [data-slot="input"],
+.evoke-shell [data-slot="select-trigger"],
+.evoke-shell [data-slot="textarea"] {
+  border-radius: 9px;
+}
+.evoke-shell [data-slot="input"],
+.evoke-shell [data-slot="select-trigger"],
+.evoke-shell [data-slot="textarea"] {
+  background: var(--card);
+}
+.evoke-shell .evoke-page-header {
+  margin-bottom: 24px;
+}
+.evoke-shell .evoke-page-header h1 {
+  font-size: clamp(26px, 2.6vw, 36px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 650;
+}
+.evoke-shell .evoke-page-header p:last-child {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.evoke-shell .wf-library,
+.evoke-shell .wf-editor {
+  --wf-accent: var(--primary);
+}
+.evoke-shell .wf-library {
+  padding: 4px 0 24px;
+}
+.evoke-shell .wf-library-heading {
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.evoke-shell .wf-library-heading h1 {
+  font-size: clamp(26px, 2.6vw, 36px);
+  font-weight: 650;
+}
+.evoke-shell .wf-library-heading p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.evoke-shell .wf-library-heading button,
+.evoke-shell .wf-header-actions > button:last-child {
+  background: var(--primary);
+}
+.evoke-shell .wf-template,
+.evoke-shell .wf-app-card,
+.evoke-shell .wf-saved,
+.evoke-shell .insight-report-card,
+.evoke-shell .insight-metric,
+.evoke-shell .insight-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 2px 8px #30224a04;
+}
+.evoke-shell .wf-template {
+  --tint: var(--primary);
+}
+.evoke-shell .wf-template-art {
+  background: linear-gradient(140deg, var(--accent), var(--card));
+  border-bottom: 1px solid var(--border);
+}
+.evoke-shell .wf-app-icon,
+.evoke-shell .wf-saved-icon {
+  background: var(--accent);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.evoke-shell .wf-template:hover,
+.evoke-shell .wf-saved:hover,
+.evoke-shell .wf-app-card:hover {
+  border-color: var(--primary);
+}
+.evoke-shell .wf-editor-header,
+.evoke-shell .wf-node {
+  background: var(--card);
+  border-color: var(--border);
+}
+.evoke-shell .wf-canvas {
+  background-color: var(--background);
+}
+.evoke-shell .wf-node {
+  border-radius: 13px;
+  box-shadow: 0 3px 14px #30224a08;
+}
+.evoke-shell .wf-app-empty,
+.evoke-shell .wf-empty-library,
+.evoke-shell .insight-results-empty {
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 70%, var(--accent));
+}
+.evoke-shell .wf-section-title h2,
+.evoke-shell .insight-section-title h2 {
+  font-size: 19px;
+  font-weight: 650;
+}
+.evoke-shell .stage-tools-nav,
+.evoke-shell .insight-page-nav {
+  border-color: var(--border);
+}
+.evoke-shell .insight-page-nav a[aria-current="page"] {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.evoke-shell .evoke-stage-card[data-workflow] {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: 15px;
+}
+.evoke-shell .evoke-stage-card[data-workflow] h3,
+.evoke-shell .loop-stage strong {
+  color: var(--foreground);
+}
+@media (max-width: 700px) {
+  .evoke-shell #workspace-content {
+    padding: 14px 12px 22px;
+  }
+  .evoke-shell .evoke-page-header {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .evoke-shell .evoke-page-header h1 {
+    font-size: 26px;
+  }
+  .evoke-shell .wf-library-heading {
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .evoke-shell .wf-library-heading h1 {
+    margin: 7px 0;
+  }
+  .evoke-shell .wf-app-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .evoke-shell .wf-app-card {
+    padding: 14px;
+  }
+  .evoke-shell .wf-app-card h3 {
+    font-size: 14px;
+  }
+  .evoke-shell .wf-app-card p {
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .evoke-shell .wf-app-card > div {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

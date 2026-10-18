@@ -27,9 +27,7 @@ import {
 } from "@shared/workflowStudio";
 import { trpc } from "@/lib/trpc";
 import { WorkflowInputControl } from "./WorkflowInputControl";
-import { StudioSections } from "./configurator/StudioSections";
-import { studioCategoryIcon } from "./configurator/studioCategoryIcons";
-import { StudioCategories } from "./configurator/StudioCategories";
+import { StudioJourney, useStudioJourney } from "./configurator/StudioJourney";
 import {
   scrollStudioChoices,
   useStudioNavigation,
@@ -114,7 +112,11 @@ export function WorkflowAppStudio({
   useEffect(() => {
     if (page && !error) scrollStudioChoices(root.current);
   }, [page, root]);
-  const select = onPageChange;
+  const select = (id: string) =>
+    journey.navigate(
+      groups.find(s => s.categories.some(c => c.id === id))?.id ?? id,
+      id
+    );
   const value = (node: WorkflowNode) => workflowFieldValue(node, values);
   const context = JSON.stringify(
     fields.map(n => ({
@@ -187,6 +189,61 @@ export function WorkflowAppStudio({
       return assets.data?.find(a => a.key === raw)?.name ?? "Selected image";
     return raw;
   };
+  const journey = useStudioJourney({
+    storageKey: `workflow-app:${organizationId}:${preview ? "preview" : "published"}:${graph.nodes.map(n => n.id).join(",")}`,
+    sections: sections.map(s => ({
+      ...s,
+      categories: (
+        groups.find(g => g.id === s.id)?.categories ?? [
+          {
+            id: s.id,
+            title: s.id === "review" ? "Summary & run" : "Latest run",
+            fields: [],
+          },
+        ]
+      ).map(c => ({
+        id: c.id,
+        title: c.title,
+        value: c.fields.length
+          ? c.fields
+              .map(n => {
+                const raw = value(n),
+                  field = n.config.field;
+                if (!raw) return field?.required ? "Not set" : "Optional";
+                if (field && isChoiceField(field))
+                  return selectionValues(raw, field.multiple)
+                    .map(
+                      id =>
+                        fieldChoices(field).find(o => o.id === id)?.label ?? id
+                    )
+                    .join(", ");
+                if (
+                  [
+                    "connection",
+                    "asset",
+                    "product",
+                    "performance_data",
+                  ].includes(field?.kind ?? "") ||
+                  n.type === "image"
+                )
+                  return "Selection saved";
+                return raw.length > 80 ? raw.slice(0, 77) + "…" : raw;
+              })
+              .join(" · ")
+          : c.id === "review"
+            ? "Check inputs before running"
+            : status || "No run selected",
+        needsInput: c.fields.some(n => n.config.field?.required && !value(n)),
+      })),
+    })),
+    section: section?.id ?? current.id,
+    category: current.id,
+    initialFocus: ["review", "results"].includes(current.id),
+    onNavigate: (_, id) => onPageChange(id),
+  });
+  useEffect(() => {
+    if (error || page === "results") journey.reveal();
+  }, [error, page]);
   return (
     <div
       ref={root}
@@ -219,26 +276,8 @@ export function WorkflowAppStudio({
       ) : (
         description && <p className="wf-studio-description">{description}</p>
       )}
-      <StudioSections
-        label="App Studio sections"
-        items={sections}
-        current={section?.id ?? current.id}
-        onSelect={id =>
-          select(groups.find(s => s.id === id)?.categories[0].id ?? id)
-        }
-      >
+      <StudioJourney journey={journey} label="App Studio sections">
         <div className="cfg-body">
-          <StudioCategories
-            items={(section?.categories ?? [current]).map(category => ({
-              ...category,
-              icon: studioCategoryIcon(
-                category.fields[0]?.config.field?.kind ?? category.id,
-                category.title
-              ),
-            }))}
-            current={current.id}
-            onSelect={select}
-          />
           {error && (
             <p role="alert" className="wf-studio-error">
               {error}
@@ -400,36 +439,8 @@ export function WorkflowAppStudio({
               results
             )}
           </section>
-          <footer className="wf-studio-footer">
-            <span>
-              Step {index + 1} of {pages.length}
-            </span>
-            <div className="cfg-actions">
-              {index > 0 && (
-                <button
-                  type="button"
-                  className="cfg-secondary"
-                  onClick={() => select(pages[index - 1].id)}
-                >
-                  <ArrowLeft size={15} /> Previous
-                </button>
-              )}
-              {index < inputPages.length && (
-                <button
-                  type="button"
-                  className="cfg-primary"
-                  onClick={() => select(pages[index + 1].id)}
-                >
-                  {pages[index + 1].id === "review"
-                    ? "Review inputs"
-                    : "Continue"}
-                  <ArrowRight size={15} />
-                </button>
-              )}
-            </div>
-          </footer>
         </div>
-      </StudioSections>
+      </StudioJourney>
     </div>
   );
 }

@@ -15,8 +15,10 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Button } from "@/components/ui/button";
-import { StudioSections } from "@/components/configurator/StudioSections";
-import { StudioCategories } from "@/components/configurator/StudioCategories";
+import {
+  StudioJourney,
+  useStudioJourney,
+} from "@/components/configurator/StudioJourney";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -194,8 +196,8 @@ function Studio({
     setError("");
   };
   const select = (next: string) => {
-    setPage(next);
-    scrollStudioChoices(root.current);
+    const target = sections.find(s => s.categories.some(c => c.id === next));
+    if (target) journey.navigate(target.id, next);
   };
   const section =
     sections.find(s => s.categories.some(p => p.id === page)) ?? sections[0];
@@ -214,6 +216,37 @@ function Studio({
     c => c.id === settings.connectionId
   );
   const busy = save.isPending || quote.isPending || run.isPending;
+  const categoryValues: Record<string, string> = {
+    purpose: studio.objective || "Add an objective",
+    focus: `${settings.focus.length} areas selected`,
+    source: account?.name || "Choose an ad account",
+    quality: `${Math.round(settings.minimumConfidence * 100)}% minimum confidence`,
+    review:
+      studio.objective && account ? "Ready to review" : "Inputs to complete",
+    results: latest ? workflowRunStatusLabel(latest) : "No analysis yet",
+    history: `${runs.length} runs`,
+    plans: `${studio.experiments.length} experiment plans`,
+  };
+  const journey = useStudioJourney({
+    storageKey: `optimization:${organizationId}:${workflowId || "new"}`,
+    sections: sections.map(s => ({
+      ...s,
+      categories: s.categories.map(c => ({
+        ...c,
+        value: categoryValues[c.id],
+        needsInput:
+          (c.id === "source" && !account) ||
+          (c.id === "purpose" && !studio.objective),
+      })),
+    })),
+    section: section.id,
+    category: page,
+    initialFocus: !!initialPage,
+    onNavigate: (_, id) => {
+      setPage(id);
+      scrollStudioChoices(root.current);
+    },
+  });
   const go = (id?: string) => {
     if (
       !dirty ||
@@ -376,20 +409,8 @@ function Studio({
           </Button>
         </div>
       </header>
-      <StudioSections
-        label="Optimization Studio sections"
-        items={sections}
-        current={section.id}
-        onSelect={id =>
-          select(sections.find(s => s.id === id)!.categories[0].id)
-        }
-      >
+      <StudioJourney journey={journey} label="Optimization Studio sections">
         <div className="cfg-body">
-          <StudioCategories
-            items={section.categories}
-            current={page}
-            onSelect={select}
-          />
           {error && (
             <p role="alert" className="insight-notice">
               {error}
@@ -923,27 +944,8 @@ function Studio({
               />
             )}
           </fieldset>
-          <footer className="optimization-footer">
-            <Button
-              variant="outline"
-              disabled={index <= 0 || busy}
-              onClick={() => select(pages[index - 1].id)}
-            >
-              <ArrowLeft size={16} /> Previous
-            </Button>
-            <span>
-              {section.title} · {index + 1} of {pages.length}
-            </span>
-            <Button
-              variant="outline"
-              disabled={index >= pages.length - 1 || busy}
-              onClick={() => select(pages[index + 1].id)}
-            >
-              Continue <ArrowRight size={16} />
-            </Button>
-          </footer>
         </div>
-      </StudioSections>
+      </StudioJourney>
     </div>
   );
 }
