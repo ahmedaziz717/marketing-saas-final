@@ -1332,6 +1332,11 @@
     min-height: 0;
     aspect-ratio: auto;
   }
+  /* Portrait sprite cells are square; the compact gallery height distorts faces. */
+  .cfg-root .journey-editor .cfg-people-grid .cfg-card-art {
+    height: auto;
+    aspect-ratio: 1;
+  }
   .cfg-root .journey-editor .cfg-card-copy {
     padding: 10px;
   }

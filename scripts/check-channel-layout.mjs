@@ -159,6 +159,7 @@ try {
     ...[
       "creative-overview",
       "creative-editor",
+      "creative-people",
       "creative-checkpoint",
       "creative-video",
       "insights-studio",
@@ -212,6 +213,7 @@ try {
     ]),
     ...[
       "creative-editor",
+      "creative-people",
       "creative-video",
       "studio-ad-copy",
       "insights-studio",
@@ -287,7 +289,7 @@ try {
         `Fixture returned no test result: ${JSON.stringify(evaluation)}`
       );
     await page("Runtime.evaluate", { expression: inlineLiveBrandImages });
-    if (["model-picker", "video-ugc"].includes(item.page)) {
+    if (["model-picker", "video-ugc", "creative-people"].includes(item.page)) {
       const sheets = Object.fromEntries(
         await Promise.all(
           (await readdir("client/public/people"))
