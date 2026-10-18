@@ -25,6 +25,14 @@ export function scrollStudioChoices(container: HTMLElement | null) {
             ".cfg-categories, .cfg-content-title, .activation-section-title"
           ) ?? []
         ).find(element => !element.closest("[hidden]"));
+    // Keep the expanded preview visible while the choices already fit on screen.
+    if (journey && !mobile) {
+      const bounds = journey.getBoundingClientRect();
+      const top =
+        root?.querySelector(".cfg-heading")?.getBoundingClientRect().bottom ??
+        0;
+      if (bounds.top >= top && bounds.top < window.innerHeight - 220) return;
+    }
     target?.scrollIntoView?.({
       block: "start",
       behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches

@@ -21,6 +21,7 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Button } from "@/components/ui/button";
 import {
   StudioJourney,
+  StudioSetupSummary,
   useStudioJourney,
 } from "@/components/configurator/StudioJourney";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
@@ -357,6 +358,34 @@ function Studio({
           Save report
         </Button>
       </header>
+      <StudioSetupSummary
+        title="Report preview & summary"
+        name={config.name || "Your report"}
+        icon={BarChart3}
+        items={[
+          {
+            title: "Sources",
+            value: categoryValues.sources,
+            category: "sources",
+          },
+          {
+            title: "Metrics",
+            value: categoryValues.metrics,
+            category: "metrics",
+          },
+          {
+            title: "Schedule",
+            value: categoryValues.schedule,
+            category: "schedule",
+          },
+        ]}
+        onNavigate={id => {
+          const target = sections.find(s =>
+            s.categories.some(c => c.id === id)
+          );
+          if (target) journey.navigate(target.id, id);
+        }}
+      />
       <StudioJourney journey={journey} label="Insights Studio sections">
         <div className="cfg-body">
           {error && (

@@ -1173,3 +1173,457 @@
     padding-inline: 3px;
   }
 }
+
+/* The desktop editor and category overview share the same vertical space. */
+.journey-review-link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--cfg-muted);
+  font-size: 11px;
+}
+.journey-review-link button,
+.journey-review-close {
+  color: var(--cfg-violet);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 28px;
+  cursor: pointer;
+}
+.journey-review-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--cfg-soft);
+  border: 1px solid var(--cfg-line);
+  border-radius: 10px;
+}
+.journey-review-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.journey-review-panel p {
+  margin: 5px 0;
+  font-size: 11px;
+  color: var(--cfg-muted);
+}
+.journey-review-list button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cfg-line);
+  font-size: 11px;
+}
+.journey-review-list button strong {
+  grid-column: 1;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.journey-review-list button svg {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.journey-review-close {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.studio-collection-filter select {
+  max-width: 100%;
+  min-height: 36px;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 8px;
+  color: var(--cfg-text);
+  background: var(--cfg-surface);
+  font: inherit;
+  font-size: 12px;
+}
+.cfg-preview-history {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--cfg-muted);
+}
+.cfg-preview-history > summary {
+  cursor: pointer;
+  min-height: 24px;
+}
+@media (min-width: 701px) {
+  .studio-shortcuts:has(+ #workspace-content .studio-journey) {
+    display: none;
+  }
+  #workspace-content:has(.studio-journey) {
+    padding: 10px 18px;
+  }
+  .cfg-root:has(.studio-journey) {
+    padding: 0;
+  }
+  .cfg-root:has(.studio-journey) .cfg-heading .cfg-back {
+    display: none;
+  }
+  .journey-review-link button {
+    min-height: 20px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-summary span {
+    line-height: 1.15;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-summary strong {
+    margin-top: 1px;
+    line-height: 1.2;
+  }
+  .journey-editor .cfg-content-title:has(+ .studio-choice-picker) {
+    display: none;
+  }
+  .studio-choice-toolbar > h3 {
+    font-size: 18px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .cfg-root .journey-editor .cfg-card-art {
+    height: 120px;
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+  .cfg-root .journey-editor .cfg-card-copy {
+    padding: 10px;
+  }
+  .cfg-root .journey-editor .cfg-card-copy h3 {
+    font-size: 13px;
+    margin-bottom: 5px;
+    line-height: 1.3;
+  }
+  .cfg-root .journey-editor .cfg-card-copy p {
+    -webkit-line-clamp: 2;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .cfg-root .journey-editor .cfg-info {
+    margin: 0 10px 4px;
+    min-height: 24px;
+    padding: 0;
+    line-height: 18px;
+  }
+  .cfg-root:has(.studio-journey) .cfg-heading {
+    padding: 4px 0;
+    margin-bottom: 8px;
+  }
+  .studio-journey {
+    margin-top: 8px;
+  }
+  .journey-sections {
+    margin-bottom: 6px;
+    position: sticky;
+    top: calc(var(--cfg-shell-height) + var(--cfg-header-height));
+    z-index: 30;
+    background: var(--cfg-bg);
+    padding-block: 4px;
+  }
+  .journey-sections > button {
+    min-height: 40px;
+    padding: 7px 10px;
+    gap: 8px;
+    border-radius: 9px;
+  }
+  .journey-sections small,
+  .journey-section-progress {
+    display: none;
+  }
+  .journey-sections b {
+    align-self: center;
+  }
+  .journey-panel {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    gap: 16px;
+    padding: 12px;
+    align-items: start;
+  }
+  .journey-overview {
+    min-width: 0;
+  }
+  .journey-heading {
+    display: block;
+    margin-bottom: 6px;
+  }
+  .journey-heading h2 {
+    font-size: 17px;
+  }
+  .journey-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .journey-category {
+    min-height: 32px;
+    padding: 2px 9px;
+    border-radius: 8px;
+    position: relative;
+  }
+  .journey-category-name {
+    line-height: 1.1;
+    font-size: 11px;
+    padding-right: 21px;
+  }
+  .journey-mark {
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .journey-category strong {
+    font-size: 12px;
+    line-height: 1.2;
+    margin: 1px 22px 0 0;
+  }
+  .journey-category small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .journey-editor {
+    margin: 0;
+    padding: 0 0 0 16px;
+    border: 0;
+    border-left: 1px solid var(--cfg-line);
+  }
+  .journey-editor .cfg-content-title {
+    position: static;
+    margin: 0 0 10px;
+    padding: 0;
+    background: none;
+  }
+  .journey-editor .cfg-content-title h2 {
+    font-size: 19px;
+  }
+  .journey-editor .cfg-content-title .cfg-eyebrow {
+    display: none;
+  }
+  .journey-discovery {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    padding: 8px 12px;
+  }
+  .journey-discovery small {
+    display: none;
+  }
+  .journey-pager {
+    margin-top: 14px;
+    padding-top: 10px;
+  }
+  .journey-summary {
+    margin: 6px 0 8px;
+  }
+  .journey-summary-toggle {
+    padding: 3px 12px;
+    min-height: 30px;
+    gap: 8px;
+  }
+  .journey-summary-toggle > img,
+  .journey-summary-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+  }
+  .journey-summary-toggle > span:not(.journey-summary-icon) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .journey-summary-toggle small {
+    margin: 0;
+  }
+  .journey-summary-toggle strong {
+    font-size: 12px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-stage {
+    grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.5fr);
+    gap: 16px;
+    padding: 7px 12px;
+    margin-bottom: 0;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-stage .cfg-preview,
+  .journey-summary:not([data-forced="true"]) .cfg-stage .cfg-preview > img,
+  .journey-summary:not([data-forced="true"])
+    .cfg-stage
+    .cfg-preview
+    > .cfg-art {
+    min-height: 0;
+    height: 100px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-preview > img {
+    padding: 6px 8px 32px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-preview-caption {
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-preview-caption strong {
+    font-size: 15px;
+    margin-top: 4px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-build {
+    padding: 0;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-build-top {
+    margin-bottom: 5px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-build-top .cfg-eyebrow {
+    display: none;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-build > .cfg-field {
+    margin: 0;
+    gap: 0;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-build > .cfg-field > input {
+    font-size: 18px;
+    min-height: 32px;
+    padding: 0 0 5px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-summary {
+    margin: 8px 0 0;
+    gap: 5px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-summary button {
+    padding: 3px 19px 3px 8px;
+  }
+  .journey-summary:not([data-forced="true"]) .cfg-summary strong {
+    font-size: 11px;
+  }
+  .journey-summary:not([data-forced="true"])
+    .activation-preview
+    > [aria-label="Content preview"] {
+    max-height: 168px;
+    overflow: auto;
+  }
+  .journey-summary:not([data-forced="true"]) .activation-summary p {
+    margin-top: 6px;
+    font-size: 11px;
+  }
+  .journey-editor .studio-choice-toolbar {
+    gap: 8px;
+    margin: 0 0 9px;
+    flex-wrap: nowrap;
+  }
+  .journey-editor .studio-choice-toolbar > p {
+    margin-right: auto;
+    flex-shrink: 0;
+  }
+  .journey-editor .studio-choice-toolbar small {
+    display: none;
+  }
+  .journey-editor .studio-choice-search {
+    width: 210px;
+    padding: 8px;
+  }
+  .journey-editor .studio-choice-selection {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+  .journey-editor .studio-choice-grid {
+    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+  }
+  .journey-editor .studio-choice-grid .cfg-card-copy {
+    padding: 9px 10px;
+  }
+  .journey-editor .studio-choice-grid .cfg-card-copy h3 {
+    font-size: 13px;
+  }
+  .journey-editor .studio-choice-grid .cfg-card-copy p {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .cfg-root:has(.studio-journey) .cfg-bottom {
+    padding: 10px 16px;
+  }
+}
+@media (min-width: 701px) and (max-width: 1000px) {
+  .journey-panel {
+    grid-template-columns: 175px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .journey-editor {
+    padding-left: 12px;
+  }
+  .journey-editor .studio-choice-toolbar {
+    flex-wrap: wrap;
+  }
+  .journey-summary-toggle small {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .journey-editor .studio-choice-toolbar > h3 {
+    display: none;
+  }
+  .journey-review-link button {
+    min-height: 36px;
+  }
+  .journey-review-list button {
+    min-height: 44px;
+  }
+  .journey-review-close {
+    min-height: 44px;
+  }
+  .studio-collection-filter {
+    flex: 1;
+  }
+  .studio-collection-filter select {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+.journey-setup-summary {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--cfg-line);
+}
+.journey-setup-art {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 110px;
+  border-radius: 10px;
+  color: var(--cfg-violet);
+  background: linear-gradient(135deg, var(--cfg-soft), var(--cfg-bg));
+}
+.journey-setup-art span {
+  font-size: 11px;
+}
+.journey-setup-summary h2 {
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.journey-setup-summary .cfg-summary {
+  margin: 8px 0 0;
+}
+.journey-setup-summary .cfg-summary strong {
+  white-space: normal;
+}
+@media (max-width: 700px) {
+  .journey-setup-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .journey-setup-art {
+    min-height: 70px;
+  }
+  .journey-setup-summary .cfg-summary {
+    grid-template-columns: 1fr;
+  }
+}

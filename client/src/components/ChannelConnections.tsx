@@ -1,3 +1,4 @@
+import { PartnerLogo } from "./PartnerLogo";
 import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Check, Facebook, Plug, RefreshCw, Unplug } from "lucide-react";
@@ -70,13 +71,10 @@ export function ChannelConnectionCard({ channel }: { channel: Channel }) {
   return (
     <article className="surface flex min-w-0 flex-col p-6">
       <div className="flex items-center justify-between gap-2">
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
-          {channel === "facebook" ? (
-            <Facebook />
-          ) : (
-            <span className="text-3xl font-semibold">∞</span>
-          )}
-        </div>
+        <PartnerLogo
+          slug={channel === "facebook" ? "facebook" : "meta"}
+          name={channel === "facebook" ? "Facebook" : "Meta"}
+        />
         <span className="rounded-full bg-muted px-3 py-1 text-xs">
           {query.isLoading
             ? "Checking..."

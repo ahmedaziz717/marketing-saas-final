@@ -8,12 +8,6 @@ import {
   Eye,
   type LucideIcon,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import "@/styles/studioExperience.css";
 
 export type JourneyCategory = {
@@ -82,14 +76,8 @@ export function useStudioJourney({
       !!window.matchMedia?.("(max-width: 700px)").matches
   );
   const [focused, setFocused] = useState(initialFocus);
-  const [pending, setPending] = useState<{
-    section: string;
-    category: string;
-    focus: boolean;
-  } | null>(null);
-  const [prompted, setPrompted] = useState<string[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const previousKey = useRef(key);
-  const returnFocus = useRef<HTMLElement | null>(null);
   const scopeChanged = previousKey.current !== key;
   useEffect(() => {
     const query = window.matchMedia?.("(max-width: 700px)");
@@ -102,8 +90,7 @@ export function useStudioJourney({
     if (previousKey.current !== key) {
       previousKey.current = key;
       setFocused(initialFocus);
-      setPending(null);
-      setPrompted([]);
+      setReviewOpen(false);
     }
   }, [key, initialFocus]);
   const active = sections.find(s => s.id === section) ?? sections[0];
@@ -139,7 +126,7 @@ export function useStudioJourney({
     category: string;
     focus: boolean;
   }) => {
-    setPending(null);
+    setReviewOpen(false);
     setFocused(target.focus);
     onNavigate(target.section, target.category);
   };
@@ -157,26 +144,10 @@ export function useStudioJourney({
       category: targetCategory.id,
       focus: !!categoryId,
     };
-    if (
-      sectionId !== section &&
-      unseen.length &&
-      !prompted.includes(section) &&
-      !memory.accepted.includes(section)
-    ) {
-      returnFocus.current = document.activeElement as HTMLElement;
-      setPrompted(previous => [...previous, section]);
-      setPending(target);
-    } else commit(target);
-  };
-  const accept = () => {
-    changeMemory(previous => ({
-      ...previous,
-      accepted: Array.from(new Set([...previous.accepted, section])),
-    }));
-    if (pending) commit(pending);
+    commit(target);
   };
   const explore = (id = unseen[0]?.id) => {
-    setPending(null);
+    setReviewOpen(false);
     if (id) {
       setFocused(true);
       onNavigate(section, id);
@@ -193,21 +164,20 @@ export function useStudioJourney({
     focused: !scopeChanged && focused,
     memory,
     unseen,
-    pending,
+    reviewOpen,
     eligible,
     sectionIndex,
     categoryIndex,
     nextSection,
     navigate,
     explore,
-    accept,
-    returnFocus,
-    dismiss: () => setPending(null),
+    review: () => setReviewOpen(value => !value),
+    dismiss: () => setReviewOpen(false),
     overview: () => setFocused(false),
     reveal: () => setFocused(true),
     reset: () => {
       changeMemory(empty);
-      setPrompted([]);
+      setReviewOpen(false);
       setFocused(false);
     },
     previous:
@@ -242,7 +212,7 @@ export function StudioJourney({
   const root = useRef<HTMLDivElement>(null);
   const viewed = j.eligible.length - j.unseen.length;
   const progress = `${viewed} of ${j.eligible.length} categories viewed`;
-  const hasMissing = j.unseen.some(c => c.needsInput);
+  const reviewId = useId();
   const cards = (
     <div
       className="journey-categories"
@@ -355,17 +325,58 @@ export function StudioJourney({
           <div className="journey-heading">
             <div>
               <h2>{j.active.title}</h2>
-              <p>
-                Make it yours. Explore each category or keep your current
-                choices.
-              </p>
+              <div className="journey-review-link" aria-label={progress}>
+                <span>
+                  {j.unseen.length
+                    ? `${j.unseen.length} ${j.unseen.length === 1 ? "category" : "categories"} unviewed`
+                    : "All categories viewed"}
+                </span>
+                {!!j.unseen.length && (
+                  <button
+                    type="button"
+                    aria-expanded={j.reviewOpen}
+                    aria-controls={reviewId}
+                    onClick={j.review}
+                  >
+                    Review
+                  </button>
+                )}
+              </div>
             </div>
-            <span>
-              <Eye size={14} />
-              {progress}
-            </span>
           </div>
           {cards}
+          {j.reviewOpen && (
+            <section
+              id={reviewId}
+              className="journey-review-panel"
+              aria-label="Review unviewed choices"
+            >
+              <h3>Your current choices</h3>
+              <p>Explore any category whenever you like.</p>
+              <div className="journey-review-list">
+                {j.unseen.map(item => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => j.explore(item.id)}
+                  >
+                    <span>{item.title}</span>
+                    <strong>
+                      {item.needsInput ? "Not set · Required" : item.value}
+                    </strong>
+                    <ArrowRight size={14} />
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="journey-review-close"
+                onClick={j.dismiss}
+              >
+                Close review
+              </button>
+            </section>
+          )}
         </div>
         <div className="journey-focus-heading" hidden={!j.mobile || !j.focused}>
           <button type="button" onClick={j.overview}>
@@ -446,66 +457,6 @@ export function StudioJourney({
           )}
         </div>
       </div>
-      <Dialog
-        open={!!j.pending}
-        onOpenChange={open => {
-          if (!open) j.dismiss();
-        }}
-      >
-        <DialogContent
-          className="journey-checkpoint"
-          onCloseAutoFocus={event => {
-            event.preventDefault();
-            j.returnFocus.current?.focus();
-          }}
-        >
-          <span className="journey-sheet-icon">
-            <Compass size={23} />
-          </span>
-          <DialogTitle>
-            {hasMissing ? "Review these choices?" : "Keep these defaults?"}
-          </DialogTitle>
-          <DialogDescription>
-            You haven’t opened {j.unseen.length}{" "}
-            {j.unseen.length === 1 ? "category" : "categories"} in{" "}
-            {j.active.title}. Here’s what’s currently selected.
-          </DialogDescription>
-          <div className="journey-checkpoint-list">
-            {j.unseen.map(item => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => j.explore(item.id)}
-              >
-                <span>{item.title}</span>
-                <strong>
-                  {item.needsInput ? "Not set" : item.value}
-                  <ArrowRight size={14} />
-                </strong>
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="journey-primary"
-            onClick={() => j.explore()}
-          >
-            Explore remaining categories
-            <ArrowRight size={16} />
-          </button>
-          <button type="button" className="journey-keep" onClick={j.accept}>
-            {hasMissing
-              ? "Continue with current choices"
-              : "Keep defaults & continue"}
-          </button>
-          <p className="journey-sheet-note">
-            You can change these later.
-            {hasMissing
-              ? " Required inputs still need to be completed before running."
-              : ""}
-          </p>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -523,11 +474,19 @@ export function StudioSummary({
   forceOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(
+    () =>
+      typeof window === "undefined" ||
+      !window.matchMedia?.("(max-width: 700px)").matches
+  );
   const id = useId();
   const expanded = open || forceOpen;
   return (
-    <section className="journey-summary" data-forced={forceOpen}>
+    <section
+      className="journey-summary"
+      data-forced={forceOpen}
+      data-expanded={expanded}
+    >
       <button
         type="button"
         className="journey-summary-toggle"
@@ -553,5 +512,46 @@ export function StudioSummary({
         {children}
       </div>
     </section>
+  );
+}
+
+/** A compact live setup preview for studios whose output is a report or plan. */
+export function StudioSetupSummary({
+  title,
+  name,
+  icon: Icon,
+  items,
+  onNavigate,
+}: {
+  title: string;
+  name: string;
+  icon: LucideIcon;
+  items: Array<{ title: string; value: string; category: string }>;
+  onNavigate: (category: string) => void;
+}) {
+  return (
+    <StudioSummary title={title} subtitle={name}>
+      <div className="journey-setup-summary">
+        <div className="journey-setup-art" aria-hidden="true">
+          <Icon size={42} />
+          <span>Live setup</span>
+        </div>
+        <div>
+          <h2>{name}</h2>
+          <div className="cfg-summary">
+            {items.map(item => (
+              <button
+                type="button"
+                key={item.category}
+                onClick={() => onNavigate(item.category)}
+              >
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </StudioSummary>
   );
 }

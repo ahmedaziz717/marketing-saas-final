@@ -210,6 +210,13 @@ try {
       { width: 1705, height: 864, role: "owner", page },
       { width: 375, height: 750, role: "owner", page },
     ]),
+    ...[
+      "creative-editor",
+      "creative-video",
+      "studio-ad-copy",
+      "insights-studio",
+      "optimization-studio",
+    ].map(page => ({ width: 1366, height: 768, role: "owner", page })),
     { width: 320, height: 568, role: "creator", page: "publishing" },
     { width: 375, height: 750, role: "creator", page: "billing-usage" },
     { width: 375, height: 750, role: "creator", page: "publishing" },
@@ -313,6 +320,50 @@ try {
       expression: `(() => { const art = ${JSON.stringify(art)}; for (const img of document.querySelectorAll('img')) { if (art[img.getAttribute('src')]) img.src = art[img.getAttribute('src')]; } })()`,
     });
     await new Promise(resolve => setTimeout(resolve, 60));
+    if (
+      [
+        "creative-editor",
+        "creative-video",
+        "insights-studio",
+        "optimization-studio",
+        "studio-ad-copy",
+      ].includes(item.page) &&
+      item.width > 700
+    ) {
+      const spacing = await page("Runtime.evaluate", {
+        expression: `(() => {
+          window.scrollTo(0, 0);
+          for (let el = document.querySelector('.cfg-root'); el; el = el.parentElement) el.scrollTop = 0;
+          const rect = selector => {
+            const r = document.querySelector(selector)?.getBoundingClientRect();
+            return r && {top: r.top, bottom: r.bottom, height: r.height};
+          };
+          return {
+            preview: rect('.journey-summary'),
+            expanded: document.querySelector('.journey-summary')?.dataset.expanded === 'true',
+            choices: rect('.journey-editor .cfg-card'),
+            footer: rect('.cfg-bottom'),
+            categories: rect('.journey-categories')
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const layout = spacing.result.value;
+      report.aboveFold = layout;
+      if (
+        ["creative-editor", "creative-video"].includes(item.page) &&
+        (!layout?.expanded ||
+          layout.preview?.top < 64 ||
+          !layout.choices ||
+          !layout.footer ||
+          !layout.categories ||
+          layout.choices.bottom > layout.footer.top ||
+          layout.categories.bottom > layout.footer.top)
+      ) {
+        report.passed = false;
+        report.error = `Expanded preview, first choice card and category rail must fit above the footer: ${JSON.stringify(layout)}`;
+      }
+    }
     const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
     const image = await page("Page.captureScreenshot", { format: "png" });
     await writeFile(

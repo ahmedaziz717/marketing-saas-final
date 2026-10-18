@@ -1,3 +1,4 @@
+import { PartnerLogo } from "@/components/PartnerLogo";
 import { OptimizationTemplates } from "@/components/OptimizationTemplates";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -136,7 +137,15 @@ function AppsWorkspace({
             {tools[family].map(({ name, description, href, icon: Icon }) => (
               <article className="wf-app-card" key={href}>
                 <span className="wf-app-icon">
-                  <Icon size={24} />
+                  {href === "/app/advertising/meta" ||
+                  href === "/app/social/facebook" ? (
+                    <PartnerLogo
+                      slug={href.includes("facebook") ? "facebook" : "meta"}
+                      name={href.includes("facebook") ? "Facebook" : "Meta"}
+                    />
+                  ) : (
+                    <Icon size={24} />
+                  )}
                 </span>
                 <h3>{name}</h3>
                 <p>{description}</p>

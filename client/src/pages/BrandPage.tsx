@@ -1,3 +1,5 @@
+import { BrandGuidelineImport } from "@/components/BrandGuidelineImport";
+import { BRAND_VOICE_MAX_LENGTH } from "@shared/brandGuidelines";
 import { BrandWebsiteScanner } from "@/components/BrandWebsiteScanner";
 import { useEffect, useRef, useState } from "react";
 import { Check, FolderOpen, ScanSearch } from "lucide-react";
@@ -298,8 +300,36 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
                     id="brand-voice"
                     className="mt-2 min-h-28"
                     value={form.voice}
+                    aria-describedby="brand-voice-count"
+                    aria-invalid={form.voice.length > BRAND_VOICE_MAX_LENGTH}
                     onChange={e => setForm({ ...form, voice: e.target.value })}
                   />
+                  <p
+                    id="brand-voice-count"
+                    className={`mt-2 text-xs ${form.voice.length > BRAND_VOICE_MAX_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
+                    role={
+                      form.voice.length > BRAND_VOICE_MAX_LENGTH
+                        ? "alert"
+                        : undefined
+                    }
+                  >
+                    {form.voice.length.toLocaleString()} / 30,000 characters
+                    {form.voice.length > BRAND_VOICE_MAX_LENGTH
+                      ? " · Shorten your brand voice before saving."
+                      : " · Tone, audience, writing style, and examples."}
+                  </p>
+                  {canManage && (
+                    <BrandGuidelineImport
+                      key={organizationId}
+                      organizationId={organizationId!}
+                      voice={form.voice}
+                      disabled={update.isPending}
+                      onApply={voice => {
+                        dirty.current = true;
+                        setForm(current => ({ ...current, voice }));
+                      }}
+                    />
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="brand-claims">Required claims</Label>
@@ -328,13 +358,19 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
                 <div className="mt-7 flex gap-3">
                   <Button
                     variant="outline"
-                    disabled={update.isPending}
+                    disabled={
+                      update.isPending ||
+                      form.voice.length > BRAND_VOICE_MAX_LENGTH
+                    }
                     onClick={() => save(false)}
                   >
                     Save draft
                   </Button>
                   <Button
-                    disabled={update.isPending}
+                    disabled={
+                      update.isPending ||
+                      form.voice.length > BRAND_VOICE_MAX_LENGTH
+                    }
                     onClick={() => save(true)}
                   >
                     Save & activate

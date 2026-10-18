@@ -11,12 +11,12 @@ export const brandAssets = Object.fromEntries(
       .map(name => "/website/" + name)
       .concat(
         (await readdir("client/public/integrations"))
-          .filter(name => name.endsWith(".svg"))
+          .filter(name => /\.(svg|png|webp|ico)$/.test(name))
           .map(name => "/integrations/" + name)
       )
       .map(async url => [
         url,
-        "data:image/svg+xml;base64," +
+        `data:${url.endsWith(".svg") ? "image/svg+xml" : url.endsWith(".ico") ? "image/x-icon" : url.endsWith(".webp") ? "image/webp" : "image/png"};base64,` +
           (await readFile("client/public" + url)).toString("base64"),
       ])
   )

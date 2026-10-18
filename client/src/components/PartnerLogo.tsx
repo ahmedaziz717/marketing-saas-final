@@ -1,42 +1,26 @@
-const colors: Record<string, string> = {
-  shopify: "#5E8E3E",
-  bigcommerce: "#121118",
-  woocommerce: "#96588A",
-  meta: "#0866FF",
-  googleads: "#4285F4",
-  microsoftbing: "#008373",
-  tiktok: "#111111",
-  linkedin: "#0A66C2",
-  pinterest: "#E60023",
-  klaviyo: "#111111",
-  mailchimp: "#111111",
-  hubspot: "#FF7A59",
-  brevo: "#0B996E",
-  activecampaign: "#004CFF",
-  omnisend: "#176652",
-  googleanalytics: "#E37400",
-};
-export function PartnerLogo({ slug, name }: { slug: string; name: string }) {
+import { partnerLogoSrc } from "@shared/partnerLogos";
+
+/** The plate may be styled; the provider's original mark must remain unchanged. */
+export function PartnerLogo({
+  slug,
+  name,
+  size = 48,
+}: {
+  slug: string;
+  name: string;
+  size?: number;
+}) {
   return (
-    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border bg-white p-2.5">
-      {["activecampaign", "klaviyo", "omnisend"].includes(slug) ? (
-        <img
-          src={`/integrations/${slug}.svg`}
-          alt={`${name} logo`}
-          className="h-full w-full object-contain"
-        />
-      ) : (
-        <span
-          role="img"
-          aria-label={`${name} logo`}
-          className="block h-full w-full"
-          style={{
-            backgroundColor: colors[slug] || "#222",
-            mask: `url(/integrations/${slug}.svg) center / contain no-repeat`,
-            WebkitMask: `url(/integrations/${slug}.svg) center / contain no-repeat`,
-          }}
-        />
-      )}
+    <span
+      className="partner-logo inline-flex shrink-0 items-center justify-center rounded-xl border bg-white"
+      style={{ width: size, height: size, padding: Math.max(5, size * 0.16) }}
+    >
+      <img
+        src={partnerLogoSrc(slug)}
+        alt={`${name} logo`}
+        className="h-full w-full object-contain"
+        style={{ filter: "none" }}
+      />
     </span>
   );
 }

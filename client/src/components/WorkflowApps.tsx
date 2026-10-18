@@ -1,3 +1,4 @@
+import { PartnerLogo } from "./PartnerLogo";
 import { WorkflowDataResult } from "./WorkflowDataResult";
 import { StudioImagePreview } from "./configurator/StudioImagePreview";
 import { activationHref } from "@shared/contentWorkflow";
@@ -17,7 +18,7 @@ import { AppWindow, ArrowRight, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { workflowSections, workflowValueText } from "@shared/workflowPlatform";
-import type { WorkflowFamily } from "@shared/creativeWorkflow";
+import { workflowNodes, type WorkflowFamily } from "@shared/creativeWorkflow";
 import { Button } from "./ui/button";
 import { WorkflowRunReview } from "./WorkflowRunReview";
 import { workflowRunStatusLabel } from "@shared/workflowRunActivity";
@@ -68,6 +69,29 @@ export function WorkflowApps({
                 <AppWindow size={24} />
               </span>
               <span className="wf-version">v{app.version}</span>
+              <div className="flex gap-2">
+                {Array.from(
+                  new Set(
+                    app.graph.nodes.flatMap(node => {
+                      const channel =
+                        workflowNodes[node.type]?.channel ??
+                        node.config.field?.connectionChannel;
+                      return channel === "meta_ads"
+                        ? ["meta"]
+                        : channel === "facebook"
+                          ? ["facebook"]
+                          : [];
+                    })
+                  )
+                ).map(slug => (
+                  <PartnerLogo
+                    key={slug}
+                    slug={slug}
+                    name={slug === "meta" ? "Meta" : "Facebook"}
+                    size={36}
+                  />
+                ))}
+              </div>
               <h3>{app.name}</h3>
               <p>
                 {app.description ||

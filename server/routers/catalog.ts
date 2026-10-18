@@ -1,3 +1,4 @@
+import { brandVoiceSchema } from "../../shared/brandGuidelines";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -544,7 +545,7 @@ export const catalogRouter = router({
         draft: z.object({
           companyName: z.string().min(1).max(160),
           summary: z.string().max(4000),
-          voice: z.string().max(4000),
+          voice: brandVoiceSchema,
           colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).max(24),
           fonts: z.array(z.string().max(180)).max(16),
           requiredClaims: z.array(z.string().max(1000)).max(40),
