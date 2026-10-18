@@ -254,7 +254,7 @@ it("keeps library filters, Brand, and administrative Settings distinct", () => {
   expect(workspacePageLabel("/app/settings/company")).toBe("Brand");
   expect(workspacePageLabel("/app/brand")).toBe("Brand");
   expect(workspacePageLabel("/app/settings/catalog/import")).toBe(
-    "Settings / Catalog & offerings"
+    "Product Catalog / Import website"
   );
   expect(workspaceSection("/app/settings/company")).toBe("Brand");
   expect(screen.getByRole("link", { name: "Brand" }).getAttribute("href")).toBe(
@@ -268,6 +268,44 @@ it("keeps library filters, Brand, and administrative Settings distinct", () => {
     screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")
   ).toBeNull();
 });
+it.each([
+  { mobile: false, compact: false },
+  { mobile: false, compact: true },
+  { mobile: true, compact: true },
+])(
+  "puts Product Catalog directly above Brand and navigates in $mobile/$compact mode",
+  ({ mobile, compact }) => {
+    viewport.mobile = mobile;
+    const router = setup("/app/settings/team", compact);
+    fireEvent.click(screen.getByRole("button", { name: "Open drawer" }));
+    const catalog = screen.getByRole("link", { name: "Product Catalog" });
+    expect(catalog.closest("li")?.nextElementSibling?.textContent).toBe(
+      "Brand"
+    );
+    fireEvent.click(catalog);
+    expect(router.history.at(-1)).toBe("/app/catalog");
+    expect(catalog.getAttribute("aria-current")).toBe("page");
+    expect(
+      screen
+        .getByRole("link", { name: "Settings" })
+        .getAttribute("aria-current")
+    ).toBeNull();
+    if (mobile)
+      expect(screen.getByTestId("sidebar-state").textContent).toBe(
+        "collapsed/false"
+      );
+    for (const path of [
+      "/app/catalog",
+      "/app/catalog/import",
+      "/app/settings/catalog",
+      "/app/settings/catalog/import",
+      "/app/import",
+    ]) {
+      expect(workspaceSection(path)).toBe("Catalog");
+      expect(workspacePageLabel(path)).toMatch(/^Product Catalog/);
+    }
+  }
+);
 it("keeps app editors, historic links, and roadmap labels understandable", () => {
   expect(workspacePageLabel("/app/advertising/meta/legacy")).toBe(
     "Activate / Meta Ads"

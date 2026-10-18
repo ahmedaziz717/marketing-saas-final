@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FolderOpen,
   House,
+  PackageSearch,
   Palette,
   Send,
   Settings,
@@ -38,7 +39,14 @@ export type WorkspaceNavItem = {
   label: string;
   path: string;
   children?: Child[];
-  group?: "Create" | "Activate" | "Measure" | "Optimize" | "Brand" | "Settings";
+  group?:
+    | "Create"
+    | "Activate"
+    | "Measure"
+    | "Optimize"
+    | "Catalog"
+    | "Brand"
+    | "Settings";
   aliases?: string[];
   roadmap?: boolean;
 };
@@ -130,6 +138,13 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     ],
   },
   {
+    icon: PackageSearch,
+    label: "Product Catalog",
+    path: "/app/catalog",
+    group: "Catalog",
+    aliases: ["/app/settings/catalog", "/app/import"],
+  },
+  {
     icon: Palette,
     label: "Brand",
     path: "/app/brand",
@@ -141,7 +156,7 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     label: "Settings",
     path: "/app/settings",
     group: "Settings",
-    aliases: ["/app/roadmap", "/app/catalog", "/app/import"],
+    aliases: ["/app/roadmap"],
   },
 ];
 const matchesPath = (path: string, location: string) =>
@@ -180,12 +195,18 @@ export function workspaceSection(location: string) {
   );
 }
 export function workspacePageLabel(location: string, search = "") {
+  if (
+    location === "/app/import" ||
+    matchesPath("/app/catalog", location) ||
+    matchesPath("/app/settings/catalog", location)
+  )
+    return location.endsWith("/import")
+      ? "Product Catalog / Import website"
+      : "Product Catalog";
   if (location === "/app/brand" || location === "/app/settings/company")
     return "Brand";
   if (location === "/app/settings" || location.startsWith("/app/settings/"))
     return `Settings / ${settingsSectionForPath(location).label}`;
-  if (["/app/catalog", "/app/import"].includes(location))
-    return "Settings / Catalog & offerings";
   if (location === "/app/roadmap") return "Settings / Product roadmap";
   // Historic channel links remain usable without duplicating studio navigation.
   const legacyActivation = [

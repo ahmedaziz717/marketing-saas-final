@@ -918,6 +918,7 @@
 }
 [data-workflow="Settings"],
 [data-workflow="Brand"],
+[data-workflow="Catalog"],
 [data-workflow="Home"] {
   --workflow-color: #535f79;
   --workflow-soft: #edf0f6;
@@ -940,6 +941,7 @@
 }
 .dark [data-workflow="Settings"],
 .dark [data-workflow="Brand"],
+.dark [data-workflow="Catalog"],
 .dark [data-workflow="Home"] {
   --workflow-color: #b2bfd5;
   --workflow-soft: #293141;

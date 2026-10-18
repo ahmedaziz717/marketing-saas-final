@@ -2,7 +2,6 @@ import { offeringLabel } from "@shared/businessProfile";
 import { CatalogSources } from "@/components/CatalogSources";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { SettingsLayout } from "@/components/SettingsLayout";
 import {
   Check,
   Edit3,
@@ -68,7 +67,10 @@ type Editable = {
 };
 
 function CatalogContent() {
-  const { organizationId } = useWorkspace();
+  const { organizationId, membership } = useWorkspace();
+  const canReview = ["owner", "admin", "reviewer"].includes(
+    membership?.role ?? ""
+  );
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const searchParams = new URLSearchParams(useSearch());
@@ -77,26 +79,34 @@ function CatalogContent() {
     requestedTab === "services" || requestedTab === "sources"
       ? requestedTab
       : "products";
-  const setTab = (value: string) =>
-    setLocation(`/app/settings/catalog?view=${value}`);
+  const setTab = (value: string) => setLocation(`/app/catalog?view=${value}`);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [category, setCategory] = useState("all");
   const [offset, setOffset] = useState(0);
+  const filters = {
+    search,
+    status: status as "all" | "pending" | "approved" | "rejected",
+    category,
+    kind: tab === "services" ? ("services" as const) : ("products" as const),
+  };
   const query = trpc.catalog.overview.useQuery(
     {
       organizationId: organizationId!,
       offset,
-      search,
-      status: status as "all" | "pending" | "approved" | "rejected",
-      category,
-      kind: tab === "services" ? "services" : "products",
+      ...filters,
     },
     { enabled: !!organizationId }
   );
   const [selected, setSelected] = useState<number[]>([]);
+  const [allMatching, setAllMatching] = useState(false);
+  const clearSelection = () => {
+    setSelected([]);
+    setAllMatching(false);
+  };
   useEffect(() => {
     setSelected([]);
+    setAllMatching(false);
     setOffset(0);
   }, [tab, organizationId]);
   const [editing, setEditing] = useState<Editable | null>(null);
@@ -119,10 +129,13 @@ function CatalogContent() {
     onError: error => toast.error(error.message),
   });
   const bulk = trpc.catalog.bulkReview.useMutation({
-    onSuccess: async result => {
-      setSelected([]);
+    onSuccess: async (result, variables) => {
+      clearSelection();
+      setOffset(0);
       await refresh();
-      toast.success(`${result.updated} products updated`);
+      toast.success(
+        `${result.updated} catalog ${result.updated === 1 ? "entry" : "entries"} ${variables.decision}`
+      );
     },
     onError: error => toast.error(error.message),
   });
@@ -171,27 +184,33 @@ function CatalogContent() {
       software: 5,
       service: 6,
     };
-    return (query.data?.products ?? [])
-      .filter(
-        product =>
-          (tab === "services"
-            ? product.recordType === "service"
-            : product.recordType !== "service") &&
-          (status === "all" || product.status === status) &&
-          (category === "all" || product.category === category) &&
-          `${product.name} ${product.sku ?? ""} ${product.category ?? ""} ${product.recordType}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
-      )
-      .sort(
-        (a, b) =>
-          (categoryPriority[a.category ?? ""] ?? 20) -
-            (categoryPriority[b.category ?? ""] ?? 20) ||
-          (typePriority[a.recordType] ?? 20) -
-            (typePriority[b.recordType] ?? 20) ||
-          a.name.localeCompare(b.name)
-      );
-  }, [query.data?.products, search, status, category, tab]);
+    return [...(query.data?.products ?? [])].sort(
+      (a, b) =>
+        (categoryPriority[a.category ?? ""] ?? 20) -
+          (categoryPriority[b.category ?? ""] ?? 20) ||
+        (typePriority[a.recordType] ?? 20) -
+          (typePriority[b.recordType] ?? 20) ||
+        a.name.localeCompare(b.name)
+    );
+  }, [query.data?.products]);
+  const visibleIds = products.map(product => product.id);
+  const selectedIds = selected.filter(id => visibleIds.includes(id));
+  const selectedCount = allMatching
+    ? (query.data?.total ?? 0)
+    : selectedIds.length;
+  const pageSelected =
+    products.length > 0 &&
+    (allMatching || selectedIds.length === products.length);
+  const selectionDisabled =
+    !canReview || bulk.isPending || review.isPending || query.isFetching;
+  const reviewSelected = (decision: "approved" | "rejected") => {
+    if (!selectedCount || selectionDisabled) return;
+    bulk.mutate({
+      organizationId: organizationId!,
+      decision,
+      ...(allMatching ? { filter: filters } : { productIds: selectedIds }),
+    });
+  };
   const summary = useMemo(
     () => ({
       products: query.data?.total ?? 0,
@@ -204,7 +223,7 @@ function CatalogContent() {
           0
         ) ?? 0,
     }),
-    [query.data?.products]
+    [query.data?.products, query.data?.total]
   );
   const beginEdit = (product: (typeof products)[number]) =>
     setEditing({
@@ -256,9 +275,10 @@ function CatalogContent() {
           key={t}
           variant={tab === t ? "default" : "ghost"}
           className="rounded-full capitalize"
+          disabled={bulk.isPending}
           onClick={() => {
             setTab(t);
-            setSelected([]);
+            clearSelection();
             setOffset(0);
           }}
         >
@@ -289,13 +309,13 @@ function CatalogContent() {
         description="Your products, services, subscriptions, and platform offerings, connected to every creative. Review facts and approve what your team can use."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setTab("sources")}>
+            <Button disabled={bulk.isPending} onClick={() => setTab("sources")}>
               Add source or item
             </Button>
             <Button
               variant="outline"
               className="rounded-full"
-              disabled={cleanup.isPending}
+              disabled={cleanup.isPending || bulk.isPending}
               onClick={() => {
                 if (
                   window.confirm(
@@ -310,7 +330,8 @@ function CatalogContent() {
             </Button>
             <Button
               className="rounded-full"
-              onClick={() => setLocation("/app/settings/catalog/import")}
+              disabled={bulk.isPending}
+              onClick={() => setLocation("/app/catalog/import")}
             >
               <ScanSearch className="mr-2 h-4 w-4" />
               Import website
@@ -334,20 +355,28 @@ function CatalogContent() {
         <Input
           className="h-11 max-w-md"
           value={search}
+          disabled={bulk.isPending}
+          aria-label="Search catalog"
           onChange={event => {
             setSearch(event.target.value);
             setOffset(0);
+            clearSelection();
           }}
           placeholder="Search products, SKUs, or categories…"
         />
         <Select
           value={status}
+          disabled={bulk.isPending}
           onValueChange={v => {
             setStatus(v);
             setOffset(0);
+            clearSelection();
           }}
         >
-          <SelectTrigger className="h-11 w-full xl:w-44">
+          <SelectTrigger
+            className="h-11 w-full xl:w-44"
+            aria-label="Review status"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -359,12 +388,17 @@ function CatalogContent() {
         </Select>
         <Select
           value={category}
+          disabled={bulk.isPending}
           onValueChange={v => {
             setCategory(v);
             setOffset(0);
+            clearSelection();
           }}
         >
-          <SelectTrigger className="h-11 w-full xl:w-52">
+          <SelectTrigger
+            className="h-11 w-full xl:w-52"
+            aria-label="Catalog category"
+          >
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
@@ -376,33 +410,73 @@ function CatalogContent() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex-1" />
-        {selected.length > 0 && (
-          <div className="flex gap-2">
+      </div>
+      <div
+        className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-3 sm:p-4"
+        aria-label="Catalog selection"
+      >
+        <label className="flex min-h-10 cursor-pointer items-center gap-3 text-sm font-medium">
+          <Checkbox
+            checked={
+              pageSelected ? true : selectedIds.length ? "indeterminate" : false
+            }
+            disabled={!products.length || selectionDisabled}
+            onCheckedChange={checked => {
+              setAllMatching(false);
+              setSelected(checked === true ? visibleIds : []);
+            }}
+          />
+          Select all on this page
+        </label>
+        <span className="text-sm text-muted-foreground" role="status">
+          {allMatching
+            ? `All ${selectedCount} matching entries selected`
+            : `${selectedCount} selected`}
+        </span>
+        {pageSelected &&
+          !allMatching &&
+          (query.data?.total ?? 0) > products.length && (
+            <Button
+              variant="link"
+              className="h-auto whitespace-normal px-0 text-left"
+              disabled={selectionDisabled}
+              onClick={() => setAllMatching(true)}
+            >
+              Select all {query.data?.total} matching entries
+            </Button>
+          )}
+        {selectedCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={bulk.isPending}
+            onClick={clearSelection}
+          >
+            Clear selection
+          </Button>
+        )}
+        {selectedCount > 0 && (
+          <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
             <Button
               variant="outline"
-              onClick={() =>
-                bulk.mutate({
-                  organizationId: organizationId!,
-                  productIds: selected,
-                  decision: "rejected",
-                })
-              }
+              className="flex-1 sm:flex-none"
+              disabled={selectionDisabled}
+              onClick={() => reviewSelected("rejected")}
             >
               <X className="mr-2 h-4 w-4" />
-              Reject {selected.length}
+              Reject {selectedCount}
             </Button>
             <Button
-              onClick={() =>
-                bulk.mutate({
-                  organizationId: organizationId!,
-                  productIds: selected,
-                  decision: "approved",
-                })
-              }
+              className="flex-1 sm:flex-none"
+              disabled={selectionDisabled}
+              onClick={() => reviewSelected("approved")}
             >
-              <Check className="mr-2 h-4 w-4" />
-              Approve {selected.length}
+              {bulk.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Approve {selectedCount}
             </Button>
           </div>
         )}
@@ -434,14 +508,18 @@ function CatalogContent() {
               >
                 <div className="flex gap-4 p-5">
                   <Checkbox
-                    checked={selected.includes(product.id)}
-                    onCheckedChange={() =>
+                    aria-label={`Select ${product.name}`}
+                    checked={allMatching || selectedIds.includes(product.id)}
+                    disabled={selectionDisabled}
+                    onCheckedChange={checked => {
+                      const current = allMatching ? visibleIds : selectedIds;
+                      setAllMatching(false);
                       setSelected(
-                        selected.includes(product.id)
-                          ? selected.filter(id => id !== product.id)
-                          : [...selected, product.id]
-                      )
-                    }
+                        checked === true
+                          ? Array.from(new Set([...current, product.id]))
+                          : current.filter(id => id !== product.id)
+                      );
+                    }}
                   />
                   <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-muted">
                     {product.images[0] ? (
@@ -499,6 +577,7 @@ function CatalogContent() {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={bulk.isPending}
                       onClick={() => beginEdit(product)}
                     >
                       <Edit3 className="mr-1.5 h-3.5 w-3.5" />
@@ -507,6 +586,7 @@ function CatalogContent() {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={bulk.isPending || remove.isPending}
                       onClick={() => {
                         if (
                           window.confirm(
@@ -524,6 +604,9 @@ function CatalogContent() {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={
+                        !canReview || bulk.isPending || review.isPending
+                      }
                       onClick={() =>
                         review.mutate({
                           organizationId: organizationId!,
@@ -540,7 +623,9 @@ function CatalogContent() {
                         product.status === "approved" ? "outline" : "default"
                       }
                       className={`flex-1 ${approvalAction.className}`}
-                      disabled={review.isPending}
+                      disabled={
+                        !canReview || review.isPending || bulk.isPending
+                      }
                       aria-label={`${approvalAction.label} ${product.name}`}
                       onClick={() =>
                         review.mutate({
@@ -569,10 +654,10 @@ function CatalogContent() {
       <div className="my-6 flex items-center justify-between">
         <Button
           variant="outline"
-          disabled={offset === 0}
+          disabled={offset === 0 || bulk.isPending || query.isFetching}
           onClick={() => {
             setOffset(Math.max(0, offset - 60));
-            setSelected([]);
+            clearSelection();
           }}
         >
           Previous
@@ -583,10 +668,10 @@ function CatalogContent() {
         </span>
         <Button
           variant="outline"
-          disabled={!query.data?.hasMore}
+          disabled={!query.data?.hasMore || bulk.isPending || query.isFetching}
           onClick={() => {
             setOffset(offset + 60);
-            setSelected([]);
+            clearSelection();
           }}
         >
           Next
@@ -843,9 +928,7 @@ function CatalogContent() {
 export default function CatalogPage() {
   return (
     <WorkspaceGate>
-      <SettingsLayout>
-        <CatalogContent />
-      </SettingsLayout>
+      <CatalogContent />
     </WorkspaceGate>
   );
 }

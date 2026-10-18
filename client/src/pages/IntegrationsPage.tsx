@@ -297,7 +297,7 @@ export function Integrations() {
               </div>
               {group.id === "catalog" && (
                 <Link
-                  href="/app/settings/catalog"
+                  href="/app/catalog"
                   className="inline-flex items-center gap-1 text-sm text-primary"
                 >
                   Open catalog <ArrowUpRight className="h-4 w-4" />
@@ -317,7 +317,7 @@ export function Integrations() {
                   Scanning a website or importing a spreadsheet? Find these
                   tools in{" "}
                   <Link
-                    href="/app/settings/catalog?view=sources"
+                    href="/app/catalog?view=sources"
                     className="text-primary underline"
                   >
                     Catalog → Sources

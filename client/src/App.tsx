@@ -157,21 +157,21 @@ function Router() {
       <Route path="/app/integrations">
         <Redirect to="/app/settings/integrations" replace />
       </Route>
-      <Route path="/app/catalog">
-        <SettingsRedirect to="/app/settings/catalog" />
-      </Route>
+      <Route path="/app/catalog/import" component={WebsiteImportPage} />
+      <Route path="/app/catalog" component={CatalogPage} />
       <Route path="/app/import">
-        <SettingsRedirect to="/app/settings/catalog/import" />
+        <SettingsRedirect to="/app/catalog/import" />
       </Route>
       <Route path="/app/activity">
         <Redirect to="/app/settings/activity" replace />
       </Route>
       <Route path="/app/settings" component={SettingsPage} />
-      <Route
-        path="/app/settings/catalog/import"
-        component={WebsiteImportPage}
-      />
-      <Route path="/app/settings/catalog" component={CatalogPage} />
+      <Route path="/app/settings/catalog/import">
+        <SettingsRedirect to="/app/catalog/import" />
+      </Route>
+      <Route path="/app/settings/catalog">
+        <SettingsRedirect to="/app/catalog" />
+      </Route>
       <Route path="/app/settings/:section" component={SettingsPage} />
       <Route path="/invite/:token" component={InvitePage} />
       <Route path="/404" component={NotFound} />
