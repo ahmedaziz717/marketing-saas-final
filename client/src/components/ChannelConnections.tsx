@@ -31,7 +31,9 @@ export function ChannelConnectionCard({ channel }: { channel: Channel }) {
   );
   const manage = ["owner", "admin"].includes(membership?.role ?? "");
   const items = (query.data?.items ?? []).filter(c => c.channel === channel);
-  const connected = items.filter(
+  const current = items.filter(c => c.status !== "disconnected");
+  const previous = items.filter(c => c.status === "disconnected");
+  const connected = current.filter(
     c => c.status === "connected" && !c.expired
   ).length;
   const fail = (e: { message: string }) => toast.error(e.message);
@@ -126,7 +128,7 @@ export function ChannelConnectionCard({ channel }: { channel: Channel }) {
                   this channel.
                 </p>
               )}
-              {items.map(c => (
+              {current.map(c => (
                 <div key={c.id} className="min-w-0 rounded-xl border p-4">
                   <div className="flex flex-wrap justify-between gap-2">
                     <div>
@@ -156,9 +158,7 @@ export function ChannelConnectionCard({ channel }: { channel: Channel }) {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={
-                            disconnect.isPending || c.status === "disconnected"
-                          }
+                          disabled={disconnect.isPending}
                           onClick={() => {
                             if (
                               window.confirm(
@@ -275,6 +275,35 @@ export function ChannelConnectionCard({ channel }: { channel: Channel }) {
                     </details>
                   )}
                 </>
+              )}
+              {previous.length > 0 && (
+                <details className="rounded-xl border p-4">
+                  <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    Previous connections ({previous.length})
+                  </summary>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    These accounts are disconnected. Their history is kept for
+                    your records.
+                  </p>
+                  <ul className="mt-3 divide-y">
+                    {previous.map(c => (
+                      <li
+                        key={c.id}
+                        className="min-w-0 py-3 first:pt-0 last:pb-0"
+                      >
+                        <p className="break-words font-medium">{c.name}</p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {c.accountId} · Disconnected
+                        </p>
+                        {c.details.pageName && (
+                          <p className="mt-1 break-words text-xs text-muted-foreground">
+                            Page: {c.details.pageName}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </>
           )}
