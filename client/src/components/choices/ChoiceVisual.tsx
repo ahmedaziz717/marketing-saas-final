@@ -22,6 +22,15 @@ import {
 import { partnerLogoFiles, partnerLogoSrc } from "@shared/partnerLogos";
 import { studioArtwork } from "../configurator/studioArtwork";
 
+const hairSwatches: Record<string, string> = {
+  any: "conic-gradient(#262220 0 20%, #68432e 20% 40%, #d6b56e 40% 60%, #ad583b 60% 80%, #bcbcc5 80%)",
+  black: "linear-gradient(135deg, #49433f, #181615)",
+  brown: "linear-gradient(135deg, #966d4c, #483025)",
+  blonde: "linear-gradient(135deg, #f1d99e, #bc914d)",
+  auburn: "linear-gradient(135deg, #ce7950, #843c2e)",
+  silver: "linear-gradient(135deg, #e3e2e8, #9695a1)",
+};
+
 /** Decorative context, not a claimed preview of a campaign or generated result. */
 export function ChoiceVisual({
   label,
@@ -35,6 +44,15 @@ export function ChoiceVisual({
   visual?: string;
 }) {
   const [failed, setFailed] = useState<string>();
+  const hair = visual?.startsWith("hair:")
+    ? hairSwatches[visual.slice(5)]
+    : undefined;
+  if (hair)
+    return (
+      <span className="choice-hair-swatch" aria-hidden="true">
+        <span style={{ background: hair }} />
+      </span>
+    );
   const text = `${visual ?? ""} ${label} ${context}`.toLowerCase();
   const partner =
     visual && partnerLogoFiles[visual]

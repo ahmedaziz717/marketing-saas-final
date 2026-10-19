@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import { useState } from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { StudioPeople } from "./StudioPeople";
 import { LIFESTYLE_PEOPLE } from "@shared/lifestylePeople";
@@ -35,7 +41,7 @@ it("keeps four selections across gender filters and allows replacing one", () =>
   for (const p of females)
     fireEvent.click(screen.getByRole("button", { name: "Select " + p.name }));
   expect(screen.getByText("4 / 4 selected")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /^Male/ }));
+  fireEvent.click(screen.getByRole("radio", { name: "Male" }));
   const male = screen.getAllByRole("button", {
     name: /^Select /,
   })[0] as HTMLButtonElement;
@@ -50,9 +56,11 @@ it("keeps four selections across gender filters and allows replacing one", () =>
 it("combines age, hair and search filters without inventing attributes", () => {
   render(<StudioPeople organizationId={1} selected={[]} onChange={vi.fn()} />);
   const person = LIFESTYLE_PEOPLE.find(p => p.gender === "female")!;
+  fireEvent.click(screen.getByRole("tab", { name: /^Age group/ }));
   changeField(screen.getByRole("radiogroup", { name: "Age group" }), {
     target: { value: person.age },
   });
+  fireEvent.click(screen.getByRole("tab", { name: /^Hair color/ }));
   changeField(screen.getByRole("radiogroup", { name: "Hair color" }), {
     target: { value: person.hair },
   });
@@ -64,5 +72,40 @@ it("combines age, hair and search filters without inventing attributes", () => {
   ).toBeLessThan(24);
   expect(
     screen.getByRole("button", { name: "Select " + person.name })
+  ).toBeTruthy();
+});
+
+it("shows each filter's selection in its tab and supports keyboard navigation and resetting", async () => {
+  render(<StudioPeople organizationId={1} selected={[]} onChange={vi.fn()} />);
+  expect(screen.getAllByRole("tab")).toHaveLength(4);
+  expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("radio", { name: "Male" }));
+  expect(screen.getByRole("tab", { name: "Gender Male" })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("tab", { name: /^Hair color/ }));
+  fireEvent.click(screen.getByRole("radio", { name: "Blonde" }));
+  const hair = screen.getByRole("tab", { name: "Hair color Blonde" });
+  hair.focus();
+  fireEvent.keyDown(hair, { key: "Home" });
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("tab", { name: /^Collection/ })
+        .getAttribute("aria-selected")
+    ).toBe("true")
+  );
+  expect(screen.queryByRole("radiogroup", { name: "Hair color" })).toBeNull();
+  expect(screen.getByRole("tab", { name: "Hair color Blonde" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("radio", { name: "My saved people" }));
+  expect(
+    screen.getByRole("tab", { name: "Collection My saved people" })
+  ).toBeTruthy();
+  fireEvent.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);
+  expect(
+    screen.getByRole("tab", { name: "Collection Studio models" })
+  ).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "Gender Female" })).toBeTruthy();
+  expect(
+    screen.getByRole("tab", { name: "Hair color All hair colors" })
   ).toBeTruthy();
 });

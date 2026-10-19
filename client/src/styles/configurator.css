@@ -1523,43 +1523,111 @@
   height: 100%;
   object-fit: contain;
 }
-.cfg-people-filters {
+.studio-filter-tabs {
+  container-type: inline-size;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  align-items: end;
+  gap: 14px;
+  min-width: 0;
 }
-.cfg-people-filters :is(label, .choice-field) {
-  font-size: 10px;
+.studio-filter-tablist {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+.studio-filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 11px;
+  background: var(--cfg-panel);
+  color: var(--cfg-ink);
+  text-align: left;
+}
+.studio-filter-tab > svg {
+  flex-shrink: 0;
+  color: var(--cfg-violet);
+}
+.studio-filter-tab > span {
+  min-width: 0;
+}
+.studio-filter-tab strong,
+.studio-filter-tab small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.studio-filter-tab strong {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.studio-filter-tab small {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--cfg-muted);
 }
-.cfg-people-filters select,
-.cfg-people-filters input {
+.studio-filter-tab[data-state="active"] {
+  border-color: var(--cfg-violet);
+  box-shadow: inset 0 0 0 1px var(--cfg-violet);
+  background: var(--cfg-soft);
+}
+.studio-filter-tab:focus-visible,
+.studio-filter-panel:focus-visible {
+  outline: 3px solid var(--cfg-violet);
+  outline-offset: 3px;
+}
+.studio-filter-panel {
+  min-width: 0;
+}
+.studio-filter-panel[hidden] {
+  display: none;
+}
+.studio-filter-panel .choice-tile {
+  height: 120px;
+}
+@container (max-width: 640px) {
+  .studio-filter-tablist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.cfg-people-browser {
+  gap: 16px;
+}
+.cfg-people-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.cfg-people-toolbar label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--cfg-muted);
+}
+.cfg-people-toolbar input {
   display: block;
   width: 100%;
   padding: 10px;
-  margin-top: 6px;
+  margin-top: 5px;
+  min-height: 44px;
   color: var(--cfg-ink);
   background: var(--cfg-panel);
   border: 1px solid var(--cfg-line);
   border-radius: 9px;
-  font-size: 11px;
+  font-size: 12px;
   min-width: 0;
 }
-.cfg-people-filters :is(label, .choice-field):last-of-type {
-  grid-column: span 2;
-}
-.cfg-people-filters button {
-  padding: 11px;
+.cfg-people-toolbar button {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 10px 12px;
   font-size: 11px;
   color: var(--cfg-violet);
-}
-.cfg-people-browser .cfg-family-tabs small {
-  display: inline-block;
-  padding: 1px 6px;
-  margin-left: 7px;
-  background: var(--cfg-soft);
-  border-radius: 5px;
 }
 .cfg-selection-strip {
   display: flex;
@@ -1662,11 +1730,12 @@
   .cfg-people-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .cfg-people-filters {
+  .studio-filter-tablist {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .cfg-people-filters :is(label, .choice-field):last-of-type {
-    grid-column: auto;
+  .studio-filter-tab {
+    gap: 8px;
+    padding: 10px;
   }
   .cfg-url-result {
     grid-template-columns: 1fr;

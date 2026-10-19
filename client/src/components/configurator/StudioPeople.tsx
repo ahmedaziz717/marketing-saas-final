@@ -1,6 +1,6 @@
-import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
+import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
-import { X } from "lucide-react";
+import { CalendarDays, Layers3, Palette, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { PersonPortrait } from "@/components/LifestylePersonPicker";
@@ -15,7 +15,7 @@ import {
   personReferenceKey,
   type PersonReference,
 } from "@shared/creativeBuilder";
-import { StudioCategories } from "./StudioCategories";
+import { StudioFilterTabs } from "./StudioFilterTabs";
 import { StudioCard } from "./StudioCard";
 
 export function StudioPeople({
@@ -51,6 +51,8 @@ export function StudioPeople({
     );
   }
   function reset() {
+    setGender("female");
+    setSource("library");
     setAge("any");
     setHair("any");
     setSearch("");
@@ -102,75 +104,107 @@ export function StudioPeople({
       : saved.data?.find(p => p.id === ref.assetId)?.name;
   return (
     <div className="cfg-people-browser">
-      <StudioCategories
-        compact
-        label="People gender"
-        current={gender}
+      <StudioFilterTabs
+        label="People filters"
+        defaultValue="gender"
         items={[
-          { id: "female", title: "Female" },
-          { id: "male", title: "Male" },
-        ].map(item => ({
-          ...item,
-          hint: String(
-            LIFESTYLE_PEOPLE.filter(p => p.gender === item.id).length
-          ),
-        }))}
-        onSelect={id => {
-          setGender(id);
-          setVisible(24);
-        }}
+          {
+            id: "collection",
+            title: "Collection",
+            summary: source === "library" ? "Studio models" : "My saved people",
+            icon: Layers3,
+            content: (
+              <VisualSelect
+                aria-label="Collection"
+                value={source}
+                onChange={e => {
+                  setSource(e.target.value);
+                  setVisible(24);
+                }}
+              >
+                <option value="library">Studio models</option>
+                <option value="saved">My saved people</option>
+              </VisualSelect>
+            ),
+          },
+          {
+            id: "gender",
+            title: "Gender",
+            summary: gender === "female" ? "Female" : "Male",
+            icon: Users,
+            content: (
+              <VisualSelect
+                aria-label="People gender"
+                value={gender}
+                onChange={e => {
+                  setGender(e.target.value);
+                  setVisible(24);
+                }}
+              >
+                {(["female", "male"] as const).map(value => (
+                  <option
+                    key={value}
+                    value={value}
+                    data-description={`${LIFESTYLE_PEOPLE.filter(p => p.gender === value).length} studio models`}
+                  >
+                    {value === "female" ? "Female" : "Male"}
+                  </option>
+                ))}
+              </VisualSelect>
+            ),
+          },
+          {
+            id: "age",
+            title: "Age group",
+            summary: MODEL_AGES.find(a => a.id === age)?.label ?? "All ages",
+            icon: CalendarDays,
+            content: (
+              <VisualSelect
+                aria-label="Age group"
+                value={age}
+                onChange={e => {
+                  setAge(e.target.value);
+                  setVisible(24);
+                }}
+              >
+                <option value="any">All ages</option>
+                {MODEL_AGES.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </VisualSelect>
+            ),
+          },
+          {
+            id: "hair",
+            title: "Hair color",
+            summary:
+              HAIR_COLORS.find(h => h.id === hair)?.label ?? "All hair colors",
+            icon: Palette,
+            content: (
+              <VisualSelect
+                aria-label="Hair color"
+                value={hair}
+                onChange={e => {
+                  setHair(e.target.value);
+                  setVisible(24);
+                }}
+              >
+                <option value="any" data-visual="hair:any">
+                  All hair colors
+                </option>
+                {HAIR_COLORS.map(h => (
+                  <option key={h.id} value={h.id} data-visual={`hair:${h.id}`}>
+                    {h.label}
+                  </option>
+                ))}
+              </VisualSelect>
+            ),
+          },
+        ]}
       />
-      <div className="cfg-people-filters">
-        <ChoiceField>
-          Collection
-          <VisualSelect
-            density="compact"
-            value={source}
-            onChange={e => {
-              setSource(e.target.value);
-              setVisible(24);
-            }}
-          >
-            <option value="library">Studio models</option>
-            <option value="saved">My saved people</option>
-          </VisualSelect>
-        </ChoiceField>
-        <ChoiceField>
-          Age group
-          <VisualSelect
-            density="compact"
-            value={age}
-            onChange={e => {
-              setAge(e.target.value);
-              setVisible(24);
-            }}
-          >
-            <option value="any">All ages</option>
-            {MODEL_AGES.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </VisualSelect>
-        </ChoiceField>
-        <ChoiceField>
-          Hair color
-          <VisualSelect
-            density="compact"
-            value={hair}
-            onChange={e => {
-              setHair(e.target.value);
-              setVisible(24);
-            }}
-          >
-            <option value="any">All hair colors</option>
-            {HAIR_COLORS.map(h => (
-              <option key={h.id} value={h.id}>
-                {h.label}
-              </option>
-            ))}
-          </VisualSelect>
-        </ChoiceField>
+      <div className="cfg-people-toolbar">
         <label>
           Find a person
           <input
@@ -183,7 +217,9 @@ export function StudioPeople({
             }}
           />
         </label>
-        <button onClick={reset}>Reset filters</button>
+        <button type="button" onClick={reset}>
+          Reset filters
+        </button>
       </div>
       <div className="cfg-selection-strip" aria-label="Selected people">
         <strong>{selected.length} / 4 selected</strong>

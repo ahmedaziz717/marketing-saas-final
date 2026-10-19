@@ -1121,6 +1121,20 @@ async function click(name: string) {
   await pause();
 }
 function layout() {
+  for (const grid of document.querySelectorAll<HTMLElement>(".choice-grid")) {
+    const tiles = Array.from(grid.querySelectorAll<HTMLElement>(".choice-tile"))
+      .filter(tile => tile.getClientRects().length)
+      .map(tile => tile.getBoundingClientRect());
+    if (tiles.length < 2) continue;
+    check(
+      tiles.every(
+        tile =>
+          Math.abs(tile.width - tiles[0].width) < 1 &&
+          Math.abs(tile.height - tiles[0].height) < 1
+      ),
+      `${grid.getAttribute("aria-label")} choices have uniform tile dimensions`
+    );
+  }
   check(
     document.documentElement.scrollWidth <= innerWidth + 1,
     "Page has horizontal overflow: " +
@@ -1389,11 +1403,46 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       await click("Select Lifestyle · with people");
       if (innerWidth <= 700) await click("All categories");
       await click("People");
+      let filterSize: { width: number; height: number } | undefined;
+      for (const name of ["Collection", "Gender", "Age group", "Hair color"]) {
+        const tab = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(".studio-filter-tab")
+        ).find(tab => tab.querySelector("strong")?.textContent === name);
+        await pressStudioControl(tab, name + " filter tab");
+        check(
+          tab?.getAttribute("aria-selected") === "true",
+          name + " tab opens its choices"
+        );
+        const panels = Array.from(
+          document.querySelectorAll<HTMLElement>(".studio-filter-panel")
+        ).filter(panel => panel.getClientRects().length);
+        check(panels.length === 1, "Only the active filter panel is shown");
+        const tiles = Array.from(
+          panels[0].querySelectorAll<HTMLElement>(".choice-tile")
+        ).map(tile => tile.getBoundingClientRect());
+        check(tiles.length > 0, name + " choices are visible");
+        filterSize ??= { width: tiles[0].width, height: tiles[0].height };
+        check(
+          tiles.every(
+            tile =>
+              Math.abs(tile.width - filterSize!.width) < 1 &&
+              Math.abs(tile.height - filterSize!.height) < 1
+          ),
+          "Every People filter uses the same tile size"
+        );
+        layout();
+      }
       await chooseVisual(
         document.querySelector<HTMLSelectElement>(
           '[data-choice-label="Hair color"] select'
         )!,
         "blonde"
+      );
+      check(
+        document
+          .querySelector('.studio-filter-tab[data-state="active"]')
+          ?.textContent?.includes("Blonde"),
+        "Filter tabs retain visible summaries"
       );
       const portraits = Array.from(
         document.querySelectorAll<HTMLElement>(
@@ -1420,6 +1469,23 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           ?.textContent?.includes("1 / 4 selected"),
         "Model selection remains available"
       );
+      const filters = document.querySelector<HTMLElement>(
+        ".studio-filter-tabs"
+      )!;
+      const stickyBottom = Math.max(
+        ...Array.from(
+          document.querySelectorAll<HTMLElement>(
+            ".cfg-heading, .journey-sections, .journey-focus-heading"
+          )
+        )
+          .filter(element => element.getClientRects().length)
+          .map(element => element.getBoundingClientRect().bottom)
+      );
+      window.scrollBy({
+        top: filters.getBoundingClientRect().top - stickyBottom - 14,
+        behavior: "instant",
+      });
+      await pause();
       layout();
     }
     if (
