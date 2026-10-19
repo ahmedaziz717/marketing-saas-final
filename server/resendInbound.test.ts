@@ -115,7 +115,7 @@ const sends = () =>
   apiFetch.mock.calls.filter(
     ([url]) => url === "https://api.resend.com/emails"
   );
-describe.sequential("signed support and privacy inbound forwarding", () => {
+describe.sequential("signed EvokeLoop inbound forwarding", () => {
   it("rejects forged, expired and altered signatures without sending", async () => {
     expect((await post(undefined, undefined, false)).status).toBe(401);
     expect(
@@ -186,6 +186,25 @@ describe.sequential("signed support and privacy inbound forwarding", () => {
       expect(body.text).toContain("support@evokeloop.com");
       if (received_for.length > 1)
         expect(body.text).toContain("privacy@evokeloop.com");
+    }
+  );
+  it.each([
+    { to: ["meta-review@evokeloop.com"] },
+    {
+      to: ["other@evokeloop.com"],
+      received_for: ["Meta Review <META-REVIEW@EVOKELOOP.COM>"],
+    },
+  ])(
+    "forwards Meta review mail once to the configured owner inbox: %j",
+    async recipients => {
+      const payload = JSON.stringify(event(recipients));
+      expect((await post(payload)).status).toBe(200);
+      expect((await post(payload)).status).toBe(200);
+      expect(sends()).toHaveLength(1);
+      const body = JSON.parse(sends()[0][1].body);
+      expect(body.to).toBe("recipient@example.test");
+      expect(body.text).toContain("meta-review@evokeloop.com");
+      expect(body.attachments[0].filename).toBe("forwarded_message.eml");
     }
   );
   it("does not acknowledge provider failures; retries with the identical payload and key", async () => {

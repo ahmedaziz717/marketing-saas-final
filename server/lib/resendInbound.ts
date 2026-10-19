@@ -9,6 +9,7 @@ export const RESEND_INBOUND_PATH = "/api/webhooks/resend/inbound";
 const forwardingAddresses = new Set([
   "privacy@evokeloop.com",
   "support@evokeloop.com",
+  "meta-review@evokeloop.com",
 ]);
 const leaseMs = 10 * 60_000;
 const retryWindowMs = 23 * 60 * 60_000;
