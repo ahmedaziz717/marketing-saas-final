@@ -1,6 +1,7 @@
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
 import { StudioFonts } from "@/components/configurator/StudioFonts";
+import { StudioFilterTabs } from "@/components/configurator/StudioFilterTabs";
 import {
   StudioJourney,
   StudioSummary,
@@ -25,6 +26,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clapperboard,
+  Coins,
   Copy,
   FolderOpen,
   Image,
@@ -828,10 +830,35 @@ function Configurator({
     return (
       <>
         <div className="cfg-choice-count">
-          {filtered.length} choices{" "}
+          {filtered.length} {category === "model" ? "models" : "choices"}{" "}
           <span>
-            {multi ? "Select multiple" : "Select one"} · Illustrations are
-            visual guides
+            {category === "model" ? (
+              <>
+                Select one · Compare up to 3
+                {(maker !== "all" ||
+                  capability !== "all" ||
+                  maxCredits ||
+                  search) && (
+                  <button
+                    type="button"
+                    className="cfg-model-reset"
+                    onClick={() => {
+                      setMaker("all");
+                      setCapability("all");
+                      setMaxCredits("");
+                      setSearch("");
+                    }}
+                  >
+                    Reset model filters
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {multi ? "Select multiple" : "Select one"} · Illustrations are
+                visual guides
+              </>
+            )}
           </span>
         </div>
         <div className="cfg-card-grid">
@@ -1484,97 +1511,120 @@ function Configurator({
         m => m.kind === config.kind && m.enabled
       );
       const makers = Array.from(new Set(list.map(m => m.maker))).sort();
+      const inputChoices = [
+        { id: "all", name: "All inputs" },
+        { id: "prompt", name: "Text prompt" },
+        { id: "references", name: "Reference images" },
+        ...(!isImage ? [{ id: "video", name: "Source video" }] : []),
+      ];
       const visible = list.filter(m => {
         const d = generationModel(m.routeId);
         return (
           d &&
           (maker === "all" || m.maker === maker) &&
-          (tab !== "value" || m.direct) &&
           (capability !== "references" || referenceCapacity(d) > 0) &&
           (capability !== "video" || requiresVideo(d)) &&
           (capability !== "prompt" ||
             !(d.inputSchema.required ?? []).some(k => /_url/.test(k))) &&
           (!maxCredits ||
             (m.estimatedCredits != null &&
-              m.estimatedCredits <= Number(maxCredits))) &&
-          (tab !== "compatible" ||
-            (m.available &&
-              !modelCompatibility(
-                d,
-                referenceCount,
-                !isImage && !!video.sourceVideoKey
-              )))
+              m.estimatedCredits <= Number(maxCredits)))
         );
       });
       return (
-        <>
-          {tabs([
-            { id: "all", name: "All models" },
-            { id: "compatible", name: "Compatible with my setup" },
-            { id: "value", name: "Great Value" },
-          ])}
-          <div className="cfg-filters">
-            <Field title="Model maker">
-              <VisualSelect
-                density="compact"
-                value={maker}
-                onChange={e => setMaker(e.target.value)}
-              >
-                <option value="all">All makers</option>
-                {makers.map(m => (
-                  <option key={m}>{m}</option>
-                ))}
-              </VisualSelect>
-            </Field>
-            <Field title="Input capability">
-              <VisualSelect
-                density="compact"
-                value={capability}
-                onChange={e => setCapability(e.target.value)}
-              >
-                <option value="all">All inputs</option>
-                <option value="prompt">Prompt only supported</option>
-                <option value="references">Reference images</option>
-                {!isImage && (
-                  <option value="video">Requires source video</option>
-                )}
-              </VisualSelect>
-            </Field>
-            <Field title="Maximum starting credits">
-              <input
-                type="number"
-                min="0"
-                value={maxCredits}
-                placeholder="Any"
-                onChange={e => setMaxCredits(e.target.value)}
-              />
-            </Field>
-          </div>
-          <p className="cfg-help">
-            Card prices are estimates at model defaults. Your complete credit
-            total is confirmed before generation. Artwork is visual inspiration,
-            not a sample generated by each model.
-          </p>
-          <div className="cfg-compare-bar">
-            <span>
-              <strong>{comparisonModels.length} / 3</strong> models to compare{" "}
-              <small>Check Compare on any model card.</small>
-            </span>
-            <div className="cfg-actions">
-              <button
-                disabled={!comparisonModels.length}
-                onClick={() => setCompareIds([])}
-              >
-                Clear
-              </button>
-              <button
-                disabled={comparisonModels.length < 2}
-                onClick={() => setCompareOpen("models")}
-              >
-                Compare models
-              </button>
+        <div className="cfg-model-browser">
+          <StudioFilterTabs
+            label="Model filters"
+            defaultValue="maker"
+            items={[
+              {
+                id: "maker",
+                title: "Model maker",
+                summary: maker === "all" ? "All makers" : maker,
+                icon: Sparkles,
+                content: (
+                  <VisualSelect
+                    aria-label="Model maker"
+                    density="compact"
+                    value={maker}
+                    onChange={e => setMaker(e.target.value)}
+                  >
+                    <option value="all">All makers</option>
+                    {makers.map(m => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </VisualSelect>
+                ),
+              },
+              {
+                id: "input",
+                title: "Input",
+                summary:
+                  inputChoices.find(c => c.id === capability)?.name ??
+                  "All inputs",
+                icon: Layers3,
+                content: (
+                  <VisualSelect
+                    aria-label="Input capability"
+                    density="compact"
+                    value={capability}
+                    onChange={e => setCapability(e.target.value)}
+                  >
+                    {inputChoices.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </VisualSelect>
+                ),
+              },
+              {
+                id: "credits",
+                title: "Credits",
+                summary: maxCredits ? `Up to ${maxCredits}` : "Any amount",
+                icon: Coins,
+                content: (
+                  <div className="cfg-model-credit-filter">
+                    <Field title="Maximum starting credits">
+                      <input
+                        type="number"
+                        min="0"
+                        value={maxCredits}
+                        placeholder="Any amount"
+                        onChange={e => setMaxCredits(e.target.value)}
+                      />
+                    </Field>
+                    <p className="cfg-help">
+                      Filter by the starting estimate per image or video. Your
+                      selected settings determine the final total.
+                    </p>
+                  </div>
+                ),
+              },
+            ]}
+          />
+          {comparisonModels.length > 0 && (
+            <div className="cfg-compare-bar">
+              <span>
+                <strong>{comparisonModels.length} / 3</strong> models to compare{" "}
+                <small>Check Compare on any model card.</small>
+              </span>
+              <div className="cfg-actions">
+                <button
+                  disabled={!comparisonModels.length}
+                  onClick={() => setCompareIds([])}
+                >
+                  Clear
+                </button>
+                <button
+                  disabled={comparisonModels.length < 2}
+                  onClick={() => setCompareOpen("models")}
+                >
+                  Compare models
+                </button>
+              </div>
             </div>
-          </div>
+          )}
           {models.isLoading && <p>Loading model catalog…</p>}
           {models.error && (
             <button onClick={() => models.refetch()}>
@@ -1600,7 +1650,6 @@ function Configurator({
                 description: m.maker + " · " + m.variant,
                 image: studioModelArtwork(m.routeId, config.kind),
                 art: config.kind,
-                badge: m.direct ? "Great Value" : undefined,
                 reason: reason ?? undefined,
                 notice: notice ?? undefined,
                 footer: (
@@ -1624,7 +1673,11 @@ function Configurator({
             [setup.modelId ?? ""],
             id => chooseModel(list.find(m => m.id === id)!)
           )}
-        </>
+          <p className="cfg-help">
+            Starting estimates use model defaults. Your final total is shown
+            before generation. Card artwork is visual inspiration.
+          </p>
+        </div>
       );
     }
     if (category === "settings" || (!isImage && category === "format"))

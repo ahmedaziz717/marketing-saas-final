@@ -1598,6 +1598,80 @@
 .cfg-people-browser {
   gap: 16px;
 }
+.cfg-model-browser {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.cfg-model-browser .studio-filter-tablist {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.cfg-model-browser .studio-filter-panel {
+  padding: 12px;
+  border: 1px solid var(--cfg-line);
+  border-radius: 12px;
+  background: var(--cfg-panel);
+}
+.cfg-model-browser .choice-select .choice-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(156px, 100%), 1fr));
+}
+.cfg-model-browser .choice-select .choice-tile {
+  height: 76px;
+}
+.cfg-model-browser .cfg-compare-bar,
+.cfg-model-browser .cfg-help,
+.cfg-model-browser .cfg-choice-count {
+  margin: 0;
+}
+.cfg-model-browser .cfg-choice-count > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.cfg-model-reset {
+  color: var(--cfg-violet);
+  font-weight: 600;
+  min-height: 32px;
+}
+.cfg-model-reset:focus-visible {
+  outline: 3px solid var(--cfg-violet);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.cfg-model-credit-filter {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 76px;
+}
+.cfg-model-credit-filter .cfg-field {
+  width: min(260px, 100%);
+  flex-shrink: 0;
+  margin: 0;
+}
+.cfg-model-credit-filter .cfg-help {
+  max-width: 440px;
+}
+@container (max-width: 640px) {
+  .cfg-model-browser .studio-filter-tab {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 10px;
+  }
+  .cfg-model-browser .choice-select .choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cfg-model-credit-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .cfg-model-credit-filter .cfg-field {
+    width: 100%;
+  }
+}
 .cfg-people-toolbar {
   display: flex;
   align-items: end;
