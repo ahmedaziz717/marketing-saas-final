@@ -59,3 +59,9 @@ The desktop preview, section navigation and choice artwork regain breathing room
 ## Larger tile refinement — 18 October 2026
 
 The follow-up request makes the desktop height increase more substantial: 112px section tiles, 96px category tiles, and large preview/gallery image areas. Gallery tiles also gain width so the artwork keeps useful proportions. The initial expanded preview can occupy more of the page; choosing a category automatically brings the actual choice card above the sticky action bar when needed. The rail uses the space at its sticky position rather than shrinking to fit below the expanded preview. Mobile keeps its existing focused editor, and model portraits stay square. Browser checks cover both the initial gallery entrance and full-tile visibility after navigation.
+
+## Filter tabs and uniform choices — 19 October 2026
+
+People filters now use Collection, Gender, Age group and Hair color tabs. Every tab shows its current value, and one choice panel is open at a time. All four remain visible in a two-column layout on narrow panels; keyboard arrow/Home/End navigation follows the tab pattern. Search and reset sit in one aligned toolbar beneath the choices. Switching tabs keeps filter values and selected people; reset restores the default filters without clearing selected people.
+
+All People filter choices use the same 120px tile height and a shared equal-width grid, including the last row. Hair choices use recognizable color swatches. Shared visual selectors across studios, Apps and workspace forms use equal grid columns and row heights instead of label-dependent flex widths. Regular and compact control densities retain their distinct roles; model portraits retain their square proportions. Browser coverage checks uniform tile geometry, each filter tab, selection and portrait behavior across desktop, laptop, tablet and narrow phones.

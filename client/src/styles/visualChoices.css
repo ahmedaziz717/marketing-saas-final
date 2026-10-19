@@ -22,7 +22,8 @@
 }
 .choice-select .choice-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(156px, 100%), 1fr));
+  grid-auto-rows: 1fr;
   gap: 8px;
   min-width: 0;
 }
@@ -35,7 +36,8 @@
   gap: 0;
   min-width: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
+  min-height: 112px;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--choice-line);
@@ -261,16 +263,14 @@
   color: #b42335;
 }
 .choice-select[data-density="compact"] .choice-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  display: grid;
+  gap: 8px;
 }
 .choice-select[data-density="compact"] .choice-tile {
-  flex: 1 1 auto;
   flex-direction: row;
   align-items: center;
-  width: auto;
-  min-height: 40px;
+  width: 100%;
+  min-height: 52px;
   border-radius: 8px;
 }
 .choice-select[data-density="compact"] .choice-tile-art {
@@ -305,15 +305,27 @@
   .choice-select .choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .choice-select .choice-grid > :only-child {
-    grid-column: 1 / -1;
-  }
   .choice-select[data-density="compact"] .choice-tile {
-    min-height: 44px;
+    min-height: 52px;
   }
   .choice-select .choice-tile-art {
     height: 52px;
   }
+}
+
+.choice-hair-swatch {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f3eef8, #faf8fc);
+}
+.choice-hair-swatch > span {
+  width: 38px;
+  height: 38px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 7px #29263826;
 }
 @media (prefers-reduced-motion: reduce) {
   .choice-select .choice-tile {
