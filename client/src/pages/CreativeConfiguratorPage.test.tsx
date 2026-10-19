@@ -706,13 +706,16 @@ it("explains the people dependency and unlocks its picker only for people scenes
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
-  expect(screen.queryByRole("group", { name: "People gender" })).toBeNull();
+  expect(screen.queryByRole("tablist", { name: "People filters" })).toBeNull();
   clickJourney(screen.getByRole("button", { name: "Open Scene category" }));
   clickJourney(
     screen.getByRole("button", { name: "Select Lifestyle · with people" })
   );
   clickJourney(screen.getByRole("button", { name: "Open People category" }));
-  expect(screen.getByRole("group", { name: "People gender" })).toBeTruthy();
+  expect(screen.getByRole("tablist", { name: "People filters" })).toBeTruthy();
+  expect(
+    screen.getByRole("radiogroup", { name: "People gender" })
+  ).toBeTruthy();
 });
 it("saves a real workspace draft without invoking generation", async () => {
   open();
