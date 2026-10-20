@@ -1,4 +1,5 @@
 import { ProductOverlayEditor } from "../ProductOverlayEditor";
+import { ImageEnhanceAction } from "../ImageEnhanceAction";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Film, ImagePlus, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
@@ -504,6 +505,7 @@ export function StudioPreview({
                 }}
               />
             )}
+            {kind === "image" && selectedAsset && ["owner", "admin", "creator"].includes(role) && <ImageEnhanceAction asset={selectedAsset} organizationId={organizationId} onSaved={onSettled} />}
             <section
               className="cfg-asset-readiness"
               aria-label="Creative readiness"

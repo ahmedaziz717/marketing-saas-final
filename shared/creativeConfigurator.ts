@@ -158,6 +158,7 @@ export function imageReferenceCount(setup: CreativeSetup) {
           ? 1
           : 0) +
     (setup.referenceAssetIds?.length ?? 0) +
+    (setup.enhancement ? 1 : 0) +
     (setup.sourceAssetKeys?.length ?? 0) +
     (setup.people?.length ?? (setup.person ? 1 : 0)) +
     (setup.logoAssetId ? 1 : 0)

@@ -134,9 +134,19 @@ export async function loadPreservedProducts(
       recordType?: string | null;
     }>;
     references?: Array<{ storageKey: string; key?: string }>;
+    enhancement?: { productOverlay?: import("../../shared/productOverlay").ProductOverlayMetadata };
   }
 ) {
   if (!setup.preserveProduct) return [];
+  if (setup.enhancement && resolved.enhancement?.productOverlay) {
+    const cutouts: ProductCutout[] = [];
+    for (const layer of resolved.enhancement.productOverlay.layers) {
+      const source = await readProductCutout(layer.sourceKey);
+      if (source.sha256 !== layer.sha256) throw new Error("The original product image changed. Reopen Enhance before continuing.");
+      cutouts.push(source);
+    }
+    return cutouts;
+  }
   if (setup.promotionMode === "platform")
     throw new Error(
       "Preserve original product needs a product photo, not a business promotion."

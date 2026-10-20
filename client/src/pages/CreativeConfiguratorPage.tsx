@@ -202,8 +202,8 @@ function Configurator({
   const [tab, setTab] = useState("all"),
     [search, setSearch] = useState(""),
     [maker, setMaker] = useState("all");
-  const [capability, setCapability] = useState("all"),
-    [maxCredits, setMaxCredits] = useState("");
+  const [capabilityOverrides, setCapabilityOverrides] = useState<Partial<Record<"image" | "video", string>>>({});
+  const [maxCredits, setMaxCredits] = useState("");
   const [info, setInfo] = useState<Choice | null>(null),
     [confirm, setConfirm] = useState(false),
     [draftsOpen, setDraftsOpen] = useState(false);
@@ -323,6 +323,10 @@ function Configurator({
   const referenceCount = isImage
     ? imageReferenceCount(image)
     : videoReferenceCount(video);
+  const automaticCapability = !isImage && video.sourceVideoKey ? "video" : referenceCount > 0 ? "references" : "all";
+  const capability = capabilityOverrides[config.kind] ?? automaticCapability;
+  const setCapability = (value: string) => setCapabilityOverrides(previous => ({ ...previous, [config.kind]: value }));
+  const resetCapability = () => setCapabilityOverrides(previous => ({ ...previous, [config.kind]: undefined }));
   const incompatible = model
     ? modelCompatibility(
         model,
@@ -669,7 +673,6 @@ function Configurator({
     setTab("all");
     setSearch("");
     setMaker("all");
-    setCapability("all");
     setMaxCredits("");
     scrollStudioChoices(studioRoot.current);
   }
@@ -846,7 +849,7 @@ function Configurator({
               <>
                 Select one · Compare up to 3
                 {(maker !== "all" ||
-                  capability !== "all" ||
+                  capability !== automaticCapability ||
                   maxCredits ||
                   search) && (
                   <button
@@ -854,7 +857,7 @@ function Configurator({
                     className="cfg-model-reset"
                     onClick={() => {
                       setMaker("all");
-                      setCapability("all");
+                      resetCapability();
                       setMaxCredits("");
                       setSearch("");
                     }}
@@ -947,7 +950,7 @@ function Configurator({
                 setSearch("");
                 setTab("all");
                 setMaker("all");
-                setCapability("all");
+                resetCapability();
                 setMaxCredits("");
               }}
             >
@@ -1490,6 +1493,7 @@ function Configurator({
               }
             />
           </button>
+          {isImage && <p className="cfg-help">Copy follows {theme.name} and your saved Brand voice. Event themes appear in the wording; offers come from your approved facts.</p>}
           {isImage &&
             image.promotionMode === "platform" &&
             image.promotion?.sourceUrl && (

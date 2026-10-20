@@ -63,6 +63,23 @@ beforeEach(() => {
 const caller = () =>
   creativeBuilderRouter.createCaller({ user: { id: 4 } } as any);
 
+it.each(["black-friday", "black-friday-minimal", "black-friday-premium", "black-friday-color"])("makes %s part of the generated message and applies brand voice without inventing offers", async theme => {
+  const result = await caller().refreshCopy({ organizationId: 3, setup: { ...setup(), theme } });
+  const payload = JSON.parse(mock.llm.mock.calls[0][0].messages[1].content);
+  expect(payload.campaign.requiredMention).toBe("Black Friday");
+  expect(payload.brandBackground.voice).toBe("Warm");
+  expect(result.headline).toBe("Black Friday · " + copy.headline);
+  expect(result.subheadline).toBe(copy.subheadline);
+  expect(mock.llm).toHaveBeenCalledTimes(1);
+  expect(mock.llm.mock.calls[0][0].messages[0].content).toContain("tone, vocabulary, audience, message hierarchy and CTA");
+  expect(payload.campaign.rule).toContain("does not authorize invented discounts");
+});
+it("keeps naturally themed copy intact", async () => {
+  mock.llm.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ ...copy, subheadline: "Explore your Black Friday learning plans." }) } }] });
+  const result = await caller().refreshCopy({ organizationId: 3, setup: { ...setup(), theme: "black-friday" } });
+  expect(result.headline).toBe(copy.headline);
+});
+
 it.each(["service", "general"] as const)(
   "passes the reviewed %s page body through the actual copy route, ahead of unrelated brand and prior copy",
   async kind => {

@@ -339,6 +339,11 @@ export function selectedPeople(setup: {
 
 export const creativeSetupSchema = z
   .object({
+    enhancement: z.object({
+      assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/),
+      revision: z.string().regex(/^[a-f0-9]{64}$/),
+      instruction: z.string().trim().min(20).max(8000),
+    }).optional(),
     modelId: z.string().max(240).optional(),
     modelOptions: modelOptionsSchema.optional(),
     campaignPlanId: z.number().int().positive().optional(),
@@ -593,7 +598,7 @@ export function isReferenceCreative(setup: CreativeSetup) {
 export function outputCount(setup: CreativeSetup) {
   return (
     setup.formatIds.length *
-    (setup.promotionMode === "platform" || isReferenceCreative(setup)
+    (setup.enhancement || setup.promotionMode === "platform" || isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -607,7 +612,7 @@ export function creativeImageOutputs(setup: CreativeSetup) {
     .filter(Boolean)
     .sort((a, b) => b.width * b.height - a.width * a.height);
   const groups =
-    setup.promotionMode === "platform" || isReferenceCreative(setup)
+    setup.enhancement || setup.promotionMode === "platform" || isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -632,6 +637,7 @@ export function generationSetupIssues(setup: CreativeSetup) {
   }
   if (
     setup.promotionMode !== "platform" &&
+    !setup.enhancement &&
     !setup.products.length &&
     !isReferenceCreative(setup)
   )
@@ -646,7 +652,7 @@ export function generationSetupIssues(setup: CreativeSetup) {
       "Add a promotion name and description so the creative has accurate context."
     );
   if (!setup.formatIds.length) issues.push("Select at least one size.");
-  if (!setup.copy.headline.trim() || !setup.copy.cta.trim())
+  if (!setup.enhancement && (!setup.copy.headline.trim() || !setup.copy.cta.trim()))
     issues.push("Add a headline and call to action.");
   if (outputCount(setup) > 24)
     issues.push(

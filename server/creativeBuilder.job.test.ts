@@ -47,6 +47,7 @@ vi.mock("./lib/creativeJobs", () => ({
   recoverExpiredBuilderJobs: vi.fn(),
 }));
 import { runBuilderJob } from "./routers/creativeBuilder";
+import { readProductCutout } from "./lib/productPreservation";
 
 function fixture() {
   const written: any[] = [];
@@ -137,6 +138,22 @@ beforeEach(() => {
 });
 
 describe("creative generation orchestration", () => {
+  it("enhances the exact asset as a new draft and retains editable original-product layers without flattening the design", async () => {
+    const { db, args, written } = fixture();
+    const bytes = await sharp({ create: { width: 80, height: 90, channels: 4, background: "red" } }).extend({ left: 3, right: 3, top: 3, bottom: 3, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+    mocked.read.mockResolvedValue(bytes.toString("base64"));
+    const cutout = await readProductCutout("original-product.png");
+    args.setup = { ...args.setup, name: "Lamp · Enhanced", formatIds: ["square_1_1"], preserveProduct: true, enhancement: { assetKey: "creative:99", revision: "a".repeat(64), instruction: "Recreate this Studio product advertisement as a stunning, professional ad creative with dramatically improved visual quality." } };
+    args.resolved.enhancement = { productOverlay: { method: "editable_original_v3", applied: true, designStorageKey: "prior-design.png", designUrl: "/prior-design.png", layers: [{ sourceKey: cutout.sourceKey, sha256: cutout.sha256, left: 10, top: 10, width: 80, height: 90 }] } };
+    args.resolved.references = [{ id: 99, key: "creative:99", storageKey: "exact-original-ad.png", url: "/exact-original-ad.png" }];
+    await runBuilderJob(db, args);
+    expect(mocked.generate).toHaveBeenCalledTimes(1);
+    expect(mocked.generate.mock.calls[0][0].originalImages.map((i: any) => i.b64Json)).toEqual(["lamp.png", "exact-original-ad.png", "logo.png"]);
+    expect(mocked.generate.mock.calls[0][0].prompt).toContain("Reference 2 is the existing advertisement");
+    expect(mocked.generate.mock.calls[0][0].prompt).toContain(args.setup.enhancement.instruction);
+    expect(mocked.generate.mock.calls[0][0].prompt).toContain("PRODUCT OVERLAY WORKFLOW");
+    expect(written[0][0]).toMatchObject({ name: "Lamp · Enhanced", status: "pending", renderMetadata: { parentVariantId: 99, enhancement: { sourceAssetKey: "creative:99" }, productPreservation: { applied: false, designStorageKey: "generated-1.png", layers: [{ sourceKey: "original-product.png", sha256: cutout.sha256 }] } } });
+  });
   it("keeps the frozen quote for each generated size and supports older jobs with one saved rate", async () => {
     const { db, args } = fixture();
     args.rateSnapshots = [11000, 22000, 33000].map(estimatedCostMicros => ({
