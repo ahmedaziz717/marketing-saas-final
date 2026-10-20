@@ -77,7 +77,9 @@ export function normalizeApiProductDetails(
     const selected =
       v.selected !== false &&
       Number(v.quantity ?? v.qty ?? 1) > 0 &&
-      !/^(none\b|no .*(selected|included)|not selected)/i.test(text(v.name))
+      !/^(?:none\b|no\s|not selected|not applicable)|[-:]\s*none$/i.test(
+        text(v.name)
+      )
         ? part(v)
         : null;
     const options = available.slice(0, Math.min(40, remaining)).map(part);

@@ -36,7 +36,7 @@ it("keeps selected parts, nested enabled upgrades and their image identities sep
         ],
       },
       barebone: { code: "laptop-1", name: "Laptop chassis", quantity: 1 },
-      monitor: { name: "No Monitor Selected", selected: false, upgrades: [] },
+      monitor: { name: "No Monitor", selected: [{ code: "none", quantity: 1 }], upgrades: [] },
     },
   };
   const result = normalizeApiProductDetails(data, config);

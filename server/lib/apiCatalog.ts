@@ -177,9 +177,7 @@ export function componentSpecifications(
       v.selected === false ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
-      /^(?:none\b|no .*(?:selected|included)|not selected|not applicable)/i.test(
-        name
-      )
+      /^(?:none\b|no\s|not selected|not applicable)|[-:]\s*none$/i.test(name)
     )
       return [];
     const label = text(v.label ?? v.type ?? v.category ?? key, 120).replace(
