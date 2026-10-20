@@ -1,3 +1,4 @@
+import { CreativeDimensions } from "./CreativeDimensions";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
 import { ImageEnhanceAction } from "./ImageEnhanceAction";
@@ -657,6 +658,7 @@ export function AssetWorkbench({
               </section>
               <section className="min-w-0 space-y-4">
                 <AssetStatus state={selected.state} />
+                {selected.intelligence && <CreativeDimensions key={selected.key} asset={selected} organizationId={organizationId!} canEdit={canCreate || role === "reviewer"} onSaved={() => { void refresh(); }} />}
                 {canCreate && selected.mediaType === "image" && <ImageEnhanceAction asset={selected} organizationId={organizationId!} onSaved={() => { void refresh(); }} />}
                 {onChoose &&
                   selected.state === "approved" &&

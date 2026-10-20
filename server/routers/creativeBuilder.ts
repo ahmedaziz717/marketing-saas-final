@@ -467,6 +467,7 @@ export async function runBuilderJob(
           imageUrl: image.url,
           imageStorageKey: image.storageKey,
           renderMetadata: {
+            requestedSetup: setup,
             ...(setup.enhancement ? {
               enhancement: {
                 sourceAssetKey: setup.enhancement.assetKey as import("../../shared/assetLibrary").AssetKey,

@@ -1,5 +1,7 @@
+import { safeFetchImage } from "../lib/websiteCrawler";
+import { readApiProductDetails } from "../lib/apiProductDetails";
 import { discoverOfferings } from "../lib/marketingDrafts";
-import { brandKits } from "../../drizzle/schema";
+import { brandKits, products } from "../../drizzle/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -8,7 +10,11 @@ import { STORE_PROVIDERS, catalogEntrySchema } from "../../shared/catalog";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
-import { encryptToken, catalogEncryptionKey } from "../lib/secureToken";
+import {
+  encryptToken,
+  decryptToken,
+  catalogEncryptionKey,
+} from "../lib/secureToken";
 import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
 import { appendActivity } from "../lib/activity";
@@ -19,11 +25,15 @@ import {
 import {
   apiCatalogConfigSchema,
   apiInstructionFileSchema,
+  apiEndpointSchema,
+  apiCatalogMappingSchema,
 } from "../../shared/apiCatalog";
 import {
   apiCatalogAddress,
   fetchApiCatalog,
   parseApiCatalog,
+  apiCatalogRows,
+  inferProductLinkRule,
 } from "../lib/apiCatalog";
 import { suggestApiMapping } from "../lib/apiInstructions";
 const org = z.object({ organizationId: z.number().int().positive() });
@@ -35,45 +45,181 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  productDetails: protectedProcedure
+    .input(org.extend({ productId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [product] = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, input.productId),
+            eq(products.organizationId, input.organizationId)
+          )
+        )
+        .limit(1);
+      if (!product?.sourceId || !product.provenance["api.detailUrl"])
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This product has no configured detail endpoint.",
+        });
+      const [source] = await db
+        .select()
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.id, product.sourceId),
+            eq(catalogSources.organizationId, input.organizationId)
+          )
+        )
+        .limit(1);
+      if (
+        source?.provider !== "api" ||
+        !source.credentials ||
+        source.status === "disconnected"
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Reconnect this API source to inspect its configuration.",
+        });
+      const credentials = JSON.parse(decryptToken(source.credentials));
+      try {
+        return await readApiProductDetails(
+          source.storeUrl,
+          product.provenance["api.detailUrl"],
+          apiCatalogConfigSchema.parse(credentials.api),
+          `${input.organizationId}:${source.id}:${source.updatedAtMs}`
+        );
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read product configuration.",
+        });
+      }
+    }),
   previewApi: protectedProcedure
     .input(
       org.extend({
-        endpoint: z.string().url().max(2048),
+        endpoint: apiEndpointSchema,
         config: apiCatalogConfigSchema,
         files: z.array(apiInstructionFileSchema).max(3).default([]),
         interpretInstructions: z.boolean().default(false),
+        exampleProductUrl: z.string().trim().max(2048).default(""),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await owner(ctx.user.id, input.organizationId);
       const endpoint = apiCatalogAddress(input.endpoint);
       const data = await fetchApiCatalog(endpoint, input.config);
-      const mapping = input.interpretInstructions
+      const suggested = input.interpretInstructions
         ? await suggestApiMapping(data, input.config.notes, input.files)
-        : {
-            itemsPath: input.config.itemsPath,
-            nextPath: input.config.nextPath,
-            fields: input.config.fields,
-          };
-      const result = parseApiCatalog(data, endpoint, {
+        : input.config;
+      const mapping = {
+        ...suggested,
+        ...Object.fromEntries(
+          Object.entries(input.config).filter(
+            ([key, value]) =>
+              !["auth", "notes", "fields"].includes(key) &&
+              value !== "" &&
+              value !== undefined
+          )
+        ),
+        fields: {
+          ...suggested.fields,
+          ...Object.fromEntries(
+            Object.entries(input.config.fields).filter(([, value]) => !!value)
+          ),
+        },
+      };
+      if (input.exampleProductUrl) {
+        let inferred: ReturnType<typeof inferProductLinkRule> = null;
+        try {
+          inferred = inferProductLinkRule(
+            input.exampleProductUrl,
+            apiCatalogRows(data, mapping.itemsPath)
+          );
+        } catch {
+          /* Explain an invalid example beside the setup. */
+        }
+        if (!inferred)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Use a product-page link containing the SKU or code of a product in this feed. If links follow another rule, describe it in Instructions.",
+          });
+        if (inferred.rule) {
+          const rule = inferred.rule;
+          mapping.productUrlRules = [
+            ...(mapping.productUrlRules ?? []).filter(
+              r => r.path !== rule.path || r.equals !== rule.equals
+            ),
+            rule,
+          ];
+        } else mapping.productUrlTemplate = inferred.template;
+      }
+      const resolved = apiCatalogConfigSchema.parse({
         ...input.config,
         ...mapping,
       });
+      const result = parseApiCatalog(data, endpoint, resolved, {
+        preview: true,
+      });
+      const checked = await Promise.allSettled(
+        result.items.slice(0, 3).map(async item => {
+          if (!item.imageUrl) return;
+          await safeFetchImage(item.imageUrl);
+        })
+      );
+      checked.forEach((check, index) => {
+        if (check.status === "rejected")
+          result.issues.push({
+            index,
+            product: result.items[index].name,
+            field: "imageUrl",
+            blocking: true,
+            message:
+              "The preview image could not be loaded. Check the documented image base address, or choose to import without images.",
+          });
+      });
       return {
-        mapping,
+        mapping: apiCatalogMappingSchema.parse(resolved),
         count: result.items.length,
         total: result.total,
         hasNext: !!result.next,
+        ready: !result.issues.some(issue => issue.blocking),
+        issues: result.issues.slice(0, 100),
+        issueCount: result.issues.length,
         samples: result.items
-          .slice(0, 5)
-          .map(({ name, sku, productUrl, imageUrl, price, currency }) => ({
-            name,
-            sku,
-            productUrl,
-            imageUrl,
-            price,
-            currency,
-          })),
+          .slice(0, 6)
+          .map(
+            ({
+              name,
+              sku,
+              productUrl,
+              imageUrl,
+              price,
+              currency,
+              specifications,
+              features,
+              availability,
+            }) => ({
+              name,
+              sku,
+              productUrl,
+              imageUrl,
+              price,
+              currency,
+              specifications,
+              features,
+              availability,
+            })
+          ),
       };
     }),
   previewPage: protectedProcedure

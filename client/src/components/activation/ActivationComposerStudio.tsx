@@ -13,6 +13,7 @@ import {
   useState,
   type RefObject,
   type SetStateAction,
+  type ReactNode,
 } from "react";
 import { Link } from "wouter";
 import {
@@ -58,6 +59,7 @@ type Props = {
   section: ActivationSection;
   onSection: (value: ActivationSection) => void;
   onChangeChannel?: () => void;
+  channelChoices?: ReactNode;
   entry?: ActivationEntry;
   active?: boolean;
   accounts: Account[];
@@ -233,7 +235,7 @@ export function ActivationComposerStudio(p: Props) {
     category,
     initialFocus: !!p.entry?.category,
     onNavigate: (section, value) => {
-      if (value === "channel") {
+      if (value === "channel" && !p.channelChoices) {
         p.onChangeChannel?.();
         return;
       }
@@ -311,7 +313,7 @@ export function ActivationComposerStudio(p: Props) {
                     key={item.title}
                     type="button"
                     onClick={() => {
-                      if (item.category === "channel") p.onChangeChannel?.();
+                      if (item.category === "channel" && !p.channelChoices) p.onChangeChannel?.();
                       else {
                         journey.navigate(item.section, item.category);
                       }
@@ -359,6 +361,7 @@ export function ActivationComposerStudio(p: Props) {
             </div>
             {p.section === "setup" && (
               <>
+                {category === "channel" && p.channelChoices}
                 {category === "account" && (
                   <>
                     <p className="activation-help">

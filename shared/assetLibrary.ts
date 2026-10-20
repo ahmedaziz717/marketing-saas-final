@@ -20,6 +20,7 @@ export type LibraryAsset = {
   campaignPlanId?: number;
   hasProductOverlay?: boolean;
   promotion?: import("./creativeBuilder").CreativeSetup["promotion"];
+  intelligence?: import("./creativeIntelligence").CreativeIntelligence;
   sourceType?: "logo" | "product" | "reference" | "other";
 };
 export type WorkflowSnapshot = { id: number; action: string; payload: Record<string, unknown> | null; actorUserId: number; createdAtMs: number };

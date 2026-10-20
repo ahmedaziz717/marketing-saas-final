@@ -1,3 +1,4 @@
+import { learningHandoffSchema, type LearningOrigin } from "@shared/learningHandoff";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
 import { StudioFonts } from "@/components/configurator/StudioFonts";
@@ -152,7 +153,8 @@ export default function CreativeConfiguratorPage({
   return (
     <WorkspaceGate>
       <Configurator
-        key={String(user?.id) + ":" + organizationId}
+        key={String(user?.id) + ":" + organizationId + ":" + (params.get("learning") ?? "")}
+        learningId={params.get("learning")}
         initialKind={initialKind}
         requestedVideoId={requestedVideoId}
         initialPlanId={
@@ -164,11 +166,13 @@ export default function CreativeConfiguratorPage({
   );
 }
 function Configurator({
+  learningId,
   initialKind,
   requestedVideoId,
   initialPlanId,
   initialUgc,
 }: {
+  learningId?: string | null;
   initialKind?: "image" | "video";
   requestedVideoId: string | null;
   initialPlanId?: number;
@@ -180,6 +184,13 @@ function Configurator({
   const [, navigate] = useLocation();
   const scope = { organizationId: organizationId! };
   const scopeKey = "creative:" + user?.id + ":" + organizationId;
+  const [learning] = useState<LearningOrigin | null>(() => {
+    if (!learningId || !organizationId || !/^[a-f0-9-]{36}$/.test(learningId)) return null;
+    try {
+      const parsed = learningHandoffSchema.safeParse(JSON.parse(sessionStorage.getItem(`evokeloop:learning:${organizationId}:${learningId}`) ?? "null"));
+      return parsed.success && parsed.data.organizationId === organizationId ? parsed.data : null;
+    } catch { return null; }
+  });
   const [config, setConfig] = useState<ConfiguratorState>(() => {
     const restored = newConfiguration();
     if (initialKind || requestedVideoId || initialUgc)
@@ -195,6 +206,10 @@ function Configurator({
           setting: "people",
         },
       };
+    if (learning) {
+      restored.image = { ...restored.image, name: "Historical evidence test", learningOrigin: learning, basePrompt: (restored.image.basePrompt + "\n\nTest hypothesis to review:\n" + learning.hypothesis).slice(0, 8000) };
+      restored.video = { ...restored.video, title: "Historical evidence test", learningOrigin: learning, prompt: learning.hypothesis };
+    }
     return restored;
   });
   const [section, setSection] = useState("type"),
@@ -2078,6 +2093,8 @@ function Configurator({
           </button>
         </div>
       </div>
+      {learning && <details className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 text-sm dark:bg-violet-950/20" open><summary className="font-medium">Test brief from historical evidence · {learning.sourceAdIds.length} source ads</summary><p className="mt-2 whitespace-pre-wrap">{learning.hypothesis}</p><p className="mt-2 text-muted-foreground">Review this hypothesis, select your product and creative direction, then save or generate. The brief and source references stay with this creative.</p></details>}
+      {learningId && !learning && <p role="alert">This learning brief is unavailable in this workspace or browser session. Return to the optimization result to open it again.</p>}
       {!videoOpened && (
         <p role={videoDetail.error ? "alert" : "status"}>
           {videoDetail.error?.message ?? "Opening your saved video…"}

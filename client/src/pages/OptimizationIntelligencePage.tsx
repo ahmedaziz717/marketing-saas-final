@@ -1,3 +1,5 @@
+import { libraryAssetLink } from "@shared/assetWorkflow";
+import { OptimizationEvidenceAction } from "@/components/OptimizationEvidenceAction";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { copyTaxonomy, type CopyDimension } from "@shared/copyTaxonomy";
 import { CopyTaxonomyReference } from "@/components/CopyTags";
@@ -153,12 +155,14 @@ function Intelligence() {
             </ChoiceField>
             {connectionId && (
               <>
+                <DateRangeFilter label="History to import" ariaPrefix="History to import" value={query.range} onChange={range => range && setQuery({ ...query, range })} />
+                <p className="text-sm text-muted-foreground">Choose any available historical period, including campaigns from before EvokeLoop. Provider retention limits may apply.</p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     disabled={!canEdit || sync.isPending}
-                    onClick={() => sync.mutate({ ...args, incremental: false })}
+                    onClick={() => sync.mutate({ ...args, incremental: false, range: query.range })}
                   >
-                    Import 2026 history
+                    Import selected history
                   </Button>
                   <Button
                     variant="outline"
@@ -294,6 +298,7 @@ function Intelligence() {
                     </VisualSelect>
                   </ChoiceField>
                 </div>
+                <details className="rounded-lg border p-3 text-sm"><summary className="font-medium">How historical evidence influences learning</summary><p className="my-3">Learning weight combines relevance, label confidence, data completeness, version reliability and recency. Older campaigns are eligible under the same rules. Spend, conversions and ROAS remain unchanged.</p><label>Recency half-life<VisualSelect aria-label="Learning recency half-life" value={query.learning?.halfLifeDays ?? 365} onChange={e => setQuery({ ...query, learning: { halfLifeDays: Number(e.target.value), context: query.learning?.context ?? [] } })}><option value={90}>90 days</option><option value={365}>1 year</option><option value={730}>2 years</option><option value={3650}>10 years</option></VisualSelect></label><p className="mt-2">Half-life is measured from the report end date. Matching your active dimension filters can also set the learning context.</p><Button variant="outline" className="mt-2" onClick={() => setQuery({ ...query, learning: { halfLifeDays: query.learning?.halfLifeDays ?? 365, context: query.filters } })}>Use filters as learning context</Button></details>
                 <fieldset>
                   <legend className="text-sm font-medium">
                     Group by dimensions (up to four)
@@ -476,6 +481,7 @@ function Intelligence() {
                               "ROAS",
                               "Ads",
                               "Evidence",
+                              "Learning weight",
                             ].map((h, i) => (
                               <th
                                 className="p-2 text-left whitespace-nowrap"
@@ -526,6 +532,7 @@ function Intelligence() {
                                 </td>
                               ))}
                               <td className="p-2">{g.evidenceStrength}</td>
+                              <td className="p-2"><details><summary>{number((g.learning?.averageWeight ?? 0) * 100)}%</summary>{Object.entries(g.learning?.factors ?? {}).map(([k,v]) => <p key={k}>{title(k)}: {number(Number(v)*100)}%</p>)}</details></td>
                             </tr>
                           ))}
                         </tbody>
@@ -537,6 +544,7 @@ function Intelligence() {
                       </p>
                     )}
                   </section>
+                  <OptimizationEvidenceAction evidence={data} dimensions={query.dimensions} />
                   <section className="rounded-xl border bg-card p-4 space-y-3">
                     <h2 className="text-xl font-semibold">
                       Source ads and classifications
@@ -579,7 +587,7 @@ function Intelligence() {
                                   <summary>
                                     {title(d)}:{" "}
                                     {v?.labels.map(l => l.label).join(", ") ||
-                                      "Unknown"}
+                                      (v?.status === "not_applicable" ? "Not applicable" : "Unknown")}
                                   </summary>
                                   <p className="text-xs mt-2">
                                     {v
@@ -596,6 +604,8 @@ function Intelligence() {
                                       {l.evidence}
                                     </p>
                                   ))}
+                                  {v?.assetKey && <Link className="block mt-2 text-xs text-primary underline" href={libraryAssetLink(v.assetKey, "approved")}>Source asset · version {v.assetVersion?.slice(0, 10)}</Link>}
+                                  {v?.basis === "requested" && <p className="text-xs text-amber-700">Requested direction; excluded from observed performance cohorts.</p>}
                                   {v?.unknownReason && (
                                     <p className="text-sm">{v.unknownReason}</p>
                                   )}
@@ -607,6 +617,7 @@ function Intelligence() {
                               <h3 className="font-medium">
                                 Reviewed classification
                               </h3>
+                              <p className="text-xs">This review applies to {query.range.since} through {query.range.until}. Confirm the attribute was present during that period.</p>
                               <VisualSelect
                                 aria-label="Override dimension"
                                 className={channelInput + " w-full"}
@@ -648,6 +659,9 @@ function Intelligence() {
                                     ...args,
                                     adId: a.id,
                                     assertion: {
+                                      basis: "observed",
+                                      validSince: query.range.since,
+                                      validUntil: query.range.until,
                                       dimension: overrideDimension,
                                       labels: overrideValue
                                         .split(",")

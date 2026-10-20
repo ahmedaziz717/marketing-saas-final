@@ -1,3 +1,4 @@
+import { dimensionNames, canonicalLabel } from "../../shared/optimization";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -23,15 +24,28 @@ async function handoff(tx: LibraryTransaction, organizationId: number, userId: n
   if (revision && asset.revision !== revision) throw new TRPCError({ code: "CONFLICT", message: "This version or its review status changed. Refresh before continuing." });
   if (!canSubmitAsset(asset.state)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This version has already been submitted. Review its submission in Asset Library." });
   await writeAssetStatus(tx, organizationId, key, { status: "pending", reviewedAtMs: null, reviewedByUserId: null });
-  await appendActivity({ organizationId, actorUserId: userId, action: "asset_library.submitted", entityType: "library_asset", entityId: key, payload: { fingerprint: asset.fingerprint, source: "content_studio", directApproval: disposition === "approve" } }, tx);
+  await appendActivity({ organizationId, actorUserId: userId, action: "asset_library.submitted", entityType: "library_asset", entityId: key, payload: { intelligence: asset.intelligence, fingerprint: asset.fingerprint, source: "content_studio", directApproval: disposition === "approve" } }, tx);
   if (disposition === "approve") {
     await writeAssetStatus(tx, organizationId, key, { status: "approved", reviewedByUserId: userId, reviewedAtMs: Date.now() });
-    await appendActivity({ organizationId, actorUserId: userId, action: "asset_library.approved", entityType: "library_asset", entityId: key, payload: { fingerprint: asset.fingerprint, purpose: asset.purpose, source: "content_studio", note: "Explicitly approved and added to the library by an authorized owner or administrator." } }, tx);
+    await appendActivity({ organizationId, actorUserId: userId, action: "asset_library.approved", entityType: "library_asset", entityId: key, payload: { intelligence: asset.intelligence, fingerprint: asset.fingerprint, purpose: asset.purpose, source: "content_studio", note: "Explicitly approved and added to the library by an authorized owner or administrator." } }, tx);
   }
   return readLibraryAsset(tx, organizationId, key);
 }
 
 export const assetLibraryRouter = router({
+  classifyDimension: protectedProcedure.input(reference.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/), dimension: z.enum(dimensionNames), status: z.enum(["known", "unknown", "not_applicable"]), values: z.array(z.string().trim().min(1).max(120)).max(30), evidence: z.string().trim().min(5).max(1500), confidence: z.number().min(0).max(1) })).mutation(async ({ctx, input}) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "creator", "reviewer"]);
+    return withOrganizationTransaction(await libraryDatabase(), input.organizationId, async tx => {
+      const asset = await readLibraryAsset(tx, input.organizationId, input.key);
+      if (asset.fingerprint !== input.fingerprint || !asset.intelligence) throw new TRPCError({ code: "CONFLICT", message: "The asset changed. Refresh before reviewing its dimensions." });
+      if (input.status === "known" && !input.values.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Add a value or mark the dimension unknown." });
+      let values: string[];
+      try { values = input.status === "known" ? input.values.map(v => canonicalLabel(input.dimension, v)) : []; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      const intelligence = { ...asset.intelligence, observed: { ...asset.intelligence.observed, [input.dimension]: { status: input.status, values, confidence: input.status === "unknown" ? 0 : input.confidence, source: `Reviewed by workspace member ${ctx.user.id}: ${input.evidence}`, reason: input.status === "known" ? undefined : input.evidence } } };
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "asset_library.classified", entityType: "library_asset", entityId: input.key, payload: { fingerprint: asset.fingerprint, intelligence, note: `${input.dimension}: ${input.evidence}` } }, tx);
+      return { ok: true };
+    });
+  }),
   list: protectedProcedure.input(scope).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
     return (await listLibrary(await libraryDatabase(), input.organizationId)).filter(isLibraryAsset);
@@ -111,7 +125,7 @@ export const assetLibraryRouter = router({
       if (!canReviewAsset(asset.state, input.decision)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Submit this version from Content Studio first." });
       if (input.decision === "changes_requested" && !input.note) throw new TRPCError({ code: "BAD_REQUEST", message: "Describe the changes needed." });
       await writeAssetStatus(tx, input.organizationId, input.key, { status: input.decision === "approved" ? "approved" : "rejected", reviewedByUserId: ctx.user.id, reviewedAtMs: Date.now() });
-      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `asset_library.${input.decision}`, entityType: "library_asset", entityId: input.key, payload: { fingerprint: asset.fingerprint, note: input.note, purpose: asset.purpose } }, tx);
+      await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: `asset_library.${input.decision}`, entityType: "library_asset", entityId: input.key, payload: { intelligence: asset.intelligence, fingerprint: asset.fingerprint, note: input.note, purpose: asset.purpose } }, tx);
       return { success: true };
     });
   }),

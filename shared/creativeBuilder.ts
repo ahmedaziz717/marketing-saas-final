@@ -1,3 +1,4 @@
+import { learningOriginSchema } from "./learningHandoff";
 import {
   findLifestylePerson,
   isPeopleShot,
@@ -339,6 +340,7 @@ export function selectedPeople(setup: {
 
 export const creativeSetupSchema = z
   .object({
+    learningOrigin: learningOriginSchema.optional(),
     enhancement: z.object({
       assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/),
       revision: z.string().regex(/^[a-f0-9]{64}$/),

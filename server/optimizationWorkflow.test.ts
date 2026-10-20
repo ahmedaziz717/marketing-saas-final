@@ -122,7 +122,7 @@ it("abstains for incomplete or unsupported evidence and never authorizes spendin
       coverage: { incomplete: false, truncated: false },
     },
   });
-  expect(result.decision).toBe("propose_test");
+  expect(result.decision).toBe("insufficient_evidence");
   expect(result.requiresHumanApproval).toBe(true);
   expect(result.confidence).toBeLessThan(1);
 });

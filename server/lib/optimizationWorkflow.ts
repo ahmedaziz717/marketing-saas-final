@@ -1,3 +1,4 @@
+import { TAXONOMY_VERSION } from "../../shared/optimization";
 import { tagLiveCopyEvidence } from "./copyClassificationStore";
 import {
   liveSchedulingReport,
@@ -244,7 +245,7 @@ export async function optimizationStep(
     return {
       ...complete("Classified Meta history", {
         connectionId: node.config.connectionId,
-        taxonomyVersion: 1,
+        taxonomyVersion: TAXONOMY_VERSION,
         completedAtMs: Date.now(),
       }),
       progress: batch.progress,
@@ -273,7 +274,7 @@ export async function optimizationStep(
         Date.now(),
         c.details.timezone ?? "UTC"
       );
-      if (query.range.since < "2026-01-01") query.range.since = "2026-01-01";
+
     }
     if (node.config.measurePublishedOnly) {
       const references = input.filter(v => v.type === "publication");

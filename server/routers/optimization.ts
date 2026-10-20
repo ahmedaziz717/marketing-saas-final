@@ -22,6 +22,7 @@ import {
 } from "../lib/optimizationAnalysis";
 import { optimizationSyncs } from "../../drizzle/optimizationSchema";
 import {
+  historyRangeSchema,
   analysisQuerySchema,
   assertionSchema,
 } from "../../shared/optimization";
@@ -85,7 +86,7 @@ export const optimizationRouter = router({
       return { enabled: optimizationEnabled(input.organizationId) };
     }),
   sync: protectedProcedure
-    .input(account.extend({ incremental: z.boolean().default(false) }))
+    .input(account.extend({ incremental: z.boolean().default(false), range: historyRangeSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       await authorize(ctx.user.id, input.organizationId, true);
       return queueHistory(
@@ -93,7 +94,8 @@ export const optimizationRouter = router({
         input.organizationId,
         ctx.user.id,
         input.connectionId,
-        input.incremental
+        input.incremental,
+        input.range
       );
     }),
   progress: protectedProcedure.input(account).query(async ({ ctx, input }) => {

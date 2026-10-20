@@ -141,5 +141,6 @@ export const optimizerOutputSchema = z.object({
   generationBrief: z.string(),
   caveats: z.array(z.string()),
   requiresHumanApproval: z.literal(true),
+  nextAction: z.object({ keep: z.array(z.string()), test: z.array(z.string()), reason: z.string() }).optional(),
 });
 export type OptimizerOutput = z.infer<typeof optimizerOutputSchema>;

@@ -35,6 +35,7 @@ export function storeAddress(provider: StoreProvider, value: string) {
 }
 export type StoreItem = CatalogEntry & {
   externalId: string;
+  detailUrl?: string;
   variants: Array<{
     id: string;
     name: string;

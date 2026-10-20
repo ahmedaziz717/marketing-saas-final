@@ -7,6 +7,8 @@ import {
   parseApiCatalog,
   fetchApiCatalog,
   readApiCatalogPage,
+  inferProductTemplate,
+  inferProductLinkRule,
 } from "./lib/apiCatalog";
 import { instructionContent } from "./lib/apiInstructions";
 const endpoint = "https://store.example/api/catalog?limit=20";
@@ -52,6 +54,29 @@ it("keeps array attributes and feature bullets as selectable catalog facts", () 
   );
   expect(custom.items[0].specifications).toEqual({});
   expect(custom.items[0].features).toEqual(["Cooling: Liquid cooling"]);
+});
+
+it("previews unresolved products and imports nested component quantities with verified URL rules", () => {
+  const kits = [{ code: "kit-1", name: "Gaming PC", layout: "desktop", price: 2000, metadata: { images: { main: "kits/kit-1/main.png" } }, stock: { available: 6 }, components: {
+    memory: { name: "16GB DDR5-5600", quantity: 2 }, processor: { name: "Ryzen 7 9700X", quantity: 1 }, monitor: { name: "No Monitor Selected", quantity: 1 },
+  } }];
+  const api = "https://api.vendor.example/v1/kits";
+  const preview = parseApiCatalog(kits, api, config(), { preview: true });
+  expect(preview.items[0].productUrl).toBe("");
+  expect(preview.items[0].imageUrl).toBe("");
+  expect(preview.issues).toEqual(expect.arrayContaining([expect.objectContaining({ field: "productUrl", blocking: true })]));
+  const mapping = apiCatalogConfigSchema.parse({ productUrlRules: [{ path: "layout", equals: "desktop", template: "https://shop.example/products/{code}" }], imageBaseUrl: "https://images.example/catalog/", defaultCurrency: "USD" });
+  const result = parseApiCatalog(kits, api, mapping);
+  expect(result.items[0]).toMatchObject({ productUrl: "https://shop.example/products/kit-1", imageUrl: "https://images.example/catalog/kits/kit-1/main.png", availability: "In stock · 6 available", currency: "USD", specifications: { memory: "32 GB total · 2 × 16GB DDR5-5600", processor: "Ryzen 7 9700X" } });
+  expect(result.items[0].specifications).not.toHaveProperty("monitor");
+  expect(inferProductTemplate("https://shop.example/products/kit-1", kits)).toBe("https://shop.example/products/{code}");
+  expect(() => parseApiCatalog([{ ...kits[0], layout: "laptop" }], api, mapping)).toThrow(/product URL/);
+});
+
+it("rejects executable templates and dangerous field paths", () => {
+  for (const productUrlTemplate of ["javascript:alert(1)", "https://user:password@shop.example/{code}", "https://shop.example/{constructor.name}"])
+    expect(apiCatalogConfigSchema.safeParse({ productUrlTemplate }).success).toBe(false);
+  expect(apiCatalogAddress("  https://api.example/products  ")).toBe("https://api.example/products");
 });
 
 it("reads a public JSON catalog without credentials and maps common fields", async () => {
@@ -234,4 +259,10 @@ it("imports stock independently and preserves HTML feature bullets", () => {
     features: ["Dimmable", "Brass finish"],
     specifications: {},
   });
+});
+
+it("limits a product-page example to its product family", () => {
+  const rows = [{ code: "desktop-1", layout: "desktop" }, { code: "laptop-1", layout: "laptop" }];
+  expect(inferProductLinkRule("https://shop.example/desktops/desktop-1", rows)).toEqual({ rule: { path: "layout", equals: "desktop", template: "https://shop.example/desktops/{code}" } });
+  expect(apiCatalogConfigSchema.safeParse({ productUrlTemplate: "https://{code}.example/product" }).success).toBe(false);
 });

@@ -197,7 +197,7 @@ describe.sequential("crawl router repeat product scans", () => {
     await workerCaller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
     const afterCanonicalUrlRescan = await db.select().from(products).where(eq(products.organizationId, organizationId));
     expect(afterCanonicalUrlRescan).toHaveLength(1);
-    expect(afterCanonicalUrlRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Updated", sku: "APX-1", status: "approved" });
+    expect(afterCanonicalUrlRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Updated", sku: "APX-1", status: "pending" });
 
     mockState.productUrl = "https://shop.router-test.example/products/apex-pro?variant=third";
     mockState.productName = "Apex Printer Pro";
@@ -212,7 +212,7 @@ describe.sequential("crawl router repeat product scans", () => {
     await workerCaller.crawl.analyzeBatch({ organizationId, jobId: third.jobId, batchSize: 5 });
     const afterSkuRescan = await db.select().from(products).where(eq(products.organizationId, organizationId));
     expect(afterSkuRescan).toHaveLength(1);
-    expect(afterSkuRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Pro", sku: "APX-1", productUrl: thirdPage.url, status: "approved" });
+    expect(afterSkuRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Pro", sku: "APX-1", productUrl: thirdPage.url, status: "pending" });
     expect(afterSkuRescan[0]!.dedupeKey).toBe(productDedupeKey({ sku: "APX-1", productUrl: thirdPage.url, name: "any" }));
   }, 30000);
 });
