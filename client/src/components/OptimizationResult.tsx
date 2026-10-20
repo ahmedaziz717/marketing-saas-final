@@ -1,3 +1,4 @@
+import { LearningHandoffButton } from "./LearningHandoffButton";
 import { optimizerOutputSchema } from "@shared/optimizerLibrary";
 const probability = (n: number) =>
   n >= 0.9995 ? ">99.9%" : n < 0.0005 ? "<0.1%" : `${(n * 100).toFixed(1)}%`;
@@ -224,6 +225,7 @@ export function OptimizationResult({
           </p>
         ))}
       </div>
+      {r.decision === "propose_test" && r.generationBrief && <LearningHandoffButton result={r} />}
       <details>
         <summary className="text-sm">
           Attribution and interpretation limits

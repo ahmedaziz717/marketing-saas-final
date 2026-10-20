@@ -7,6 +7,7 @@ import { safeFetchImage } from "./websiteCrawler";
 import { storagePut } from "../storage";
 import type { StoreItem } from "./storeCatalog";
 import { structuredCatalogFacts } from "../../shared/catalogFacts";
+import { reconcileCatalogRefresh } from "../../shared/catalogRefresh";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export async function importCatalogEntry(
@@ -41,7 +42,7 @@ export async function importCatalogEntry(
       )
     )
     .limit(1);
-  const truth = {
+  let truth = {
     name: item.name,
     description: item.description,
     sku: item.sku,
@@ -54,6 +55,8 @@ export async function importCatalogEntry(
     serviceDetails: item.serviceDetails,
     variantCount: variants.length,
   };
+  const refreshed = old ? reconcileCatalogRefresh(old, truth, {}, source?.provider ?? "manual") : null;
+  if (refreshed) truth = refreshed.values;
   // Imported changes require review again. Never silently approve updated claims.
   const previousTruth = old ? { ...old, ...structuredCatalogFacts(old) } : null;
   const unchanged =
@@ -70,7 +73,7 @@ export async function importCatalogEntry(
     sourceId: source?.id ?? old?.sourceId,
     externalId: source?.externalId ?? old?.externalId,
     provenance: {
-      ...old?.provenance,
+      ...(refreshed?.provenance ?? old?.provenance),
       source: source?.provider ?? "manual",
       importedAt: new Date().toISOString(),
     },

@@ -248,7 +248,7 @@ export async function dependencies(db: Runner, item: Publication) {
     scheduledAtMs: item.scheduledAtMs,
     timezone: item.timezone,
   });
-  return { connection, asset, hash, carouselAssets };
+  return { connection, asset, hash, carouselAssets, creativeSnapshots: [asset, ...placementAssets, ...carouselAssets].flatMap(a => a?.intelligence ? [a.intelligence] : []) };
 }
 export async function approvedDependencies(db: Runner, item: Publication) {
   const d = await dependencies(db, item);

@@ -1,3 +1,5 @@
+import { missingProductFacts } from "../lib/productSpecifications";
+import { reconcileCatalogRefresh } from "../../shared/catalogRefresh";
 import { structuredCatalogFacts } from "../../shared/catalogFacts";
 import { brandKits } from "../../drizzle/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -435,6 +437,8 @@ export const crawlRouter = router({
             stylesheetUrls: evidence.stylesheetUrls,
             structuredProducts: evidence.structuredProducts,
             specifications: evidence.specifications,
+            specificationEvidence: evidence.specificationEvidence,
+            missingProductFacts: evidence.missingProductFacts,
             commerceMeta: evidence.commerceMeta,
             productCandidate: evidence.productCandidate,
             productEvidence: evidence.productEvidence,
@@ -724,9 +728,11 @@ export const crawlRouter = router({
             return record ? [[page.id, record] as const] : [];
           })
         );
-        const gptProductEvidence = productEvidence.filter(
-          page => !deterministicByPageId.has(page.id)
-        );
+        const incompletePageIds = new Set(productPages.filter(page => {
+          const record = deterministicByPageId.get(page.id);
+          return !record || missingProductFacts(record.name, record.specifications).length > 0;
+        }).map(page => page.id));
+        const gptProductEvidence = productEvidence.filter(page => incompletePageIds.has(page.id));
         let model = "deterministic_product_schema";
         let analysis: AnalysisResult = {
           brand: {
@@ -811,6 +817,11 @@ export const crawlRouter = router({
         const deterministic = productPages.flatMap(page => {
           const record = deterministicByPageId.get(page.id);
           const enrichment = gptByPageId.get(page.id);
+          const verifiedEnrichment = enrichment ? validateExtractedProduct({
+            candidate: enrichment,
+            page: { pageType: page.pageType, productCandidate: true, productEvidence: ["product_schema"], text: page.textContent ?? "", structuredProducts: (page.metadata as any)?.structuredProducts ?? [] },
+          }) : null;
+          const enrichedSpecs = Object.fromEntries((verifiedEnrichment?.specifications ?? []).map(s => [s.name, s.value]));
           return record
             ? [
                 {
@@ -824,7 +835,7 @@ export const crawlRouter = router({
                   productUrl: page.url,
                   price: record.price,
                   currency: record.currency,
-                  specifications: Object.entries(record.specifications).map(
+                  specifications: Object.entries({ ...enrichedSpecs, ...record.specifications }).map(
                     ([name, value]) => ({ name, value })
                   ),
                   imageUrls: record.imageUrls,
@@ -909,20 +920,23 @@ export const crawlRouter = router({
               1
             );
           const variantCount = deterministicRecord?.variantCount ?? 1;
-          const provenance = isDeterministic
+          const provenance: Record<string, string> = isDeterministic
             ? {
                 name: `${productUrl}#schema:name`,
                 sku: `${productUrl}#schema:sku`,
                 category: `${productUrl}#inferred-category`,
                 description: `${productUrl}#schema:description`,
                 price: `${productUrl}#schema:offers.price`,
-                specifications: `${productUrl}#specification-table+schema:hasVariant`,
+                specifications: `${productUrl}#product-specifications`,
+                "specifications.evidence": JSON.stringify((sourcePage.metadata as any)?.specificationEvidence ?? {}),
+                "specifications.missing": JSON.stringify(missingProductFacts(candidate.name, specifications)),
+                "specifications.observedAt": new Date(now).toISOString(),
                 images: `${productUrl}#schema:image`,
                 "confidence.name": "high",
                 "confidence.sku": validated.sku ? "high" : "not_available",
                 "confidence.price": validated.price ? "high" : "not_available",
                 "confidence.specifications": Object.keys(specifications).length
-                  ? "high"
+                  ? incompletePageIds.has(candidate.sourcePageId) ? "review_required" : "high"
                   : "not_available",
                 "confidence.images": candidate.imageUrls.length
                   ? "high"
@@ -943,9 +957,7 @@ export const crawlRouter = router({
                 "confidence.images": "review_required",
               };
           if (existing) {
-            await db
-              .update(products)
-              .set({
+            const refresh = reconcileCatalogRefresh(existing, {
                 crawlJobId: job.id,
                 sourcePageId: candidate.sourcePageId,
                 name: candidate.name.slice(0, 300),
@@ -973,12 +985,15 @@ export const crawlRouter = router({
                 availability:
                   structuredCatalogFacts({ specifications }).availability ||
                   existing.availability,
-                provenance,
-                status: existing.status,
-                reviewedByUserId: existing.reviewedByUserId,
-                reviewedAtMs: existing.reviewedAtMs,
                 updatedAtMs: now,
-              })
+            }, provenance, "website");
+            await db.update(products).set({
+              ...refresh.values,
+              provenance: refresh.provenance,
+              status: refresh.changed ? "pending" : existing.status,
+              reviewedByUserId: refresh.changed ? null : existing.reviewedByUserId,
+              reviewedAtMs: refresh.changed ? null : existing.reviewedAtMs,
+            })
               .where(
                 and(
                   eq(products.organizationId, input.organizationId),

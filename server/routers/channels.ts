@@ -1008,6 +1008,7 @@ export const publishingRouter = router({
             });
         }
         const subheadlines: string[] = [];
+        const creativeSnapshots: import("../../shared/creativeIntelligence").CreativeIntelligence[] = [];
         const copyAssetKeys = Array.from(
           new Set(
             [
@@ -1024,6 +1025,7 @@ export const publishingRouter = router({
             copyAssetKey
           );
           if (asset.subheadline) subheadlines.push(asset.subheadline);
+          if (asset.intelligence) creativeSnapshots.push(asset.intelligence);
           if (asset.state !== "approved" || asset.purpose !== "finished")
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
@@ -1094,6 +1096,8 @@ export const publishingRouter = router({
             payload: {
               scheduledAtMs: input.scheduledAtMs,
               channel: input.channel,
+              revision: input.revision + 1,
+              creativeSnapshots,
             },
           },
           tx
@@ -1242,7 +1246,7 @@ export const publishingRouter = router({
             action: `publication.${input.decision}`,
             entityType: "publication",
             entityId: item.id,
-            payload: { note: input.note, approvalHash: d?.hash ?? null },
+            payload: { note: input.note, approvalHash: d?.hash ?? null, creativeSnapshots: d?.creativeSnapshots ?? [] },
           },
           tx
         );

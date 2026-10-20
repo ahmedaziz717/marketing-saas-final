@@ -1,3 +1,4 @@
+import { creativeIntelligence } from "../../shared/creativeIntelligence";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { activityEvents, brandAssets, creativeVariants } from "../../drizzle/schema";
@@ -21,29 +22,42 @@ export function normalizeUpload(row: typeof brandAssets.$inferSelect, workflow?:
   // Legacy font records are not one of the supported media upload categories.
   // Keep their original database type and fingerprint; only normalize the UI hint.
   const sourceType = row.type === "font" ? "other" : row.type;
-  return { key: `asset:${row.id}`, name: row.name, origin: (row.metadata?.generatedVideo || row.metadata?.generatedImage) ? "generated" : "uploaded", durationSeconds: Number(row.metadata?.durationSeconds) || undefined, campaignPlanId: Number(row.metadata?.campaignPlanId) || undefined, url: row.url, mediaType: row.mimeType.startsWith("video/") ? "video" : row.mimeType.startsWith("image/") ? "image" : "other", mimeType: row.mimeType, sourceType, width: Number(row.metadata?.width) || undefined, height: Number(row.metadata?.height) || undefined, purpose: metadata.purpose, isUgc: metadata.isUgc, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: metadata.parentKey, createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId };
+  const intelligence = creativeIntelligence({ key: `asset:${row.id}`, fingerprint, createdAtMs: row.createdAtMs, mediaType: row.mimeType.startsWith("video/") ? "video" : row.mimeType.startsWith("image/") ? "image" : "other", width: Number(row.metadata?.width) || undefined, height: Number(row.metadata?.height) || undefined, durationSeconds: Number(row.metadata?.durationSeconds) || undefined, isUgc: metadata.isUgc, requested: row.metadata?.direction as Record<string, any> | undefined, metadata: row.metadata ?? {} });
+  return { intelligence, key: `asset:${row.id}`, name: row.name, origin: (row.metadata?.generatedVideo || row.metadata?.generatedImage) ? "generated" : "uploaded", durationSeconds: Number(row.metadata?.durationSeconds) || undefined, campaignPlanId: Number(row.metadata?.campaignPlanId) || undefined, url: row.url, mediaType: row.mimeType.startsWith("video/") ? "video" : row.mimeType.startsWith("image/") ? "image" : "other", mimeType: row.mimeType, sourceType, width: Number(row.metadata?.width) || undefined, height: Number(row.metadata?.height) || undefined, purpose: metadata.purpose, isUgc: metadata.isUgc, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: metadata.parentKey, createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId };
 }
 export function normalizeCreative(row: typeof creativeVariants.$inferSelect, workflow?: WorkflowSnapshot): LibraryAsset {
   const fingerprint = stableHash({ name: row.name, imageUrl: row.imageUrl, imageStorageKey: row.imageStorageKey, headline: row.headline, primaryText: row.primaryText, description: row.description, callToAction: row.callToAction, channel: row.channel, format: row.format, renderMetadata: row.renderMetadata });
   const copy = row.renderMetadata?.copy;
   const copyText = copy ? [copy.headline, copy.subheadline, "CTA: " + copy.cta].join("\n") : [row.primaryText, "", row.headline, row.description ?? "", "CTA: " + row.callToAction].join("\n");
-  return { key: `creative:${row.id}`, name: row.name, origin: "generated", url: row.imageUrl, mediaType: "image", mimeType: "image/*", purpose: "finished", isUgc: false, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: row.renderMetadata?.parentVariantId ? `creative:${row.renderMetadata.parentVariantId}` : row.renderMetadata?.enhancement?.sourceAssetKey ?? null, hasProductOverlay: row.renderMetadata?.productPreservation?.method === "editable_original_v3", createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId, headline: row.headline, subheadline: copy?.subheadline, primaryText: row.primaryText, format: row.format, channel: row.channel, width: row.renderMetadata?.width, height: row.renderMetadata?.height, copyText, campaignPlanId: row.renderMetadata?.campaignPlanId, promotion: row.renderMetadata?.promotion };
+  const intelligence = creativeIntelligence({ key: `creative:${row.id}`, fingerprint, createdAtMs: row.createdAtMs, mediaType: "image", width: row.renderMetadata?.width, height: row.renderMetadata?.height, channel: row.channel, copyText, requested: row.renderMetadata?.requestedSetup ?? row.renderMetadata ?? {}, metadata: row.renderMetadata ?? {} });
+  return { intelligence, key: `creative:${row.id}`, name: row.name, origin: "generated", url: row.imageUrl, mediaType: "image", mimeType: "image/*", purpose: "finished", isUgc: false, state: assetState(row.status, workflow, fingerprint), fingerprint, revision: stableHash({ fingerprint, status: row.status, event: workflow?.id ?? null }), parentKey: row.renderMetadata?.parentVariantId ? `creative:${row.renderMetadata.parentVariantId}` : row.renderMetadata?.enhancement?.sourceAssetKey ?? null, hasProductOverlay: row.renderMetadata?.productPreservation?.method === "editable_original_v3", createdAtMs: row.createdAtMs, reviewedAtMs: row.reviewedAtMs, reviewedByUserId: row.reviewedByUserId, headline: row.headline, subheadline: copy?.subheadline, primaryText: row.primaryText, format: row.format, channel: row.channel, width: row.renderMetadata?.width, height: row.renderMetadata?.height, copyText, campaignPlanId: row.renderMetadata?.campaignPlanId, promotion: row.renderMetadata?.promotion };
+}
+function reviewedIntelligence(asset: LibraryAsset, event?: WorkflowSnapshot) {
+  const snapshot = event?.payload?.intelligence as LibraryAsset["intelligence"];
+  if (snapshot?.assetVersion === asset.fingerprint && asset.intelligence) asset.intelligence = { ...asset.intelligence, observed: { ...asset.intelligence.observed, ...snapshot.observed } };
+  return asset;
+}
+async function withReviewedIntelligence(db: Runner, organizationId: number, asset: LibraryAsset) {
+  const [event] = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityType, "library_asset"), eq(activityEvents.entityId, asset.key), eq(activityEvents.action, "asset_library.classified"))).orderBy(desc(activityEvents.id)).limit(1);
+  return reviewedIntelligence(asset, event);
 }
 async function latestWorkflow(db: Runner, organizationId: number, key: string) { return (await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityType, "library_asset"), eq(activityEvents.entityId, key), inArray(activityEvents.action, WORKFLOW_ACTIONS))).orderBy(desc(activityEvents.id)).limit(1))[0]; }
 export async function listLibrary(db: Runner, organizationId: number): Promise<LibraryAsset[]> {
-  const [uploads, creatives, events] = await Promise.all([
+  const [uploads, creatives, events, classifications] = await Promise.all([
     db.select().from(brandAssets).where(eq(brandAssets.organizationId, organizationId)),
     db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, organizationId)),
     db.selectDistinctOn([activityEvents.entityId]).from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityType, "library_asset"), inArray(activityEvents.action, WORKFLOW_ACTIONS))).orderBy(activityEvents.entityId, desc(activityEvents.id)),
+    db.selectDistinctOn([activityEvents.entityId]).from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityType, "library_asset"), eq(activityEvents.action, "asset_library.classified"))).orderBy(activityEvents.entityId, desc(activityEvents.id)),
   ]);
+  const reviewed = new Map(classifications.map(event => [event.entityId, event]));
   const latest = new Map(events.map(event => [event.entityId, event]));
-  return [...uploads.map(row => normalizeUpload(row, latest.get(`asset:${row.id}`))), ...creatives.map(row => normalizeCreative(row, latest.get(`creative:${row.id}`)))].sort((a, b) => b.createdAtMs - a.createdAtMs || a.key.localeCompare(b.key));
+  return [...uploads.map(row => normalizeUpload(row, latest.get(`asset:${row.id}`))), ...creatives.map(row => normalizeCreative(row, latest.get(`creative:${row.id}`)))].map(asset => reviewedIntelligence(asset, reviewed.get(asset.key))).sort((a, b) => b.createdAtMs - a.createdAtMs || a.key.localeCompare(b.key));
 }
 export async function readLibraryAsset(db: Runner, organizationId: number, key: string) {
   let reference; try { reference = parseAssetKey(key); } catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid asset reference" }); }
   const workflow = await latestWorkflow(db, organizationId, key);
-  if (reference.kind === "asset") { const row = (await db.select().from(brandAssets).where(and(eq(brandAssets.organizationId, organizationId), eq(brandAssets.id, reference.id))).limit(1))[0]; if (row) return normalizeUpload(row, workflow); }
-  else { const row = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.organizationId, organizationId), eq(creativeVariants.id, reference.id))).limit(1))[0]; if (row) return normalizeCreative(row, workflow); }
+  if (reference.kind === "asset") { const row = (await db.select().from(brandAssets).where(and(eq(brandAssets.organizationId, organizationId), eq(brandAssets.id, reference.id))).limit(1))[0]; if (row) return withReviewedIntelligence(db, organizationId, normalizeUpload(row, workflow)); }
+  else { const row = (await db.select().from(creativeVariants).where(and(eq(creativeVariants.organizationId, organizationId), eq(creativeVariants.id, reference.id))).limit(1))[0]; if (row) return withReviewedIntelligence(db, organizationId, normalizeCreative(row, workflow)); }
   throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found in this workspace" });
 }
 export async function writeAssetStatus(db: LibraryTransaction, organizationId: number, key: string, data: { status: "pending" | "approved" | "rejected"; reviewedByUserId: number | null; reviewedAtMs: number | null }) {

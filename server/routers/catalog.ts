@@ -283,7 +283,8 @@ export const catalogRouter = router({
           provenance: editedProductProvenance(
             existing.provenance,
             ctx.user.id,
-            now
+            now,
+            Object.keys(input.product).filter(key => JSON.stringify((input.product as any)[key]) !== JSON.stringify((existing as any)[key]))
           ),
           status: "pending",
           reviewedByUserId: null,

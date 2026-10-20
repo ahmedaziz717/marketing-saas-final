@@ -5,8 +5,9 @@ import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import { XMLParser } from "fast-xml-parser";
 import ipaddr from "ipaddr.js";
+import { extractProductSpecifications, selectStructuredProducts, missingProductFacts } from "./productSpecifications";
 
-const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 4;
 const BLOCKED_EXTENSIONS =
@@ -28,6 +29,8 @@ export type PageEvidence = {
   internalLinks: string[];
   structuredProducts: Array<Record<string, unknown>>;
   specifications: Record<string, string>;
+  specificationEvidence?: Record<string, { source: string; confidence: number }>;
+  missingProductFacts?: string[];
   commerceMeta: {
     sku: string | null;
     price: string | null;
@@ -426,33 +429,6 @@ function collectJsonLdProducts($: cheerio.CheerioAPI) {
   return products.slice(0, 30);
 }
 
-function extractSpecifications($: cheerio.CheerioAPI) {
-  const pairs = new Map<string, string>();
-  $("table tr").each((_, row) => {
-    const cells = $(row)
-      .find("th,td")
-      .toArray()
-      .map(cell => $(cell).text().replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    if (cells.length < 2) return;
-    const key = cells.length === 2 ? cells[0]! : `${cells[0]} · ${cells[1]}`;
-    const value = cells.length === 2 ? cells[1]! : cells.slice(2).join(" · ");
-    if (
-      key &&
-      value &&
-      key.length <= 180 &&
-      value.length <= 1200 &&
-      !pairs.has(key)
-    )
-      pairs.set(key, value);
-  });
-  $("li").each((_, item) => {
-    const text = $(item).text().replace(/\s+/g, " ").trim();
-    const match = text.match(/^([^:]{2,100}):\s*(.{2,1000})$/);
-    if (match && !pairs.has(match[1]!)) pairs.set(match[1]!, match[2]!);
-  });
-  return Object.fromEntries(Array.from(pairs).slice(0, 120));
-}
 
 function extractColors(source: string) {
   const values = source.match(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g) ?? [];
@@ -494,7 +470,7 @@ export function extractPageEvidence(
   linkedStyles = ""
 ): PageEvidence {
   const $ = cheerio.load(html);
-  const structuredProducts = collectJsonLdProducts($);
+  const allStructuredProducts = collectJsonLdProducts($);
   const hasSku =
     $('[itemprop="sku"], [data-sku], meta[property="product:retailer_item_id"]')
       .length > 0 || /\bSKU\s*[:#]/i.test($("body").text());
@@ -533,6 +509,7 @@ export function extractPageEvidence(
       $('[itemprop="availability"]').attr("content") ||
       null,
   };
+  const structuredProducts = selectStructuredProducts(allStructuredProducts, pageUrl, commerceMeta.sku);
   const title =
     $('meta[property="og:title"]').attr("content") ||
     $("title").first().text().trim();
@@ -588,6 +565,7 @@ export function extractPageEvidence(
     .get()
     .join("\n")}\n${linkedStyles.slice(0, 500_000)}\n${html.slice(0, 300_000)}`;
   $("script,style,noscript,svg,nav,footer").remove();
+  const specificationData = extractProductSpecifications($, structuredProducts);
   const text = $("body").text().replace(/\s+/g, " ").trim().slice(0, 18_000);
   const pathname = new URL(pageUrl).pathname.toLowerCase();
   const productResult = productCandidateFromEvidence({
@@ -629,7 +607,9 @@ export function extractPageEvidence(
     stylesheetUrls: Array.from(stylesheetUrls).slice(0, 12),
     internalLinks: Array.from(internalLinks).slice(0, 1500),
     structuredProducts,
-    specifications: extractSpecifications($),
+    specifications: specificationData.specifications,
+    specificationEvidence: specificationData.evidence,
+    missingProductFacts: missingProductFacts(title, specificationData.specifications),
     commerceMeta,
     productCandidate: productResult.eligible,
     productEvidence: productResult.reasons,

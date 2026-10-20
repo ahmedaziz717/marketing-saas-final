@@ -1,3 +1,4 @@
+import { learningOriginSchema } from "./learningHandoff";
 import { z } from "zod";
 import {
   productFactSelectionSchema,
@@ -119,6 +120,7 @@ export const videoSetupSchema = z
     title: z.string().trim().min(1).max(160),
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
+    learningOrigin: learningOriginSchema.optional(),
     promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(30),
     productSelections: z.array(productFactSelectionSchema).max(30).optional(),

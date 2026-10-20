@@ -19,11 +19,15 @@ import {
 import {
   apiCatalogConfigSchema,
   apiInstructionFileSchema,
+  apiEndpointSchema,
+  apiCatalogMappingSchema,
 } from "../../shared/apiCatalog";
 import {
   apiCatalogAddress,
   fetchApiCatalog,
   parseApiCatalog,
+  apiCatalogRows,
+  inferProductLinkRule,
 } from "../lib/apiCatalog";
 import { suggestApiMapping } from "../lib/apiInstructions";
 const org = z.object({ organizationId: z.number().int().positive() });
@@ -38,42 +42,103 @@ export const catalogSourcesRouter = router({
   previewApi: protectedProcedure
     .input(
       org.extend({
-        endpoint: z.string().url().max(2048),
+        endpoint: apiEndpointSchema,
         config: apiCatalogConfigSchema,
         files: z.array(apiInstructionFileSchema).max(3).default([]),
         interpretInstructions: z.boolean().default(false),
+        exampleProductUrl: z.string().trim().max(2048).default(""),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await owner(ctx.user.id, input.organizationId);
       const endpoint = apiCatalogAddress(input.endpoint);
       const data = await fetchApiCatalog(endpoint, input.config);
-      const mapping = input.interpretInstructions
+      const suggested = input.interpretInstructions
         ? await suggestApiMapping(data, input.config.notes, input.files)
-        : {
-            itemsPath: input.config.itemsPath,
-            nextPath: input.config.nextPath,
-            fields: input.config.fields,
-          };
-      const result = parseApiCatalog(data, endpoint, {
+        : input.config;
+      const mapping = {
+        ...suggested,
+        ...Object.fromEntries(
+          Object.entries(input.config).filter(
+            ([key, value]) =>
+              !["auth", "notes", "fields"].includes(key) &&
+              value !== "" &&
+              value !== undefined
+          )
+        ),
+        fields: {
+          ...suggested.fields,
+          ...Object.fromEntries(
+            Object.entries(input.config.fields).filter(([, value]) => !!value)
+          ),
+        },
+      };
+      if (input.exampleProductUrl) {
+        let inferred: ReturnType<typeof inferProductLinkRule> = null;
+        try {
+          inferred = inferProductLinkRule(
+            input.exampleProductUrl,
+            apiCatalogRows(data, mapping.itemsPath)
+          );
+        } catch {
+          /* Explain an invalid example beside the setup. */
+        }
+        if (!inferred)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Use a product-page link containing the SKU or code of a product in this feed. If links follow another rule, describe it in Instructions.",
+          });
+        if (inferred.rule) {
+          const rule = inferred.rule;
+          mapping.productUrlRules = [
+            ...(mapping.productUrlRules ?? []).filter(
+              r => r.path !== rule.path || r.equals !== rule.equals
+            ),
+            rule,
+          ];
+        } else mapping.productUrlTemplate = inferred.template;
+      }
+      const resolved = apiCatalogConfigSchema.parse({
         ...input.config,
         ...mapping,
       });
+      const result = parseApiCatalog(data, endpoint, resolved, {
+        preview: true,
+      });
       return {
-        mapping,
+        mapping: apiCatalogMappingSchema.parse(resolved),
         count: result.items.length,
         total: result.total,
         hasNext: !!result.next,
+        ready: !result.issues.some(issue => issue.blocking),
+        issues: result.issues.slice(0, 100),
+        issueCount: result.issues.length,
         samples: result.items
-          .slice(0, 5)
-          .map(({ name, sku, productUrl, imageUrl, price, currency }) => ({
-            name,
-            sku,
-            productUrl,
-            imageUrl,
-            price,
-            currency,
-          })),
+          .slice(0, 6)
+          .map(
+            ({
+              name,
+              sku,
+              productUrl,
+              imageUrl,
+              price,
+              currency,
+              specifications,
+              features,
+              availability,
+            }) => ({
+              name,
+              sku,
+              productUrl,
+              imageUrl,
+              price,
+              currency,
+              specifications,
+              features,
+              availability,
+            })
+          ),
       };
     }),
   previewPage: protectedProcedure

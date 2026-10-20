@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CREATIVE_THEME_LIST } from "./creativeThemes";
 import { CREATIVE_ART_STYLES } from "./creativeBuilder";
 
-export const TAXONOMY_VERSION = 2;
+export const TAXONOMY_VERSION = 3;
 export const dimensionNames = [
   "messaging_style",
   "emotional_appeal",
@@ -42,6 +42,8 @@ export const dimensionNames = [
   "timezone",
   "budget",
   "bid_strategy",
+  "font_family", "font_weight", "font_size", "product", "product_category", "creator_content",
+  "video_duration", "video_hook", "video_pacing", "video_audio", "video_captions", "objective", "attribution_window",
 ] as const;
 export type Dimension = (typeof dimensionNames)[number];
 export const messagingStyles = [
@@ -85,6 +87,13 @@ export const assertionSchema = z.object({
   dimension: z.enum(dimensionNames),
   labels: z.array(labelSchema).max(30),
   unknownReason: z.string().max(1000).optional(),
+  basis: z.enum(["requested", "observed"]).optional(),
+  status: z.enum(["known", "unknown", "not_applicable"]).optional(),
+  assetVersion: z.string().max(100).optional(),
+  assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/).optional(),
+  retired: z.boolean().optional(),
+  validSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 export type Assertion = z.infer<typeof assertionSchema>;
 export type Classification = Assertion & {
@@ -111,7 +120,13 @@ export function effectiveClassifications(
   rows: Classification[]
 ): Partial<Record<Dimension, Classification>> {
   const result: Partial<Record<Dimension, Classification>> = {};
+  const latest = new Map<string, Classification>();
   for (const row of rows) {
+    const key = `${row.dimension}:${row.source}`;
+    if (!latest.has(key) || latest.get(key)!.revision < row.revision) latest.set(key, row);
+  }
+  for (const row of Array.from(latest.values())) {
+    if (row.retired) continue;
     const current = result[row.dimension];
     const priority = { human: 3, import: 2, rule: 1 };
     if (
@@ -131,7 +146,7 @@ export const historyRangeSchema = z
   })
   .refine(
     r =>
-      r.since >= "2026-01-01" &&
+      r.since >= "2000-01-01" &&
       r.since <= r.until &&
       [r.since, r.until].every(d => {
         const parsed = new Date(d + "T00:00:00Z");
@@ -139,7 +154,7 @@ export const historyRangeSchema = z
           Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === d
         );
       }),
-    "Choose valid dates from January 1, 2026 onwards."
+    "Choose valid dates from January 1, 2000 onwards. Availability depends on the connected provider."
   );
 export const analysisQuerySchema = z.object({
   range: historyRangeSchema,
@@ -156,6 +171,7 @@ export const analysisQuerySchema = z.object({
     .max(20)
     .default([]),
   minimumConfidence: z.number().min(0).max(1).default(0),
+  learning: z.object({ halfLifeDays: z.number().min(1).max(3650).default(365), context: z.array(z.object({ dimension: z.enum(dimensionNames), values: z.array(z.string().max(120)).min(1).max(30) })).max(20).default([]) }).optional(),
 });
 export type AnalysisQuery = z.infer<typeof analysisQuerySchema>;
 export const optimizerKinds = [

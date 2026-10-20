@@ -246,6 +246,8 @@ async function saveOutput(db: LibraryDatabase, job: VideoJob) {
         metadata: {
           ...info,
           campaignPlanId: job.setup.campaignPlanId,
+          direction: { ...job.setup.direction, duration: job.setup.duration, sound: job.setup.sound, learningOrigin: job.setup.learningOrigin },
+          learningOrigin: job.setup.learningOrigin,
           generatedVideo: {
             jobId: job.id,
             provider: "higgsfield",

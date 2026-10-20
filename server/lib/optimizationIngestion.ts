@@ -149,9 +149,11 @@ export async function queueHistory(
   organizationId: number,
   actorUserId: number,
   connectionId: string,
-  incremental = false
+  incremental = false,
+  requestedRange?: { since: string; until: string }
 ) {
   requireOptimization(organizationId);
+  if (requestedRange) historyRangeSchema.parse(requestedRange);
   await requireOrganizationRole(actorUserId, organizationId, [
     "owner",
     "admin",
@@ -174,12 +176,14 @@ export async function queueHistory(
       .for("update");
     if (existing && ["queued", "running"].includes(existing.status))
       return existing;
-    const until = new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const until = requestedRange?.until ?? today;
+    if (until > today) throw new Error("Choose a history range ending today or earlier.");
     // Re-fetch attribution lag, including empty slices; never append overlapping totals.
     const since =
       incremental && existing?.status === "completed"
-        ? ["2026-01-01", moveDate(existing.until, -28)].sort().at(-1)!
-        : "2026-01-01";
+        ? [existing.checkpoint.coverage?.since ?? existing.since, moveDate(existing.until, -28)].sort().at(-1)!
+        : requestedRange?.since ?? `${new Date().getUTCFullYear()}-01-01`;
     const values = {
       organizationId,
       connectionId,

@@ -119,7 +119,7 @@ it("keeps rollout and read-only roles gated and lists only connected ad accounts
   expect(
     (
       screen.getByRole("button", {
-        name: "Import 2026 history",
+        name: "Import selected history",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);

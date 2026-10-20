@@ -297,17 +297,14 @@ it("creates immutable human revisions without cross-tenant object access", async
   ).rejects.toThrow(/workspace/);
 });
 
-it("batches imported classifications idempotently without fabricating unknown observations or replacing human edits", async () => {
+it("persists explicit unknown coverage idempotently without inventing labels or replacing human edits", async () => {
   await classifyHistoryBatch(state.db, org, cid);
   const first = await state.db.select().from(optimizationClassifications);
   expect(
     first.some((r: any) => r.source === "rule" && r.dimension === "channel")
   ).toBe(true);
-  expect(
-    first.filter(
-      (r: any) => r.source === "rule" && r.assertion.labels.length === 0
-    )
-  ).toHaveLength(0);
+  expect(first.filter((r: any) => r.source === "rule" && r.assertion.labels.length === 0).length).toBeGreaterThan(0);
+  expect(new Set(first.filter((r: any) => r.source === "rule").map((r: any) => r.dimension)).size).toBe(50);
   const humans = first.filter((r: any) => r.source === "human");
   await classifyHistoryBatch(state.db, org, cid);
   const second = await state.db.select().from(optimizationClassifications);
@@ -778,4 +775,11 @@ it("joins authored subheadlines only to the same published creative and clears u
     tagLiveCopyEvidence(state.db, org, { ...evidence, accountId: "999" })
   ).rejects.toThrow(/match/);
   await state.db.delete(publications).where(eq(publications.id, id));
+});
+
+it("queues a selected pre-system historical range without a 2026 floor", async () => {
+  await state.db.update(optimizationSyncs).set({ status: "completed" }).where(eq(optimizationSyncs.connectionId, cid));
+  const queued = await queueHistory(state.db, org, uid, cid, false, { since: "2024-06-01", until: "2024-06-07" });
+  expect(queued.since).toBe("2024-06-01");
+  expect(queued.until).toBe("2024-06-07");
 });

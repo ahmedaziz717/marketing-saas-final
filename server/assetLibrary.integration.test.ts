@@ -67,5 +67,15 @@ describe.sequential("Studio to Asset Library handoff", () => {
   it("does not let a reviewer bypass Studio permissions with direct approval", async () => { const asset = await current(generatedKey); await expect(reviewer.assetLibrary.approveAndAdd({ organizationId, key: asset.key, revision: asset.revision })).rejects.toMatchObject({ code: "FORBIDDEN" }); });
   it("submits generated work without duplicating creative records or media", async () => { const db = await database(), before = await db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, organizationId)), asset = await current(generatedKey); await creator.assetLibrary.submit({ organizationId, key: asset.key, revision: asset.revision }); expect((await owner.assetLibrary.list({ organizationId })).filter(a => a.key === asset.key)).toHaveLength(1); expect(await db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, organizationId))).toHaveLength(before.length); });
   it("rejects replayed submission revisions", async () => { const asset = await current(generatedKey); await expect(creator.assetLibrary.submit({ organizationId, key: asset.key, revision: asset.revision })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" }); });
+  it("keeps reviewed dimensions on the exact asset version and denies foreign-workspace edits", async () => {
+    const asset = await current(generatedKey);
+    const input = { organizationId, key: asset.key, fingerprint: asset.fingerprint, dimension: "theme" as const, status: "known" as const, values: ["spotlight"], evidence: "Reviewed the rendered product spotlight", confidence: .9 };
+    await creator.assetLibrary.classifyDimension(input);
+    const reviewed = await current(generatedKey);
+    expect(reviewed.intelligence?.observed.theme.values).toEqual(["spotlight"]);
+    expect(reviewed.state).toBe(asset.state);
+    await expect(outsider.assetLibrary.classifyDimension({ ...input, organizationId: otherOrganizationId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(creator.assetLibrary.classifyDimension({ ...input, fingerprint: "0".repeat(64) })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
   it("keeps the transactional audit chain valid", async () => { const db = await database(); const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, organizationId)); expect(verifyActivityChain(events)).toBe(true); });
 });

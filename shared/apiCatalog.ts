@@ -29,6 +29,38 @@ export const API_CATALOG_FIELDS = [
   "features",
   "availability",
 ] as const;
+const publicLink = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(value => {
+    try {
+      const u = new URL(value);
+      return /^https?:$/.test(u.protocol) && !u.username && !u.password;
+    } catch {
+      return false;
+    }
+  }, "Use a complete website address, starting with https://.");
+const linkTemplate = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(value => {
+    const paths = Array.from(value.matchAll(/\{([^{}]+)\}/g)).map(m => m[1]);
+    const authority = value.match(/^https?:\/\/([^/]+)/)?.[1] ?? "";
+    return (
+      !/[{}]/.test(authority) &&
+      paths.every(p => path.safeParse(p).success && p.length > 0) &&
+      publicLink.safeParse(value.replace(/\{[^{}]+\}/g, "example")).success
+    );
+  }, "Use a website address with field placeholders, such as https://shop.example/products/{sku}.");
+export const apiEndpointSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .url(
+    "Enter only the API address, starting with https://. Put explanations in Instructions."
+  );
 export const apiCatalogMappingSchema = z.object({
   itemsPath: path.default(""),
   nextPath: path.default(""),
@@ -42,6 +74,26 @@ export const apiCatalogMappingSchema = z.object({
       >
     )
     .default({}),
+  productUrlTemplate: linkTemplate.optional(),
+  productUrlRules: z
+    .array(
+      z.object({
+        path,
+        equals: z.string().max(200),
+        template: linkTemplate,
+      })
+    )
+    .max(20)
+    .optional(),
+  productBaseUrl: publicLink.optional(),
+  imageBaseUrl: publicLink.optional(),
+  imageUrlTemplate: linkTemplate.optional(),
+  componentsPath: path.optional(),
+  inventoryQuantityPath: path.optional(),
+  defaultCurrency: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Choose a three-letter currency, such as USD.")
+    .optional(),
 });
 export const apiCatalogAuthSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),

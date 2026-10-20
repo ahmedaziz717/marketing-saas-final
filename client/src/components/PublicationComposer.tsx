@@ -132,6 +132,7 @@ function ComposerSurface({
 export function PublicationComposer({
   studio = false,
   onChangeChannel,
+  channelChoices,
   studioEntry,
   studioActive = true,
   item,
@@ -148,6 +149,7 @@ export function PublicationComposer({
 }: {
   studio?: boolean;
   onChangeChannel?: () => void;
+  channelChoices?: React.ReactNode;
   studioEntry?: ActivationEntry;
   studioActive?: boolean;
   item?: Publication;
@@ -626,6 +628,7 @@ export function PublicationComposer({
         section={step}
         onSection={goToStep}
         onChangeChannel={onChangeChannel}
+        channelChoices={channelChoices}
         entry={validationEntry ?? studioEntry}
         active={studioActive}
         accounts={connectedAccounts}
