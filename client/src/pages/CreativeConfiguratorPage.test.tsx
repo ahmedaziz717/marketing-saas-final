@@ -14,7 +14,10 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
 } from "@shared/modelCatalog";
-import { newConfiguration } from "@shared/creativeConfigurator";
+import {
+  newConfiguration,
+  type ConfiguratorState,
+} from "@shared/creativeConfigurator";
 const api = vi.hoisted(() => ({
   save: vi.fn(),
   generate: vi.fn(),
@@ -24,6 +27,7 @@ const api = vi.hoisted(() => ({
   org: 1,
   route: vi.fn(),
   drafts: [] as any[],
+  videoDrafts: [] as any[],
   history: [] as any[],
   job: undefined as any,
   assets: [] as any[],
@@ -108,6 +112,10 @@ vi.mock("@/lib/trpc", () => ({
                 id: 1,
                 name: "Studio lamp",
                 recordType: "product",
+                specifications: { Power: "12 W", Material: "Aluminum" },
+                description: "A dimmable desk lamp.",
+                price: "89.00",
+                currency: "USD",
                 images: [{ id: 2, url: "/lamp.png" }],
               },
             ],
@@ -183,13 +191,21 @@ vi.mock("@/lib/trpc", () => ({
                 name: "Studio lamp",
                 detail: "Photo 1",
                 url: "/lamp.png",
+                product: {
+                  id: 1,
+                  name: "Studio lamp",
+                  specifications: { Power: "12 W", Material: "Aluminum" },
+                  description: "A dimmable desk lamp.",
+                  price: "89.00",
+                  currency: "USD",
+                },
               },
             ],
             nextOffset: null,
           },
         }),
       },
-      list: { useQuery: () => ({ data: [] }) },
+      list: { useQuery: () => ({ data: api.videoDrafts }) },
       options: { useQuery: () => ({ data: { ready: true } }) },
       save: { useMutation: () => ({ mutateAsync: api.videoSave }) },
       generate: { useMutation: () => ({ mutateAsync: api.videoGenerate }) },
@@ -207,6 +223,7 @@ beforeEach(() => {
   api.role = "owner";
   api.org = 1;
   api.drafts = [];
+  api.videoDrafts = [];
   api.history = [];
   api.job = undefined;
   api.videoJob = undefined;
@@ -258,14 +275,16 @@ it("allows a video prompt with zero images, switches Seedance input modes with r
         .value
     ).toContain("softly lit studio")
   );
-  await waitFor(() =>
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Generate video",
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(false)
+  await waitFor(
+    () =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Generate video",
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false),
+    { timeout: 3000 }
   );
   section(/Type & Source Start with an idea/);
   clickJourney(
@@ -298,8 +317,7 @@ it("generates copy from the saved page snapshot and shows which page is being us
     sourceUrl: "https://learn.example.test/quiz/",
     pageContent: "Answer 12 questions about your routines.",
   };
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
-  open();
+  openSaved(config);
   section(/Story & Sound Tell your story/);
   expect(
     screen.getByText("Homeschool quiz", { selector: ".cfg-copy-source strong" })
@@ -323,7 +341,7 @@ it("generates copy from the saved page snapshot and shows which page is being us
     (screen.getByLabelText("Page details") as HTMLTextAreaElement).value
   ).toContain("12 questions");
 });
-it("shows every category with actual choices and remembers viewed status separately for image and video", () => {
+it("shows every category and resets viewed status when the studio reopens", () => {
   const view = open();
   expect(
     screen.getByRole("button", { name: "Open Creative type category" })
@@ -335,6 +353,8 @@ it("shows every category with actual choices and remembers viewed status separat
   expect(
     screen.getByRole("heading", { name: "Subject & sources" })
   ).toBeTruthy();
+  clickJourney(screen.getByRole("button", { name: "Next category" }));
+  expect(screen.getByRole("heading", { name: "Product details" })).toBeTruthy();
   clickJourney(screen.getByRole("button", { name: "Next category" }));
   expect(screen.getByRole("heading", { name: "Brand & logo" })).toBeTruthy();
   section(/Look & Feel/);
@@ -356,7 +376,7 @@ it("shows every category with actual choices and remembers viewed status separat
   section(/Look & Feel/);
   expect(
     screen.getByRole("button", { name: "Open Fonts category" }).textContent
-  ).toContain("Viewed");
+  ).toContain("Not viewed");
   section(/Type & Source/);
   clickJourney(screen.getByRole("button", { name: "Select Video" }));
   expect(
@@ -424,10 +444,9 @@ it("duplicates a build, preserves its snapshot, highlights changes, and swaps wi
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("Original build");
-  const stored = JSON.parse(
-    localStorage.getItem("el-configurator-v1:10:1:comparison")!
-  );
-  expect(stored.config.image.shot).toBe("lifestyle");
+  clickJourney(screen.getByRole("button", { name: "Compare builds" }));
+  expect(screen.getByText("Original build · Alternative")).toBeTruthy();
+  expect(localStorage.getItem("el-configurator-v1:10:1:comparison")).toBeNull();
   expect(api.save).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
 });
@@ -448,10 +467,96 @@ it("exposes audio and subtitle categories only for video and does not imply subt
   expect(api.videoGenerate).not.toHaveBeenCalled();
 });
 afterEach(cleanup);
+
+it.each(["image", "video"] as const)(
+  "exposes catalog facts and saves only the selected %s highlights",
+  async kind => {
+    open();
+    if (kind === "video")
+      clickJourney(screen.getByRole("button", { name: "Select Video" }));
+    clickJourney(
+      screen.getByRole("button", { name: "Open Subject & sources category" })
+    );
+    clickJourney(screen.getByRole("button", { name: "Select Studio lamp" }));
+    clickJourney(
+      screen.getByRole("button", { name: /Choose product details for the ad/ })
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /Include price/ })
+        .getAttribute("aria-pressed")
+    ).toBe("false");
+    expect(
+      screen.getByRole("button", { name: "Feature Material: Aluminum" })
+    ).toBeTruthy();
+    clickJourney(screen.getByRole("button", { name: "Feature Power: 12 W" }));
+    clickJourney(screen.getByRole("button", { name: /Include price/ }));
+    clickJourney(
+      screen.getByRole("button", { name: /Description & benefits/ })
+    );
+    clickJourney(screen.getByRole("button", { name: "Save draft" }));
+    const save = kind === "image" ? api.save : api.videoSave;
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          setup: expect.objectContaining({
+            [kind === "image" ? "products" : "productSelections"]: [
+              expect.objectContaining({
+                productId: 1,
+                featuredSpecKeys: ["Power"],
+                includePrice: true,
+                includeDescription: true,
+              }),
+            ],
+          }),
+        })
+      )
+    );
+    if (kind === "video") {
+      clickJourney(
+        screen.getByRole("button", { name: "Open Subject & sources category" })
+      );
+      clickJourney(screen.getByRole("button", { name: "Remove Studio lamp" }));
+      clickJourney(
+        screen.getByRole("button", { name: "Open Product details category" })
+      );
+      expect(
+        screen.getByRole("heading", { name: "Choose a catalog product first" })
+      ).toBeTruthy();
+      clickJourney(screen.getByRole("button", { name: "Save draft" }));
+      await waitFor(() =>
+        expect(save).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            setup: expect.objectContaining({
+              imageKeys: [],
+              productSelections: [],
+            }),
+          })
+        )
+      );
+    }
+    expect(api.generate).not.toHaveBeenCalled();
+    expect(api.videoGenerate).not.toHaveBeenCalled();
+  }
+);
+
 function open() {
   const view = render(<CreativeConfiguratorPage />);
   const summary = screen.getByRole("button", { name: /Preview & summary/ });
   if (summary.getAttribute("aria-expanded") === "false") clickJourney(summary);
+  return view;
+}
+function openSaved(config: ConfiguratorState) {
+  const name = config.kind === "image" ? config.image.name : config.video.title;
+  if (config.kind === "image")
+    api.drafts = [{ id: 1, name, setup: config.image, updatedAtMs: 123 }];
+  else
+    api.videoDrafts = [
+      { id: "video-draft", setup: config.video, revision: 1, status: "draft" },
+    ];
+  const view = open();
+  clickJourney(screen.getByRole("button", { name: "Saved drafts" }));
+  clickJourney(within(screen.getByRole("dialog")).getByText(name));
   return view;
 }
 function section(name: RegExp) {
@@ -473,7 +578,7 @@ it("shows the shared brand logos in video and saves the choice without changing 
       revision: "a".repeat(64),
     },
   ];
-  const view = render(<CreativeConfiguratorPage initialKind="video" />);
+  render(<CreativeConfiguratorPage initialKind="video" />);
   const heading = screen.getByRole("heading", { level: 1 }).textContent;
   clickJourney(
     screen.getByRole("button", { name: "Open Brand & logo category" })
@@ -490,11 +595,6 @@ it("shows the shared brand logos in video and saves the choice without changing 
         }),
       })
     )
-  );
-  view.unmount();
-  open();
-  clickJourney(
-    screen.getByRole("button", { name: "Open Brand & logo category" })
   );
   expect(
     screen
@@ -520,8 +620,7 @@ it("keeps video generation, playback and approval in the same Studio layout", as
   const config = newConfiguration();
   config.kind = "video";
   config.video.prompt = "A slow sunrise over a mountain lake";
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
-  const view = open();
+  const view = openSaved(config);
   const heading = screen.getByRole("heading", { level: 1 }).textContent;
   await waitFor(() =>
     expect(
@@ -660,7 +759,7 @@ it("opens a failed request in Studio and detaches a new version from its old lin
     assetKey: null,
     createdAtMs: 1000,
   };
-  open();
+  const view = open();
   await waitFor(() =>
     expect(
       (screen.getByLabelText("Creative name") as HTMLInputElement).value
@@ -672,13 +771,27 @@ it("opens a failed request in Studio and detaches a new version from its old lin
   expect(api.route).toHaveBeenCalledWith("/app/creatives/studio", {
     replace: true,
   });
+  api.search = "";
+  view.rerender(<CreativeConfiguratorPage />);
   expect(
-    JSON.parse(localStorage.getItem("el-configurator-v1:10:1")!).video
-  ).toMatchObject({ title: "Brand film · new version", logoAssetId: 4 });
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toBe("Brand film · new version");
+  expect(localStorage.getItem("el-configurator-v1:10:1")).toBeNull();
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          title: "Brand film · new version",
+          logoAssetId: 4,
+        }),
+      })
+    )
+  );
   expect(api.videoGenerate).not.toHaveBeenCalled();
 });
-it("preserves each type's name and setup when switching Image/Video", () => {
-  open();
+it("preserves each type during the visit, then resets unsaved image and video choices on return", () => {
+  const view = open();
   changeField(screen.getByLabelText("Creative name"), {
     target: { value: "My image" },
   });
@@ -694,7 +807,102 @@ it("preserves each type's name and setup when switching Image/Video", () => {
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
   ).toBe("My film");
+  view.unmount();
+  open();
+  expect(
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toBe("Untitled creative");
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
+  expect(
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toBe("Untitled video");
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.videoSave).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
+});
+
+it("ignores old browser choices and comparisons when starting a new studio visit", () => {
+  const stale = newConfiguration();
+  stale.kind = "video";
+  stale.image.name = "Stale image";
+  stale.video.title = "Stale video";
+  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(stale));
+  localStorage.setItem(
+    "el-configurator-v1:10:1:comparison",
+    JSON.stringify({ config: stale, credits: 10, capturedAt: Date.now() })
+  );
+  open();
+  expect(
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toBe("Untitled creative");
+  expect(screen.queryByRole("button", { name: "Compare builds" })).toBeNull();
+  clickJourney(screen.getByRole("button", { name: "Select Video" }));
+  expect(
+    (screen.getByLabelText("Creative name") as HTMLInputElement).value
+  ).toBe("Untitled video");
+});
+
+it.each(["image", "video"] as const)(
+  "reopens the explicitly saved %s choices without retaining later unsaved edits",
+  async kind => {
+    const view = open();
+    if (kind === "video")
+      clickJourney(screen.getByRole("button", { name: "Select Video" }));
+    changeField(screen.getByLabelText("Creative name"), {
+      target: { value: "Saved campaign" },
+    });
+    clickJourney(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() =>
+      expect(screen.getByText("Saved to workspace")).toBeTruthy()
+    );
+    const saved = (kind === "image" ? api.save : api.videoSave).mock.calls[0][0]
+      .setup;
+    if (kind === "image")
+      api.drafts = [
+        { id: 1, name: saved.name, setup: saved, updatedAtMs: 123 },
+      ];
+    else
+      api.videoDrafts = [
+        { id: "video-draft", setup: saved, revision: 1, status: "draft" },
+      ];
+    changeField(screen.getByLabelText("Creative name"), {
+      target: { value: "Unsaved revision" },
+    });
+    expect(
+      screen.getByText("Unsaved choices · Save draft to keep")
+    ).toBeTruthy();
+    view.unmount();
+    open();
+    expect(
+      (screen.getByLabelText("Creative name") as HTMLInputElement).value
+    ).toBe("Untitled creative");
+    clickJourney(screen.getByRole("button", { name: "Saved drafts" }));
+    clickJourney(
+      within(screen.getByRole("dialog")).getByText("Saved campaign")
+    );
+    expect(
+      (screen.getByLabelText("Creative name") as HTMLInputElement).value
+    ).toBe("Saved campaign");
+    expect(screen.getByText("Saved to workspace")).toBeTruthy();
+    expect(kind === "image" ? api.save : api.videoSave).toHaveBeenCalledTimes(
+      1
+    );
+    expect(api.generate).not.toHaveBeenCalled();
+    expect(api.videoGenerate).not.toHaveBeenCalled();
+  }
+);
+
+it("keeps choices unsaved when saving fails", async () => {
+  api.save.mockRejectedValueOnce(new Error("Could not save draft"));
+  open();
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Could not save draft"
+    )
+  );
+  expect(screen.getByText("Unsaved choices · Save draft to keep")).toBeTruthy();
+  expect(screen.queryByText("Saved to workspace")).toBeNull();
 });
 it("explains the people dependency and unlocks its picker only for people scenes", () => {
   open();
@@ -735,9 +943,17 @@ it("requires a valid current quote and explicit confirmation before image genera
   config.image.products = [
     { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
   ];
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
   api.job = { id: 12, status: "queued", variants: [] };
-  const view = open();
+  const view = openSaved(config);
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate images",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
   clickJourney(screen.getByRole("button", { name: "Generate images" }));
   expect(api.generate).not.toHaveBeenCalled();
   clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
@@ -808,8 +1024,7 @@ it("renders selected catalog source photos and titles in video builds", () => {
   const config = newConfiguration();
   config.kind = "video";
   config.video.imageKeys = ["product_image:2"];
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
-  open();
+  openSaved(config);
   clickJourney(
     screen.getByRole("button", { name: "Open Subject & sources category" })
   );
@@ -914,7 +1129,6 @@ it("keeps completed generation in the large preview and requires explicit approv
   config.image.products = [
     { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
   ];
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
   api.job = {
     id: 12,
     status: "completed",
@@ -939,7 +1153,16 @@ it("keeps completed generation in the large preview and requires explicit approv
       sourceType: "creative",
     },
   ];
-  open();
+  openSaved(config);
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate images",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
   clickJourney(screen.getByRole("button", { name: "Generate images" }));
   clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
   await waitFor(() =>
@@ -972,14 +1195,22 @@ it("reports a failed generation in place without navigating or approving", async
   config.image.products = [
     { productId: 1, imageId: 2, featuredSpecKeys: [], includePrice: false },
   ];
-  localStorage.setItem("el-configurator-v1:10:1", JSON.stringify(config));
   api.job = {
     id: 12,
     status: "failed",
     errorMessage: "The provider could not finish this image.",
     variants: [],
   };
-  open();
+  openSaved(config);
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate images",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
   clickJourney(screen.getByRole("button", { name: "Generate images" }));
   clickJourney(screen.getByRole("button", { name: "Confirm · 174 credits" }));
   await waitFor(() =>

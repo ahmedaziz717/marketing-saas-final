@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  productFactSelectionSchema,
+  type SelectedProductFacts,
+  type StudioProduct,
+} from "./studioProductFacts";
+import {
   generationModel,
   modelOptionsSchema,
   modelRequestBody,
@@ -103,6 +108,7 @@ export type VideoImageChoice = {
   width?: number;
   height?: number;
   durationSeconds?: number;
+  product?: StudioProduct;
 };
 export const videoSetupSchema = z
   .object({
@@ -115,6 +121,7 @@ export const videoSetupSchema = z
     prompt: z.string().trim().max(10000),
     promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(30),
+    productSelections: z.array(productFactSelectionSchema).max(30).optional(),
     logoAssetId: z.number().int().positive().nullable().optional(),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
@@ -126,6 +133,15 @@ export const videoSetupSchema = z
     campaignPlanId: z.number().int().positive().optional(),
   })
   .superRefine((setup, ctx) => {
+    if (
+      new Set(setup.productSelections?.map(p => p.productId)).size !==
+      (setup.productSelections?.length ?? 0)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["productSelections"],
+        message: "Choose product attributes once per product.",
+      });
     if (setup.category === "product" && (setup.people ?? []).length)
       ctx.addIssue({
         code: "custom",
@@ -238,6 +254,8 @@ export type VideoReference = {
   height?: number;
   durationSeconds?: number;
   role?: "logo";
+  catalogFingerprint?: string;
+  productFacts?: SelectedProductFacts;
 };
 export function videoModelKey(setup: VideoSetup) {
   if (setup.modelId)
@@ -307,21 +325,24 @@ export function videoPrompt(setup: VideoSetup) {
 export function videoRequestBody(
   setup: VideoSetup,
   images: string[],
-  source?: string
+  source?: string,
+  catalogContext?: string
 ) {
+  const prompt = [videoPrompt(setup), catalogContext]
+    .filter(Boolean)
+    .join("\n\n");
   if (setup.modelId) {
     const model = generationModel(setup.modelId);
     if (!model || model.kind !== "video")
       throw new Error("Choose a video model.");
     return modelRequestBody(model, {
-      prompt: videoPrompt(setup),
+      prompt,
       images,
       video: source,
       options: videoModelOptions(setup),
     });
   }
   const body: Record<string, unknown> = { resolution: setup.resolution };
-  const prompt = videoPrompt(setup);
   if (prompt) body.prompt = prompt;
   if (images.length) body.image_urls = images;
   if (setup.mode === "motion") return { ...body, video_url: source };

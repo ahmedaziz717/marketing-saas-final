@@ -40,7 +40,7 @@ function Fixture({
   const [section, setSection] = useState("look");
   const [category, setCategory] = useState("theme");
   const journey = useStudioJourney({
-    storageKey: scope,
+    scopeKey: scope,
     section,
     category,
     sections: [
@@ -135,9 +135,13 @@ it("navigates immediately without opening a review or changing unviewed choices"
   expect(
     screen.getByRole("button", { name: "Open Summary category" })
   ).toBeTruthy();
-  expect(JSON.parse(localStorage.getItem("one:journey:v1")!).viewed).toEqual([
-    "theme",
-  ]);
+  fireEvent.click(screen.getByRole("button", { name: /Look & Feel/ }));
+  expect(
+    screen.getByRole("button", { name: "Open Theme category" }).textContent
+  ).toContain("Viewed");
+  expect(
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Not viewed");
 });
 it("opens an optional inline review with actual values and keeps required inputs distinct", () => {
   render(<Fixture missing />);
@@ -157,11 +161,36 @@ it("keeps navigation memory isolated when the workspace or draft changes", () =>
   fireEvent.click(screen.getByRole("button", { name: "Open Theme category" }));
   rerender(<Fixture scope="two" />);
   expect(screen.getAllByText("0/2 viewed")[0]).toBeTruthy();
-  expect(JSON.parse(localStorage.getItem("one:journey:v1")!).viewed).toEqual([
-    "theme",
-  ]);
   fireEvent.click(screen.getByRole("button", { name: "Open Fonts category" }));
-  expect(JSON.parse(localStorage.getItem("two:journey:v1")!).viewed).toEqual([
-    "fonts",
-  ]);
+  fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+  expect(
+    screen.getByRole("button", { name: "Open Theme category" }).textContent
+  ).toContain("Not viewed");
+  expect(
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Viewed");
+  rerender(<Fixture scope="one" />);
+  expect(
+    screen.getByRole("button", { name: "Open Theme category" }).textContent
+  ).toContain("Viewed");
+  expect(
+    screen.getByRole("button", { name: "Open Fonts category" }).textContent
+  ).toContain("Not viewed");
+});
+
+it("starts a new visit with no viewed categories, ignoring old browser memory", () => {
+  localStorage.setItem(
+    "one:journey:v1",
+    JSON.stringify({ viewed: ["theme", "fonts"], accepted: [] })
+  );
+  const view = render(<Fixture />);
+  expect(screen.getAllByText("0/2 viewed")[0]).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Open Theme category" }));
+  fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open Fonts category" }));
+  fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+  expect(screen.getAllByText("2/2 viewed")[0]).toBeTruthy();
+  view.unmount();
+  render(<Fixture />);
+  expect(screen.getAllByText("0/2 viewed")[0]).toBeTruthy();
 });

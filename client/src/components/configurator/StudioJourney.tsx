@@ -38,46 +38,31 @@ export type JourneySection = {
 };
 type Memory = { viewed: string[]; accepted: string[] };
 const empty = (): Memory => ({ viewed: [], accepted: [] });
-function readMemory(key: string): Memory {
-  try {
-    const data = JSON.parse(localStorage.getItem(key) ?? "null");
-    const strings = (value: unknown): string[] =>
-      Array.isArray(value)
-        ? value.filter((v): v is string => typeof v === "string")
-        : [];
-    return { viewed: strings(data?.viewed), accepted: strings(data?.accepted) };
-  } catch {
-    return empty();
-  }
-}
 
 /** Exploration is optional and never implies that a configuration is valid. */
 export function useStudioJourney({
-  storageKey,
+  scopeKey,
   sections,
   section,
   category,
   onNavigate,
   initialFocus = false,
 }: {
-  storageKey: string;
+  scopeKey: string;
   sections: JourneySection[];
   section: string;
   category: string;
   onNavigate: (section: string, category: string) => void;
   initialFocus?: boolean;
 }) {
-  const key = storageKey + ":journey:v1";
-  const [record, setRecord] = useState(() => ({
-    key,
-    memory: readMemory(key),
-  }));
-  // The key travels with its data: switching a workspace/mode cannot overwrite another trail.
-  const memory = record.key === key ? record.memory : readMemory(key);
+  const key = scopeKey;
+  // Keep each mode's trail during this visit, and start fresh when the studio reopens.
+  const [records, setRecords] = useState<Record<string, Memory>>({});
+  const memory = records[key] ?? empty();
   const changeMemory = (change: (previous: Memory) => Memory) =>
-    setRecord(previous => ({
-      key,
-      memory: change(previous.key === key ? previous.memory : readMemory(key)),
+    setRecords(previous => ({
+      ...previous,
+      [key]: change(previous[key] ?? empty()),
     }));
   const [mobile, setMobile] = useState(
     () =>
@@ -118,15 +103,6 @@ export function useStudioJourney({
       }));
     }
   }, [key, category, mobile, focused, !!current, memory.viewed.join("|")]);
-  useEffect(() => {
-    if (record.key === key) {
-      try {
-        localStorage.setItem(key, JSON.stringify(record.memory));
-      } catch {
-        /* Saving the actual draft is independent. */
-      }
-    }
-  }, [key, record]);
   const unseen = eligible.filter(c => !memory.viewed.includes(c.id));
   const sectionIndex = sections.findIndex(s => s.id === active.id);
   const categoryIndex = eligible.findIndex(c => c.id === category);

@@ -191,7 +191,7 @@ export function WorkflowAppStudio({
     return raw;
   };
   const journey = useStudioJourney({
-    storageKey: `workflow-app:${organizationId}:${preview ? "preview" : "published"}:${graph.nodes.map(n => n.id).join(",")}`,
+    scopeKey: `workflow-app:${organizationId}:${preview ? "preview" : "published"}:${graph.nodes.map(n => n.id).join(",")}`,
     sections: sections.map(s => ({
       ...s,
       categories: (

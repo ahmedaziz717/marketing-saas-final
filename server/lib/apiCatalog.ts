@@ -75,6 +75,7 @@ const aliases = {
   currency: ["currency", "price.currency", "currency_code"],
   category: ["category.name", "category", "product_type"],
   specifications: ["specifications", "specs", "attributes"],
+  features: ["features", "highlights", "bullet_points", "benefits"],
 };
 const text = (v: unknown, limit: number) =>
   (typeof v === "string" || typeof v === "number" ? String(v) : "")
@@ -87,6 +88,49 @@ function link(value: unknown, base: string) {
   if (!/^https?:$/.test(url.protocol) || url.username || url.password)
     throw new Error("Catalog links must be HTTP(S) URLs without credentials.");
   return url.href;
+}
+function catalogAttributes(
+  value: unknown,
+  prefix: string
+): Array<[string, string]> {
+  const primitive = (v: unknown): string =>
+    ["string", "number", "boolean"].includes(typeof v)
+      ? text(String(v), 1000)
+      : "";
+  const entries = Array.isArray(value)
+    ? value.map((item, index): [string, unknown] => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          const name =
+            item.name ?? item.label ?? item.key ?? item.Name ?? item.Label;
+          return [
+            text(name, 120) || `${prefix} ${index + 1}`,
+            item.value ??
+              item.values ??
+              item.options ??
+              item.Value ??
+              item.description,
+          ];
+        }
+        return [`${prefix} ${index + 1}`, item];
+      })
+    : value && typeof value === "object"
+      ? Object.entries(value)
+      : value
+        ? [[prefix, value] as [string, unknown]]
+        : [];
+  return entries.slice(0, 100).flatMap(([key, raw]) => {
+    if (["__proto__", "constructor", "prototype"].includes(key)) return [];
+    const name = text(key, 120),
+      content = Array.isArray(raw)
+        ? raw
+            .slice(0, 100)
+            .map(primitive)
+            .filter(Boolean)
+            .join(", ")
+            .slice(0, 1000)
+        : primitive(raw);
+    return name && content ? [[name, content] as [string, string]] : [];
+  });
 }
 export function parseApiCatalog(
   data: unknown,
@@ -132,20 +176,17 @@ export function parseApiCatalog(
       throw new Error(
         `Product ${index + 1} has no product URL. Set the productUrl field; API URLs are not used as product landing pages.`
       );
-    const specs = read("specifications");
-    const specifications =
-      specs && typeof specs === "object" && !Array.isArray(specs)
-        ? Object.fromEntries(
-            Object.entries(specs)
-              .slice(0, 100)
-              .filter(
-                ([key, v]) =>
-                  !["__proto__", "constructor", "prototype"].includes(key) &&
-                  ["string", "number", "boolean"].includes(typeof v)
-              )
-              .map(([key, v]) => [key.slice(0, 120), String(v).slice(0, 1000)])
-          )
-        : {};
+    const specs = catalogAttributes(read("specifications"), "Specification");
+    const usedKeys = new Set(specs.map(([key]) => key));
+    const features = catalogAttributes(read("features"), "Feature").map(
+      ([key, value]): [string, string] => [
+        usedKeys.has(key) ? `Feature · ${key}` : key,
+        value,
+      ]
+    );
+    const specifications = Object.fromEntries(
+      [...specs, ...features].slice(0, 100)
+    );
     const externalId =
       text(read("id"), 180) ||
       sku ||

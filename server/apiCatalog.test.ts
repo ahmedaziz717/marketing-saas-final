@@ -20,6 +20,37 @@ const product = {
 };
 beforeEach(() => vi.clearAllMocks());
 
+it("keeps array attributes and feature bullets as selectable catalog facts", () => {
+  const page = parseApiCatalog(
+    [
+      {
+        ...product,
+        attributes: [
+          { name: "Graphics", value: "RTX 5090" },
+          { label: "Memory", options: ["64 GB", "DDR5"] },
+          { name: "Wi-Fi", value: true },
+        ],
+        features: ["Tool-free access", "Two-year warranty"],
+      },
+    ],
+    endpoint,
+    config()
+  );
+  expect(page.items[0].specifications).toEqual({
+    Graphics: "RTX 5090",
+    Memory: "64 GB, DDR5",
+    "Wi-Fi": "true",
+    "Feature 1": "Tool-free access",
+    "Feature 2": "Two-year warranty",
+  });
+  const custom = parseApiCatalog(
+    [{ ...product, info: { highlights: { Cooling: "Liquid cooling" } } }],
+    endpoint,
+    apiCatalogConfigSchema.parse({ fields: { features: "info.highlights" } })
+  );
+  expect(custom.items[0].specifications).toEqual({ Cooling: "Liquid cooling" });
+});
+
 it("reads a public JSON catalog without credentials and maps common fields", async () => {
   mocked.request.mockResolvedValue({ data: { products: [product] } });
   const page = await readApiCatalogPage(endpoint, config(), null);

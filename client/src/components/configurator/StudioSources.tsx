@@ -41,6 +41,7 @@ export function StudioSources({
   updateVideo,
   onUploaded,
   onModels,
+  onProductDetails,
 }: {
   organizationId: number;
   role: string;
@@ -54,6 +55,7 @@ export function StudioSources({
   updateVideo: (patch: Partial<VideoSetup>) => void;
   onUploaded: () => Promise<unknown>;
   onModels?: () => void;
+  onProductDetails?: () => void;
 }) {
   const [tab, setTab] = useState(
       (
@@ -140,7 +142,32 @@ export function StudioSources({
     else
       key === video.sourceVideoKey
         ? updateVideo({ sourceVideoKey: null })
-        : updateVideo({ imageKeys: video.imageKeys.filter(k => k !== key) });
+        : updateVideoSources(video.imageKeys.filter(k => k !== key));
+  }
+  function updateVideoSources(imageKeys: string[]) {
+    const removed = video.imageKeys.filter(key => !imageKeys.includes(key));
+    const known = [
+      ...(selectedCatalog.data?.items ?? []),
+      ...(catalog.data?.items ?? []),
+    ];
+    const removedProductIds = new Set(
+      known
+        .filter(item => removed.includes(item.key))
+        .map(item => item.product?.id)
+    );
+    const remainingProductIds = new Set(
+      known
+        .filter(item => imageKeys.includes(item.key))
+        .map(item => item.product?.id)
+    );
+    updateVideo({
+      imageKeys,
+      productSelections: (video.productSelections ?? []).filter(
+        p =>
+          !removedProductIds.has(p.productId) ||
+          remainingProductIds.has(p.productId)
+      ),
+    });
   }
   function toggleSource(key: string) {
     const next = sourceKeys.includes(key)
@@ -154,7 +181,7 @@ export function StudioSources({
         promotionMode:
           image.promotionMode === "platform" ? "platform" : "offerings",
       });
-    else updateVideo({ imageKeys: next });
+    else updateVideoSources(next);
   }
   const sourceTabs = [
     ["catalog", "Product catalog", "Choose product photos", Package],
@@ -197,7 +224,12 @@ export function StudioSources({
               <button
                 type="button"
                 onClick={() =>
-                  updateVideo({ imageKeys: [], people: [], logoAssetId: null })
+                  updateVideo({
+                    imageKeys: [],
+                    productSelections: [],
+                    people: [],
+                    logoAssetId: null,
+                  })
                 }
               >
                 Clear image references
@@ -273,6 +305,20 @@ export function StudioSources({
               </div>
             ))}
           </div>
+          {selectedItems.some(item => item.key.startsWith("product")) &&
+            onProductDetails && (
+              <button
+                type="button"
+                className="cfg-product-details-link"
+                onClick={onProductDetails}
+              >
+                <Package size={19} />
+                <span>
+                  <strong>Choose product details for the ad</strong>
+                  <small>Specifications, features, description and price</small>
+                </span>
+              </button>
+            )}
         </section>
       )}
       <div className="cfg-source-tabs" role="group" aria-label="Source type">

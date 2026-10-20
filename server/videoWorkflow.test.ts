@@ -196,7 +196,9 @@ beforeAll(async () => {
         dedupeKey: "video-lamp",
         productUrl: "https://example.test/lamp",
         description: "A brass lamp.",
-        specifications: {},
+        specifications: { Material: "Brass", Power: "12 W" },
+        price: "49.00",
+        currency: "USD",
         provenance: {},
         status: "approved",
         createdAtMs: now,
@@ -473,6 +475,94 @@ describe("durable video generation", () => {
     expect(job.credits).toBeGreaterThan(0);
   });
 
+  it("exposes selected product facts and carries them into the actual video request", async () => {
+    const settings = {
+      ...setup(),
+      imageKeys: [`product_image:${catalogImageId}`],
+      productSelections: [
+        {
+          productId,
+          featuredSpecKeys: ["Power"],
+          includePrice: true,
+          includeDescription: true,
+        },
+      ],
+    };
+    const choices = await owner.video.catalogImages({
+      organizationId: org,
+      selectedOnly: true,
+      selectedKeys: settings.imageKeys,
+    });
+    expect(choices.items[0].product).toMatchObject({
+      id: productId,
+      specifications: { Material: "Brass", Power: "12 W" },
+      price: "49.00",
+      currency: "USD",
+    });
+    await queued(settings);
+    state.submit.mockResolvedValue({ id: "product-facts-request" });
+    await tick();
+    await tick();
+    const prompt = state.submit.mock.calls[0][1].prompt;
+    expect(prompt).toContain('"featuredSpecifications":{"Power":"12 W"}');
+    expect(prompt).toContain('"price":"49.00"');
+    expect(prompt).toContain('"includeDescription":true');
+    expect(prompt).toContain('"referenceImage":1');
+    expect(prompt).toContain(
+      "Other specifications are factual background only"
+    );
+    const refs = await resolveVideoReferences(state.db, org, {
+      ...settings,
+      productSelections: [
+        { productId, featuredSpecKeys: [], includePrice: false },
+      ],
+    });
+    expect(refs[0].productFacts).toMatchObject({
+      featuredSpecifications: {},
+      price: null,
+      currency: null,
+      includeDescription: false,
+    });
+    await expect(
+      resolveVideoReferences(state.db, org, {
+        ...settings,
+        productSelections: [
+          {
+            productId,
+            featuredSpecKeys: ["Invented claim"],
+            includePrice: false,
+          },
+        ],
+      })
+    ).rejects.toThrow(/specifications changed/);
+    await expect(
+      resolveVideoReferences(state.db, org, {
+        ...settings,
+        productSelections: [
+          {
+            productId: productId + 10000,
+            featuredSpecKeys: [],
+            includePrice: true,
+          },
+        ],
+      })
+    ).rejects.toThrow(/no longer among your references/);
+    await state.db
+      .update(products)
+      .set({ price: "59.00" })
+      .where(eq(products.id, productId));
+    await expect(
+      validateVideoReferences(state.db, {
+        organizationId: org,
+        references: refs,
+      })
+    ).rejects.toThrow(/Product details changed/);
+    await state.db
+      .update(products)
+      .set({ price: "49.00" })
+      .where(eq(products.id, productId));
+  });
+
   it("saves and sends an approved brand logo after subject images and before people", async () => {
     const settings = {
       ...setup(),
@@ -604,7 +694,17 @@ describe("durable video generation", () => {
     };
     const result = await owner.video.draftPrompt({
       organizationId: org,
-      setup: settings,
+      setup: {
+        ...settings,
+        productSelections: [
+          {
+            productId,
+            featuredSpecKeys: ["Material"],
+            includePrice: false,
+            includeDescription: true,
+          },
+        ],
+      },
     });
     expect(result.prompt).toContain("Image 1");
     expect(scope).toMatchObject({
@@ -623,6 +723,10 @@ describe("durable video generation", () => {
     ]);
     expect(parts[0].text).toContain("Creative theme");
     expect(parts[1].text).toContain("A brass lamp.");
+    expect(parts[1].text).toContain(
+      '"featuredSpecifications":{"Material":"Brass"}'
+    );
+    expect(parts[1].text).toContain('"price":null');
     state.llm.mockClear();
     await expect(
       owner.video.draftPrompt({
