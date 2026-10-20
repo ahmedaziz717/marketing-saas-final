@@ -6,6 +6,23 @@ import {
 } from "../../shared/videoCreation";
 import { readLifestylePortrait } from "./lifestylePeople";
 import { storageClient, assetBucket, normalizeStorageKey } from "../storage";
+import { productFactsDirection } from "../../shared/studioProductFacts";
+
+export function videoCatalogContext(
+  setup: VideoSetup,
+  references: VideoReference[]
+) {
+  const products = references
+    .filter(r => r.key !== setup.sourceVideoKey)
+    .flatMap((ref, index) =>
+      ref.productFacts
+        ? [{ referenceImage: index + 1, ...ref.productFacts }]
+        : []
+    );
+  return products.length
+    ? `${productFactsDirection}\nSelected catalog products: ${JSON.stringify(products)}`
+    : "";
+}
 
 /** Used for estimation and submission. Real references let the provider price
  * source duration, dimensions and input-dependent model options correctly. */
@@ -41,6 +58,7 @@ export async function prepareVideoRequest(
     references
       .filter(r => r.key !== setup.sourceVideoKey)
       .map(r => signed.get(r.key)!),
-    signed.get(setup.sourceVideoKey ?? "")
+    signed.get(setup.sourceVideoKey ?? ""),
+    videoCatalogContext(setup, references)
   );
 }

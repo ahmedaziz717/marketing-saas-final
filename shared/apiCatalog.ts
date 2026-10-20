@@ -26,6 +26,7 @@ export const API_CATALOG_FIELDS = [
   "currency",
   "category",
   "specifications",
+  "features",
 ] as const;
 export const apiCatalogMappingSchema = z.object({
   itemsPath: path.default(""),

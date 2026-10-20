@@ -26,6 +26,7 @@ import { mp4Info } from "./videoMedia";
 import { higgsfieldConfigured } from "./higgsfield";
 import { appendActivity } from "./activity";
 import { readVideoCatalogImage } from "./videoCatalog";
+import { selectProductFacts } from "./productFacts";
 
 export type VideoJob = typeof videoJobs.$inferSelect;
 export function publicVideoJob(job: VideoJob) {
@@ -181,6 +182,7 @@ export async function resolveVideoReferences(
   await validateVideoPeople(db, organizationId, setup);
   await validateVideoLogo(db, organizationId, setup);
   const refs: VideoReference[] = [];
+  const selectedProductIds = new Set<number>();
   const imageKeys = videoImageReferenceKeys(setup);
   const keys = [
     ...imageKeys,
@@ -191,9 +193,19 @@ export async function resolveVideoReferences(
   ];
   for (const key of keys) {
     if (key.startsWith("product_image:")) {
-      refs.push(
-        (await readVideoCatalogImage(db, organizationId, key)).reference
-      );
+      const catalog = await readVideoCatalogImage(db, organizationId, key);
+      selectedProductIds.add(catalog.facts.id);
+      const selection = setup.productSelections?.find(
+        p => p.productId === catalog.facts.id
+      ) ?? {
+        productId: catalog.facts.id,
+        featuredSpecKeys: [],
+        includePrice: false,
+      };
+      refs.push({
+        ...catalog.reference,
+        productFacts: selectProductFacts(catalog.facts, selection),
+      });
       continue;
     }
     const asset = await readLibraryAsset(db, organizationId, key),
@@ -320,6 +332,12 @@ export async function resolveVideoReferences(
     ),
     ...(setup.sourceVideoKey ? [setup.sourceVideoKey] : []),
   ];
+  if (setup.productSelections?.some(p => !selectedProductIds.has(p.productId)))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "A product selected for advertising details is no longer among your references. Review Product details.",
+    });
   return ordered.map(key => refs.find(ref => ref.key === key)!);
 }
 export async function validateVideoReferences(
@@ -347,6 +365,13 @@ export async function validateVideoReferences(
       if (current.reference.fingerprint !== ref.fingerprint)
         throw new Error(
           "A product reference changed. Prepare a new draft with the current product images."
+        );
+      if (
+        ref.catalogFingerprint &&
+        current.reference.catalogFingerprint !== ref.catalogFingerprint
+      )
+        throw new Error(
+          "Product details changed. Review the current catalog facts and prepare a new draft."
         );
       continue;
     }

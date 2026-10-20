@@ -63,6 +63,7 @@ import {
 const icons: Record<string, LucideIcon> = {
   type: Layers3,
   source: FolderOpen,
+  productDetails: ListChecks,
   sources: CalendarDays,
   brand: BadgeCheck,
   scene: Image,

@@ -271,6 +271,8 @@ describe("creative setup and trusted catalog inputs", () => {
       Power: "12 W",
     });
     expect(resolved.products[0].specifications).toEqual(product.specifications);
+    expect(resolved.products[0].price).toBeNull();
+    expect(resolved.products[0].includeDescription).toBe(false);
     expect(() =>
       resolveBuilderInputs(
         1,

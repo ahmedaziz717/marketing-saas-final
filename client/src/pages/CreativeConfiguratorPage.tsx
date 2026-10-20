@@ -48,6 +48,7 @@ import { trpc } from "@/lib/trpc";
 import { ModelSettings } from "@/components/ModelPicker";
 import { StudioPeople } from "@/components/configurator/StudioPeople";
 import { StudioSources } from "@/components/configurator/StudioSources";
+import { StudioProductFacts } from "@/components/configurator/StudioProductFacts";
 import { StudioPreview } from "@/components/configurator/StudioPreview";
 import { StudioLogos } from "@/components/configurator/StudioLogos";
 import { ActionCredits } from "@/components/ActionCredits";
@@ -98,12 +99,10 @@ import {
 import {
   configuratorSections,
   newConfiguration,
-  readConfiguration,
   imageReferenceCount,
   modelCompatibility,
   videoWithModel,
   videoWithSources,
-  readConfigurationSnapshot,
   type ConfigurationSnapshot,
   type ConfiguratorState,
 } from "@shared/creativeConfigurator";
@@ -153,13 +152,7 @@ export default function CreativeConfiguratorPage({
   return (
     <WorkspaceGate>
       <Configurator
-        key={
-          String(user?.id) +
-          ":" +
-          organizationId +
-          ":" +
-          (requestedVideoId ?? "new")
-        }
+        key={String(user?.id) + ":" + organizationId}
         initialKind={initialKind}
         requestedVideoId={requestedVideoId}
         initialPlanId={
@@ -186,15 +179,9 @@ function Configurator({
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const scope = { organizationId: organizationId! };
-  const storageKey = "el-configurator-v1:" + user?.id + ":" + organizationId;
+  const scopeKey = "creative:" + user?.id + ":" + organizationId;
   const [config, setConfig] = useState<ConfiguratorState>(() => {
-    let restored = newConfiguration();
-    try {
-      restored =
-        readConfiguration(localStorage.getItem(storageKey)) ?? restored;
-    } catch {
-      /* Browser memory is optional. */
-    }
+    const restored = newConfiguration();
     if (initialKind || requestedVideoId || initialUgc)
       restored.kind = requestedVideoId || initialUgc ? "video" : initialKind!;
     if (initialPlanId)
@@ -220,14 +207,18 @@ function Configurator({
   const [info, setInfo] = useState<Choice | null>(null),
     [confirm, setConfirm] = useState(false),
     [draftsOpen, setDraftsOpen] = useState(false);
-  const [storageOk, setStorageOk] = useState(true),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [pendingImageJob, setPendingImageJob] = useState<number | null>(null);
   const [pendingVideoJob, setPendingVideoJob] = useState<string | null>(
     requestedVideoId
   );
-  const [videoOpened, setVideoOpened] = useState(!requestedVideoId);
+  const [openedVideoId, setOpenedVideoId] = useState<string | null>(null);
+  const videoOpened = !requestedVideoId || openedVideoId === requestedVideoId;
+  const videoJobId = requestedVideoId ?? pendingVideoJob;
+  const [savedSetups, setSavedSetups] = useState<
+    Partial<Record<ConfiguratorState["kind"], string>>
+  >({});
   const [savedImage, setSavedImage] = useState<{
     briefId: number;
     updatedAtMs: number;
@@ -240,15 +231,7 @@ function Configurator({
   const [compareOpen, setCompareOpen] = useState<"models" | "builds" | null>(
     null
   );
-  const [baseline, setBaseline] = useState<ConfigurationSnapshot | null>(() => {
-    try {
-      return readConfigurationSnapshot(
-        localStorage.getItem(storageKey + ":comparison")
-      );
-    } catch {
-      return null;
-    }
-  });
+  const [baseline, setBaseline] = useState<ConfigurationSnapshot | null>(null);
   const configRef = useRef(config);
   configRef.current = config;
   const canCreate = ["owner", "admin", "creator"].includes(
@@ -268,9 +251,9 @@ function Configurator({
     enabled: !!organizationId && canCreate,
   });
   const videoDetail = trpc.video.get.useQuery(
-    { ...scope, id: pendingVideoJob ?? "00000000-0000-4000-8000-000000000000" },
+    { ...scope, id: videoJobId ?? "00000000-0000-4000-8000-000000000000" },
     {
-      enabled: !!organizationId && canCreate && !!pendingVideoJob,
+      enabled: !!organizationId && canCreate && !!videoJobId,
       retry: false,
       refetchInterval: query =>
         query.state.data &&
@@ -280,28 +263,30 @@ function Configurator({
     }
   );
   useEffect(() => {
-    if (
-      !requestedVideoId ||
-      videoOpened ||
-      videoDetail.data?.id !== requestedVideoId
-    )
+    if (!requestedVideoId) {
+      setOpenedVideoId(null);
       return;
+    }
+    if (videoOpened || videoDetail.data?.id !== requestedVideoId) return;
     const job = videoDetail.data;
     const parsed = videoSetupSchema.safeParse(job.setup);
     if (!parsed.success) {
       setError("This video setup could not be opened. Start a new draft.");
-      setVideoOpened(true);
+      setOpenedVideoId(requestedVideoId);
       return;
     }
+    const restored = videoWithSources(parsed.data);
     setConfig(previous => ({
       ...previous,
       kind: "video",
-      video: videoWithSources(parsed.data),
+      video: restored,
     }));
+    rememberSaved("video", restored);
+    setPendingVideoJob(requestedVideoId);
     setSavedVideo(
       job.status === "draft" ? { id: job.id, revision: job.revision } : null
     );
-    setVideoOpened(true);
+    setOpenedVideoId(requestedVideoId);
   }, [requestedVideoId, videoOpened, videoDetail.data]);
   const readiness = trpc.video.options.useQuery(scope, {
     enabled: !!organizationId && canCreate,
@@ -320,6 +305,16 @@ function Configurator({
     video = config.video,
     isImage = config.kind === "image";
   const setup = isImage ? image : video;
+  const isSaved = savedSetups[config.kind] === JSON.stringify(setup);
+  function rememberSaved(
+    kind: ConfiguratorState["kind"],
+    value: CreativeSetup | VideoSetup
+  ) {
+    setSavedSetups(previous => ({
+      ...previous,
+      [kind]: JSON.stringify(value),
+    }));
+  }
   const direction = isImage
     ? image
     : (video.direction ?? defaultVideoDirection);
@@ -359,6 +354,36 @@ function Configurator({
   const videoReference =
     assets.data?.find(a => a.key === video.imageKeys[0]) ??
     selectedCatalog.data?.items.find(a => a.key === video.imageKeys[0]);
+  const factProducts = isImage
+    ? image.products.flatMap(selection => {
+        const product = products.find(p => p.id === selection.productId);
+        return product
+          ? [
+              {
+                ...product,
+                imageUrl: product.images.find(i => i.id === selection.imageId)
+                  ?.url,
+              },
+            ]
+          : [];
+      })
+    : Array.from(
+        new Map(
+          (selectedCatalog.data?.items ?? []).flatMap(item =>
+            video.imageKeys.includes(item.key) && item.product
+              ? [
+                  [
+                    item.product.id,
+                    { ...item.product, imageUrl: item.url },
+                  ] as const,
+                ]
+              : []
+          )
+        ).values()
+      );
+  const factSelections = isImage
+    ? image.products
+    : (video.productSelections ?? []);
   const preview = isImage
     ? (selectedProduct?.images.find(i => i.id === image.products[0]?.imageId)
         ?.url ??
@@ -535,13 +560,6 @@ function Configurator({
   );
   function keepComparison(value: ConfigurationSnapshot) {
     setBaseline(value);
-    try {
-      localStorage.setItem(storageKey + ":comparison", JSON.stringify(value));
-    } catch {
-      toast.info(
-        "Comparison kept for this session. Browser storage is unavailable."
-      );
-    }
   }
   function duplicateForComparison() {
     keepComparison({
@@ -580,6 +598,7 @@ function Configurator({
     });
     setSavedImage(null);
     setSavedVideo(null);
+    setSavedSetups({});
     setPendingVideoJob(null);
     journey.reset();
     update(structuredClone(restored), true);
@@ -592,14 +611,6 @@ function Configurator({
     else if (currentIds.length < 3) setCompareIds([...currentIds, id]);
     else toast.info("Compare up to three models. Remove one to add another.");
   }
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(config));
-      setStorageOk(true);
-    } catch {
-      setStorageOk(false);
-    }
-  }, [config, storageKey]);
   const initialized = useRef(false);
   useEffect(() => {
     if (!options.data || initialized.current) return;
@@ -625,13 +636,8 @@ function Configurator({
       requestedVideoId &&
       (detachVideo || next.kind !== configRef.current.kind)
     ) {
-      // Remember the new draft before changing the deep link and remounting.
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
-      } catch {
-        setStorageOk(false);
-        return;
-      }
+      // Detach the saved-video link without leaving this in-memory session.
+      setPendingVideoJob(null);
       navigate("/app/creatives/studio", { replace: true });
     }
   }
@@ -700,6 +706,7 @@ function Configurator({
           expectedUpdatedAtMs: savedImage?.updatedAtMs,
         });
         setSavedImage(result);
+        rememberSaved("image", image);
         await utils.creativeBuilder.options.invalidate();
       } else {
         const result = await videoSave.mutateAsync({
@@ -708,6 +715,7 @@ function Configurator({
           ...savedVideo,
         });
         setSavedVideo({ id: result.id, revision: result.revision });
+        rememberSaved("video", video);
         await utils.video.list.invalidate();
         if (requestedVideoId && requestedVideoId !== result.id)
           navigate("/app/creatives/studio?video=" + result.id, {
@@ -736,6 +744,7 @@ function Configurator({
           expectedUpdatedAtMs: savedImage?.updatedAtMs,
         });
         setSavedImage(saved);
+        rememberSaved("image", image);
         const started = await imageGenerate.mutateAsync({
           ...scope,
           briefId: saved.briefId,
@@ -754,6 +763,7 @@ function Configurator({
           ...savedVideo,
         });
         setSavedVideo({ id: saved.id, revision: saved.revision });
+        rememberSaved("video", video);
         const started = await videoGenerate.mutateAsync({
           ...scope,
           id: saved.id,
@@ -1070,6 +1080,38 @@ function Configurator({
           update({ ...config, kind: id as "image" | "video" });
         }
       );
+    if (category === "productDetails")
+      return (
+        <StudioProductFacts
+          products={factProducts}
+          selections={factSelections}
+          loading={isImage ? options.isLoading : selectedCatalog.isLoading}
+          error={(isImage ? options.error : selectedCatalog.error)?.message}
+          onRetry={() => {
+            void (isImage ? options.refetch() : selectedCatalog.refetch());
+          }}
+          onSources={() => go("type", "source")}
+          onChange={selection => {
+            if (isImage)
+              updateImage({
+                products: image.products.map(p =>
+                  p.productId === selection.productId
+                    ? { ...p, ...selection }
+                    : p
+                ),
+              });
+            else
+              updateVideo({
+                productSelections: [
+                  ...(video.productSelections ?? []).filter(
+                    p => p.productId !== selection.productId
+                  ),
+                  selection,
+                ],
+              });
+          }}
+        />
+      );
     if (category === "source")
       return (
         <>
@@ -1098,6 +1140,7 @@ function Configurator({
             updateImage={updateImage}
             updateVideo={updateVideo}
             onModels={() => go("model")}
+            onProductDetails={() => go("type", "productDetails")}
             onUploaded={async () => {
               await Promise.all([
                 utils.assetLibrary.studioList.invalidate(),
@@ -1873,6 +1916,9 @@ function Configurator({
         : `${image.products.length + (image.sourceAssetKeys?.length ?? 0)} selected sources`
       : `${video.imageKeys.length} reference images`,
     brand: options.data?.brand?.name || "No Brand Kit",
+    productDetails: factProducts.length
+      ? `${factSelections.reduce((total, p) => total + p.featuredSpecKeys.length + Number(p.includePrice) + Number(!!p.includeDescription), 0)} facts selected · ${factProducts.length} products`
+      : "Choose catalog products",
     scene:
       scene === "people"
         ? "Lifestyle with people"
@@ -1912,7 +1958,7 @@ function Configurator({
       : "Ready to review",
   };
   const journey = useStudioJourney({
-    storageKey: `${storageKey}:${config.kind}`,
+    scopeKey: `${scopeKey}:${config.kind}`,
     sections: configuratorSections.map((item, i) => ({
       ...item,
       icon: sectionIcons[i],
@@ -2036,11 +2082,10 @@ function Configurator({
               type="button"
               onClick={() => {
                 setPendingVideoJob(null);
-                setVideoOpened(true);
                 update(configRef.current, true);
               }}
             >
-              Return to your browser draft
+              Start a new draft
             </button>
           )}
         </p>
@@ -2066,11 +2111,12 @@ function Configurator({
                 <div className="cfg-build-top">
                   <span className="cfg-eyebrow">YOUR CREATIVE, YOUR WAY</span>
                   <span
-                    className={`cfg-draft-status${storageOk ? " is-saved" : ""}`}
+                    className={`cfg-draft-status${isSaved ? " is-saved" : ""}`}
+                    role="status"
                   >
-                    {storageOk
-                      ? "Remembered in this browser"
-                      : "Browser storage unavailable · save a draft"}
+                    {isSaved
+                      ? "Saved to workspace"
+                      : "Unsaved choices · Save draft to keep"}
                   </span>
                 </div>
                 <Field title="Creative name">
@@ -2123,6 +2169,10 @@ function Configurator({
             reuse={trial => {
               setSavedImage(null);
               setSavedVideo(null);
+              setSavedSetups(previous => ({
+                ...previous,
+                [trial.imageSetup ? "image" : "video"]: undefined,
+              }));
               setPendingVideoJob(null);
               journey.reset();
               update(
@@ -2388,6 +2438,7 @@ function Configurator({
                   update({ ...config, kind: "image", image: parsed.data });
                   journey.reset();
                   setSavedImage({ briefId: d.id, updatedAtMs: d.updatedAtMs });
+                  rememberSaved("image", parsed.data);
                   setDraftsOpen(false);
                   go("type");
                 }}
@@ -2418,6 +2469,7 @@ function Configurator({
                     });
                     journey.reset();
                     setSavedVideo({ id: d.id, revision: d.revision });
+                    rememberSaved("video", videoWithSources(parsed.data));
                     setPendingVideoJob(null);
                     setDraftsOpen(false);
                     go("type");

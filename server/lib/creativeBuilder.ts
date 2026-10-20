@@ -1,3 +1,5 @@
+import { selectProductFacts } from "./productFacts";
+import { productFactsDirection } from "../../shared/studioProductFacts";
 import {
   isReferenceCreative,
   promotionContext,
@@ -55,49 +57,8 @@ export function resolveBuilderInputs(
           "A selected product or image is unavailable. Choose approved products from your catalog.",
       });
     }
-    if (
-      selection.featuredSpecKeys.some(
-        key =>
-          !Object.hasOwn(product.specifications, key) ||
-          !product.specifications[key]?.trim()
-      )
-    ) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "Product specifications changed. Review the selected specs before continuing.",
-      });
-    }
-    if (
-      selection.includePrice &&
-      (!product.price?.trim() || !product.currency?.trim())
-    ) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "A selected product needs a catalog price and currency before its price can appear.",
-      });
-    }
     return {
-      id: product.id,
-      name: product.name,
-      sku: product.sku,
-      description: product.description,
-      category: product.category,
-      recordType: product.recordType,
-      serviceDetails: product.serviceDetails,
-      specifications: product.specifications,
-      featuredSpecifications: Object.fromEntries(
-        selection.featuredSpecKeys.map(key => [
-          key,
-          product.specifications[key],
-        ])
-      ),
-      price: product.price,
-      currency: product.currency,
-      includePrice: selection.includePrice,
-      productUrl: product.productUrl,
-      updatedAtMs: product.updatedAtMs,
+      ...selectProductFacts(product, selection),
       image: image
         ? {
             id: image.id,
@@ -225,9 +186,10 @@ export function buildCreativePrompt(input: {
       : []),
     "Render this customer-selected copy accurately: " +
       JSON.stringify(setup.copy),
+    productFactsDirection,
     "For EACH product, render only its featuredSpecifications as spec callouts, accurately associated with that product. Other specifications are factual context only. Never mix facts between products.",
     "Render a product price only if includePrice is true, using its exact catalog price and currency. Do not invent discounts or offers.",
-    "All selected copy and featured specs must remain readable and within the canvas. Adapt the arrangement for compact formats; do not silently omit selected facts or required claims. Do not add any other words or badges.",
+    "All selected copy and featured specs must remain readable and within the canvas. When includeDescription is true, integrate a concise, faithful benefit from that product's description or service benefits. Adapt the arrangement for compact formats; do not silently omit selected facts or required claims. Add no unselected claims, words or badges beyond the selected copy and explicitly selected product facts.",
   ].join("\n\n");
 }
 

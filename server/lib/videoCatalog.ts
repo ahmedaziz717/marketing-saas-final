@@ -11,9 +11,7 @@ import { stableHash } from "./policy";
 type Database = LibraryDatabase | LibraryTransaction;
 const selection = {
   image: productImages,
-  name: products.name,
-  description: products.description,
-  sku: products.sku,
+  product: products,
 };
 const owned = (organizationId: number) =>
   and(
@@ -23,16 +21,32 @@ const owned = (organizationId: number) =>
   );
 type Row = {
   image: typeof productImages.$inferSelect;
-  name: string;
-  description: string | null;
-  sku: string | null;
+  product: typeof products.$inferSelect;
 };
+function productFacts(row: Row) {
+  const p = row.product;
+  return {
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    description: p.description,
+    category: p.category,
+    recordType: p.recordType,
+    specifications: p.specifications,
+    price: p.price,
+    currency: p.currency,
+    serviceDetails: p.serviceDetails,
+    productUrl: p.productUrl,
+    updatedAtMs: p.updatedAtMs,
+  };
+}
 function choice(row: Row): VideoImageChoice {
   return {
     key: `product_image:${row.image.id}`,
-    name: row.name,
+    name: row.product.name,
     url: row.image.url,
     origin: "catalog",
+    product: productFacts(row),
     detail:
       row.image.altText ||
       (row.image.isPrimary ? "Primary product image" : "Product image"),
@@ -111,20 +125,21 @@ export async function readVideoCatalogImage(
   const reference: VideoReference = {
     key,
     storageKey: row.image.storageKey,
-    name: row.name,
+    name: row.product.name,
     mimeType: "image/*",
     fingerprint: stableHash({
       id: row.image.id,
       productId: row.image.productId,
       storageKey: row.image.storageKey,
       url: row.image.url,
-      name: row.name,
-      description: row.description,
+      name: row.product.name,
+      description: row.product.description,
     }),
+    catalogFingerprint: stableHash(productFacts(row)),
   };
   return {
     reference,
     choice: choice(row),
-    facts: { name: row.name, description: row.description?.slice(0, 4000) },
+    facts: productFacts(row),
   };
 }

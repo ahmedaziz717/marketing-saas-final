@@ -230,7 +230,7 @@ function Studio({
     plans: `${studio.experiments.length} experiment plans`,
   };
   const journey = useStudioJourney({
-    storageKey: `optimization:${organizationId}:${workflowId || "new"}`,
+    scopeKey: `optimization:${organizationId}:${workflowId || "new"}`,
     sections: sections.map(s => ({
       ...s,
       categories: s.categories.map(c => ({

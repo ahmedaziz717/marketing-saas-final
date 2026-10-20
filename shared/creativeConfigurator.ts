@@ -171,6 +171,7 @@ export const configuratorSections = [
     categories: [
       { id: "type", title: "Creative type" },
       { id: "source", title: "Subject & sources" },
+      { id: "productDetails", title: "Product details" },
       { id: "brand", title: "Brand & logo" },
     ],
   },

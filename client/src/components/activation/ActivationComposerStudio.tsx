@@ -215,7 +215,7 @@ export function ActivationComposerStudio(p: Props) {
         .join(", ") || "AI recommendation";
   });
   const journey = useStudioJourney({
-    storageKey: `activation:${p.organizationId}:${p.channel}:${p.draftId || "new"}`,
+    scopeKey: `activation:${p.organizationId}:${p.channel}:${p.draftId || "new"}`,
     sections: activationSections.map(section => ({
       ...section,
       initialCategory: categories[section.id],

@@ -233,7 +233,7 @@ function Studio({
     history: `${runs.data?.length ?? 0} runs`,
   };
   const journey = useStudioJourney({
-    storageKey: `insights:${organizationId}:${reportId || "new"}`,
+    scopeKey: `insights:${organizationId}:${reportId || "new"}`,
     sections: sections.map(s => ({
       ...s,
       categories: s.categories.map(c => ({
