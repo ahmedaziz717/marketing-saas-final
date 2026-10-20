@@ -52,6 +52,7 @@ vi.mock("@/components/InsightReport", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    channels: { accountImage: { useQuery: () => ({ data: {} }) } },
     useUtils: () => ({
       insights: {
         list: { invalidate: vi.fn() },

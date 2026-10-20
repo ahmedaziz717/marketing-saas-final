@@ -33,6 +33,9 @@ it("orders shared presets and applies calendar presets immediately", () => {
     "Last 365 days",
     "Custom date range",
   ]);
+  expect(screen.getAllByRole("radio")).toHaveLength(12);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+  expect(screen.queryByText(/Show more/)).toBeNull();
   changeField(screen.getByRole("radiogroup", { name: "Date range" }), {
     target: { value: "last_month" },
   });

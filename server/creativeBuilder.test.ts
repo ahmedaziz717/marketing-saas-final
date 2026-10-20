@@ -461,3 +461,36 @@ describe("business promotions without catalog products", () => {
     ).toBe(false);
   });
 });
+
+it("sends selected feature and availability facts while retaining image creative styling", () => {
+  const selection = {
+    ...setup(),
+    products: [
+      {
+        ...setup().products[0],
+        featuredFeatures: ["Dimmable"],
+        includeAvailability: true,
+      },
+    ],
+  };
+  const resolved = resolveBuilderInputs(
+    1,
+    selection,
+    [{ ...product, features: ["Dimmable"], availability: "In stock" }],
+    [image],
+    [logo]
+  );
+  const prompt = buildCreativePrompt({
+    setup: selection,
+    brand,
+    products: resolved.products,
+    formatId: "square_1_1",
+    hasLogo: true,
+  });
+  expect(prompt).toContain('"featuredFeatures":["Dimmable"]');
+  expect(prompt).toContain('"availability":"In stock"');
+  expect(prompt).toContain("MANDATORY ART STYLE");
+  expect(prompt).toContain(
+    "Do not silently revert to a generic studio-ad aesthetic"
+  );
+});

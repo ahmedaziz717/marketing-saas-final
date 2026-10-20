@@ -6,6 +6,7 @@ import { stableHash } from "./policy";
 import { safeFetchImage } from "./websiteCrawler";
 import { storagePut } from "../storage";
 import type { StoreItem } from "./storeCatalog";
+import { structuredCatalogFacts } from "../../shared/catalogFacts";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export async function importCatalogEntry(
@@ -49,16 +50,18 @@ export async function importCatalogEntry(
     productUrl: item.productUrl,
     price: item.price,
     currency: item.currency,
-    specifications: item.specifications,
+    ...structuredCatalogFacts(item),
     serviceDetails: item.serviceDetails,
     variantCount: variants.length,
   };
   // Imported changes require review again. Never silently approve updated claims.
+  const previousTruth = old ? { ...old, ...structuredCatalogFacts(old) } : null;
   const unchanged =
-    old &&
+    previousTruth &&
     Object.entries(truth).every(
       ([k, v]) =>
-        JSON.stringify((old as any)[k] ?? "") === JSON.stringify(v ?? "")
+        JSON.stringify((previousTruth as any)[k] ?? "") ===
+        JSON.stringify(v ?? "")
     );
   const values = {
     ...truth,
@@ -136,18 +139,16 @@ export async function importCatalogEntry(
         image.data,
         image.contentType
       );
-      await db
-        .insert(productImages)
-        .values({
-          organizationId,
-          productId: product.id,
-          sourceUrl: item.imageUrl,
-          storageKey: stored.key,
-          url: stored.url,
-          altText: item.name,
-          isPrimary: 1,
-          createdAtMs: Date.now(),
-        });
+      await db.insert(productImages).values({
+        organizationId,
+        productId: product.id,
+        sourceUrl: item.imageUrl,
+        storageKey: stored.key,
+        url: stored.url,
+        altText: item.name,
+        isPrimary: 1,
+        createdAtMs: Date.now(),
+      });
     }
   }
   return product;

@@ -1,5 +1,6 @@
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { trpc } from "@/lib/trpc";
+import { PartnerLogo } from "./PartnerLogo";
 
 export function WorkflowConnectionInput({
   organizationId,
@@ -34,8 +35,17 @@ export function WorkflowConnectionInput({
     );
   return (
     <div className="space-y-2">
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <PartnerLogo
+          slug={channel === "facebook" ? "facebook" : "meta"}
+          name={channel === "facebook" ? "Facebook" : "Meta"}
+          size={28}
+        />
+        {channel === "facebook" ? "Facebook Pages" : "Meta accounts"}
+      </span>
       <VisualSelect
-        visual={channel === "facebook" ? "facebook" : "meta"}
+        visual="account"
+        imageOrganizationId={organizationId}
         aria-label={title}
         value={value}
         disabled={disabled || query.isLoading}
@@ -52,7 +62,17 @@ export function WorkflowConnectionInput({
           </option>
         )}
         {items.map(c => (
-          <option key={c.id} value={c.id}>
+          <option
+            key={c.id}
+            value={c.id}
+            data-account-id={c.id}
+            data-image={c.details.imageUrl}
+            data-description={
+              c.details.imageSource === "business"
+                ? "Business photo"
+                : undefined
+            }
+          >
             {c.name}
           </option>
         ))}

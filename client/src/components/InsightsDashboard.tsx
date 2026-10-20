@@ -21,6 +21,7 @@ import {
   insightMetrics,
   scheduleDescription,
   independentWidgetConfig,
+  recommendedWidgetLayout,
   type InsightConfig,
   type DashboardWidget,
   type InsightMetric,
@@ -165,8 +166,11 @@ export function InsightsDashboard({
         kind,
         connectionId: kind === "report" ? null : chosenAccount!.id,
         metric: chosenMetric ?? chosenReport.config.chartMetric,
-        size: kind === "kpi" ? "small" : "medium",
-        height: kind === "kpi" ? "compact" : "standard",
+        ...recommendedWidgetLayout(
+          kind,
+          components,
+          (selectedMetrics ?? chosenReport.config.metrics).length
+        ),
         components: kind === "report" ? components : undefined,
       },
     ]);

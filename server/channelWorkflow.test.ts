@@ -852,9 +852,16 @@ describe.sequential(
       const final = state.graph.mock.calls.find(c => c[0] === "act_456/ads");
       expect(final?.[3].get("status")).toBe("PAUSED");
       state.graph.mockReset().mockResolvedValue({ account_id: "other" });
-      const bad = await queued(extra);
-      await publicationTick(state.db);
-      expect((await current(bad.id)).state).toBe("failed");
+      const bad = await approved(extra);
+      await expect(
+        owner.publishing.queue({
+          organizationId: org,
+          id: bad.id,
+          revision: bad.revision,
+          confirm: true,
+        })
+      ).rejects.toThrow("different ad account");
+      expect((await current(bad.id)).state).toBe("approved");
       expect(state.graph).toHaveBeenCalledTimes(1);
     });
     it("persists editable business profiles with workspace and role isolation", async () => {

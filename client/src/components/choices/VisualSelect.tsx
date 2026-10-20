@@ -17,6 +17,7 @@ import {
 } from "react";
 import { Check, Search, X } from "lucide-react";
 import { ChoiceVisual } from "./ChoiceVisual";
+import { ConnectedAccountIdentity } from "../AccountIdentity";
 import "@/styles/visualChoices.css";
 
 type Choice = {
@@ -27,14 +28,19 @@ type Choice = {
   description?: string;
   image?: string;
   visual?: string;
+  accountId?: string;
 };
 type OptionProps = OptionHTMLAttributes<HTMLOptionElement> & {
   "data-description"?: string;
   "data-image"?: string;
   "data-visual"?: string;
+  "data-account-id"?: string;
 };
 type Props = SelectHTMLAttributes<HTMLSelectElement> & {
   density?: "tiles" | "compact";
+  searchable?: boolean;
+  showAll?: boolean;
+  imageOrganizationId?: number;
   visual?: string;
   /** The native control keeps submission and change events; visuals use this wrapper class. */
   tileClassName?: string;
@@ -119,6 +125,7 @@ function optionsFrom(
         description: p["data-description"] ?? p.title,
         image: p["data-image"],
         visual: p["data-visual"],
+        accountId: p["data-account-id"],
       },
     ];
   });
@@ -137,6 +144,9 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
       disabled,
       required,
       density = "tiles",
+      searchable = true,
+      showAll = false,
+      imageOrganizationId,
       visual,
       tileClassName = "",
       className,
@@ -227,7 +237,7 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
         .toLowerCase()
         .includes(query.trim().toLowerCase())
     );
-    const visible = matches.slice(0, limit);
+    const visible = showAll ? [...matches] : matches.slice(0, limit);
     const retained = selectable.filter(
       o => selectedValues.includes(o.value) && !visible.includes(o)
     );
@@ -298,7 +308,7 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
           ))}
           {children}
         </select>
-        {(selectable.length > 8 || query) && (
+        {searchable && (selectable.length > 8 || query) && (
           <span className="choice-search">
             <Search size={14} aria-hidden="true" />
             <input
@@ -393,12 +403,21 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
               }}
             >
               <span className="choice-tile-art" aria-hidden="true">
-                <ChoiceVisual
-                  label={option.label}
-                  context={`${option.group ?? ""} ${label}`}
-                  visual={option.visual ?? visual}
-                  image={option.image}
-                />
+                {option.accountId && imageOrganizationId ? (
+                  <ConnectedAccountIdentity
+                    organizationId={imageOrganizationId}
+                    id={option.accountId}
+                    name={option.label}
+                    imageUrl={option.image}
+                  />
+                ) : (
+                  <ChoiceVisual
+                    label={option.label}
+                    context={`${option.group ?? ""} ${label}`}
+                    visual={option.visual ?? visual}
+                    image={option.image}
+                  />
+                )}
               </span>
               <span className="choice-tile-copy">
                 {option.group && <small>{option.group}</small>}
@@ -422,10 +441,10 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
               : placeholder?.label || "No choices available."}
           </span>
         )}
-        {(matches.length > limit ||
+        {((!showAll && matches.length > limit) ||
           (!!placeholder && !!selected && !required && !disabled)) && (
           <span className="choice-actions">
-            {matches.length > limit && (
+            {!showAll && matches.length > limit && (
               <button type="button" onClick={() => setLimit(n => n + 16)}>
                 Show more · {matches.length - limit} remaining
               </button>

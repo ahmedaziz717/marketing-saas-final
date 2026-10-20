@@ -1,4 +1,6 @@
 import { publicationCopyTags } from "../../shared/copyTaxonomy";
+import { readAccountImage } from "../lib/accountImages";
+import { preflightMetaPublication } from "../lib/metaPublicationPreflight";
 import sharp from "sharp";
 import { marketingJson } from "../lib/marketingDrafts";
 import { assetCopyRequestSchema } from "../../shared/adCopy";
@@ -89,6 +91,18 @@ const upstream = (e: unknown) =>
       e instanceof Error ? e.message : "The provider could not be reached.",
   });
 export const channelsRouter = router({
+  accountImage: protectedProcedure
+    .input(reference)
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const c = await getConnection(
+        await libraryDatabase(),
+        input.organizationId,
+        input.id
+      );
+      if (c.status !== "connected") return {};
+      return readAccountImage(c.channel, c.accountId, connectionToken(c));
+    }),
   connections: protectedProcedure
     .input(scopeSchema)
     .query(async ({ ctx, input }) => {
@@ -279,7 +293,17 @@ export const channelsRouter = router({
           throw new Error("The provider returned a different account.");
         await db
           .update(channelConnections)
-          .set({ verifiedAtMs: Date.now() })
+          .set({
+            verifiedAtMs: Date.now(),
+            details: {
+              ...c.details,
+              ...(await readAccountImage(
+                c.channel,
+                c.accountId,
+                connectionToken(c)
+              )),
+            },
+          })
           .where(
             and(
               eq(channelConnections.id, c.id),
@@ -876,6 +900,23 @@ export const channelsRouter = router({
     }),
 });
 
+async function checkMetaDestinationBeforeDelivery(
+  db: Parameters<typeof dependencies>[0],
+  item: Parameters<typeof dependencies>[1]
+) {
+  if (item.channel !== "meta_ads" || !liveDeliveryEnabled("meta_ads")) return;
+  const ready = await dependencies(db, item);
+  try {
+    await preflightMetaPublication(
+      ready.connection.accountId,
+      connectionToken(ready.connection),
+      item.content
+    );
+  } catch (error) {
+    throw upstream(error);
+  }
+}
+
 export const publishingRouter = router({
   list: protectedProcedure.input(scopeSchema).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
@@ -1065,6 +1106,10 @@ export const publishingRouter = router({
       ...editors,
     ]);
     const db = await libraryDatabase();
+    // Provider checks must not hold an organization lock or a pool connection.
+    const candidate = await publicationById(db, input.organizationId, input.id);
+    assertRevision(candidate, input.revision);
+    await checkMetaDestinationBeforeDelivery(db, candidate);
     return withOrganizationTransaction(db, input.organizationId, async tx => {
       const item = await publicationById(tx, input.organizationId, input.id);
       assertRevision(item, input.revision);
@@ -1119,6 +1164,15 @@ export const publishingRouter = router({
         ...publishers,
       ]);
       const db = await libraryDatabase();
+      if (input.delivery && input.decision === "approved") {
+        const candidate = await publicationById(
+          db,
+          input.organizationId,
+          input.id
+        );
+        assertRevision(candidate, input.revision);
+        await checkMetaDestinationBeforeDelivery(db, candidate);
+      }
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const item = await publicationById(tx, input.organizationId, input.id);
         assertRevision(item, input.revision);
@@ -1226,6 +1280,15 @@ export const publishingRouter = router({
         ...publishers,
       ]);
       const db = await libraryDatabase();
+      {
+        const candidate = await publicationById(
+          db,
+          input.organizationId,
+          input.id
+        );
+        assertRevision(candidate, input.revision);
+        await checkMetaDestinationBeforeDelivery(db, candidate);
+      }
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         const item = await publicationById(tx, input.organizationId, input.id);
         assertRevision(item, input.revision);

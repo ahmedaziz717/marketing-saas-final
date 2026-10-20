@@ -365,6 +365,11 @@ export const creativeSetupSchema = z
           featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
           includePrice: z.boolean().default(false),
           includeDescription: z.boolean().optional(),
+          featuredFeatures: z
+            .array(z.string().min(1).max(1000))
+            .max(20)
+            .optional(),
+          includeAvailability: z.boolean().optional(),
         })
       )
       .max(12),

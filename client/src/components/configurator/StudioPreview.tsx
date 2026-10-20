@@ -504,6 +504,29 @@ export function StudioPreview({
                 }}
               />
             )}
+            <section
+              className="cfg-asset-readiness"
+              aria-label="Creative readiness"
+            >
+              <strong>
+                {selectedAsset?.state === "approved"
+                  ? "Ready for Activation Studio"
+                  : "Review this creative before activation"}
+              </strong>
+              <ul>
+                <li>
+                  Check the product, logo, typography and spelling in the
+                  finished asset.
+                </li>
+                <li>
+                  {selectedAsset?.state === "approved"
+                    ? "Asset approved. Choose a destination, finalize the copy and schedule delivery next."
+                    : selectedAsset?.state === "needs_review"
+                      ? "Waiting for a reviewer to approve this asset."
+                      : "Approve the asset or submit it for review when its content is ready."}
+                </li>
+              </ul>
+            </section>
             <div className="cfg-result-actions">
               <button
                 type="button"

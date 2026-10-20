@@ -608,6 +608,7 @@ export function InsightWidgetEditor({
                     onChange={e =>
                       update({
                         height: e.target.value as DashboardWidget["height"],
+                        autoSize: false,
                       })
                     }
                   >
@@ -617,6 +618,22 @@ export function InsightWidgetEditor({
                   </VisualSelect>
                 </ChoiceField>
               </div>
+              {draft.kind === "report" && (
+                <label className="insight-check">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.autoSize}
+                    onChange={e => update({ autoSize: e.target.checked })}
+                  />
+                  <span>
+                    <strong>Fit height to report content</strong>
+                    <small>
+                      Adapts as the report or screen changes, keeping the
+                      dashboard grid aligned.
+                    </small>
+                  </span>
+                </label>
+              )}
               <p className="insight-caption">
                 Two compact tiles align with one standard tile; three align with
                 one tall tile, including the gaps.

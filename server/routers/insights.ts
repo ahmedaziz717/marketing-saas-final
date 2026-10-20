@@ -62,6 +62,8 @@ export const insightsRouter = router({
           status: c.status,
           currency: c.details.currency,
           timezone: c.details.timezone,
+          imageUrl: c.details.imageUrl,
+          imageSource: c.details.imageSource,
         })),
         recipients: await insightRecipients(db, input.organizationId),
         emailConfigured: insightEmailConfigured(),

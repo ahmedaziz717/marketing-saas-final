@@ -615,7 +615,8 @@
   font-weight: 600;
   letter-spacing: -0.6px;
   margin: 12px 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .insight-metric small {
   font-size: 10px;
@@ -903,7 +904,8 @@
   container-type: inline-size;
 }
 .insight-dashboard-grid {
-  --widget-unit: 280px;
+  /* Four smaller tracks preserve the original 280px compact height. */
+  --widget-unit: 58px;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: var(--widget-unit);
@@ -915,7 +917,7 @@
   --widget-muted: color-mix(in srgb, var(--widget-fg) 78%, var(--widget-bg));
   --widget-border: color-mix(in srgb, var(--widget-fg) 15%, var(--widget-bg));
   grid-column: span 8;
-  grid-row: span 2;
+  grid-row: span 8;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--widget-border);
@@ -937,10 +939,10 @@
   grid-column: span 12;
 }
 .insight-widget[data-height="compact"] {
-  grid-row: span 1;
+  grid-row: span 4;
 }
 .insight-widget[data-height="tall"] {
-  grid-row: span 3;
+  grid-row: span 12;
 }
 .insight-widget[draggable="true"] {
   border-style: dashed;
@@ -1538,4 +1540,81 @@
   .insight-studio .cfg-title {
     gap: 10px;
   }
+}
+
+/* Metric layout follows the available report width, including embedded reports. */
+.insight-metric-grid,
+.insight-widget-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 14px;
+}
+.insight-metric {
+  container-type: inline-size;
+}
+.insight-metric > strong,
+.insight-widget .insight-metric > strong {
+  font-size: clamp(17px, 9cqw, 30px);
+  white-space: nowrap;
+  overflow-wrap: normal;
+  font-variant-numeric: tabular-nums;
+}
+.insight-widget-report .insight-metric {
+  padding: 16px;
+  border: 1px solid var(--widget-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--widget-fg) 3%, var(--widget-bg));
+}
+.insight-widget-body {
+  min-width: 0;
+  width: 100%;
+}
+.insight-widget[data-auto-size] .insight-widget-content {
+  overflow: visible;
+  flex: none;
+}
+.insight-widget[data-auto-size] > footer {
+  margin-top: auto;
+}
+.insight-widget[data-kind="trend"] .insight-widget-body {
+  height: 100%;
+}
+.insight-widget[data-kind="kpi"] .insight-widget-body {
+  width: 100%;
+}
+.insight-widget-report {
+  gap: 24px;
+}
+.insight-widget-report h4 {
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+.insight-widget-account {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.insight-widget-report .insight-chart {
+  height: 250px;
+}
+.insight-widget-table table {
+  font-size: 12px;
+}
+.insight-recipient-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.insight-recipient-toolbar input {
+  flex: 1;
+  min-width: 180px;
+}
+.insight-recipient-grid .insight-check {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.insight-recipient-grid .insight-check:has(:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
 }

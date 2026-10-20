@@ -1917,7 +1917,7 @@ function Configurator({
       : `${video.imageKeys.length} reference images`,
     brand: options.data?.brand?.name || "No Brand Kit",
     productDetails: factProducts.length
-      ? `${factSelections.reduce((total, p) => total + p.featuredSpecKeys.length + Number(p.includePrice) + Number(!!p.includeDescription), 0)} facts selected · ${factProducts.length} products`
+      ? `${factSelections.reduce((total, p) => total + p.featuredSpecKeys.length + (p.featuredFeatures?.length ?? 0) + Number(p.includePrice) + Number(!!p.includeDescription) + Number(!!p.includeAvailability), 0)} facts selected · ${factProducts.length} products`
       : "Choose catalog products",
     scene:
       scene === "people"

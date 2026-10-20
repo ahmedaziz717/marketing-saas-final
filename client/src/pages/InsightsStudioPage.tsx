@@ -1,3 +1,6 @@
+import { ConnectedAccountIdentity } from "@/components/AccountIdentity";
+import { PartnerLogo } from "@/components/PartnerLogo";
+import { WorkspaceRecipients } from "@/components/WorkspaceRecipients";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -123,7 +126,10 @@ function Studio({
   const [, navigate] = useLocation();
   const workspace = useWorkspace();
   const root = useStudioNavigation();
-  const options = trpc.insights.options.useQuery({ organizationId });
+  const options = trpc.insights.options.useQuery(
+    { organizationId },
+    { staleTime: 0, refetchOnWindowFocus: true, refetchInterval: 30000 }
+  );
   const report = trpc.insights.get.useQuery(
     { organizationId, id: reportId! },
     { enabled: !!reportId, refetchOnWindowFocus: false }
@@ -538,11 +544,23 @@ function Studio({
                         })
                       }
                     >
-                      <span className="insight-eyebrow">
+                      <span className="insight-eyebrow flex items-center gap-2">
+                        <PartnerLogo
+                          slug={a.channel === "meta_ads" ? "meta" : "facebook"}
+                          name={a.channel === "meta_ads" ? "Meta" : "Facebook"}
+                          size={24}
+                        />
                         {a.channel === "meta_ads"
                           ? "Meta advertising"
                           : "Facebook Page"}
                       </span>
+                      <ConnectedAccountIdentity
+                        organizationId={organizationId}
+                        id={a.id}
+                        name={a.name}
+                        imageUrl={a.imageUrl}
+                        source={a.imageSource}
+                      />
                       <strong>{a.name}</strong>
                       <span>
                         {a.status !== "connected"
@@ -1092,37 +1110,20 @@ function Studio({
                 {config.delivery.email && (
                   <>
                     <h3 className="insight-form-heading">Recipients</h3>
-                    <div className="insight-recipient-grid">
-                      {options.data?.recipients.map(r => (
-                        <label className="insight-check" key={r.userId}>
-                          <input
-                            type="checkbox"
-                            checked={config.delivery.recipientUserIds.includes(
-                              r.userId
-                            )}
-                            onChange={e =>
-                              update({
-                                delivery: {
-                                  ...config.delivery,
-                                  recipientUserIds: e.target.checked
-                                    ? [
-                                        ...config.delivery.recipientUserIds,
-                                        r.userId,
-                                      ]
-                                    : config.delivery.recipientUserIds.filter(
-                                        id => id !== r.userId
-                                      ),
-                                },
-                              })
-                            }
-                          />
-                          <span>
-                            <strong>{r.name || r.email}</strong>
-                            <small>{r.email}</small>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                    <WorkspaceRecipients
+                      recipients={options.data?.recipients ?? []}
+                      selected={config.delivery.recipientUserIds}
+                      loading={options.isFetching}
+                      error={options.error?.message}
+                      onRefresh={() => {
+                        void options.refetch();
+                      }}
+                      onChange={recipientUserIds =>
+                        update({
+                          delivery: { ...config.delivery, recipientUserIds },
+                        })
+                      }
+                    />
                     <label className="insight-check">
                       <input
                         type="checkbox"

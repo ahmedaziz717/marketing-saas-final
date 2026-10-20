@@ -65,3 +65,46 @@ jobs:
           path: artifacts/dialog-layout/
           if-no-files-found: ignore
           retention-days: 7
+
+  release:
+    needs: verify
+    concurrency:
+      group: evokeloop-production-release
+      cancel-in-progress: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/render-supabase-migration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      VERIFIED_RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check deployment credentials
+        id: credentials
+        run: |
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "::notice::RENDER_API_KEY is not configured. Use the authorized Render connector for this release."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.credentials.outputs.configured == 'true'
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        if: steps.credentials.outputs.configured == 'true'
+        with:
+          node-version: 22
+      - name: Skip a release superseded on the deployment branch
+        if: steps.credentials.outputs.configured == 'true'
+        id: current
+        run: |
+          latest=$(git ls-remote origin refs/heads/codex/render-supabase-migration | cut -f1)
+          if [ "$latest" = "$VERIFIED_RELEASE_SHA" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit exists. Waiting for its CI instead."
+          fi
+      - name: Deploy web, wait for database connections to drain, then deploy worker
+        if: steps.current.outputs.release == 'true'
+        run: node scripts/deploy-evokeloop.mjs "$VERIFIED_RELEASE_SHA"

@@ -1,6 +1,11 @@
+import {
+  structuredCatalogFacts,
+  availabilityLabel,
+} from "@shared/catalogFacts";
+import "@/styles/catalogFacts.css";
 import { useState } from "react";
 import { Link } from "wouter";
-import { Check, FileText, ListChecks, Package, Tag } from "lucide-react";
+import { Check, FileText, Package, Tag } from "lucide-react";
 import type {
   ProductFactSelection,
   StudioProduct,
@@ -41,8 +46,8 @@ export function StudioProductFacts({
         <Package size={32} />
         <h3>Choose a catalog product first</h3>
         <p>
-          Its specifications, features, description and price will appear here
-          for you to select.
+          Its specifications, features, availability, description and price will
+          appear here for you to select.
         </p>
         <button type="button" className="cfg-primary" onClick={onSources}>
           Choose catalog products
@@ -54,8 +59,10 @@ export function StudioProductFacts({
     featuredSpecKeys: [],
     includePrice: false,
   };
-  const fields = Object.entries(product.specifications ?? {}).filter(
-    ([, value]) => value.trim()
+  const facts = structuredCatalogFacts(product);
+  const selectedFeatures = selection.featuredFeatures ?? [];
+  const fields = Object.entries(facts.specifications).filter(([, value]) =>
+    value.trim()
   );
   const description = [product.description, product.serviceDetails?.benefits]
     .filter(Boolean)
@@ -69,12 +76,15 @@ export function StudioProductFacts({
   const count =
     selection.featuredSpecKeys.length +
     Number(!!selection.includeDescription) +
-    Number(selection.includePrice);
+    Number(selection.includePrice) +
+    Number(!!selection.includeAvailability) +
+    selectedFeatures.length;
   return (
     <div className="cfg-product-facts">
       <p className="cfg-help">
         Choose the facts to feature in your ad. Other specifications remain
-        background context. Prices are included only when you select them.
+        background context. Price and availability appear in the ad only when
+        selected.
       </p>
       {products.length > 1 && (
         <div
@@ -155,6 +165,27 @@ export function StudioProductFacts({
               <Check size={17} className="cfg-fact-check" />
             )}
           </button>
+          <button
+            type="button"
+            className="cfg-fact-tile"
+            aria-label="Include availability"
+            aria-pressed={!!selection.includeAvailability}
+            disabled={
+              (!facts.availability ||
+                availabilityLabel(facts.availability) === "Not supplied") &&
+              !selection.includeAvailability
+            }
+            onClick={() =>
+              update({ includeAvailability: !selection.includeAvailability })
+            }
+          >
+            <Package size={21} />
+            <strong>Include availability</strong>
+            <span>{availabilityLabel(facts.availability)}</span>
+            {selection.includeAvailability && (
+              <Check size={17} className="cfg-fact-check" />
+            )}
+          </button>
         </div>
         {description && (
           <details className="cfg-product-description">
@@ -163,13 +194,17 @@ export function StudioProductFacts({
           </details>
         )}
         <div className="cfg-choice-count">
-          <strong>Specifications & features</strong>
+          <strong>Specifications</strong>
           <span>
-            {selection.featuredSpecKeys.length} / 20 selected
-            {selection.featuredSpecKeys.length > 0 && (
+            {selection.featuredSpecKeys.length + selectedFeatures.length} / 20
+            highlights selected
+            {selection.featuredSpecKeys.length + selectedFeatures.length >
+              0 && (
               <button
                 type="button"
-                onClick={() => update({ featuredSpecKeys: [] })}
+                onClick={() =>
+                  update({ featuredSpecKeys: [], featuredFeatures: [] })
+                }
               >
                 Clear highlights
               </button>
@@ -195,40 +230,101 @@ export function StudioProductFacts({
           </p>
         )}
         {fields.length ? (
-          <div className="cfg-fact-grid">
+          <ul className="cfg-specification-list">
             {fields.map(([key, value]) => {
               const selected = selection.featuredSpecKeys.includes(key);
               return (
-                <button
-                  type="button"
-                  className="cfg-fact-tile"
-                  key={key}
-                  aria-label={`Feature ${key}: ${value}`}
-                  aria-pressed={selected}
-                  disabled={
-                    !selected && selection.featuredSpecKeys.length >= 20
-                  }
-                  title={`${key}: ${value}`}
-                  onClick={() =>
-                    update({
-                      featuredSpecKeys: selected
-                        ? selection.featuredSpecKeys.filter(k => k !== key)
-                        : [...selection.featuredSpecKeys, key],
-                    })
-                  }
-                >
-                  <ListChecks size={21} />
-                  <strong>{key}</strong>
-                  <span>{value}</span>
-                  {selected && <Check size={17} className="cfg-fact-check" />}
-                </button>
+                <li key={key}>
+                  <button
+                    type="button"
+                    aria-label={`Feature ${key}: ${value}`}
+                    aria-pressed={selected}
+                    disabled={
+                      !selected &&
+                      selection.featuredSpecKeys.length +
+                        selectedFeatures.length >=
+                        20
+                    }
+                    onClick={() =>
+                      update({
+                        featuredSpecKeys: selected
+                          ? selection.featuredSpecKeys.filter(k => k !== key)
+                          : [...selection.featuredSpecKeys, key],
+                      })
+                    }
+                  >
+                    <span aria-hidden="true">•</span>
+                    <span>
+                      <strong>{key}:</strong> {value}
+                    </span>
+                    {selected ? <Check size={17} /> : <span />}
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         ) : (
-          <p className="cfg-empty">
-            No structured specifications or features were imported for this
-            product. Add them in Catalog or refresh its source.
+          <p className="cfg-help">
+            No structured specifications were imported. Add them in Catalog or
+            refresh its source.
+          </p>
+        )}
+        <div className="cfg-choice-count">
+          <strong>Features & benefits</strong>
+          <span>{selectedFeatures.length} selected</span>
+        </div>
+        {facts.features.length ? (
+          <ul className="cfg-specification-list">
+            {facts.features.map(feature => {
+              const selected = selectedFeatures.includes(feature);
+              return (
+                <li key={feature}>
+                  <button
+                    type="button"
+                    aria-label={`Feature: ${feature}`}
+                    aria-pressed={selected}
+                    disabled={
+                      !selected &&
+                      selection.featuredSpecKeys.length +
+                        selectedFeatures.length >=
+                        20
+                    }
+                    onClick={() =>
+                      update({
+                        featuredFeatures: selected
+                          ? selectedFeatures.filter(f => f !== feature)
+                          : [...selectedFeatures, feature],
+                      })
+                    }
+                  >
+                    <span aria-hidden="true">•</span>
+                    <span>{feature}</span>
+                    {selected ? <Check size={17} /> : <span />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="cfg-help">
+            No separate feature bullets supplied in Catalog.
+          </p>
+        )}
+        {selectedFeatures.some(f => !facts.features.includes(f)) && (
+          <p role="alert">
+            Some selected features are no longer available.{" "}
+            <button
+              type="button"
+              onClick={() =>
+                update({
+                  featuredFeatures: selectedFeatures.filter(f =>
+                    facts.features.includes(f)
+                  ),
+                })
+              }
+            >
+              Remove unavailable features
+            </button>
           </p>
         )}
         {count > 0 && (
@@ -242,9 +338,15 @@ export function StudioProductFacts({
                 .filter(key => !unavailable.includes(key))
                 .map(key => (
                   <li key={key}>
-                    {key}: {product.specifications?.[key]}
+                    {key}: {facts.specifications[key]}
                   </li>
                 ))}
+              {selectedFeatures.map(feature => (
+                <li key={feature}>{feature}</li>
+              ))}
+              {selection.includeAvailability && (
+                <li>Availability: {availabilityLabel(facts.availability)}</li>
+              )}
               {selection.includePrice && (
                 <li>
                   Price: {product.currency} {product.price}

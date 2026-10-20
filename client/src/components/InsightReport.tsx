@@ -25,6 +25,7 @@ import {
   insightMetrics,
   insightNumber,
   independentWidgetConfig,
+  recommendedWidgetLayout,
   type DashboardWidget,
   type InsightAccount,
   type InsightConfig,
@@ -183,8 +184,11 @@ export function PinInsightDialog({
               id: widgetId,
               reportId,
               ...choice,
-              size: choice.kind === "kpi" ? "small" : "medium",
-              height: choice.kind === "kpi" ? "compact" : "standard",
+              ...recommendedWidgetLayout(
+                choice.kind,
+                components,
+                metrics.length
+              ),
               components: choice.kind === "report" ? components : undefined,
             },
           ],
@@ -335,7 +339,7 @@ export function InsightMetricCard({
           </button>
         )}
       </div>
-      <strong>
+      <strong title={insightNumber(metric.value, metric.key, account.currency)}>
         {insightNumber(metric.value, metric.key, account.currency)}
       </strong>
       {metric.key === "followers" ? (

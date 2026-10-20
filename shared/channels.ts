@@ -31,6 +31,8 @@ export type ConnectionDetails = {
   capabilities: Array<"read" | "publish" | "insights">;
   pageId?: string;
   pageName?: string;
+  imageUrl?: string;
+  imageSource?: "page" | "business";
   currency?: string;
   timezone?: string;
   expiresAtMs?: number | null;

@@ -197,6 +197,8 @@ beforeAll(async () => {
         productUrl: "https://example.test/lamp",
         description: "A brass lamp.",
         specifications: { Material: "Brass", Power: "12 W" },
+        features: ["Dimmable"],
+        availability: "In stock",
         price: "49.00",
         currency: "USD",
         provenance: {},
@@ -485,6 +487,8 @@ describe("durable video generation", () => {
           featuredSpecKeys: ["Power"],
           includePrice: true,
           includeDescription: true,
+          featuredFeatures: ["Dimmable"],
+          includeAvailability: true,
         },
       ],
     };
@@ -505,6 +509,8 @@ describe("durable video generation", () => {
     await tick();
     const prompt = state.submit.mock.calls[0][1].prompt;
     expect(prompt).toContain('"featuredSpecifications":{"Power":"12 W"}');
+    expect(prompt).toContain('"featuredFeatures":["Dimmable"]');
+    expect(prompt).toContain('"availability":"In stock"');
     expect(prompt).toContain('"price":"49.00"');
     expect(prompt).toContain('"includeDescription":true');
     expect(prompt).toContain('"referenceImage":1');

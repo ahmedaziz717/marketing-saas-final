@@ -1,3 +1,10 @@
+import { CatalogFactsFields } from "@/components/CatalogFactsFields";
+import {
+  structuredCatalogFacts,
+  specificationsFromLines,
+  availabilityLabel,
+} from "@shared/catalogFacts";
+import "@/styles/catalogFacts.css";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { offeringLabel } from "@shared/businessProfile";
 import { CatalogSources } from "@/components/CatalogSources";
@@ -50,6 +57,8 @@ type Editable = {
   price: string;
   currency: string;
   specifications: string;
+  features: string[];
+  availability: string;
   variants: Array<{
     id: number;
     name: string;
@@ -231,20 +240,18 @@ function CatalogContent() {
       productUrl: product.productUrl,
       price: product.price ?? "",
       currency: product.currency ?? "",
-      specifications: Object.entries(product.specifications)
+      features: structuredCatalogFacts(product).features,
+      availability: structuredCatalogFacts(product).availability,
+      specifications: Object.entries(
+        structuredCatalogFacts(product).specifications
+      )
         .map(([name, value]) => `${name}: ${value}`)
         .join("\n"),
       variants: product.variants,
     });
   const save = () => {
     if (!editing) return;
-    const specifications = Object.fromEntries(
-      editing.specifications
-        .split("\n")
-        .map(line => line.split(":"))
-        .filter(parts => parts[0]?.trim() && parts.slice(1).join(":").trim())
-        .map(parts => [parts[0]!.trim(), parts.slice(1).join(":").trim()])
-    );
+    const specifications = specificationsFromLines(editing.specifications);
     update.mutate({
       organizationId: organizationId!,
       productId: editing.id,
@@ -258,6 +265,8 @@ function CatalogContent() {
         price: editing.price || null,
         currency: editing.currency || null,
         specifications,
+        features: editing.features.map(f => f.trim()).filter(Boolean),
+        availability: editing.availability || null,
       },
     });
   };
@@ -480,6 +489,7 @@ function CatalogContent() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {products.map(product => {
+            const facts = structuredCatalogFacts(product);
             const approvalAction = getCatalogApprovalAction(product.status);
             const approvalPending =
               review.isPending && review.variables?.productId === product.id;
@@ -536,11 +546,50 @@ function CatalogContent() {
                     </p>
                   </div>
                 </div>
+                <div className="catalog-card-facts px-5 pb-4">
+                  <dl>
+                    <div>
+                      <dt>Price</dt>
+                      <dd>
+                        {product.price
+                          ? `${product.currency || ""} ${product.price}`
+                          : "Not supplied"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Availability</dt>
+                      <dd>{availabilityLabel(facts.availability)}</dd>
+                    </div>
+                  </dl>
+                  {!!Object.keys(facts.specifications).length && (
+                    <>
+                      <h3>Specifications</h3>
+                      <ul>
+                        {Object.entries(facts.specifications)
+                          .slice(0, 4)
+                          .map(([key, value]) => (
+                            <li key={key}>
+                              <strong>{key}:</strong> {value}
+                            </li>
+                          ))}
+                      </ul>
+                    </>
+                  )}
+                  {!!facts.features.length && (
+                    <>
+                      <h3>Features</h3>
+                      <ul>
+                        {facts.features.slice(0, 2).map((f, i) => (
+                          <li key={i}>{f}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
                 <div className="border-t hairline px-5 py-4">
                   <div className="mb-4 flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">
-                      {Object.keys(product.specifications).length}{" "}
-                      specifications
+                      {Object.keys(facts.specifications).length} specifications
                       {product.variants.length
                         ? ` · ${product.variants.length} variant records`
                         : ""}
@@ -663,7 +712,7 @@ function CatalogContent() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-semibold">
-              Review product truth
+              Review product details
             </DialogTitle>
           </DialogHeader>
           {editing && (
@@ -873,21 +922,11 @@ function CatalogContent() {
                 </div>
               )}
               <div className="sm:col-span-2">
-                <Label>
-                  Specifications{" "}
-                  <span className="text-muted-foreground">
-                    (Name: value, one per line)
-                  </span>
-                </Label>
-                <Textarea
-                  className="mt-2 min-h-48 font-mono text-xs"
-                  value={editing.specifications}
-                  onChange={event =>
-                    setEditing({
-                      ...editing,
-                      specifications: event.target.value,
-                    })
-                  }
+                <CatalogFactsFields
+                  specifications={editing.specifications}
+                  features={editing.features}
+                  availability={editing.availability}
+                  onChange={patch => setEditing({ ...editing, ...patch })}
                 />
               </div>
               <Button

@@ -1,3 +1,4 @@
+import { ConnectedAccountIdentity } from "../AccountIdentity";
 import {
   StudioJourney,
   StudioSummary,
@@ -390,8 +391,13 @@ export function ActivationComposerStudio(p: Props) {
                           disabled={!a.details.capabilities.includes("publish")}
                           media={
                             <div className="activation-choice-symbol">
-                              <Building2 size={38} />
-                              <span>{a.name.slice(0, 2).toUpperCase()}</span>
+                              <ConnectedAccountIdentity
+                                organizationId={p.organizationId}
+                                id={a.id}
+                                name={a.name}
+                                imageUrl={a.details.imageUrl}
+                                source={a.details.imageSource}
+                              />
                             </div>
                           }
                           onSelect={() => {
@@ -886,6 +892,13 @@ export function ActivationComposerStudio(p: Props) {
                   </div>
                   <div className="studio-review-summary">
                     <h3>Confirm your activation</h3>
+                    <p role="status">
+                      {p.activationUnavailable
+                        ? "Checking delivery availability…"
+                        : Object.keys(p.errors).length
+                          ? `${Object.keys(p.errors).length} requirements need attention below.`
+                          : "Creative, copy and destination are ready for your confirmation."}
+                    </p>
                     {[
                       {
                         title: "Destination",
