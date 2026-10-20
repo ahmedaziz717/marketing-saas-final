@@ -14,7 +14,12 @@ export async function importCatalogEntry(
   db: Database,
   organizationId: number,
   entry: CatalogEntry,
-  source?: { id: number; externalId: string; provider: string },
+  source?: {
+    id: number;
+    externalId: string;
+    provider: string;
+    detailUrl?: string;
+  },
   variants: StoreItem["variants"] = []
 ) {
   const item = catalogEntrySchema.parse(entry);
@@ -55,7 +60,9 @@ export async function importCatalogEntry(
     serviceDetails: item.serviceDetails,
     variantCount: variants.length,
   };
-  const refreshed = old ? reconcileCatalogRefresh(old, truth, {}, source?.provider ?? "manual") : null;
+  const refreshed = old
+    ? reconcileCatalogRefresh(old, truth, {}, source?.provider ?? "manual")
+    : null;
   if (refreshed) truth = refreshed.values;
   // Imported changes require review again. Never silently approve updated claims.
   const previousTruth = old ? { ...old, ...structuredCatalogFacts(old) } : null;
@@ -76,6 +83,7 @@ export async function importCatalogEntry(
       ...(refreshed?.provenance ?? old?.provenance),
       source: source?.provider ?? "manual",
       importedAt: new Date().toISOString(),
+      ...(source?.detailUrl ? { "api.detailUrl": source.detailUrl } : {}),
     },
     status: unchanged ? old.status : ("pending" as const),
     reviewedByUserId: unchanged ? old.reviewedByUserId : null,

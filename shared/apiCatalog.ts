@@ -75,6 +75,9 @@ export const apiCatalogMappingSchema = z.object({
     )
     .default({}),
   productUrlTemplate: linkTemplate.optional(),
+  detailUrlTemplate: linkTemplate.optional(),
+  detailRootPath: path.optional(),
+  componentImageUrlTemplate: linkTemplate.optional(),
   productUrlRules: z
     .array(
       z.object({
@@ -88,6 +91,7 @@ export const apiCatalogMappingSchema = z.object({
   productBaseUrl: publicLink.optional(),
   imageBaseUrl: publicLink.optional(),
   imageUrlTemplate: linkTemplate.optional(),
+  skipImages: z.boolean().optional(),
   componentsPath: path.optional(),
   inventoryQuantityPath: path.optional(),
   defaultCurrency: z

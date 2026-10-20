@@ -1,5 +1,7 @@
+import { safeFetchImage } from "../lib/websiteCrawler";
+import { readApiProductDetails } from "../lib/apiProductDetails";
 import { discoverOfferings } from "../lib/marketingDrafts";
-import { brandKits } from "../../drizzle/schema";
+import { brandKits, products } from "../../drizzle/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -8,7 +10,11 @@ import { STORE_PROVIDERS, catalogEntrySchema } from "../../shared/catalog";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { requireOrganizationRole } from "../lib/access";
-import { encryptToken, catalogEncryptionKey } from "../lib/secureToken";
+import {
+  encryptToken,
+  decryptToken,
+  catalogEncryptionKey,
+} from "../lib/secureToken";
 import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
 import { appendActivity } from "../lib/activity";
@@ -39,6 +45,64 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  productDetails: protectedProcedure
+    .input(org.extend({ productId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [product] = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, input.productId),
+            eq(products.organizationId, input.organizationId)
+          )
+        )
+        .limit(1);
+      if (!product?.sourceId || !product.provenance["api.detailUrl"])
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This product has no configured detail endpoint.",
+        });
+      const [source] = await db
+        .select()
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.id, product.sourceId),
+            eq(catalogSources.organizationId, input.organizationId)
+          )
+        )
+        .limit(1);
+      if (
+        source?.provider !== "api" ||
+        !source.credentials ||
+        source.status === "disconnected"
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Reconnect this API source to inspect its configuration.",
+        });
+      const credentials = JSON.parse(decryptToken(source.credentials));
+      try {
+        return await readApiProductDetails(
+          source.storeUrl,
+          product.provenance["api.detailUrl"],
+          apiCatalogConfigSchema.parse(credentials.api),
+          `${input.organizationId}:${source.id}:${source.updatedAtMs}`
+        );
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read product configuration.",
+        });
+      }
+    }),
   previewApi: protectedProcedure
     .input(
       org.extend({
@@ -105,6 +169,23 @@ export const catalogSourcesRouter = router({
       });
       const result = parseApiCatalog(data, endpoint, resolved, {
         preview: true,
+      });
+      const checked = await Promise.allSettled(
+        result.items.slice(0, 3).map(async item => {
+          if (!item.imageUrl) return;
+          await safeFetchImage(item.imageUrl);
+        })
+      );
+      checked.forEach((check, index) => {
+        if (check.status === "rejected")
+          result.issues.push({
+            index,
+            product: result.items[index].name,
+            field: "imageUrl",
+            blocking: true,
+            message:
+              "The preview image could not be loaded. Check the documented image base address, or choose to import without images.",
+          });
       });
       return {
         mapping: apiCatalogMappingSchema.parse(resolved),

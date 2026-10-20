@@ -511,6 +511,30 @@ function ApiCatalogForm({
               />
             </label>
           )}
+          {preview.data.issues.some(i => i.field === "imageUrl") && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!config.skipImages}
+                onChange={e => {
+                  setConfig({ ...config, skipImages: e.target.checked });
+                  setManualMapping({
+                    ...manualMapping,
+                    skipImages: e.target.checked,
+                  });
+                }}
+              />
+              Import without product images
+            </label>
+          )}
+          {preview.data.issues
+            .filter(i => i.blocking && i.field === "imageUrl")
+            .slice(0, 1)
+            .map(i => (
+              <p className="text-sm text-amber-700" key={i.index}>
+                {i.message}
+              </p>
+            ))}
           <p className="text-xs text-muted-foreground">
             Add the missing details, then preview again. Your instructions and
             other choices stay in place.
@@ -584,6 +608,13 @@ function ApiCatalogForm({
             {preview.data.count} products on this page
             {preview.data.hasNext ? " · more pages available" : ""}
           </p>
+          {config.detailUrlTemplate && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Product configuration details are connected. After import, open a
+              product’s Installed components & available upgrades panel to
+              inspect its current options.
+            </p>
+          )}
           <ul className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
             {preview.data.samples.map((sample, i) => (
               <li key={i} className="min-w-0 rounded-xl border p-3 space-y-2">

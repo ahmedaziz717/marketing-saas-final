@@ -174,6 +174,7 @@ export function componentSpecifications(
     const quantity = Number(v.quantity ?? v.qty ?? 1);
     if (
       !name ||
+      v.selected === false ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
       /^(?:none\b|no .*(?:selected|included)|not selected|not applicable)/i.test(
@@ -376,9 +377,11 @@ export function parseApiCatalog(
       text(read("id"), 180) ||
       sku ||
       createHash("sha256").update(productUrl).digest("hex");
-    const rawImage = config.imageUrlTemplate
-      ? catalogUrlFromTemplate(config.imageUrlTemplate, row)
-      : read("imageUrl");
+    const rawImage = config.skipImages
+      ? ""
+      : config.imageUrlTemplate
+        ? catalogUrlFromTemplate(config.imageUrlTemplate, row)
+        : read("imageUrl");
     const relativeImage =
       typeof rawImage === "string" &&
       !!rawImage &&
@@ -390,7 +393,7 @@ export function parseApiCatalog(
         ? ""
         : link(rawImage, config.imageBaseUrl ?? endpoint);
     const currency = text(read("currency"), 16) || config.defaultCurrency || "";
-    if (!imageUrl)
+    if (!imageUrl && !config.skipImages)
       issues.push({
         index,
         product: name,
@@ -428,9 +431,14 @@ export function parseApiCatalog(
         ? candidate
         : catalogEntrySchema.parse(candidate)),
       externalId,
+      detailUrl: config.detailUrlTemplate
+        ? catalogUrlFromTemplate(config.detailUrlTemplate, row)
+        : undefined,
       variants: [],
     };
   });
+  if (!options.preview && issues.some(i => i.blocking))
+    throw new Error(issues.find(i => i.blocking)!.message);
   if (new Set(items.map(item => item.externalId)).size !== items.length)
     throw new Error(
       "Product IDs repeat within this page. Map a unique ID or SKU before importing."

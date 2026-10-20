@@ -1,3 +1,4 @@
+import { ApiProductDetails } from "@/components/ApiProductDetails";
 import { CatalogFactsFields } from "@/components/CatalogFactsFields";
 import { catalogRefreshChanges } from "@shared/catalogRefresh";
 import {
@@ -549,11 +550,60 @@ function CatalogContent() {
                   </div>
                 </div>
                 <div className="catalog-card-facts px-5 pb-4">
-                  {sourceChanges && product.status === "pending" && <details className="mb-4 rounded-lg border border-amber-300 p-3">
-                    <summary className="cursor-pointer font-medium">Review source changes · {Object.keys(sourceChanges.after).length} fields</summary>
-                    <p className="my-2 text-xs text-muted-foreground">Updated {new Date(sourceChanges.observedAt).toLocaleDateString()}. Manual corrections are preserved. Approve this product after reviewing the updated facts.</p>
-                    {Object.entries(sourceChanges.after).map(([key, value]) => <div key={key} className="border-t py-2 text-xs break-words"><strong className="capitalize">{key}</strong><p>Before: {typeof sourceChanges.before[key] === "object" ? Object.entries(sourceChanges.before[key] ?? {}).map(([name, value]) => `${name}: ${value}`).join("; ") : String(sourceChanges.before[key] ?? "Not supplied")}</p><p>Updated: {typeof value === "object" ? Object.entries(value ?? {}).map(([name, detail]) => `${name}: ${detail}`).join("; ") : String(value ?? "Not supplied")}</p></div>)}
-                  </details>}
+                  {product.provenance["api.detailUrl"] && (
+                    <ApiProductDetails
+                      organizationId={organizationId!}
+                      productId={product.id}
+                    />
+                  )}
+                  {sourceChanges && product.status === "pending" && (
+                    <details className="mb-4 rounded-lg border border-amber-300 p-3">
+                      <summary className="cursor-pointer font-medium">
+                        Review source changes ·{" "}
+                        {Object.keys(sourceChanges.after).length} fields
+                      </summary>
+                      <p className="my-2 text-xs text-muted-foreground">
+                        Updated{" "}
+                        {new Date(
+                          sourceChanges.observedAt
+                        ).toLocaleDateString()}
+                        . Manual corrections are preserved. Approve this product
+                        after reviewing the updated facts.
+                      </p>
+                      {Object.entries(sourceChanges.after).map(
+                        ([key, value]) => (
+                          <div
+                            key={key}
+                            className="border-t py-2 text-xs break-words"
+                          >
+                            <strong className="capitalize">{key}</strong>
+                            <p>
+                              Before:{" "}
+                              {typeof sourceChanges.before[key] === "object"
+                                ? Object.entries(
+                                    sourceChanges.before[key] ?? {}
+                                  )
+                                    .map(([name, value]) => `${name}: ${value}`)
+                                    .join("; ")
+                                : String(
+                                    sourceChanges.before[key] ?? "Not supplied"
+                                  )}
+                            </p>
+                            <p>
+                              Updated:{" "}
+                              {typeof value === "object"
+                                ? Object.entries(value ?? {})
+                                    .map(
+                                      ([name, detail]) => `${name}: ${detail}`
+                                    )
+                                    .join("; ")
+                                : String(value ?? "Not supplied")}
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </details>
+                  )}
                   <dl>
                     <div>
                       <dt>Price</dt>
