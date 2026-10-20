@@ -16,13 +16,13 @@ export function ConnectedAccountIdentity({
 }) {
   const picture = trpc.channels.accountImage.useQuery(
     { organizationId, id },
-    { enabled: !imageUrl, staleTime: 15 * 60000, retry: false }
+    { staleTime: 15 * 60000, retry: false }
   );
   return (
     <AccountIdentity
       name={name}
-      imageUrl={imageUrl || picture.data?.imageUrl}
-      source={source || picture.data?.imageSource}
+      imageUrl={picture.data?.imageUrl || imageUrl}
+      source={picture.data?.imageSource || source}
     />
   );
 }
@@ -41,7 +41,7 @@ export function AccountIdentity({
     <span
       className="account-identity"
       title={
-        url
+        url && failed !== url
           ? `${source === "business" ? "Business" : "Account"} photo`
           : `${name} · no account photo supplied`
       }

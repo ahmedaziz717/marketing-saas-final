@@ -20,6 +20,8 @@ export function CatalogFactsFields({
 }) {
   const id = useId();
   const rows = specifications ? specificationLines(specifications) : [];
+  const label = availabilityLabel(availability);
+  const selectedAvailability = label === "Not supplied" ? "" : label;
   const saveRows = (next: typeof rows) =>
     onChange({
       specifications: next.map(r => `${r.name}: ${r.value}`).join("\n"),
@@ -39,14 +41,14 @@ export function CatalogFactsFields({
         Availability
         <VisualSelect
           aria-label="Availability"
-          value={availability}
+          value={selectedAvailability}
           showAll
           searchable={false}
           density="compact"
           onChange={e => onChange({ availability: e.target.value })}
         >
-          {!statuses.includes(availability) && (
-            <option value={availability}>
+          {!statuses.includes(selectedAvailability) && (
+            <option value={selectedAvailability}>
               {availabilityLabel(availability)}
             </option>
           )}
