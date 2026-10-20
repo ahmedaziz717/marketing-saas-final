@@ -57,6 +57,8 @@ export const catalogEntrySchema = z.object({
   price: z.string().max(80).default(""),
   currency: z.string().max(16).default(""),
   specifications: z.record(z.string(), z.string().max(1000)).default({}),
+  features: z.array(z.string().trim().min(1).max(1000)).max(100).optional(),
+  availability: z.string().trim().max(120).optional(),
   serviceDetails: serviceDetailsSchema.nullable().default(null),
   imageUrl: z.union([z.literal(""), z.string().url()]).default(""),
 });

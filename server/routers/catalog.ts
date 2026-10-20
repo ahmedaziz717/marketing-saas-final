@@ -84,6 +84,8 @@ const editableProduct = z.object({
   price: z.string().max(80).nullable().optional(),
   currency: z.string().max(16).nullable().optional(),
   specifications: z.record(z.string(), z.string().max(1000)),
+  features: z.array(z.string().trim().min(1).max(1000)).max(100).optional(),
+  availability: z.string().trim().max(120).nullable().optional(),
 });
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;

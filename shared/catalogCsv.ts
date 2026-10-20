@@ -1,3 +1,4 @@
+import { specificationsFromLines } from "./catalogFacts";
 import { catalogEntrySchema, type CatalogEntry } from "./catalog";
 /** RFC4180 quotes, embedded newlines, escaped quotes, BOM, and CRLF. */
 export function parseCatalogCsv(text: string): CatalogEntry[] {
@@ -44,7 +45,15 @@ export function parseCatalogCsv(text: string): CatalogEntry[] {
           recordType: item.offeringType
             ? "service"
             : item.recordType || "standalone",
-          specifications: {},
+          specifications: item.specifications?.startsWith("{")
+            ? JSON.parse(item.specifications)
+            : specificationsFromLines(item.specifications || ""),
+          features: item.features?.startsWith("[")
+            ? JSON.parse(item.features)
+            : (item.features || "")
+                .split("\n")
+                .map(value => value.replace(/^\s*[-•]\s*/, "").trim())
+                .filter(Boolean),
           serviceDetails:
             item.recordType === "service" || item.offeringType
               ? {

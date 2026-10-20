@@ -444,6 +444,36 @@ export function PublicationComposer({
         ? "Wait for your selected media to finish loading."
         : "Choose an approved photo or video, or remove the current selection.";
   }
+  const readinessErrors = { ...socialErrors };
+  if (channel === "meta_ads") {
+    if (
+      !connectedAccounts
+        .find(c => c.id === connectionId)
+        ?.details.capabilities.includes("publish")
+    )
+      readinessErrors.destination =
+        "Choose a connected ad account with publishing permission.";
+    if (!content.adSetId)
+      readinessErrors.campaign = "Choose a campaign and ad set.";
+    if (
+      !copyAssetKeys.length ||
+      copyAssetKeys.some(
+        key =>
+          !assets.data?.some(
+            a =>
+              a.key === key &&
+              a.state === "approved" &&
+              a.purpose === "finished" &&
+              a.mediaType === "image"
+          )
+      )
+    )
+      readinessErrors.asset = "Select approved image assets for this ad.";
+    if (!content.message.trim())
+      readinessErrors.message = "Add the ad’s primary text.";
+    if (!normalizeDestinationUrl(content.link))
+      readinessErrors.link = "Add a valid destination URL.";
+  }
   function focusIssue(field: string) {
     const name = field === "asset" ? "pub-asset" : `pub-${field}`;
     const element = scrollBody.current?.querySelector<HTMLElement>(
@@ -645,7 +675,9 @@ export function PublicationComposer({
         activationUnavailable={canPublish && liveDelivery === undefined}
         activationError={activationError}
         liveDelivery={liveDelivery}
-        errors={showErrors ? socialErrors : {}}
+        errors={
+          step === "preview" ? readinessErrors : showErrors ? socialErrors : {}
+        }
         onSave={submit}
         onClose={onClose}
         scrollBody={scrollBody}
@@ -2203,8 +2235,19 @@ export function PublicationDetails({
                 {item.error && (
                   <div className="publication-provider-error" role="alert">
                     <strong>Provider response</strong>
+                    {typeof item.result?.deliveryStep === "string" && (
+                      <p>Step: {item.result.deliveryStep}</p>
+                    )}
                     <p>{item.error}</p>
                   </div>
+                )}
+                {delivered && (
+                  <p>
+                    <Link href="/app/analytics/studio">
+                      Open Insights Studio
+                    </Link>{" "}
+                    to report on this account once delivery data is available.
+                  </p>
                 )}
               </div>
             </section>

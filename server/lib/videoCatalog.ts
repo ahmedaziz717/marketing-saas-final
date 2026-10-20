@@ -33,6 +33,9 @@ function productFacts(row: Row) {
     category: p.category,
     recordType: p.recordType,
     specifications: p.specifications,
+    // Empty migration defaults must not invalidate already queued catalog references.
+    ...(p.features?.length ? { features: p.features } : {}),
+    ...(p.availability ? { availability: p.availability } : {}),
     price: p.price,
     currency: p.currency,
     serviceDetails: p.serviceDetails,

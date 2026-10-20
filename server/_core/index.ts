@@ -65,7 +65,9 @@ async function startServer() {
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
       await db.execute(sql`select 1 from app_private.users limit 1`);
-      res.set("Cache-Control", "no-store").json({ ok: true });
+      res
+        .set("Cache-Control", "no-store")
+        .json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null });
     } catch {
       res.status(503).json({ ok: false });
     }

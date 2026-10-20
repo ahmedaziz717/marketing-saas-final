@@ -1,4 +1,5 @@
 import { placementSlots } from "../../shared/metaPlacements";
+import { preflightMetaPublication } from "./metaPublicationPreflight";
 import { assetFormat } from "../../shared/assetFit";
 import { assetFit } from "../../shared/assetFit";
 import {
@@ -538,36 +539,9 @@ export async function executePublication(
         null
       );
     } else {
-      const adSet = await graphRequest<{
-        id: string;
-        account_id: string;
-        is_dynamic_creative?: boolean;
-        campaign_id?: string;
-      }>(remoteId(item.content.adSetId), token, {
-        fields:
-          item.content.placementAssetKeys || hasTextVariants(item.content)
-            ? "id,account_id,campaign_id,is_dynamic_creative"
-            : "id,account_id,campaign_id",
-      });
-      if (adSet.account_id !== connection.accountId)
-        throw new Error(
-          "The selected ad set belongs to a different ad account."
-        );
-      if (
-        item.content.metaCampaignId &&
-        adSet.campaign_id !== item.content.metaCampaignId
-      )
-        throw new Error(
-          "The selected ad set does not belong to the selected campaign. Update delivery settings."
-        );
+      result.deliveryStep = "Checking campaign and ad set";
+      await preflightMetaPublication(connection.accountId, token, item.content);
       const placement = item.content.placementAssetKeys;
-      if (
-        (placement || hasTextVariants(item.content)) &&
-        adSet.is_dynamic_creative
-      )
-        throw new Error(
-          "Placement images require a standard ad set without Dynamic Creative. Choose a compatible ad set."
-        );
       const keys = placement
         ? placementSlots.map(slot => placement[slot.key]!)
         : item.content.carouselAssetKeys?.length
@@ -609,6 +583,7 @@ export async function executePublication(
               `${slot.label} requires a ${slot.ratio} image at least 600 pixels on its shorter edge.`
             );
         }
+        result.deliveryStep = "Uploading approved image";
         const uploaded = await graphPost(
           `act_${remoteId(connection.accountId)}/adimages`,
           token,
@@ -625,6 +600,7 @@ export async function executePublication(
         await checkpoint(db, item, result);
       }
       if (!result.creativeId) {
+        result.deliveryStep = "Creating Meta creative";
         const creative = await graphPost(
           `act_${remoteId(connection.accountId)}/adcreatives`,
           token,
@@ -666,6 +642,7 @@ export async function executePublication(
       }
       await approvedDependencies(db, item);
       finalWriteStarted = true;
+      result.deliveryStep = "Creating paused ad";
       const ad = await graphPost(
         `act_${remoteId(connection.accountId)}/ads`,
         token,
@@ -690,6 +667,8 @@ export async function executePublication(
       (error instanceof ChannelGraphError && error.definitive);
     const message = error instanceof Error ? error.message : "Delivery failed.";
     result.retrySafe = safeToRetry;
+    if (error instanceof ChannelGraphError)
+      result.providerError = { code: error.code, ...error.details };
     await finish(
       db,
       item,

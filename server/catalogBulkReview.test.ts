@@ -26,6 +26,9 @@ beforeAll(async () => {
   engine = new PGlite();
   for (const file of ["0000_long_mad_thinker.sql", "0001_wooden_gideon.sql"])
     await engine.exec(readFileSync(`drizzle/postgres/${file}`, "utf8"));
+  await engine.exec(
+    readFileSync("drizzle/postgres/0018_structured_product_facts.sql", "utf8")
+  );
   state.db = drizzle(engine);
   const people = await state.db
     .insert(users)

@@ -5,7 +5,13 @@ export class ChannelGraphError extends Error {
     message: string,
     public definitive: boolean,
     public code?: number,
-    public retryAfterMs?: number
+    public retryAfterMs?: number,
+    public details?: {
+      subcode?: number;
+      traceId?: string;
+      userTitle?: string;
+      userMessage?: string;
+    }
   ) {
     super(message);
     this.name = "ChannelGraphError";
@@ -68,27 +74,61 @@ export async function graphRequest<T = Record<string, any>>(
   observe?.(response.headers);
   const data = await response.json().catch(() => null);
   if (!response.ok || !data || data.error || data.success === false) {
-    const text =
+    const provider = data?.error;
+    const secrets = [
+      ...Object.entries(params),
+      ...(body instanceof URLSearchParams ? Array.from(body.entries()) : []),
+    ]
+      .filter(([key]) =>
+        /^(?:access_token|input_token|fb_exchange_token|client_secret|code)$/.test(
+          key
+        )
+      )
+      .map(([, value]) => value)
+      .filter(Boolean);
+    const sanitize = (value: string) =>
+      redactProviderMessage(
+        secrets.reduce(
+          (message, secret) => message.split(secret).join("[redacted]"),
+          value
+        ),
+        token
+      );
+    const details = {
+      subcode: Number(provider?.error_subcode) || undefined,
+      traceId:
+        typeof provider?.fbtrace_id === "string" &&
+        /^[A-Za-z0-9_-]{1,100}$/.test(provider.fbtrace_id)
+          ? provider.fbtrace_id
+          : undefined,
+      userTitle:
+        typeof provider?.error_user_title === "string"
+          ? sanitize(provider.error_user_title)
+          : undefined,
+      userMessage:
+        typeof provider?.error_user_msg === "string"
+          ? sanitize(provider.error_user_msg)
+          : undefined,
+    };
+    const original =
       typeof data?.error?.message === "string"
         ? data.error.message
         : `Meta returned an unsuccessful response (HTTP ${response.status}).`;
+    const text = [
+      details.userTitle,
+      details.userMessage || original,
+      Number(provider?.code)
+        ? `(Meta ${Number(provider.code)}${details.subcode ? `/${details.subcode}` : ""})`
+        : "",
+      details.traceId ? `Reference: ${details.traceId}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
     throw new ChannelGraphError(
-      Object.entries(params)
-        .filter(([key]) =>
-          [
-            "input_token",
-            "fb_exchange_token",
-            "client_secret",
-            "code",
-          ].includes(key)
-        )
-        .reduce(
-          (message, [, secret]) =>
-            secret ? message.split(secret).join("[redacted]") : message,
-          redactProviderMessage(text, token)
-        ),
+      sanitize(text),
       !!data?.error &&
         response.status < 500 &&
+        !provider?.is_transient &&
         ![1, 2].includes(data.error.code),
       Number(data?.error?.code) || undefined,
       response.status === 429 ||
@@ -97,7 +137,8 @@ export async function graphRequest<T = Record<string, any>>(
             60000,
             Number(response.headers.get("retry-after") || 0) * 1000
           )
-        : undefined
+        : undefined,
+      details
     );
   }
   return data as T;

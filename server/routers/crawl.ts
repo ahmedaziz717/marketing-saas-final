@@ -1,3 +1,4 @@
+import { structuredCatalogFacts } from "../../shared/catalogFacts";
 import { brandKits } from "../../drizzle/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -964,7 +965,14 @@ export const crawlRouter = router({
                 currency:
                   validated.currency?.slice(0, 16) ||
                   (Number(existing.price) > 0 ? existing.currency : null),
-                specifications,
+                ...structuredCatalogFacts({ specifications }),
+                features: structuredCatalogFacts({ specifications }).features
+                  .length
+                  ? structuredCatalogFacts({ specifications }).features
+                  : existing.features,
+                availability:
+                  structuredCatalogFacts({ specifications }).availability ||
+                  existing.availability,
                 provenance,
                 status: existing.status,
                 reviewedByUserId: existing.reviewedByUserId,
@@ -994,7 +1002,7 @@ export const crawlRouter = router({
                 productUrl,
                 price: validated.price?.slice(0, 80) || null,
                 currency: validated.currency?.slice(0, 16) || null,
-                specifications,
+                ...structuredCatalogFacts({ specifications }),
                 provenance,
                 status: "pending",
                 createdAtMs: now,
@@ -1015,7 +1023,7 @@ export const crawlRouter = router({
                   productUrl,
                   price: validated.price?.slice(0, 80) || null,
                   currency: validated.currency?.slice(0, 16) || null,
-                  specifications,
+                  ...structuredCatalogFacts({ specifications }),
                   provenance,
                   updatedAtMs: now,
                 },

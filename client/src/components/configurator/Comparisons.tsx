@@ -313,7 +313,7 @@ function describe(
       ? c.image.products
           .map(
             p =>
-              `${context.products.find(x => x.id === p.productId)?.name ?? "Catalog item"}: ${p.includePrice ? "Include price" : "No price"}${p.featuredSpecKeys.length ? " · " + p.featuredSpecKeys.join(", ") : ""}`
+              `${context.products.find(x => x.id === p.productId)?.name ?? "Catalog item"}: ${p.includePrice ? "Include price" : "No price"}${p.includeAvailability ? " · Availability" : ""}${[...p.featuredSpecKeys, ...(p.featuredFeatures ?? [])].length ? " · " + [...p.featuredSpecKeys, ...(p.featuredFeatures ?? [])].join(", ") : ""}`
           )
           .join("\n") || "Not applicable"
       : "Not applicable",

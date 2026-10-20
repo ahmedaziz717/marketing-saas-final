@@ -390,3 +390,49 @@
   width: 16px;
   height: 16px;
 }
+
+.date-range-filter > .choice-field {
+  flex: 0 0 100%;
+}
+.date-range-choices .choice-tile {
+  min-height: 120px;
+}
+.date-range-choices .choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+}
+@media (max-width: 700px) {
+  .date-range-choices .choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.account-identity {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  max-width: 100%;
+  border-radius: 14px;
+  background: #eee8fb;
+  color: #6848b6;
+  font-size: 22px;
+  font-weight: 650;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.account-identity img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: white;
+}
+.choice-tile-art .account-identity {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+.choice-select[data-density="compact"] .account-identity {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}

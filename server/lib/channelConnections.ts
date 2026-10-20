@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readAccountImage } from "./accountImages";
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import type { Express, Response } from "express";
@@ -97,17 +98,15 @@ export async function beginMetaOAuth(
   await db
     .delete(channelOAuthSessions)
     .where(lt(channelOAuthSessions.expiresAtMs, Date.now()));
-  await db
-    .insert(channelOAuthSessions)
-    .values({
-      id: randomUUID(),
-      organizationId,
-      userId,
-      purpose,
-      stateHash: hash(state),
-      expiresAtMs: Date.now() + 600000,
-      createdAtMs: Date.now(),
-    });
+  await db.insert(channelOAuthSessions).values({
+    id: randomUUID(),
+    organizationId,
+    userId,
+    purpose,
+    stateHash: hash(state),
+    expiresAtMs: Date.now() + 600000,
+    createdAtMs: Date.now(),
+  });
   res.cookie("frame_meta_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -143,17 +142,15 @@ export async function createDiscovery(
   await db
     .delete(channelOAuthSessions)
     .where(lt(channelOAuthSessions.expiresAtMs, Date.now()));
-  await db
-    .insert(channelOAuthSessions)
-    .values({
-      id,
-      organizationId,
-      userId,
-      purpose,
-      credentials: encryptToken(token),
-      expiresAtMs: Date.now() + 600000,
-      createdAtMs: Date.now(),
-    });
+  await db.insert(channelOAuthSessions).values({
+    id,
+    organizationId,
+    userId,
+    purpose,
+    credentials: encryptToken(token),
+    expiresAtMs: Date.now() + 600000,
+    createdAtMs: Date.now(),
+  });
   return { id, purpose, ...safeDiscovery(discovery) };
 }
 export async function readDiscovery(
@@ -304,6 +301,10 @@ export async function connectChoice(
       code: "FORBIDDEN",
       message: "Required read access was not granted.",
     });
+  Object.assign(
+    details,
+    await readAccountImage(row.purpose, accountId, selectedToken)
+  );
   if (!details.capabilities.includes("publish"))
     details.warnings.push(
       "Publishing is unavailable. Reconnect with the required permissions and Page tasks."
@@ -380,15 +381,13 @@ export async function connectChoice(
         .set(values)
         .where(eq(channelConnections.id, id));
     else
-      await tx
-        .insert(channelConnections)
-        .values({
-          id,
-          organizationId: input.organizationId,
-          channel: row.purpose,
-          accountId,
-          ...values,
-        });
+      await tx.insert(channelConnections).values({
+        id,
+        organizationId: input.organizationId,
+        channel: row.purpose,
+        accountId,
+        ...values,
+      });
     // Reconnection changes the destination authorization; reapprove queued content.
     await tx
       .update(publications)

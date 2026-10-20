@@ -380,6 +380,8 @@ export const products = appSchema.table(
     specifications: json("specifications")
       .$type<Record<string, string>>()
       .notNull(),
+    features: json("features").$type<string[]>().default([]).notNull(),
+    availability: varchar("availability", { length: 120 }),
     provenance: json("provenance").$type<Record<string, string>>().notNull(),
     status: productsStatusEnum("status").default("pending").notNull(),
     reviewedByUserId: integer("reviewedByUserId").references(() => users.id),

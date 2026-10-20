@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AccountIdentity } from "../AccountIdentity";
 import {
   BarChart3,
   CalendarDays,
@@ -44,6 +45,8 @@ export function ChoiceVisual({
   visual?: string;
 }) {
   const [failed, setFailed] = useState<string>();
+  if (visual === "account")
+    return <AccountIdentity name={label} imageUrl={image} />;
   const hair = visual?.startsWith("hair:")
     ? hairSwatches[visual.slice(5)]
     : undefined;

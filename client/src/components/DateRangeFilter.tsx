@@ -46,11 +46,14 @@ export function DateRangeFilter({
     });
   }, [value?.since, value?.until, timezone]);
   return (
-    <div className="flex min-w-0 flex-wrap items-end gap-3">
-      <ChoiceField className="text-sm">
+    <div className="date-range-filter flex w-full min-w-0 flex-wrap items-end gap-3">
+      <ChoiceField className="w-full text-sm">
         {label}
         <VisualSelect
-          density="compact"
+          density="tiles"
+          showAll
+          searchable={false}
+          tileClassName="date-range-choices"
           aria-label={label}
           className={channelInput + " mt-1 block"}
           value={period}

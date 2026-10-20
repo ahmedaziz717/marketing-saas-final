@@ -184,6 +184,8 @@ try {
       "social",
       "advertising",
       "analytics",
+      "report-layout",
+      "product-facts",
       "analytics-ads",
       "analytics-social",
       "advertising-empty",

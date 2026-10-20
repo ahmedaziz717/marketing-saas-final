@@ -46,6 +46,7 @@ vi.mock("@/lib/trpc", () => ({
       progress: { useQuery: () => ({ data: null }) },
     },
     channels: {
+      accountImage: { useQuery: () => ({ data: {} }) },
       connections: {
         useQuery: () => ({
           data: {

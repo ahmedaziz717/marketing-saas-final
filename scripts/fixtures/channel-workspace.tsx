@@ -1,3 +1,4 @@
+import { ReleaseDetailsFixture } from "./release-details";
 import CreativeWorkflowsPage from "../../client/src/pages/CreativeWorkflowsPage";
 import CreativeConfiguratorPage from "../../client/src/pages/CreativeConfiguratorPage";
 import InsightsStudioPage from "../../client/src/pages/InsightsStudioPage";
@@ -758,6 +759,7 @@ function respond(path: string, input: any) {
     else posts[found] = post;
     return post;
   }
+  if (path === "channels.accountImage") return {};
   if (path === "workspace.mine") return [];
   throw new Error("No fixture response for " + path);
 }
@@ -790,6 +792,8 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "report-layout": "/app/release-fixture",
+  "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
@@ -948,6 +952,12 @@ function ModelPickerFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/release-fixture")
+    return (
+      <DashboardLayout>
+        <ReleaseDetailsFixture facts={which === "product-facts"} />
+      </DashboardLayout>
+    );
   if (path === "/app/creatives/workflows")
     return (
       <DashboardLayout>
@@ -1718,7 +1728,57 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           !!document.querySelector('a[href="/app/analytics/studio"]'),
         "Customizable Measure dashboard and report creation render"
       );
-    else if (which === "integrations") {
+    else if (which === "report-layout") {
+      check(
+        document.querySelectorAll('.date-range-choices [role="radio"]')
+          .length === 12,
+        "All date presets appear together"
+      );
+      const widget = document.querySelector<HTMLElement>(".insight-widget")!;
+      const content = widget.querySelector<HTMLElement>(
+        ".insight-widget-content"
+      )!;
+      const body = widget.querySelector<HTMLElement>(".insight-widget-body")!;
+      check(
+        widget.dataset.autoSize === "true",
+        "New reports fit content automatically"
+      );
+      check(
+        body.getBoundingClientRect().bottom <=
+          widget.getBoundingClientRect().bottom,
+        "Metric report fits its dashboard widget without clipping"
+      );
+      check(
+        content.scrollHeight <= content.clientHeight + 1,
+        "Auto-sized report needs no inner vertical scrolling"
+      );
+      for (const number of widget.querySelectorAll<HTMLElement>(
+        ".insight-metric > strong"
+      ))
+        check(
+          number.scrollWidth <= number.clientWidth + 1,
+          "Currency values fit their metric tiles"
+        );
+      check(
+        document.body.textContent?.includes("USD 95,458.20"),
+        "Currency preserves two decimal places"
+      );
+      layout();
+    } else if (which === "product-facts") {
+      check(
+        document.querySelectorAll(".cfg-specification-list li").length === 5,
+        "Specifications and features render as separate bullets"
+      );
+      check(
+        !!button("Include availability"),
+        "Availability is its own selected fact"
+      );
+      check(
+        !!document.querySelector('[aria-label="Specification 1 name"]'),
+        "Catalog specifications have structured name and value fields"
+      );
+      layout();
+    } else if (which === "integrations") {
       check(
         document.body.textContent?.includes("Social Media"),
         "Social integration category renders"

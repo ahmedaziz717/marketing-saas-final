@@ -1,3 +1,6 @@
+import { CatalogFactsFields } from "./CatalogFactsFields";
+import { specificationsFromLines } from "@shared/catalogFacts";
+import "@/styles/catalogFacts.css";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { offeringTypes, offeringLabels } from "@shared/businessProfile";
 import { useState } from "react";
@@ -65,15 +68,10 @@ export function CatalogEntryForm({
           entries: [
             {
               ...entry,
-              specifications: Object.fromEntries(
-                specs
-                  .split("\n")
-                  .filter(s => s.includes(":"))
-                  .map(s => [
-                    s.slice(0, s.indexOf(":")).trim(),
-                    s.slice(s.indexOf(":") + 1).trim(),
-                  ])
-              ),
+              specifications: specificationsFromLines(specs),
+              features: (entry.features ?? [])
+                .map(f => f.trim())
+                .filter(Boolean),
             },
           ],
         });
@@ -250,13 +248,14 @@ export function CatalogEntryForm({
           ))}
         </div>
       )}
-      <Label htmlFor="entry-specifications">
-        Specifications or service facts (name: value, one per line)
-      </Label>
-      <Textarea
-        id="entry-specifications"
-        value={specs}
-        onChange={e => setSpecs(e.target.value)}
+      <CatalogFactsFields
+        specifications={specs}
+        features={entry.features ?? []}
+        availability={entry.availability ?? ""}
+        onChange={({ specifications, ...patch }) => {
+          if (specifications !== undefined) setSpecs(specifications);
+          setEntry({ ...entry, ...patch });
+        }}
       />
       <Button disabled={save.isPending} type="submit">
         {save.isPending ? "Saving…" : "Save for review"}

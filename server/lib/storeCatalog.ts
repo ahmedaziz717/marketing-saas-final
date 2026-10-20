@@ -2,7 +2,11 @@ import { apiCatalogAddress, readApiCatalogPage } from "./apiCatalog";
 import type { ApiCatalogConfig } from "../../shared/apiCatalog";
 import type { StoreProvider, CatalogEntry } from "../../shared/catalog";
 import { safeStoreRequest } from "./websiteCrawler";
-export type StoreCredentials = { token: string; secret?: string; api?: ApiCatalogConfig };
+export type StoreCredentials = {
+  token: string;
+  secret?: string;
+  api?: ApiCatalogConfig;
+};
 export function storeAddress(provider: StoreProvider, value: string) {
   if (provider === "api") return apiCatalogAddress(value);
   const url = new URL(value);
@@ -216,6 +220,7 @@ export async function readStorePage(
       productUrl: p.permalink,
       price: p.price || "",
       currency,
+      availability: p.stock_status || "",
       specifications: Object.fromEntries(
         (p.attributes || []).map((a: any) => [a.name, a.options.join(", ")])
       ),

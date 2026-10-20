@@ -393,6 +393,7 @@ export function insightNumber(
     return "Unavailable";
   const def = insightMetrics[metric];
   const number = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: def.unit === "currency" ? 2 : 0,
     maximumFractionDigits: def.unit === "number" ? 0 : 2,
   }).format(value);
   return def.unit === "currency"
@@ -496,6 +497,7 @@ export const dashboardWidgetSchema = z
     metric: metricSchema,
     size: z.enum(["small", "half", "medium", "wide"]),
     height: z.enum(["compact", "standard", "tall"]),
+    autoSize: z.boolean().optional(),
     title: z
       .string()
       .trim()
@@ -515,6 +517,27 @@ export const dashboardWidgetSchema = z
     "Choose an account for a metric or chart."
   );
 export type DashboardWidget = z.infer<typeof dashboardWidgetSchema>;
+/** New widgets get sensible defaults; existing deliberate layouts stay intact. */
+export function recommendedWidgetLayout(
+  kind: DashboardWidget["kind"],
+  components: NonNullable<DashboardWidget["components"]> = [],
+  metricCount = 0
+): Pick<DashboardWidget, "size" | "height" | "autoSize"> {
+  if (kind === "kpi")
+    return { size: "small", height: "compact", autoSize: false };
+  if (kind === "trend")
+    return { size: "half", height: "standard", autoSize: false };
+  const detailed =
+    components.includes("details") || components.includes("trends");
+  return {
+    size:
+      detailed || (components.includes("metrics") && metricCount > 3)
+        ? "wide"
+        : "half",
+    height: detailed ? "tall" : "standard",
+    autoSize: true,
+  };
+}
 export const dashboardLayoutSchema = z.object({
   name: z.string().trim().min(1).max(80),
   surface: z.enum(["main", "measure"]),

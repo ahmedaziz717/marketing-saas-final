@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { structuredCatalogFacts } from "../../shared/catalogFacts";
 import type {
   ProductFactSelection,
   SelectedProductFacts,
@@ -10,7 +11,20 @@ export function selectProductFacts(
   product: StudioProduct,
   selection: ProductFactSelection
 ): SelectedProductFacts {
-  const specifications = product.specifications ?? {};
+  const { specifications, features, availability } =
+    structuredCatalogFacts(product);
+  if (
+    (selection.featuredFeatures ?? []).some(
+      feature => !features.includes(feature)
+    ) ||
+    (selection.includeAvailability &&
+      (!availability || availability.toLowerCase() === "unknown"))
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Product features or availability changed. Review Product details before continuing.",
+    });
   if (
     selection.productId !== product.id ||
     selection.featuredSpecKeys.some(
@@ -40,6 +54,10 @@ export function selectProductFacts(
     recordType: product.recordType,
     serviceDetails: product.serviceDetails,
     specifications,
+    features,
+    featuredFeatures: selection.featuredFeatures ?? [],
+    availability: selection.includeAvailability ? availability : null,
+    includeAvailability: !!selection.includeAvailability,
     featuredSpecifications: Object.fromEntries(
       selection.featuredSpecKeys.map(key => [key, specifications[key]])
     ),

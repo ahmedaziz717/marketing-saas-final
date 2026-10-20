@@ -1,4 +1,5 @@
 import type { inferRouterOutputs } from "@trpc/server";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { AppRouter } from "../../../server/routers";
 import {
   ArrowDown,
@@ -60,14 +61,51 @@ export function InsightWidget({
   const running = !!latest && ["queued", "running"].includes(latest.status);
   const components = w.components ?? ["summary"];
   const stale = !!run && !!report && run.revision !== report.revision;
+  const frame = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState(2);
+  useLayoutEffect(() => {
+    if (
+      !w.autoSize ||
+      !frame.current ||
+      !body.current ||
+      typeof ResizeObserver === "undefined"
+    )
+      return;
+    const measure = () => {
+      const node = frame.current!;
+      const grid = node.parentElement;
+      if (!grid) return;
+      const css = getComputedStyle(grid);
+      const unit = parseFloat(css.getPropertyValue("--widget-unit")) || 280;
+      const gap = parseFloat(css.rowGap) || 16;
+      const chrome = Array.from(node.children)
+        .filter(el => !el.classList.contains("insight-widget-content"))
+        .reduce((total, el) => total + el.getBoundingClientRect().height, 0);
+      const needed = body.current!.getBoundingClientRect().height + chrome + 24;
+      setRows(Math.max(1, Math.ceil((needed + gap) / (unit + gap))));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(body.current);
+    for (const child of Array.from(frame.current.children))
+      if (!child.classList.contains("insight-widget-content"))
+        observer.observe(child);
+    measure();
+    return () => observer.disconnect();
+  }, [w.autoSize, w.size, editing, run, report]);
   return (
     <article
+      ref={frame}
       className="insight-widget"
       data-size={w.size}
       data-height={w.height}
       data-kind={w.kind}
+      data-auto-size={w.autoSize || undefined}
       data-widget-id={w.id}
-      style={widgetStyle(w)}
+      style={{
+        ...widgetStyle(w),
+        ...(w.autoSize ? { gridRow: `span ${rows}` } : {}),
+      }}
       draggable={editing}
       onDragStart={e => {
         if ((e.target as HTMLElement).closest("button, a")) {
@@ -129,129 +167,131 @@ export function InsightWidget({
         tabIndex={0}
         aria-label={`${title} content`}
       >
-        {loading ? (
-          <p role="status">Loading widget…</p>
-        ) : !report ? (
-          <p>This widget is no longer available. Remove it in Customize.</p>
-        ) : !run ? (
-          <p>Refresh this widget to load its first result.</p>
-        ) : !run.result ? (
-          <p role="status">
-            {running
-              ? "Loading this widget’s data…"
-              : run.error || "No result is available."}
-          </p>
-        ) : w.kind === "report" ? (
-          <div className="insight-widget-report">
-            {components.includes("summary") && (
-              <section aria-label="Executive summary">
-                <h4>Executive summary</h4>
-                <ul>
-                  {run.result.findings.map((f, i) => (
-                    <li key={i}>{f}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {components.includes("metrics") && (
-              <section aria-label="Key metrics">
-                <h4>Key metrics</h4>
-                {run.result.accounts
-                  .filter(a => a.metrics.length)
-                  .map(a => (
-                    <div key={a.connectionId}>
-                      <p className="insight-widget-account">{a.name}</p>
-                      <div className="insight-widget-metric-grid">
-                        {a.metrics
-                          .filter(m => report.config.metrics.includes(m.key))
-                          .map(m => (
-                            <InsightMetricCard
-                              key={m.key}
-                              account={a}
-                              metric={m}
-                              compare={run.config.compare}
-                            />
-                          ))}
+        <div ref={body} className="insight-widget-body">
+          {loading ? (
+            <p role="status">Loading widget…</p>
+          ) : !report ? (
+            <p>This widget is no longer available. Remove it in Customize.</p>
+          ) : !run ? (
+            <p>Refresh this widget to load its first result.</p>
+          ) : !run.result ? (
+            <p role="status">
+              {running
+                ? "Loading this widget’s data…"
+                : run.error || "No result is available."}
+            </p>
+          ) : w.kind === "report" ? (
+            <div className="insight-widget-report">
+              {components.includes("summary") && (
+                <section aria-label="Executive summary">
+                  <h4>Executive summary</h4>
+                  <ul>
+                    {run.result.findings.map((f, i) => (
+                      <li key={i}>{f}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {components.includes("metrics") && (
+                <section aria-label="Key metrics">
+                  <h4>Key metrics</h4>
+                  {run.result.accounts
+                    .filter(a => a.metrics.length)
+                    .map(a => (
+                      <div key={a.connectionId}>
+                        <p className="insight-widget-account">{a.name}</p>
+                        <div className="insight-widget-metric-grid">
+                          {a.metrics
+                            .filter(m => report.config.metrics.includes(m.key))
+                            .map(m => (
+                              <InsightMetricCard
+                                key={m.key}
+                                account={a}
+                                metric={m}
+                                compare={run.config.compare}
+                              />
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-              </section>
-            )}
-            {components.includes("trends") && (
-              <section aria-label="Trend charts">
-                <h4>Trend charts</h4>
-                {run.result.accounts
-                  .filter(a => a.metrics.length)
-                  .map(a => (
-                    <div key={a.connectionId}>
-                      <p className="insight-widget-account">{a.name}</p>
-                      <InsightChart
-                        account={a}
-                        metric={insightChartMetric(
-                          report.config.chartMetric,
-                          a
-                        )}
-                      />
-                    </div>
-                  ))}
-              </section>
-            )}
-            {components.includes("details") && (
-              <section aria-label="Detail tables">
-                <h4>Detail tables</h4>
-                {run.result.accounts.map(a => (
-                  <div key={a.connectionId} className="insight-widget-table">
-                    <table>
-                      <caption>
-                        {a.name} · {a.detailLabel}
-                      </caption>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          {a.detailMetrics.map(m => (
-                            <th key={m}>{insightMetrics[m].label}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {a.details.map((d, i) => (
-                          <tr key={i}>
-                            <td>{d.name}</td>
+                    ))}
+                </section>
+              )}
+              {components.includes("trends") && (
+                <section aria-label="Trend charts">
+                  <h4>Trend charts</h4>
+                  {run.result.accounts
+                    .filter(a => a.metrics.length)
+                    .map(a => (
+                      <div key={a.connectionId}>
+                        <p className="insight-widget-account">{a.name}</p>
+                        <InsightChart
+                          account={a}
+                          metric={insightChartMetric(
+                            report.config.chartMetric,
+                            a
+                          )}
+                        />
+                      </div>
+                    ))}
+                </section>
+              )}
+              {components.includes("details") && (
+                <section aria-label="Detail tables">
+                  <h4>Detail tables</h4>
+                  {run.result.accounts.map(a => (
+                    <div key={a.connectionId} className="insight-widget-table">
+                      <table>
+                        <caption>
+                          {a.name} · {a.detailLabel}
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th>Name</th>
                             {a.detailMetrics.map(m => (
-                              <td key={m}>
-                                {insightNumber(
-                                  d.values[m] ?? null,
-                                  m,
-                                  a.currency
-                                )}
-                              </td>
+                              <th key={m}>{insightMetrics[m].label}</th>
                             ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {!a.details.length && (
-                      <p>No detail rows are available for this period.</p>
-                    )}
-                  </div>
-                ))}
-              </section>
-            )}
-          </div>
-        ) : !account || !value ? (
-          <p>
-            This metric is unavailable in the current result. Refresh the widget
-            or edit its content.
-          </p>
-        ) : w.kind === "kpi" ? (
-          <InsightMetricCard
-            account={account}
-            metric={value}
-            compare={run.config.compare}
-          />
-        ) : (
-          <InsightChart account={account} metric={w.metric} />
-        )}
+                        </thead>
+                        <tbody>
+                          {a.details.map((d, i) => (
+                            <tr key={i}>
+                              <td>{d.name}</td>
+                              {a.detailMetrics.map(m => (
+                                <td key={m}>
+                                  {insightNumber(
+                                    d.values[m] ?? null,
+                                    m,
+                                    a.currency
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!a.details.length && (
+                        <p>No detail rows are available for this period.</p>
+                      )}
+                    </div>
+                  ))}
+                </section>
+              )}
+            </div>
+          ) : !account || !value ? (
+            <p>
+              This metric is unavailable in the current result. Refresh the
+              widget or edit its content.
+            </p>
+          ) : w.kind === "kpi" ? (
+            <InsightMetricCard
+              account={account}
+              metric={value}
+              compare={run.config.compare}
+            />
+          ) : (
+            <InsightChart account={account} metric={w.metric} />
+          )}
+        </div>
       </div>
       <footer>
         <details>

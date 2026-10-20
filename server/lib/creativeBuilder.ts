@@ -187,7 +187,7 @@ export function buildCreativePrompt(input: {
     "Render this customer-selected copy accurately: " +
       JSON.stringify(setup.copy),
     productFactsDirection,
-    "For EACH product, render only its featuredSpecifications as spec callouts, accurately associated with that product. Other specifications are factual context only. Never mix facts between products.",
+    "For EACH product, render only its selected featuredSpecifications and featuredFeatures as callouts, accurately associated with that product. Other specifications are factual context only. Never mix facts between products.",
     "Render a product price only if includePrice is true, using its exact catalog price and currency. Do not invent discounts or offers.",
     "All selected copy and featured specs must remain readable and within the canvas. When includeDescription is true, integrate a concise, faithful benefit from that product's description or service benefits. Adapt the arrangement for compact formats; do not silently omit selected facts or required claims. Add no unselected claims, words or badges beyond the selected copy and explicitly selected product facts.",
   ].join("\n\n");

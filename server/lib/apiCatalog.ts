@@ -76,9 +76,18 @@ const aliases = {
   category: ["category.name", "category", "product_type"],
   specifications: ["specifications", "specs", "attributes"],
   features: ["features", "highlights", "bullet_points", "benefits"],
+  availability: [
+    "availability",
+    "stock_status",
+    "stockStatus",
+    "in_stock",
+    "inStock",
+    "available",
+  ],
 };
 const text = (v: unknown, limit: number) =>
   (typeof v === "string" || typeof v === "number" ? String(v) : "")
+    .replace(/<\/(?:li|p|div)>|<br\s*\/?\s*>/gi, "\n")
     .replace(/<[^>]*>/g, " ")
     .trim()
     .slice(0, limit);
@@ -177,16 +186,25 @@ export function parseApiCatalog(
         `Product ${index + 1} has no product URL. Set the productUrl field; API URLs are not used as product landing pages.`
       );
     const specs = catalogAttributes(read("specifications"), "Specification");
-    const usedKeys = new Set(specs.map(([key]) => key));
-    const features = catalogAttributes(read("features"), "Feature").map(
-      ([key, value]): [string, string] => [
-        usedKeys.has(key) ? `Feature · ${key}` : key,
-        value,
-      ]
-    );
-    const specifications = Object.fromEntries(
-      [...specs, ...features].slice(0, 100)
-    );
+    const features = catalogAttributes(read("features"), "Feature")
+      .flatMap(([key, value]) =>
+        /^Feature(?: \d+)?$/.test(key)
+          ? value
+              .split(/\n/)
+              .map(v => v.replace(/^\s*[-•]\s*/, "").trim())
+              .filter(Boolean)
+          : [`${key}: ${value}`]
+      )
+      .map(feature => feature.slice(0, 1000))
+      .slice(0, 100);
+    const specifications = Object.fromEntries(specs);
+    const stock = read("availability");
+    const availability =
+      typeof stock === "boolean"
+        ? stock
+          ? "In stock"
+          : "Out of stock"
+        : text(stock, 120);
     const externalId =
       text(read("id"), 180) ||
       sku ||
@@ -202,6 +220,8 @@ export function parseApiCatalog(
         currency: text(read("currency"), 16),
         category: text(read("category"), 240),
         specifications,
+        features,
+        availability,
       }),
       externalId,
       variants: [],

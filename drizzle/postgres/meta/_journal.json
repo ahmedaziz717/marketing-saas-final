@@ -127,6 +127,13 @@
       "when": 1792119293742,
       "tag": "0017_independent_dashboard_widgets",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792463682266,
+      "tag": "0018_structured_product_facts",
+      "breakpoints": true
     }
   ]
 }

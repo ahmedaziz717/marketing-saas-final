@@ -40,15 +40,18 @@ it("keeps array attributes and feature bullets as selectable catalog facts", () 
     Graphics: "RTX 5090",
     Memory: "64 GB, DDR5",
     "Wi-Fi": "true",
-    "Feature 1": "Tool-free access",
-    "Feature 2": "Two-year warranty",
   });
+  expect(page.items[0].features).toEqual([
+    "Tool-free access",
+    "Two-year warranty",
+  ]);
   const custom = parseApiCatalog(
     [{ ...product, info: { highlights: { Cooling: "Liquid cooling" } } }],
     endpoint,
     apiCatalogConfigSchema.parse({ fields: { features: "info.highlights" } })
   );
-  expect(custom.items[0].specifications).toEqual({ Cooling: "Liquid cooling" });
+  expect(custom.items[0].specifications).toEqual({});
+  expect(custom.items[0].features).toEqual(["Cooling: Liquid cooling"]);
 });
 
 it("reads a public JSON catalog without credentials and maps common fields", async () => {
@@ -212,4 +215,23 @@ it("treats instruction files as bounded data and rejects disguised executable/im
       },
     ])
   ).rejects.toThrow(/UTF-8/);
+});
+
+it("imports stock independently and preserves HTML feature bullets", () => {
+  const result = parseApiCatalog(
+    [
+      {
+        ...product,
+        in_stock: false,
+        features: "<ul><li>Dimmable</li><li>Brass finish</li></ul>",
+      },
+    ],
+    endpoint,
+    config()
+  );
+  expect(result.items[0]).toMatchObject({
+    availability: "Out of stock",
+    features: ["Dimmable", "Brass finish"],
+    specifications: {},
+  });
 });

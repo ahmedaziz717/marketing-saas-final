@@ -44,6 +44,7 @@ vi.mock("@/lib/trpc", () => ({
     brand: { get: { useQuery: () => ({ data: api.brand }) } },
     models: { credits: { useQuery: () => ({ data: { textEstimate: 1 } }) } },
     channels: {
+      accountImage: { useQuery: () => ({ data: {} }) },
       draftAssetCopy: {
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },
