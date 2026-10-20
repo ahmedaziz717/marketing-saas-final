@@ -63,7 +63,7 @@ export function InsightWidget({
   const stale = !!run && !!report && run.revision !== report.revision;
   const frame = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
-  const [rows, setRows] = useState(2);
+  const [rows, setRows] = useState(8);
   useLayoutEffect(() => {
     if (
       !w.autoSize ||
@@ -77,7 +77,7 @@ export function InsightWidget({
       const grid = node.parentElement;
       if (!grid) return;
       const css = getComputedStyle(grid);
-      const unit = parseFloat(css.getPropertyValue("--widget-unit")) || 280;
+      const unit = parseFloat(css.getPropertyValue("--widget-unit")) || 58;
       const gap = parseFloat(css.rowGap) || 16;
       const chrome = Array.from(node.children)
         .filter(el => !el.classList.contains("insight-widget-content"))

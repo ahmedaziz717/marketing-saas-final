@@ -904,7 +904,8 @@
   container-type: inline-size;
 }
 .insight-dashboard-grid {
-  --widget-unit: 280px;
+  /* Four smaller tracks preserve the original 280px compact height. */
+  --widget-unit: 58px;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: var(--widget-unit);
@@ -916,7 +917,7 @@
   --widget-muted: color-mix(in srgb, var(--widget-fg) 78%, var(--widget-bg));
   --widget-border: color-mix(in srgb, var(--widget-fg) 15%, var(--widget-bg));
   grid-column: span 8;
-  grid-row: span 2;
+  grid-row: span 8;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--widget-border);
@@ -938,10 +939,10 @@
   grid-column: span 12;
 }
 .insight-widget[data-height="compact"] {
-  grid-row: span 1;
+  grid-row: span 4;
 }
 .insight-widget[data-height="tall"] {
-  grid-row: span 3;
+  grid-row: span 12;
 }
 .insight-widget[draggable="true"] {
   border-style: dashed;

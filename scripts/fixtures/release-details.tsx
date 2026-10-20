@@ -29,7 +29,7 @@ export function ReleaseDetailsFixture({ facts = false }: { facts?: boolean }) {
   const config = {
     ...defaultInsightConfig(),
     name: "Weekly account report",
-    metrics: ["spend", "revenue", "purchases", "roas"],
+    metrics: ["spend", "purchaseValue", "purchases", "roas"],
     compare: true,
   } as any;
   const account = {
@@ -39,7 +39,12 @@ export function ReleaseDetailsFixture({ facts = false }: { facts?: boolean }) {
     currency: "USD",
     metrics: [
       { key: "spend", value: 95458.2, previous: 81724.52, change: 16.8 },
-      { key: "revenue", value: 1254631.17, previous: 1023631.1, change: 22.6 },
+      {
+        key: "purchaseValue",
+        value: 1254631.17,
+        previous: 1023631.1,
+        change: 22.6,
+      },
       { key: "purchases", value: 3246, previous: 2932, change: 10.7 },
       { key: "roas", value: 13.14, previous: 12.5, change: 5.1 },
     ],
