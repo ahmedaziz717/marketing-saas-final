@@ -550,7 +550,7 @@ function CatalogContent() {
                   </div>
                 </div>
                 <div className="catalog-card-facts px-5 pb-4">
-                  {product.provenance["api.detailUrl"] && (
+                  {product.provenance?.["api.detailUrl"] && (
                     <ApiProductDetails
                       organizationId={organizationId!}
                       productId={product.id}
