@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assetState, assetMatchesView, canReviewAsset, canSubmitAsset, parseAssetKey, type LibraryAsset, type WorkflowSnapshot } from "../shared/assetLibrary";
+import { assetState, assetMatchesView, canEnhanceImage, canReviewAsset, canSubmitAsset, parseAssetKey, type LibraryAsset, type WorkflowSnapshot } from "../shared/assetLibrary";
 import { detectAssetMime, normalizeCreative } from "./lib/assetLibrary";
 import { creativeVariants } from "../drizzle/schema";
 const hash = "a".repeat(64);
@@ -26,6 +26,9 @@ describe("asset library state and version rules", () => {
   });
 });
 describe("upload signature validation", () => {
+  it.each(["image/png", "image/jpeg", "image/webp"])("allows enhancement of saved %s images", mimeType => expect(canEnhanceImage({ mediaType: "image", mimeType, origin: "uploaded" })).toBe(true));
+  it.each(["image/gif", "image/svg+xml", "video/mp4", "image/*"])("does not send unsupported uploaded %s files for enhancement", mimeType => expect(canEnhanceImage({ mediaType: "image", mimeType, origin: "uploaded" })).toBe(false));
+  it("allows generated images with the legacy image MIME type", () => expect(canEnhanceImage({ mediaType: "image", mimeType: "image/*", origin: "generated" })).toBe(true));
   it("accepts PNG bytes", () => expect(detectAssetMime(Buffer.from([137,80,78,71,13,10,26,10,0,0,0,13]))).toBe("image/png"));
   it("rejects SVG/HTML disguised as images", () => expect(detectAssetMime(Buffer.from("<svg onload='alert(1)'></svg>"))).toBeNull());
   it("rejects a short corrupt file", () => expect(detectAssetMime(Buffer.from([137,80,78]))).toBeNull());

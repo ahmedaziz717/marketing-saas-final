@@ -1,4 +1,5 @@
 import { ReleaseDetailsFixture } from "./release-details";
+import { ImageEnhanceAction } from "../../client/src/components/ImageEnhanceAction";
 import CreativeWorkflowsPage from "../../client/src/pages/CreativeWorkflowsPage";
 import CreativeConfiguratorPage from "../../client/src/pages/CreativeConfiguratorPage";
 import InsightsStudioPage from "../../client/src/pages/InsightsStudioPage";
@@ -233,6 +234,10 @@ const fixtureModels = [
   generationModels.find(m => m.kind === "image")!,
 ];
 function respond(path: string, input: any) {
+  if (path === "creativeBuilder.enhancementSetup") return {
+    setup: { ...defaultCreativeSetup(), name: "Emerald collection · Enhanced", formatIds: ["square_1_1"], modelId: fixtureModels.find(m => m.kind === "image")!.id, preserveProduct: true, enhancement: { assetKey: "asset:1", revision: "a".repeat(64), instruction: "Recreate this Studio product advertisement as a stunning, professional ad creative with dramatically improved visual quality." } },
+    source: studioDraftAssets[0], width: 1080, height: 1080, hasProductOverlay: true, canPreserveProductOverlay: true,
+  };
   if (path === "models.catalog" || path === "models.studioCatalog")
     return fixtureModels.map(m => ({
       ...m,
@@ -792,6 +797,7 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
@@ -952,6 +958,7 @@ function ModelPickerFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/enhance-fixture") return <DashboardLayout><h1>Image assets</h1><ImageEnhanceAction asset={{ ...studioDraftAssets[0], mimeType: "image/png", revision: "a".repeat(64) } as any} organizationId={1} /></DashboardLayout>;
   if (path === "/app/release-fixture")
     return (
       <DashboardLayout>
@@ -1728,6 +1735,19 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           !!document.querySelector('a[href="/app/analytics/studio"]'),
         "Customizable Measure dashboard and report creation render"
       );
+    else if (which === "enhance-image") {
+      await click("Enhance image");
+      await pause(); await pause(); await pause();
+      check(document.querySelector<HTMLTextAreaElement>('[aria-label="Enhancement direction"]')?.value.includes("dramatically improved visual quality"), "Enhance carries the requested editable direction");
+      check(!!document.querySelector('[role="radio"][aria-checked="true"][data-value="keep"]'), "Original product overlay is preserved by default");
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+      const action = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === "Enhance image")!;
+      check(!!action && !action.disabled, "A quoted enhancement can be started explicitly");
+      check(document.body.textContent?.includes("24 credits"), "Enhance shows the current credit quote");
+      check(mutations.length === 0, "Opening Enhance does not generate, approve, or publish");
+      action.scrollIntoView({ block: "center" });
+      layout();
+    }
     else if (which === "report-layout") {
       check(
         document.querySelectorAll('.date-range-choices [role="radio"]')

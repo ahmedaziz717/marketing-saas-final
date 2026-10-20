@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const provider = vi.hoisted(() => ({ calls: 0, failAt: 0, bytes: "" }));
+const provider = vi.hoisted(() => ({ calls: 0, failAt: 0, bytes: "", requests: [] as any[] }));
 vi.mock("./_core/llm", () => ({
   listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
   invokeLLM: async () => ({
@@ -22,8 +22,9 @@ vi.mock("./_core/llm", () => ({
   }),
 }));
 vi.mock("./lib/openaiSunburst", () => ({
-  generateSunburstImage: async () => {
+  generateSunburstImage: async (input: any) => {
     provider.calls++;
+    provider.requests.push(input);
     if (provider.calls === provider.failAt) throw new Error("Provider timeout");
     return {
       url: "/manus-storage/test/output-" + provider.calls + ".png",
@@ -56,6 +57,7 @@ import {
 import { getDb } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { readLibraryAsset } from "./lib/assetLibrary";
 
 const suffix = randomUUID();
 let organizationId = 0,
@@ -381,6 +383,38 @@ describe.sequential("persistent creative builder", () => {
     const events = await caller.activity.list({ organizationId });
     expect(events.verified).toBe(true);
     expect(JSON.stringify(events.events)).not.toContain("OPENAI_API_KEY");
+  });
+
+  it("enhances a workspace draft as a linked new version and blocks stale sources before generation", async () => {
+    const db = await database();
+    const [source] = await db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, organizationId)).limit(1);
+    const key = `creative:${source.id}` as const;
+    const asset = await readLibraryAsset(db, organizationId, key);
+    const input = { organizationId, key, revision: asset.revision };
+    await expect(caller.creativeBuilder.enhancementSetup({ ...input, organizationId: organizationId + 999999 })).rejects.toThrow(/access/);
+    await expect(caller.creativeBuilder.enhancementSetup({ ...input, revision: "f".repeat(64) })).rejects.toThrow(/changed/);
+    const prepared = await caller.creativeBuilder.enhancementSetup(input);
+    expect(prepared.setup.enhancement).toMatchObject({ assetKey: key, revision: asset.revision });
+    expect(prepared.setup.copy).toEqual(source.renderMetadata?.copy);
+    expect(prepared.setup.formatIds).toEqual([source.format]);
+    const saved = await caller.creativeBuilder.save({ organizationId, setup: prepared.setup });
+    const quote = await caller.creativeBuilder.quote({ organizationId, setup: prepared.setup });
+    const started = await caller.creativeBuilder.generate({ organizationId, briefId: saved.briefId, expectedUpdatedAtMs: saved.updatedAtMs, requestId: randomUUID(), quotedCredits: quote.credits });
+    const calls = provider.calls;
+    await processNextBuilderJob(db);
+    const job = await caller.creativeBuilder.studioJob({ organizationId, jobId: started.jobId });
+    expect(job.status).toBe("completed");
+    expect(provider.calls).toBe(calls + 1);
+    expect(provider.requests.at(-1).prompt).toContain(prepared.setup.enhancement!.instruction);
+    const enhanced = await readLibraryAsset(db, organizationId, `creative:${job.variants[0].id}`);
+    expect(enhanced).toMatchObject({ state: "draft", parentKey: key });
+    expect((await readLibraryAsset(db, organizationId, key)).revision).toBe(asset.revision);
+    const retry = await caller.creativeBuilder.generate({ organizationId, briefId: saved.briefId, expectedUpdatedAtMs: saved.updatedAtMs, requestId: randomUUID(), quotedCredits: quote.credits });
+    await db.update(creativeVariants).set({ name: "Changed after queueing" }).where(eq(creativeVariants.id, source.id));
+    const before = provider.calls;
+    await processNextBuilderJob(db);
+    expect((await caller.creativeBuilder.studioJob({ organizationId, jobId: retry.jobId })).status).toBe("failed");
+    expect(provider.calls).toBe(before);
   });
 
   it("saves failure without partial results and allows a new attempt", async () => {

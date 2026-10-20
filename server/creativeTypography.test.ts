@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { creativeTypographyDirection } from "../shared/creativeFonts";
+import { creativeTypographyDirection, brandFontFamilies } from "../shared/creativeFonts";
 import {
   creativeSetupSchema,
   defaultCreativeSetup,
@@ -42,9 +42,19 @@ it("uses one explicit brand family when preserving and restores mixed typography
     'selected font family "Rubik"'
   );
   expect(creativeTypographyDirection("Bungee", false, ["Inter"])).toContain(
-    "freedom to choose complementary fonts"
+    "allows complementary roles"
   );
   expect(creativeTypographyDirection("", true, [])).toContain(
     "Font preservation is OFF"
   );
+});
+it("uses actual brand families rather than crawler fallback aliases and constrains oversized default text", () => {
+  const fonts = ["Rubik", "Russo One", "Rubik Fallback\\: Segoe UI", "Rubik Fallback\\: Arial"];
+  expect(brandFontFamilies(fonts)).toEqual(["Rubik", "Russo One"]);
+  const prompt = creativeTypographyDirection(undefined, false, fonts);
+  expect(prompt).toContain('Use "Rubik" as the primary family');
+  expect(prompt).toContain('"Russo One"');
+  expect(prompt).not.toContain("Fallback");
+  expect(prompt).toContain("product or subject as the visual hero");
+  expect(prompt).toContain("10–18%");
 });

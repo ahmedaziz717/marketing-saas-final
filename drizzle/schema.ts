@@ -524,6 +524,7 @@ export const creativeVariants = appSchema.table("creative_variants", {
     logoPreservation?: import("../shared/logoPreservation").LogoPreservationMetadata;
     productPreservation?: import("../shared/productOverlay").ProductOverlayMetadata;
     parentVariantId?: number;
+    enhancement?: { sourceAssetKey: import("../shared/assetLibrary").AssetKey; sourceRevision: string; instruction: string };
     copyTags?: import("../shared/copyTaxonomy").CopyTags;
     campaignPlanId?: number;
     productIds: number[];

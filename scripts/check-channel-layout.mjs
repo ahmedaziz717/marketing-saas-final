@@ -186,6 +186,7 @@ try {
       "analytics",
       "report-layout",
       "product-facts",
+      "enhance-image",
       "analytics-ads",
       "analytics-social",
       "advertising-empty",

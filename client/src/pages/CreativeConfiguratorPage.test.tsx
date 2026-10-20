@@ -566,6 +566,25 @@ function section(name: RegExp) {
   });
   if (keep) clickJourney(keep);
 }
+it("defaults to reference-image models for an image source and keeps a deliberate filter choice across categories", () => {
+  open();
+  section(/AI Model Choose your engine/);
+  clickJourney(screen.getByRole("tab", { name: /Input/ }));
+  expect(screen.getByRole("radio", { name: "All inputs" }).getAttribute("aria-checked")).toBe("true");
+  section(/Type & Source Start with an idea/);
+  clickJourney(screen.getByRole("button", { name: "Open Subject & sources category" }));
+  clickJourney(screen.getByRole("button", { name: "Select Studio lamp" }));
+  section(/AI Model Choose your engine/);
+  clickJourney(screen.getByRole("tab", { name: /Input/ }));
+  expect(screen.getByRole("radio", { name: "Reference images" }).getAttribute("aria-checked")).toBe("true");
+  clickJourney(screen.getByRole("radio", { name: "All inputs" }));
+  section(/Story & Sound Tell your story/);
+  section(/AI Model Choose your engine/);
+  clickJourney(screen.getByRole("tab", { name: /Input/ }));
+  expect(screen.getByRole("radio", { name: "All inputs" }).getAttribute("aria-checked")).toBe("true");
+  clickJourney(screen.getByRole("button", { name: "Reset model filters" }));
+  expect(screen.getByRole("radio", { name: "Reference images" }).getAttribute("aria-checked")).toBe("true");
+});
 it("shows the shared brand logos in video and saves the choice without changing image branding", async () => {
   api.assets = [
     {

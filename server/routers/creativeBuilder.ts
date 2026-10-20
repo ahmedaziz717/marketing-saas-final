@@ -5,6 +5,8 @@ import {
   renderOriginalLogo,
 } from "../lib/logoPreservation";
 import { productOverlayPlacementSchema } from "../../shared/productOverlay";
+import { alignCopyWithCampaign } from "../../shared/creativeMessaging";
+import { prepareEnhancement, readEnhancementSource } from "../lib/imageEnhancement";
 import {
   renderProductOverlay,
   suggestProductPlacement,
@@ -276,8 +278,12 @@ export async function loadInputs(
       return { id: parsed.id, key, storageKey: row.storageKey, url: asset.url };
     })
   );
+  const enhancement = setup.enhancement
+    ? (await readEnhancementSource(db, organizationId, setup.enhancement.assetKey, setup.enhancement.revision)).source
+    : undefined;
   return {
-    references: [...sourceReferences, ...references],
+    ...(enhancement ? { enhancement } : {}),
+    references: [...(enhancement ? [enhancement] : []), ...sourceReferences, ...references],
     personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
@@ -289,6 +295,7 @@ function builderProductGroups(
   setup: CreativeSetup,
   resolved: Awaited<ReturnType<typeof loadInputs>>
 ) {
+  if (setup.enhancement) return [resolved.products];
   return setup.promotionMode === "platform" || isReferenceCreative(setup)
     ? [[]]
     : setup.productMode === "together"
@@ -362,7 +369,7 @@ export async function runBuilderJob(
         .sort((a, b) => b.width * b.height - a.width * a.height);
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
-        const cutouts = group.length
+        const cutouts = setup.enhancement ? preserved : group.length
           ? preserved.filter(p =>
               group.some(g => g.image?.storageKey === p.sourceKey)
             )
@@ -392,6 +399,7 @@ export async function runBuilderJob(
             hasLogo: !!resolved.logo,
             logoPlacement: logoLayout,
             adaptMaster: !!master,
+            enhancementReferencePosition: group.filter(p => p.image).length + 1 + (master ? 1 : 0),
           }),
           outputSize: {
             width: format.width,
@@ -435,6 +443,7 @@ export async function runBuilderJob(
           briefId: briefId,
           jobId,
           name: (
+            setup.enhancement ? setup.name :
             (group.map(product => product.name).join(" + ") ||
               setup.promotion?.title ||
               resolved.brand.name) +
@@ -458,6 +467,15 @@ export async function runBuilderJob(
           imageUrl: image.url,
           imageStorageKey: image.storageKey,
           renderMetadata: {
+            ...(setup.enhancement ? {
+              enhancement: {
+                sourceAssetKey: setup.enhancement.assetKey as import("../../shared/assetLibrary").AssetKey,
+                sourceRevision: setup.enhancement.revision,
+                instruction: setup.enhancement.instruction,
+              },
+              ...(setup.enhancement.assetKey.startsWith("creative:")
+                ? { parentVariantId: parseAssetKey(setup.enhancement.assetKey).id } : {}),
+            } : {}),
             ...(preservedLogo && logoLayout
               ? {
                   logoPreservation: {
@@ -718,6 +736,15 @@ async function readOverlayDesign(
 }
 
 export const creativeBuilderRouter = router({
+  enhancementSetup: protectedProcedure
+    .input(organizationInput.extend({ key: z.string().regex(/^(asset|creative):[1-9][0-9]*$/), revision: z.string().regex(/^[a-f0-9]{64}$/) }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [...editorRoles]);
+      const db = (await getDb())!;
+      const [brand] = await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1);
+      if (!brand) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Set up your Brand Kit before enhancing an image." });
+      return prepareEnhancement(db, input.organizationId, input.key, input.revision, brand);
+    }),
   productOverlay: protectedProcedure
     .input(organizationInput.extend({ variantId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
@@ -1474,9 +1501,10 @@ export const creativeBuilderRouter = router({
           },
         });
         const content = response.choices[0]?.message?.content;
-        return creativeCopySchema.parse(
+        const copy = creativeCopySchema.parse(
           JSON.parse(typeof content === "string" ? content : "{}")
         );
+        return alignCopyWithCampaign(copy, copySetup.theme);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

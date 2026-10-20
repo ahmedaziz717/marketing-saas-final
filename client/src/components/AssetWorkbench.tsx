@@ -1,5 +1,6 @@
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
+import { ImageEnhanceAction } from "./ImageEnhanceAction";
 import { studioContentHref } from "@shared/contentWorkflow";
 import {
   assetSizeMatches,
@@ -656,6 +657,7 @@ export function AssetWorkbench({
               </section>
               <section className="min-w-0 space-y-4">
                 <AssetStatus state={selected.state} />
+                {canCreate && selected.mediaType === "image" && <ImageEnhanceAction asset={selected} organizationId={organizationId!} onSaved={() => { void refresh(); }} />}
                 {onChoose &&
                   selected.state === "approved" &&
                   selected.purpose === "finished" && (

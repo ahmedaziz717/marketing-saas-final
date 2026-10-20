@@ -23,6 +23,9 @@ export type LibraryAsset = {
   sourceType?: "logo" | "product" | "reference" | "other";
 };
 export type WorkflowSnapshot = { id: number; action: string; payload: Record<string, unknown> | null; actorUserId: number; createdAtMs: number };
+export function canEnhanceImage(asset: Pick<LibraryAsset, "mediaType" | "mimeType" | "origin">) {
+  return asset.mediaType === "image" && (["image/png", "image/jpeg", "image/webp"].includes(asset.mimeType) || (asset.origin === "generated" && asset.mimeType === "image/*"));
+}
 export const WORKFLOW_ACTIONS = ["asset_library.submitted", "asset_library.approved", "asset_library.changes_requested", "asset_library.rejected"];
 export function parseAssetKey(value: string): { kind: "asset" | "creative"; id: number } {
   const match = /^(asset|creative):([1-9][0-9]*)$/.exec(value);

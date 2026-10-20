@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Sparkles } from "lucide-react";
-import { CREATIVE_FONT_GROUPS } from "@shared/creativeFonts";
+import { CREATIVE_FONT_GROUPS, brandFontFamilies } from "@shared/creativeFonts";
 
 const knownFonts: string[] = Object.values(CREATIVE_FONT_GROUPS).flat();
 const sample = "Make it yours";
@@ -8,7 +8,7 @@ const sample = "Make it yours";
 export function StudioFonts({
   font,
   preserve,
-  brandFonts,
+  brandFonts: rawBrandFonts,
   search,
   onChange,
 }: {
@@ -18,6 +18,7 @@ export function StudioFonts({
   search: string;
   onChange: (value: { fontFamily?: string; preserveFont?: boolean }) => void;
 }) {
+  const brandFonts = brandFontFamilies(rawBrandFonts);
   const [group, setGroup] = useState("All fonts");
   const groups = {
     ...CREATIVE_FONT_GROUPS,
@@ -52,7 +53,7 @@ export function StudioFonts({
         <p className="cfg-help">
           {preserve
             ? `Ask AI to use ${font || brandFonts[0] || "your selected font"} throughout the creative, while keeping the visual styling. Generated letterforms can vary; review the result.`
-            : "Off by default. Select a font and turn this on to keep one family throughout the creative. Leave it off to allow complementary fonts."}
+            : "Off by default. Automatic typography follows your brand fonts and visual guidance. Turn this on to keep one selected family throughout the creative."}
         </p>
       </div>
       <div className="cfg-family-tabs" aria-label="Font categories">
@@ -68,7 +69,7 @@ export function StudioFonts({
         ))}
       </div>
       <p className="cfg-help">
-        Selected: {font || "Automatic · art-directed typography"}
+        Selected: {font || "Automatic · brand-led typography"}
       </p>
       <div className="cfg-font-grid">
         <button
@@ -82,7 +83,7 @@ export function StudioFonts({
             <Sparkles size={26} aria-hidden="true" />
           </span>
           <strong>Automatic</strong>
-          <span>Art-directed typography</span>
+          <span>Brand fonts & balanced hierarchy</span>
           {!font && (
             <Check className="cfg-font-check" size={16} aria-hidden="true" />
           )}
