@@ -192,9 +192,19 @@ describe.sequential("crawl router repeat product scans", () => {
     const secondPage = (await db.select().from(websiteCrawlPages).where(and(eq(websiteCrawlPages.organizationId, organizationId), eq(websiteCrawlPages.jobId, second.jobId))).limit(1))[0]!;
     expect(secondPage.url).toContain("variant=second");
     vi.mocked(invokeLLM).mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ brand: { companyName: "", summary: "", voice: "", requiredClaims: [], prohibitedContent: [], colors: [], fonts: [], logoUrls: [] }, products: [{ sourcePageId: secondPage.id, name: "Apex Printer Updated", sku: "APX-1", category: "Printers", description: "Updated description", productUrl: secondPage.url, price: "$1,499", currency: "USD", specifications: [{ name: "Build volume", value: "300 mm" }], imageUrls: [] }] }) } }] } as never);
+    // API drafts without a landing page must not break website URL indexing.
+    const [incompleteApiDraft] = await db.insert(products).values({
+      organizationId, name: "API draft without a landing page",
+      sku: "UNRELATED-DRAFT", dedupeKey: `draft-no-url-${suffix}`,
+      productUrl: "", specifications: {}, provenance: { source: "api" },
+      status: "pending", createdAtMs: Date.now(), updatedAtMs: Date.now(),
+    }).returning();
     const secondAnalysis = await workerCaller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
     expect(secondAnalysis.productsFound).toBe(1);
     await workerCaller.crawl.analyzeBatch({ organizationId, jobId: second.jobId, batchSize: 5 });
+    expect((await db.select().from(products).where(eq(products.id, incompleteApiDraft.id)))[0])
+      .toMatchObject({ productUrl: "", sku: "UNRELATED-DRAFT", status: "pending" });
+    await db.delete(products).where(eq(products.id, incompleteApiDraft.id));
     const afterCanonicalUrlRescan = await db.select().from(products).where(eq(products.organizationId, organizationId));
     expect(afterCanonicalUrlRescan).toHaveLength(1);
     expect(afterCanonicalUrlRescan[0]).toMatchObject({ id: original.id, name: "Apex Printer Updated", sku: "APX-1", status: "pending" });

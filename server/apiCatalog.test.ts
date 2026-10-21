@@ -57,26 +57,74 @@ it("keeps array attributes and feature bullets as selectable catalog facts", () 
 });
 
 it("previews unresolved products and imports nested component quantities with verified URL rules", () => {
-  const kits = [{ code: "kit-1", name: "Gaming PC", layout: "desktop", price: 2000, metadata: { images: { main: "kits/kit-1/main.png" } }, stock: { available: 6 }, components: {
-    memory: { name: "16GB DDR5-5600", quantity: 2 }, processor: { name: "Ryzen 7 9700X", quantity: 1 }, monitor: { name: "No Monitor Selected", quantity: 1 },
-  } }];
+  const kits = [
+    {
+      code: "kit-1",
+      name: "Gaming PC",
+      layout: "desktop",
+      price: 2000,
+      metadata: { images: { main: "kits/kit-1/main.png" } },
+      stock: { available: 6 },
+      components: {
+        memory: { name: "16GB DDR5-5600", quantity: 2 },
+        processor: { name: "Ryzen 7 9700X", quantity: 1 },
+        monitor: { name: "No Monitor Selected", quantity: 1 },
+      },
+    },
+  ];
   const api = "https://api.vendor.example/v1/kits";
   const preview = parseApiCatalog(kits, api, config(), { preview: true });
   expect(preview.items[0].productUrl).toBe("");
   expect(preview.items[0].imageUrl).toBe("");
-  expect(preview.issues).toEqual(expect.arrayContaining([expect.objectContaining({ field: "productUrl", blocking: true })]));
-  const mapping = apiCatalogConfigSchema.parse({ productUrlRules: [{ path: "layout", equals: "desktop", template: "https://shop.example/products/{code}" }], imageBaseUrl: "https://images.example/catalog/", defaultCurrency: "USD" });
+  expect(preview.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ field: "productUrl", blocking: false }),
+    ])
+  );
+  const mapping = apiCatalogConfigSchema.parse({
+    productUrlRules: [
+      {
+        path: "layout",
+        equals: "desktop",
+        template: "https://shop.example/products/{code}",
+      },
+    ],
+    imageBaseUrl: "https://images.example/catalog/",
+    defaultCurrency: "USD",
+  });
   const result = parseApiCatalog(kits, api, mapping);
-  expect(result.items[0]).toMatchObject({ productUrl: "https://shop.example/products/kit-1", imageUrl: "https://images.example/catalog/kits/kit-1/main.png", availability: "In stock · 6 available", currency: "USD", specifications: { memory: "32 GB total · 2 × 16GB DDR5-5600", processor: "Ryzen 7 9700X" } });
+  expect(result.items[0]).toMatchObject({
+    productUrl: "https://shop.example/products/kit-1",
+    imageUrl: "https://images.example/catalog/kits/kit-1/main.png",
+    availability: "In stock · 6 available",
+    currency: "USD",
+    specifications: {
+      memory: "32 GB total · 2 × 16GB DDR5-5600",
+      processor: "Ryzen 7 9700X",
+    },
+  });
   expect(result.items[0].specifications).not.toHaveProperty("monitor");
-  expect(inferProductTemplate("https://shop.example/products/kit-1", kits)).toBe("https://shop.example/products/{code}");
-  expect(() => parseApiCatalog([{ ...kits[0], layout: "laptop" }], api, mapping)).toThrow(/product URL/);
+  expect(
+    inferProductTemplate("https://shop.example/products/kit-1", kits)
+  ).toBe("https://shop.example/products/{code}");
+  expect(
+    parseApiCatalog([{ ...kits[0], layout: "laptop" }], api, mapping).items[0]
+      .productUrl
+  ).toBe("");
 });
 
 it("rejects executable templates and dangerous field paths", () => {
-  for (const productUrlTemplate of ["javascript:alert(1)", "https://user:password@shop.example/{code}", "https://shop.example/{constructor.name}"])
-    expect(apiCatalogConfigSchema.safeParse({ productUrlTemplate }).success).toBe(false);
-  expect(apiCatalogAddress("  https://api.example/products  ")).toBe("https://api.example/products");
+  for (const productUrlTemplate of [
+    "javascript:alert(1)",
+    "https://user:password@shop.example/{code}",
+    "https://shop.example/{constructor.name}",
+  ])
+    expect(
+      apiCatalogConfigSchema.safeParse({ productUrlTemplate }).success
+    ).toBe(false);
+  expect(apiCatalogAddress("  https://api.example/products  ")).toBe(
+    "https://api.example/products"
+  );
 });
 
 it("reads a public JSON catalog without credentials and maps common fields", async () => {
@@ -126,7 +174,7 @@ it("uses explicit dot paths and preserves stable identifiers and product links",
   });
   expect(() =>
     parseApiCatalog([{ name: "No landing page" }], endpoint, config())
-  ).toThrow(/product URL/);
+  ).toThrow(/stable ID or SKU/);
   expect(() => parseApiCatalog([product, product], endpoint, config())).toThrow(
     /IDs repeat/
   );
@@ -262,7 +310,80 @@ it("imports stock independently and preserves HTML feature bullets", () => {
 });
 
 it("limits a product-page example to its product family", () => {
-  const rows = [{ code: "desktop-1", layout: "desktop" }, { code: "laptop-1", layout: "laptop" }];
-  expect(inferProductLinkRule("https://shop.example/desktops/desktop-1", rows)).toEqual({ rule: { path: "layout", equals: "desktop", template: "https://shop.example/desktops/{code}" } });
-  expect(apiCatalogConfigSchema.safeParse({ productUrlTemplate: "https://{code}.example/product" }).success).toBe(false);
+  const rows = [
+    { code: "desktop-1", layout: "desktop" },
+    { code: "laptop-1", layout: "laptop" },
+  ];
+  expect(
+    inferProductLinkRule("https://shop.example/desktops/desktop-1", rows)
+  ).toEqual({
+    rule: {
+      path: "layout",
+      equals: "desktop",
+      template: "https://shop.example/desktops/{code}",
+    },
+  });
+  expect(
+    apiCatalogConfigSchema.safeParse({
+      productUrlTemplate: "https://{code}.example/product",
+    }).success
+  ).toBe(false);
+});
+
+it("imports incomplete products by stable identity and never substitutes a fake landing page", () => {
+  const result = parseApiCatalog(
+    [
+      { code: "a", name: "Desktop", price: 2000 },
+      { code: "b", name: "Laptop", features: ["Portable"] },
+    ],
+    "https://api.example/kits",
+    config()
+  );
+  expect(result.items.map(p => p.productUrl)).toEqual(["", ""]);
+  expect(result.items.map(p => p.externalId)).toEqual(["a", "b"]);
+  expect(result.issues.every(i => !i.blocking)).toBe(true);
+  expect(result.items[1].features).toEqual(["Portable"]);
+  expect(() =>
+    parseApiCatalog([{ name: "Unidentified" }], endpoint, config())
+  ).toThrow(/stable ID/);
+});
+
+it.each(["https://images.example/clx", "https://images.example/clx/"])(
+  "preserves the directory for image base %s",
+  imageBaseUrl => {
+    const result = parseApiCatalog(
+      [
+        {
+          code: "a",
+          name: "PC",
+          metadata: {
+            images: { chassisFeatured: "components/case/featured.png" },
+          },
+        },
+      ],
+      "https://api.example/kits",
+      { ...config(), imageBaseUrl }
+    );
+    expect(result.items[0].imageUrl).toBe(
+      "https://images.example/clx/components/case/featured.png"
+    );
+    expect(apiCatalogConfigSchema.parse({ imageBaseUrl }).imageBaseUrl).toBe(
+      "https://images.example/clx/"
+    );
+  }
+);
+
+it("retains absolute image URLs and does not duplicate root-relative paths", () => {
+  const rows = [
+    { code: "1", name: "One", imageUrl: "https://cdn.example/one.png" },
+    { code: "2", name: "Two", imageUrl: "/clx/components/two.png" },
+  ];
+  const result = parseApiCatalog(rows, "https://api.example/kits", {
+    ...config(),
+    imageBaseUrl: "https://images.example/clx",
+  });
+  expect(result.items.map(p => p.imageUrl)).toEqual([
+    "https://cdn.example/one.png",
+    "https://images.example/clx/components/two.png",
+  ]);
 });

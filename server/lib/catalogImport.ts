@@ -1,7 +1,11 @@
 import { and, eq, or } from "drizzle-orm";
 import { products, productImages, productVariants } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { catalogEntrySchema, type CatalogEntry } from "../../shared/catalog";
+import {
+  catalogEntrySchema,
+  catalogDraftEntrySchema,
+  type CatalogEntry,
+} from "../../shared/catalog";
 import { stableHash } from "./policy";
 import { safeFetchImage } from "./websiteCrawler";
 import { storagePut } from "../storage";
@@ -22,7 +26,12 @@ export async function importCatalogEntry(
   },
   variants: StoreItem["variants"] = []
 ) {
-  const item = catalogEntrySchema.parse(entry);
+  const apiSource = source?.provider === "api";
+  const item = (apiSource ? catalogDraftEntrySchema : catalogEntrySchema).parse(
+    entry
+  );
+  if (apiSource && !source?.externalId.trim())
+    throw new Error("API products require a stable source ID or SKU.");
   const key = stableHash(
     source
       ? { source: source.id, id: source.externalId }
@@ -41,7 +50,11 @@ export async function importCatalogEntry(
                 eq(products.externalId, source.externalId)
               ),
               eq(products.dedupeKey, key),
-              eq(products.productUrl, item.productUrl)
+              // Unresolved links are not identity keys: two blank URLs must
+              // never merge different products (or overwrite another source).
+              item.productUrl
+                ? eq(products.productUrl, item.productUrl)
+                : undefined
             )
           : eq(products.dedupeKey, key)
       )
@@ -131,6 +144,7 @@ export async function importCatalogEntry(
         set: value,
       });
   }
+  let imageState = item.imageUrl ? "available" : "missing";
   if (item.imageUrl) {
     const [present] = await db
       .select()
@@ -144,23 +158,51 @@ export async function importCatalogEntry(
       )
       .limit(1);
     if (!present) {
-      const image = await safeFetchImage(item.imageUrl);
-      const stored = await storagePut(
-        `organizations/${organizationId}/products/${product.id}/import`,
-        image.data,
-        image.contentType
-      );
-      await db.insert(productImages).values({
-        organizationId,
-        productId: product.id,
-        sourceUrl: item.imageUrl,
-        storageKey: stored.key,
-        url: stored.url,
-        altText: item.name,
-        isPrimary: 1,
-        createdAtMs: Date.now(),
+      // A missing/blocked remote image is a product review issue, not an API
+      // connection failure. Safe fetching remains mandatory; no unsafe URL is
+      // retried through an unguarded request. Storage/DB failures still surface.
+      const image = await safeFetchImage(item.imageUrl).catch(error => {
+        if (!apiSource) throw error;
+        imageState = "unavailable";
+        return null;
       });
+      if (image) {
+        const stored = await storagePut(
+          `organizations/${organizationId}/products/${product.id}/import`,
+          image.data,
+          image.contentType
+        );
+        await db.insert(productImages).values({
+          organizationId,
+          productId: product.id,
+          sourceUrl: item.imageUrl,
+          storageKey: stored.key,
+          url: stored.url,
+          altText: item.name,
+          isPrimary: 1,
+          createdAtMs: Date.now(),
+        });
+      }
     }
+  }
+  if (apiSource) {
+    const [updated] = await db
+      .update(products)
+      .set({
+        provenance: {
+          ...values.provenance,
+          "api.imageStatus": imageState,
+          "api.imageSourceUrl": item.imageUrl,
+        },
+      })
+      .where(
+        and(
+          eq(products.id, product.id),
+          eq(products.organizationId, organizationId)
+        )
+      )
+      .returning();
+    return updated;
   }
   return product;
 }

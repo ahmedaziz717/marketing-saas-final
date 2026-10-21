@@ -25,7 +25,10 @@ import {
 import { isExcludedProductUrl, safeFetchImage } from "../lib/websiteCrawler";
 import { storagePut } from "../storage";
 
-import { serviceDetailsSchema } from "../../shared/catalog";
+import {
+  serviceDetailsSchema,
+  catalogDraftEntrySchema,
+} from "../../shared/catalog";
 
 const organizationInput = z.object({
   organizationId: z.number().int().positive(),
@@ -80,7 +83,7 @@ const editableProduct = z.object({
   sku: z.string().max(180).nullable().optional(),
   category: z.string().max(240).nullable().optional(),
   description: z.string().max(10000).nullable().optional(),
-  productUrl: z.string().url(),
+  productUrl: catalogDraftEntrySchema.shape.productUrl,
   price: z.string().max(80).nullable().optional(),
   currency: z.string().max(16).nullable().optional(),
   specifications: z.record(z.string(), z.string().max(1000)),
@@ -269,11 +272,20 @@ export const catalogRouter = router({
           .limit(1)
       )[0];
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-      const dedupeKey = productDedupeKey({
-        sku: input.product.sku,
-        productUrl: input.product.productUrl,
-        name: input.product.name,
-      });
+      const apiDraft =
+        existing.provenance.source === "api" && !!existing.sourceId;
+      if (!input.product.productUrl && !apiDraft)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Add a valid product-page link.",
+        });
+      const dedupeKey = apiDraft
+        ? existing.dedupeKey
+        : productDedupeKey({
+            sku: input.product.sku,
+            productUrl: input.product.productUrl,
+            name: input.product.name,
+          });
       const now = Date.now();
       await db
         .update(products)
@@ -284,7 +296,11 @@ export const catalogRouter = router({
             existing.provenance,
             ctx.user.id,
             now,
-            Object.keys(input.product).filter(key => JSON.stringify((input.product as any)[key]) !== JSON.stringify((existing as any)[key]))
+            Object.keys(input.product).filter(
+              key =>
+                JSON.stringify((input.product as any)[key]) !==
+                JSON.stringify((existing as any)[key])
+            )
           ),
           status: "pending",
           reviewedByUserId: null,

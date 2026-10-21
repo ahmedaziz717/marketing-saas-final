@@ -1,6 +1,7 @@
 import { ApiProductDetails } from "@/components/ApiProductDetails";
 import { CatalogFactsFields } from "@/components/CatalogFactsFields";
 import { catalogRefreshChanges } from "@shared/catalogRefresh";
+import { catalogReviewNotices } from "@shared/catalogReadiness";
 import {
   structuredCatalogFacts,
   specificationsFromLines,
@@ -56,6 +57,7 @@ type Editable = {
   recordType: string;
   description: string;
   productUrl: string;
+  allowMissingUrl: boolean;
   price: string;
   currency: string;
   specifications: string;
@@ -240,6 +242,8 @@ function CatalogContent() {
       recordType: product.recordType,
       description: product.description ?? "",
       productUrl: product.productUrl,
+      allowMissingUrl:
+        product.provenance.source === "api" && !!product.sourceId,
       price: product.price ?? "",
       currency: product.currency ?? "",
       features: structuredCatalogFacts(product).features,
@@ -492,6 +496,7 @@ function CatalogContent() {
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {products.map(product => {
             const facts = structuredCatalogFacts(product);
+            const reviewNotices = catalogReviewNotices(product);
             const sourceChanges = catalogRefreshChanges(product.provenance);
             const approvalAction = getCatalogApprovalAction(product.status);
             const approvalPending =
@@ -550,6 +555,16 @@ function CatalogContent() {
                   </div>
                 </div>
                 <div className="catalog-card-facts px-5 pb-4">
+                  {!!reviewNotices.length && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                      <p className="font-medium">Imported for review</p>
+                      <ul className="mt-1 list-disc space-y-1 pl-4">
+                        {reviewNotices.map(notice => (
+                          <li key={notice}>{notice}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {product.provenance?.["api.detailUrl"] && (
                     <ApiProductDetails
                       organizationId={organizationId!}
@@ -651,15 +666,21 @@ function CatalogContent() {
                         ? ` · ${product.variants.length} variant records`
                         : ""}
                     </span>
-                    <a
-                      href={product.productUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-primary"
-                    >
-                      Source
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    {product.productUrl ? (
+                      <a
+                        href={product.productUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 text-primary"
+                      >
+                        Source
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-amber-700">
+                        Product-page link needed
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -990,7 +1011,9 @@ function CatalogContent() {
                 className="sm:col-span-2"
                 onClick={save}
                 disabled={
-                  !editing.name || !editing.productUrl || update.isPending
+                  !editing.name ||
+                  (!editing.productUrl && !editing.allowMissingUrl) ||
+                  update.isPending
                 }
               >
                 Save changes for review

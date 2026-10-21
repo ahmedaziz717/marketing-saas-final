@@ -3,6 +3,18 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
+import { catalogDraftEntrySchema } from "../shared/catalog";
+import { parseApiCatalog } from "./lib/apiCatalog";
+import { apiCatalogConfigSchema } from "../shared/apiCatalog";
+import { catalogRouter } from "./routers/catalog";
+import { safeFetchImage, safeStoreRequest } from "./lib/websiteCrawler";
+import { storagePut } from "./storage";
+vi.mock("./lib/websiteCrawler", async load => ({
+  ...(await load<any>()),
+  safeFetchImage: vi.fn(),
+  safeStoreRequest: vi.fn(),
+}));
+vi.mock("./storage", () => ({ storagePut: vi.fn() }));
 const state = vi.hoisted(() => ({ db: null as any }));
 vi.mock("./db", () => ({ getDb: async () => state.db }));
 vi.mock("./lib/storeCatalog", async load => ({
@@ -247,6 +259,160 @@ it("connects a public API with encrypted configuration and keeps it private from
         },
       })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  } finally {
+    delete process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET;
+  }
+});
+
+it("previews missing product links and failed images without blocking the connection", async () => {
+  vi.mocked(safeStoreRequest).mockResolvedValue({
+    data: [
+      {
+        code: "a",
+        name: "Missing page",
+        imageUrl: "https://cdn.example/missing.png",
+        price: 1200,
+      },
+      { code: "b", name: "Second product" },
+    ],
+  } as any);
+  vi.mocked(safeFetchImage).mockRejectedValue(new Error("Image not found"));
+  const result = await caller.previewApi({
+    organizationId: orgId,
+    endpoint: "https://api.example/kits",
+    config: apiCatalogConfigSchema.parse({
+      imageBaseUrl: "https://cdn.example/clx",
+    }),
+    exampleProductUrl: "https://shop.example/products/not-in-feed",
+  });
+  expect(result.ready).toBe(true);
+  expect(result.count).toBe(2);
+  expect(result.reviewProductCount).toBe(2);
+  expect(result.exampleWarning).toContain("not applied");
+  expect(result.issues.every(i => !i.blocking)).toBe(true);
+  expect(result.samples[0].productUrl).toBe("");
+  expect(result.mapping.imageBaseUrl).toBe("https://cdn.example/clx/");
+  await expect(
+    outsider.previewApi({
+      organizationId: orgId,
+      endpoint: "https://api.example/kits",
+      config: apiCatalogConfigSchema.parse({}),
+    })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+});
+
+it("completes a mixed API import, keeps blank URLs distinct, supports repair and retries images on sync", async () => {
+  process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET = "isolated-draft-test-key";
+  try {
+    // Only the isolated test database is affected; do not run an older queued fixture.
+    await state.db.update(catalogSources).set({ status: "disconnected" });
+    const entries = parseApiCatalog(
+      [
+        {
+          code: "draft-a",
+          name: "No page",
+          imageUrl: "https://cdn.example/fail.png",
+          price: 1500,
+          features: ["Liquid cooling"],
+        },
+        {
+          code: "draft-b",
+          name: "Second",
+          imageUrl: "https://cdn.example/good.png",
+        },
+      ],
+      "https://api.example/draft-kits",
+      apiCatalogConfigSchema.parse({})
+    ).items;
+    vi.mocked(readStorePage).mockResolvedValue({
+      items: entries,
+      next: null,
+      total: 2,
+    });
+    vi.mocked(safeFetchImage).mockImplementation(async url => {
+      if (url.includes("fail")) throw new Error("Image not found");
+      return { data: Buffer.from("image"), contentType: "image/png" } as any;
+    });
+    vi.mocked(storagePut).mockResolvedValue({
+      key: "test/image",
+      url: "https://storage.example/image.png",
+    });
+    const { id } = await caller.connect({
+      organizationId: orgId,
+      provider: "api",
+      storeUrl: "https://api.example/draft-kits",
+      api: apiCatalogConfigSchema.parse({}),
+    });
+    await processNextStoreJob(state.db);
+    let rows = await state.db
+      .select()
+      .from(products)
+      .where(eq(products.sourceId, id));
+    expect(rows).toHaveLength(2);
+    const first = rows.find((p: any) => p.externalId === "draft-a");
+    const second = rows.find((p: any) => p.externalId === "draft-b");
+    expect(first.id).not.toBe(second.id);
+    expect(first).toMatchObject({
+      productUrl: "",
+      status: "pending",
+      features: ["Liquid cooling"],
+      provenance: { "api.imageStatus": "unavailable" },
+    });
+    expect(second.provenance["api.imageStatus"]).toBe("available");
+    expect(
+      (await caller.list({ organizationId: orgId })).find(s => s.id === id)
+    ).toMatchObject({ status: "connected", processed: 2, error: null });
+    const user = (
+      await state.db.select().from(users).where(eq(users.id, userId))
+    )[0];
+    const catalog = catalogRouter.createCaller({
+      user,
+      req: {} as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    });
+    await catalog.updateProduct({
+      organizationId: orgId,
+      productId: first.id,
+      product: { name: "Reviewed name", productUrl: "", specifications: {} },
+    });
+    await catalog.updateProduct({
+      organizationId: orgId,
+      productId: first.id,
+      product: {
+        name: "Reviewed name",
+        productUrl: "https://shop.example/repaired",
+        specifications: {},
+        currency: "USD",
+      },
+    });
+    vi.mocked(safeFetchImage).mockResolvedValue({
+      data: Buffer.from("image"),
+      contentType: "image/png",
+    } as any);
+    await caller.action({
+      organizationId: orgId,
+      sourceId: id,
+      action: "sync",
+    });
+    await processNextStoreJob(state.db);
+    rows = await state.db
+      .select()
+      .from(products)
+      .where(eq(products.sourceId, id));
+    expect(rows).toHaveLength(2);
+    expect(rows.find((p: any) => p.id === first.id)).toMatchObject({
+      name: "Reviewed name",
+      productUrl: "https://shop.example/repaired",
+      currency: "USD",
+      provenance: { "api.imageStatus": "available" },
+    });
+    expect(
+      catalogEntrySchema.safeParse({ name: "Manual", productUrl: "" }).success
+    ).toBe(false);
+    expect(
+      catalogDraftEntrySchema.safeParse({ name: "API draft", productUrl: "" })
+        .success
+    ).toBe(true);
   } finally {
     delete process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET;
   }

@@ -802,7 +802,7 @@ export const crawlRouter = router({
             .map(product => [product.sku!.trim().toLowerCase(), product])
         );
         const existingByUrl = new Map(
-          existingCatalog.map(product => [
+          existingCatalog.filter(product => !!product.productUrl).map(product => [
             canonicalProductIdentityUrl(product.productUrl),
             product,
           ])
