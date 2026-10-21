@@ -209,6 +209,10 @@ try {
       "studio-ad-create",
       "studio-ad-warning",
       "catalog-api-import",
+      "google-connect",
+      "google-selection",
+      "google-empty",
+      "google-manage",
       "studio-ad-copy",
       "campaign-plans",
       "asset-library",
@@ -240,7 +244,12 @@ try {
     { width: 1906, height: 938, role: "owner", page: "creative-people" },
     { width: 768, height: 1024, role: "owner", page: "creative-people" },
     { width: 320, height: 740, role: "owner", page: "creative-people" },
-    ...["studio-ad-warning", "catalog-api-import"].flatMap(page => [
+    ...[
+      "studio-ad-warning",
+      "catalog-api-import",
+      "google-selection",
+      "google-manage",
+    ].flatMap(page => [
       { width: 1366, height: 768, role: "owner", page },
       { width: 375, height: 600, role: "owner", page },
     ]),
@@ -281,7 +290,7 @@ try {
       await new Promise(resolve => setTimeout(resolve, 100));
       const check = await page("Runtime.evaluate", {
         expression:
-          'Boolean(window.runChannelRegression && document.querySelector("h1"))',
+          'Boolean(window.runChannelRegression && document.querySelector("h1, h2"))',
         returnByValue: true,
       });
       if (check.result.value) {

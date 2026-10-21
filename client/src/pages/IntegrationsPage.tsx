@@ -2,6 +2,10 @@ import {
   ChannelConnectionCard,
   MetaConnectionSelection,
 } from "@/components/ChannelConnections";
+import {
+  GoogleAdsConnectionCard,
+  GoogleAdsConnectionSelection,
+} from "@/components/GoogleAdsConnections";
 import { useState } from "react";
 import { Link } from "wouter";
 import { Search, ArrowUpRight, Plug } from "lucide-react";
@@ -249,6 +253,7 @@ export function Integrations() {
   return (
     <>
       <MetaConnectionSelection />
+      <GoogleAdsConnectionSelection />
       <PageHeader
         compact
         eyebrow="Workspace connections"
@@ -337,6 +342,8 @@ export function Integrations() {
                           p.slug === "facebook" ? "facebook" : "meta_ads"
                         }
                       />
+                    ) : p.slug === "googleads" ? (
+                      <GoogleAdsConnectionCard key={p.slug} />
                     ) : (
                       <article
                         key={p.slug}

@@ -55,16 +55,18 @@ export const insightsRouter = router({
         .from(channelConnections)
         .where(eq(channelConnections.organizationId, input.organizationId));
       return {
-        connections: connections.map(c => ({
-          id: c.id,
-          name: c.name,
-          channel: c.channel,
-          status: c.status,
-          currency: c.details.currency,
-          timezone: c.details.timezone,
-          imageUrl: c.details.imageUrl,
-          imageSource: c.details.imageSource,
-        })),
+        connections: connections
+          .filter(c => c.channel === "facebook" || c.channel === "meta_ads")
+          .map(c => ({
+            id: c.id,
+            name: c.name,
+            channel: c.channel,
+            status: c.status,
+            currency: c.details.currency,
+            timezone: c.details.timezone,
+            imageUrl: c.details.imageUrl,
+            imageSource: c.details.imageSource,
+          })),
         recipients: await insightRecipients(db, input.organizationId),
         emailConfigured: insightEmailConfigured(),
         canEdit: canEdit(access.membership.role),

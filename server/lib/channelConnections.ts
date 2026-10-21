@@ -36,7 +36,7 @@ export const oauthConfigured = () =>
   );
 export const callbackUrl = () =>
   new URL("/api/channels/meta/callback", process.env.APP_ORIGIN).toString();
-export function safeConnection(c: ChannelConnection) {
+export function safeConnection<T extends ChannelConnection>(c: T) {
   const { credentials: _, ...safe } = c;
   return {
     ...safe,
@@ -61,14 +61,23 @@ export async function getConnection(
       )
       .limit(1)
   )[0];
-  if (!row || (channel && row.channel !== channel))
+  if (
+    !row ||
+    !["facebook", "meta_ads"].includes(row.channel) ||
+    (channel && row.channel !== channel)
+  )
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Connection not found in this workspace.",
     });
-  return row;
+  return row as ChannelConnection & { channel: Channel };
 }
 export function connectionToken(c: ChannelConnection) {
+  if (c.channel === "google_ads")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Use the Google Ads connection service for this account.",
+    });
   if (c.status !== "connected" || !c.credentials)
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -173,13 +182,20 @@ export async function readDiscovery(
       )
       .limit(1)
   )[0];
-  if (!row?.credentials)
+  if (
+    !row?.credentials ||
+    (row.purpose !== "facebook" && row.purpose !== "meta_ads")
+  )
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Account selection expired. Connect again.",
     });
   const token = decryptToken(row.credentials);
-  return { row, token, discovery: await discoverMeta(token, row.purpose) };
+  return {
+    row: { ...row, purpose: row.purpose },
+    token,
+    discovery: await discoverMeta(token, row.purpose),
+  };
 }
 export async function connectChoice(
   db: LibraryDatabase,
@@ -454,6 +470,7 @@ export function registerChannelOAuth(app: Express) {
           and(
             eq(channelOAuthSessions.stateHash, hash(state)),
             eq(channelOAuthSessions.userId, user.id),
+            inArray(channelOAuthSessions.purpose, ["facebook", "meta_ads"]),
             gt(channelOAuthSessions.expiresAtMs, Date.now())
           )
         )
@@ -492,7 +509,7 @@ export function registerChannelOAuth(app: Express) {
         db,
         session.organizationId,
         user.id,
-        session.purpose,
+        session.purpose as Channel,
         long.access_token
       );
       res.redirect(

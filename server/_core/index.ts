@@ -13,6 +13,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sql } from "drizzle-orm";
 import { registerChannelOAuth } from "../lib/channelConnections";
+import { registerGoogleAdsOAuth } from "../lib/googleAdsConnections";
 import { getDb, closeDb } from "../db";
 import { startWebsiteNotificationDelivery } from "../lib/websiteNotifications";
 import { startInsightDelivery } from "../lib/insightDelivery";
@@ -75,6 +76,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerAuthRoutes(app);
   registerChannelOAuth(app);
+  registerGoogleAdsOAuth(app);
   // tRPC API
   app.use(
     "/api/trpc",

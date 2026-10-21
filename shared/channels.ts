@@ -5,6 +5,8 @@ import { z } from "zod";
 
 export const channelSchema = z.enum(["facebook", "meta_ads"]);
 export type Channel = z.infer<typeof channelSchema>;
+// Account connectivity is separate from the channels with publishing adapters.
+export type ConnectionChannel = Channel | "google_ads";
 export const channelNames: Record<Channel, string> = {
   facebook: "Facebook",
   meta_ads: "Meta Ads",
@@ -36,6 +38,11 @@ export type ConnectionDetails = {
   currency?: string;
   timezone?: string;
   expiresAtMs?: number | null;
+  google?: {
+    loginCustomerId?: string;
+    testAccount: boolean;
+    refreshExpiresAtMs?: number;
+  };
   warnings: string[];
 };
 export const scopeSchema = z.object({

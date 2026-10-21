@@ -11,6 +11,7 @@ import {
 import { appSchema, organizations, users } from "./schema";
 import type {
   Channel,
+  ConnectionChannel,
   ConnectionDetails,
   Secret,
   ContentPlan,
@@ -26,7 +27,9 @@ export const channelConnections = appSchema
       organizationId: integer("organizationId")
         .notNull()
         .references(() => organizations.id),
-      channel: varchar("channel", { length: 40 }).$type<Channel>().notNull(),
+      channel: varchar("channel", { length: 40 })
+        .$type<ConnectionChannel>()
+        .notNull(),
       accountId: varchar("accountId", { length: 100 }).notNull(),
       name: varchar("name", { length: 250 }).notNull(),
       status: varchar("status", { length: 24 })
@@ -61,7 +64,9 @@ export const channelOAuthSessions = appSchema
       userId: integer("userId")
         .notNull()
         .references(() => users.id),
-      purpose: varchar("purpose", { length: 40 }).$type<Channel>().notNull(),
+      purpose: varchar("purpose", { length: 40 })
+        .$type<ConnectionChannel>()
+        .notNull(),
       stateHash: varchar("stateHash", { length: 64 }),
       credentials: jsonb("credentials").$type<Secret>(),
       expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
