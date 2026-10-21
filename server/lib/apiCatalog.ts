@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { catalogEntrySchema } from "../../shared/catalog";
+import { catalogDraftEntrySchema } from "../../shared/catalog";
 import {
   apiCatalogConfigSchema,
+  catalogImageDirectory,
   type ApiCatalogConfig,
 } from "../../shared/apiCatalog";
 import { safeStoreRequest } from "./websiteCrawler";
@@ -78,6 +79,8 @@ const aliases = {
     "thumbnail",
     "image_link",
     "metadata.images.main",
+    "metadata.images.chassisFeatured",
+    "metadata.images.bareboneFeatured",
   ],
   price: ["price.amount", "price", "sale_price", "Price"],
   currency: ["currency", "price.currency", "currency_code"],
@@ -320,18 +323,14 @@ export function parseApiCatalog(
     )
       productUrl = "";
     if (productUrl === endpoint) productUrl = "";
-    if (!productUrl && !options.preview)
-      throw new Error(
-        `Product ${index + 1} has no product URL. Add an example product-page link or its link instructions, then preview again.`
-      );
     if (!productUrl)
       issues.push({
         index,
         product: name,
         field: "productUrl",
-        blocking: true,
+        blocking: false,
         message:
-          "What is this product’s page address on your website? Add an example link below or explain the link rules in Instructions.",
+          "Product-page link is missing. Import for review now, or add a matching example link. Add the correct destination before publishing an ad.",
       });
     const specs = catalogAttributes(read("specifications"), "Specification");
     specs.push(
@@ -374,7 +373,11 @@ export function parseApiCatalog(
     const externalId =
       text(read("id"), 180) ||
       sku ||
-      createHash("sha256").update(productUrl).digest("hex");
+      (productUrl ? createHash("sha256").update(productUrl).digest("hex") : "");
+    if (!externalId)
+      throw new Error(
+        `Product ${index + 1} needs a stable ID or SKU to import without a product-page link.`
+      );
     const rawImage = config.skipImages
       ? ""
       : config.imageUrlTemplate
@@ -389,7 +392,12 @@ export function parseApiCatalog(
       !config.imageBaseUrl &&
       /^api\./i.test(new URL(endpoint).hostname)
         ? ""
-        : link(rawImage, config.imageBaseUrl ?? endpoint);
+        : link(
+            rawImage,
+            config.imageBaseUrl
+              ? catalogImageDirectory(config.imageBaseUrl)
+              : endpoint
+          );
     const currency = text(read("currency"), 16) || config.defaultCurrency || "";
     if (!imageUrl && !config.skipImages)
       issues.push({
@@ -406,8 +414,9 @@ export function parseApiCatalog(
         index,
         product: name,
         field: "currency",
-        blocking: true,
-        message: "Which currency are these prices in?",
+        blocking: false,
+        message:
+          "Price currency is missing. Confirm it during review before using prices in ads.",
       });
     const candidate = {
       name,
@@ -425,9 +434,7 @@ export function parseApiCatalog(
       serviceDetails: null,
     };
     return {
-      ...(options.preview && !productUrl
-        ? candidate
-        : catalogEntrySchema.parse(candidate)),
+      ...catalogDraftEntrySchema.parse(candidate),
       externalId,
       detailUrl: config.detailUrlTemplate
         ? catalogUrlFromTemplate(config.detailUrlTemplate, row)

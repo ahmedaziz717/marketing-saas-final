@@ -62,6 +62,11 @@ export const catalogEntrySchema = z.object({
   serviceDetails: serviceDetailsSchema.nullable().default(null),
   imageUrl: z.union([z.literal(""), z.string().url()]).default(""),
 });
+// Source-owned drafts may lack a landing page. Manual imports and channel
+// publishing keep their strict schemas; an empty value is never a fake URL.
+export const catalogDraftEntrySchema = catalogEntrySchema.extend({
+  productUrl: z.union([z.literal(""), catalogEntrySchema.shape.productUrl]),
+});
 export type CatalogEntry = z.infer<typeof catalogEntrySchema>;
 export const STORE_PROVIDERS = [
   "shopify",

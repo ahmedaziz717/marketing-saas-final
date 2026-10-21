@@ -1,4 +1,7 @@
-import type { ApiCatalogConfig } from "../../shared/apiCatalog";
+import {
+  catalogImageDirectory,
+  type ApiCatalogConfig,
+} from "../../shared/apiCatalog";
 import {
   apiCatalogAddress,
   catalogUrlFromTemplate,
@@ -37,7 +40,12 @@ export function normalizeApiProductDetails(
         : "");
     let imageUrl = "";
     try {
-      const u = new URL(image, config.imageBaseUrl);
+      const u = new URL(
+        image,
+        config.imageBaseUrl
+          ? catalogImageDirectory(config.imageBaseUrl)
+          : undefined
+      );
       if (image && /^https?:$/.test(u.protocol) && !u.username && !u.password)
         imageUrl = u.href;
     } catch {

@@ -1,4 +1,6 @@
 import { ReleaseDetailsFixture } from "./release-details";
+import { ApiCatalogConnect } from "../../client/src/components/ApiCatalogConnect";
+import { catalogImageDirectory } from "../../shared/apiCatalog";
 import { ImageEnhanceAction } from "../../client/src/components/ImageEnhanceAction";
 import CreativeWorkflowsPage from "../../client/src/pages/CreativeWorkflowsPage";
 import CreativeConfiguratorPage from "../../client/src/pages/CreativeConfiguratorPage";
@@ -234,10 +236,27 @@ const fixtureModels = [
   generationModels.find(m => m.kind === "image")!,
 ];
 function respond(path: string, input: any) {
-  if (path === "creativeBuilder.enhancementSetup") return {
-    setup: { ...defaultCreativeSetup(), name: "Emerald collection · Enhanced", formatIds: ["square_1_1"], modelId: fixtureModels.find(m => m.kind === "image")!.id, preserveProduct: true, enhancement: { assetKey: "asset:1", revision: "a".repeat(64), instruction: "Recreate this Studio product advertisement as a stunning, professional ad creative with dramatically improved visual quality." } },
-    source: studioDraftAssets[0], width: 1080, height: 1080, hasProductOverlay: true, canPreserveProductOverlay: true,
-  };
+  if (path === "creativeBuilder.enhancementSetup")
+    return {
+      setup: {
+        ...defaultCreativeSetup(),
+        name: "Emerald collection · Enhanced",
+        formatIds: ["square_1_1"],
+        modelId: fixtureModels.find(m => m.kind === "image")!.id,
+        preserveProduct: true,
+        enhancement: {
+          assetKey: "asset:1",
+          revision: "a".repeat(64),
+          instruction:
+            "Recreate this Studio product advertisement as a stunning, professional ad creative with dramatically improved visual quality.",
+        },
+      },
+      source: studioDraftAssets[0],
+      width: 1080,
+      height: 1080,
+      hasProductOverlay: true,
+      canPreserveProductOverlay: true,
+    };
   if (path === "models.catalog" || path === "models.studioCatalog")
     return fixtureModels.map(m => ({
       ...m,
@@ -543,6 +562,57 @@ function respond(path: string, input: any) {
       data: [{ id: "77", name: "Website visitors", subtype: "WEBSITE" }],
       truncated: false,
     };
+  if (path === "catalogSources.previewApi") {
+    mutations.push(path);
+    return {
+      count: 3,
+      ready: true,
+      reviewProductCount: 3,
+      mapping: {
+        ...input.config,
+        ...(input.config.imageBaseUrl
+          ? { imageBaseUrl: catalogImageDirectory(input.config.imageBaseUrl) }
+          : {}),
+      },
+      issues: [
+        {
+          index: 0,
+          product: "Desktop kit",
+          field: "productUrl",
+          blocking: false,
+          message: "Product-page link missing",
+        },
+        {
+          index: 1,
+          product: "Laptop kit",
+          field: "imageUrl",
+          blocking: false,
+          message: "Source image unavailable; import for review.",
+        },
+        {
+          index: 2,
+          product: "Ready-to-ship kit",
+          field: "productUrl",
+          blocking: false,
+          message: "Product-page link missing",
+        },
+      ],
+      samples: ["Desktop kit", "Laptop kit", "Ready-to-ship kit"].map(
+        (name, i) => ({
+          name,
+          sku: `KIT-${i}`,
+          productUrl: "",
+          imageUrl: "",
+          specifications: { Memory: "32 GB" },
+          features: ["Test feature"],
+        })
+      ),
+    };
+  }
+  if (path === "catalogSources.connect") {
+    mutations.push(path);
+    return { id: 99 };
+  }
   if (path === "channels.reviewMetaChange") {
     mutations.push(path);
     return {
@@ -820,6 +890,8 @@ const routeForPage: Record<string, string> = {
   "studio-ad": "/app/creatives/ads?new=1",
   "studio-ad-setup": "/app/creatives/ads?new=1",
   "studio-ad-create": "/app/creatives/ads?new=1",
+  "studio-ad-warning": "/app/creatives/ads?new=1",
+  "catalog-api-import": "/app/catalog-api-fixture",
   "studio-ad-copy": "/app/creatives/ads?new=1&asset=asset%3A1",
   "campaign-plans": "/app/plans",
   "asset-library": "/app/library",
@@ -958,7 +1030,29 @@ function ModelPickerFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
-  if (path === "/app/enhance-fixture") return <DashboardLayout><h1>Image assets</h1><ImageEnhanceAction asset={{ ...studioDraftAssets[0], mimeType: "image/png", revision: "a".repeat(64) } as any} organizationId={1} /></DashboardLayout>;
+  if (path === "/app/catalog-api-fixture")
+    return (
+      <DashboardLayout>
+        <h1>Catalog sources</h1>
+        <ApiCatalogConnect organizationId={1} onConnected={async () => {}} />
+      </DashboardLayout>
+    );
+  if (path === "/app/enhance-fixture")
+    return (
+      <DashboardLayout>
+        <h1>Image assets</h1>
+        <ImageEnhanceAction
+          asset={
+            {
+              ...studioDraftAssets[0],
+              mimeType: "image/png",
+              revision: "a".repeat(64),
+            } as any
+          }
+          organizationId={1}
+        />
+      </DashboardLayout>
+    );
   if (path === "/app/release-fixture")
     return (
       <DashboardLayout>
@@ -1737,18 +1831,42 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       );
     else if (which === "enhance-image") {
       await click("Enhance image");
-      await pause(); await pause(); await pause();
-      check(document.querySelector<HTMLTextAreaElement>('[aria-label="Enhancement direction"]')?.value.includes("dramatically improved visual quality"), "Enhance carries the requested editable direction");
-      check(!!document.querySelector('[role="radio"][aria-checked="true"][data-value="keep"]'), "Original product overlay is preserved by default");
+      await pause();
+      await pause();
+      await pause();
+      check(
+        document
+          .querySelector<HTMLTextAreaElement>(
+            '[aria-label="Enhancement direction"]'
+          )
+          ?.value.includes("dramatically improved visual quality"),
+        "Enhance carries the requested editable direction"
+      );
+      check(
+        !!document.querySelector(
+          '[role="radio"][aria-checked="true"][data-value="keep"]'
+        ),
+        "Original product overlay is preserved by default"
+      );
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-      const action = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === "Enhance image")!;
-      check(!!action && !action.disabled, "A quoted enhancement can be started explicitly");
-      check(document.body.textContent?.includes("24 credits"), "Enhance shows the current credit quote");
-      check(mutations.length === 0, "Opening Enhance does not generate, approve, or publish");
+      const action = [
+        ...dialog.querySelectorAll<HTMLButtonElement>("button"),
+      ].find(b => b.textContent?.trim() === "Enhance image")!;
+      check(
+        !!action && !action.disabled,
+        "A quoted enhancement can be started explicitly"
+      );
+      check(
+        document.body.textContent?.includes("24 credits"),
+        "Enhance shows the current credit quote"
+      );
+      check(
+        mutations.length === 0,
+        "Opening Enhance does not generate, approve, or publish"
+      );
       action.scrollIntoView({ block: "center" });
       layout();
-    }
-    else if (which === "report-layout") {
+    } else if (which === "report-layout") {
       check(
         document.querySelectorAll('.date-range-choices [role="radio"]')
           .length === 12,
@@ -2147,7 +2265,89 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "The legacy asset selection is retained, not silently discarded"
       );
     }
-    if (which === "studio-ad-setup" || which === "studio-ad-create") {
+    if (which === "catalog-api-import") {
+      await click("Connect API endpoint");
+      await fillControl(
+        "#catalog-api-endpoint",
+        "https://api.example/products"
+      );
+      await click("Preview products");
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+      const footer = dialog.querySelector<HTMLElement>(
+        "[data-dialog-actions]"
+      )!;
+      const scroller = dialog.querySelector<HTMLElement>(
+        "[data-dialog-scroll]"
+      )!;
+      check(
+        !button("Connect and import catalog")!.disabled,
+        "Incomplete product details do not block import"
+      );
+      check(
+        footer.textContent?.includes("3 products can be imported for review"),
+        "Import status stays beside Connect"
+      );
+      check(
+        !scroller.contains(footer),
+        "API actions are outside the scrolling body"
+      );
+      for (const fraction of [0, 0.5, 1]) {
+        scroller.scrollTop =
+          (scroller.scrollHeight - scroller.clientHeight) * fraction;
+        await pause();
+        const r = footer.getBoundingClientRect();
+        check(
+          r.top >= 0 && r.bottom <= innerHeight,
+          "API status/actions visible at every scroll position"
+        );
+      }
+      const imageInput = Array.from(
+        dialog.querySelectorAll<HTMLLabelElement>("label")
+      )
+        .find(label =>
+          label.textContent?.includes("Website address where product images")
+        )!
+        .querySelector<HTMLInputElement>("input")!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )!.set!.call(imageInput, "https://cdn.example/clx");
+      imageInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause();
+      check(
+        button("Connect and import catalog")!.disabled,
+        "Changing image settings invalidates the old preview"
+      );
+      check(
+        footer.textContent?.includes("Settings changed"),
+        "Stale-preview reason is visible"
+      );
+      await click("Update preview");
+      check(
+        !button("Connect and import catalog")!.disabled,
+        "Rechecking enables import with warnings"
+      );
+      check(
+        // Re-preview replaces the optional-details panel; inspect the new input.
+        Array.from(dialog.querySelectorAll<HTMLLabelElement>("label"))
+          .find(label =>
+            label.textContent?.includes("Website address where product images")
+          )
+          ?.querySelector<HTMLInputElement>("input")?.value ===
+          "https://cdn.example/clx/",
+        "The image directory is normalized without losing its folder"
+      );
+      check(
+        mutations.every(m => m === "catalogSources.previewApi"),
+        "Browser validation does not import or publish real data"
+      );
+      layout();
+    }
+    if (
+      which === "studio-ad-setup" ||
+      which === "studio-ad-create" ||
+      which === "studio-ad-warning"
+    ) {
       const select = async (selector: string, value: string) => {
         const el = document.querySelector<HTMLSelectElement>(selector)!;
         check(!!el, "Selector available: " + selector);
@@ -2232,7 +2432,55 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           dialog().textContent?.includes("Audience"),
         "Ad set form follows the new Sales campaign objective"
       );
-      if (which === "studio-ad-create") {
+      if (which === "studio-ad-warning") {
+        const changesBeforeValidation = mutations.length;
+        await fillControl('[data-meta-field="startTime"]', "2000-01-01T00:00");
+        await click("Review settings");
+        const footer = dialog().querySelector<HTMLElement>(
+          "[data-dialog-actions]"
+        )!;
+        const scroller = dialog().querySelector<HTMLElement>(
+          "[data-dialog-scroll]"
+        )!;
+        check(
+          footer.textContent?.includes("Choose a future start date"),
+          "Date error is adjacent to the action buttons"
+        );
+        for (const fraction of [0, 0.5, 1]) {
+          scroller.scrollTop =
+            (scroller.scrollHeight - scroller.clientHeight) * fraction;
+          await pause();
+          const r = footer.getBoundingClientRect();
+          check(
+            r.top >= 0 && r.bottom <= innerHeight,
+            "Validation remains visible at top, middle and bottom"
+          );
+        }
+        await click("Go to the field");
+        check(
+          (document.activeElement as HTMLElement)?.dataset.metaField ===
+            "startTime",
+          "Error action focuses the date input"
+        );
+        await fillControl('[data-meta-field="startTime"]', "2001-01-01T00:00");
+        check(
+          footer.textContent?.includes("Choose a future start date"),
+          "Warning remains while the date is still invalid"
+        );
+        await fillControl('[data-meta-field="startTime"]', "");
+        check(
+          !footer.querySelector('[role="alert"]'),
+          "Clearing the optional start date clears its warning immediately"
+        );
+        check(
+          mutations.length === changesBeforeValidation,
+          "Invalid dates cause no Meta request or ad creation"
+        );
+        await fillControl('[data-meta-field="startTime"]', "2000-01-01T00:00");
+        scroller.scrollTop = scroller.scrollHeight;
+        await pause();
+        layout();
+      } else if (which === "studio-ad-create") {
         layout();
       } else {
         const budgetLabel = Array.from(

@@ -1,3 +1,4 @@
+import { metaScheduleIssue } from "../../shared/metaSchedule";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { activityEvents } from "../../drizzle/schema";
@@ -148,17 +149,12 @@ export async function prepareMetaChange(
       );
     if (!ownsBudget && !change.dailyBudget && !change.lifetimeBudget)
       throw new Error("Enter an ad-set budget for this ABO campaign.");
-    if (
-      (change.lifetimeBudget || Number(campaign!.lifetime_budget) > 0) &&
-      !change.endTime
-    )
-      throw new Error("Lifetime budgets require an ad-set end date.");
-    if (change.endTime && Date.parse(change.endTime) <= Date.now())
-      throw new Error("Choose a future end date.");
-    if (change.startTime && Date.parse(change.startTime) <= Date.now())
-      throw new Error(
-        "Choose a future start date, or leave it blank to start when activated."
-      );
+    const scheduleIssue = metaScheduleIssue(
+      change.startTime,
+      change.endTime,
+      !!change.lifetimeBudget || Number(campaign!.lifetime_budget) > 0
+    );
+    if (scheduleIssue) throw new Error(scheduleIssue.message);
     Object.assign(params, {
       campaign_id: change.campaignId!,
       status: "PAUSED",

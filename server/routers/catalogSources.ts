@@ -137,6 +137,7 @@ export const catalogSourcesRouter = router({
           ),
         },
       };
+      let exampleWarning: string | undefined;
       if (input.exampleProductUrl) {
         let inferred: ReturnType<typeof inferProductLinkRule> = null;
         try {
@@ -148,12 +149,9 @@ export const catalogSourcesRouter = router({
           /* Explain an invalid example beside the setup. */
         }
         if (!inferred)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "Use a product-page link containing the SKU or code of a product in this feed. If links follow another rule, describe it in Instructions.",
-          });
-        if (inferred.rule) {
+          exampleWarning =
+            "That example could not be matched to a product code in this feed. It was not applied. You can still import products for review.";
+        if (inferred?.rule) {
           const rule = inferred.rule;
           mapping.productUrlRules = [
             ...(mapping.productUrlRules ?? []).filter(
@@ -161,7 +159,7 @@ export const catalogSourcesRouter = router({
             ),
             rule,
           ];
-        } else mapping.productUrlTemplate = inferred.template;
+        } else if (inferred) mapping.productUrlTemplate = inferred.template;
       }
       const resolved = apiCatalogConfigSchema.parse({
         ...input.config,
@@ -182,17 +180,22 @@ export const catalogSourcesRouter = router({
             index,
             product: result.items[index].name,
             field: "imageUrl",
-            blocking: true,
+            blocking: false,
             message:
-              "The preview image could not be loaded. Check the documented image base address, or choose to import without images.",
+              "This preview image could not be loaded. Product data can still be imported for review; check the image address or add an image later.",
           });
       });
       return {
         mapping: apiCatalogMappingSchema.parse(resolved),
+        exampleWarning,
         count: result.items.length,
         total: result.total,
         hasNext: !!result.next,
-        ready: !result.issues.some(issue => issue.blocking),
+        ready:
+          result.items.length > 0 &&
+          !result.issues.some(issue => issue.blocking),
+        reviewProductCount: new Set(result.issues.map(issue => issue.index))
+          .size,
         issues: result.issues.slice(0, 100),
         issueCount: result.issues.length,
         samples: result.items

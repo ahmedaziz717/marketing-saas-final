@@ -1,6 +1,8 @@
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { DialogActionFooter, readableFormError } from "./DialogActionFooter";
+import { metaScheduleIssue } from "@shared/metaSchedule";
 import { ExternalLink, CheckCircle2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -77,6 +79,8 @@ export function MetaCreateDialog({
   const [end, setEnd] = useState("");
   const [approved, setApproved] = useState(false);
   const [error, setError] = useState("");
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const scrollBody = useRef<HTMLDivElement>(null);
   const [reviewed, setReviewed] = useState<MetaChange | null>(null);
   const objective = isCampaign
     ? form.objective
@@ -105,7 +109,7 @@ export function MetaCreateDialog({
       });
   }, [objective]);
   const review = trpc.channels.reviewMetaChange.useMutation({
-    onError: e => setError(e.message),
+    onError: e => setError(readableFormError(e)),
   });
   const apply = trpc.channels.applyMetaChange.useMutation({
     onSuccess: data => {
@@ -115,7 +119,38 @@ export function MetaCreateDialog({
     onError: e =>
       setError(`${e.message} Check Meta before submitting another change.`),
   });
+  const requiresEnd =
+    budgetType === "lifetime" ||
+    Number(parent.data?.object.lifetime_budget) > 0;
+  const scheduleIssue =
+    !isCampaign && validationAttempted
+      ? metaScheduleIssue(start, end, requiresEnd)
+      : null;
+  const serverScheduleField = /start date/i.test(error)
+    ? "startTime"
+    : /end date/i.test(error)
+      ? "endTime"
+      : undefined;
+  const problemField = scheduleIssue?.field ?? serverScheduleField;
+  const activeError = scheduleIssue?.message || error;
+  function focusProblem(field = problemField) {
+    if (!field) return;
+    const input = scrollBody.current?.querySelector<HTMLInputElement>(
+      `[data-meta-field="${field}"]`
+    );
+    input?.scrollIntoView?.({ block: "center" });
+    input?.focus({ preventScroll: true });
+  }
   function prepare() {
+    setValidationAttempted(true);
+    const issue = !isCampaign
+      ? metaScheduleIssue(start, end, requiresEnd)
+      : null;
+    if (issue) {
+      setError("");
+      focusProblem(issue.field);
+      return;
+    }
     try {
       const change = metaChangeSchema.parse({
         ...form,
@@ -156,7 +191,7 @@ export function MetaCreateDialog({
       setError("");
       review.mutate({ ...scope, change });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Check the settings.");
+      setError(readableFormError(e));
     }
   }
   const budgetVisible =
@@ -167,7 +202,7 @@ export function MetaCreateDialog({
         className="meta-create-dialog flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-3xl"
         data-workflow="Activate"
       >
-        <DialogHeader className="border-b px-5 py-5 pr-12 text-left sm:px-6">
+        <DialogHeader className="shrink-0 border-b px-5 py-5 pr-12 text-left sm:px-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Meta Ads · {connection?.name ?? "Connected account"}
           </p>
@@ -182,7 +217,11 @@ export function MetaCreateDialog({
             Created paused after your confirmation.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6 space-y-5">
+        <div
+          ref={scrollBody}
+          data-dialog-scroll
+          className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6 space-y-5"
+        >
           {review.data && reviewed ? (
             <>
               <div className="rounded-2xl border bg-muted/40 p-4 space-y-3">
@@ -592,9 +631,28 @@ export function MetaCreateDialog({
                                 <input
                                   type="datetime-local"
                                   className={channelInput}
+                                  data-meta-field="startTime"
+                                  aria-invalid={problemField === "startTime"}
+                                  aria-describedby={
+                                    problemField === "startTime"
+                                      ? "meta-start-error"
+                                      : undefined
+                                  }
                                   value={start}
-                                  onChange={e => setStart(e.target.value)}
+                                  onChange={e => {
+                                    setStart(e.target.value);
+                                    if (/start date|end date/i.test(error))
+                                      setError("");
+                                  }}
                                 />
+                                {problemField === "startTime" && (
+                                  <span
+                                    id="meta-start-error"
+                                    className="block text-xs text-destructive"
+                                  >
+                                    {activeError}
+                                  </span>
+                                )}
                               </label>
                               <label className="block space-y-2 text-sm">
                                 End{" "}
@@ -605,9 +663,28 @@ export function MetaCreateDialog({
                                 <input
                                   type="datetime-local"
                                   className={channelInput}
+                                  data-meta-field="endTime"
+                                  aria-invalid={problemField === "endTime"}
+                                  aria-describedby={
+                                    problemField === "endTime"
+                                      ? "meta-end-error"
+                                      : undefined
+                                  }
                                   value={end}
-                                  onChange={e => setEnd(e.target.value)}
+                                  onChange={e => {
+                                    setEnd(e.target.value);
+                                    if (/start date|end date/i.test(error))
+                                      setError("");
+                                  }}
                                 />
+                                {problemField === "endTime" && (
+                                  <span
+                                    id="meta-end-error"
+                                    className="block text-xs text-destructive"
+                                  >
+                                    {activeError}
+                                  </span>
+                                )}
                               </label>
                             </div>
                           </section>
@@ -975,16 +1052,19 @@ export function MetaCreateDialog({
               </a>
             </>
           )}
-          {error && (
-            <p
-              role="alert"
-              className="rounded-xl bg-red-50 p-3 text-sm text-red-800 break-words"
-            >
-              {error}
-            </p>
-          )}
         </div>
-        <div className="flex flex-wrap justify-end gap-3 border-t bg-card p-4 [&_button]:whitespace-normal [&_button]:h-auto [&_button]:min-h-10">
+        <DialogActionFooter
+          message={
+            activeError ||
+            (review.data && reviewed ? review.data.warnings.join(" ") : "")
+          }
+          tone={activeError ? "error" : "warning"}
+          onGoToField={
+            problemField && !(review.data && reviewed)
+              ? () => focusProblem()
+              : undefined
+          }
+        >
           {review.data && reviewed ? (
             <>
               <Button
@@ -1036,7 +1116,7 @@ export function MetaCreateDialog({
               </Button>
             </>
           )}
-        </div>
+        </DialogActionFooter>
       </DialogContent>
     </Dialog>
   );

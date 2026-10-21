@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/** Image bases describe directories, not files. Preserve their full path. */
+export function catalogImageDirectory(value: string) {
+  const url = new URL(value.trim());
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.href;
+}
+
 const path = z
   .string()
   .trim()
@@ -89,7 +96,7 @@ export const apiCatalogMappingSchema = z.object({
     .max(20)
     .optional(),
   productBaseUrl: publicLink.optional(),
-  imageBaseUrl: publicLink.optional(),
+  imageBaseUrl: publicLink.transform(catalogImageDirectory).optional(),
   imageUrlTemplate: linkTemplate.optional(),
   skipImages: z.boolean().optional(),
   componentsPath: path.optional(),
