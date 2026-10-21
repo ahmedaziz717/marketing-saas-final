@@ -93,6 +93,7 @@ export async function validateInsightConfig(
       and(
         eq(channelConnections.organizationId, organizationId),
         eq(channelConnections.status, "connected"),
+        inArray(channelConnections.channel, ["facebook", "meta_ads"]),
         inArray(channelConnections.id, config.connectionIds)
       )
     );

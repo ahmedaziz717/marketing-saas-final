@@ -21,6 +21,7 @@ import { catalogRouter } from "./routers/catalog";
 import { creativeBuilderRouter } from "./routers/creativeBuilder";
 import { assetLibraryRouter } from "./routers/assetLibrary";
 import { channelsRouter, publishingRouter } from "./routers/channels";
+import { googleAdsRouter } from "./routers/googleAds";
 import { billingRouter } from "./routers/billing";
 import { authClient } from "./auth/supabase";
 
@@ -55,6 +56,7 @@ export const appRouter = router({
   assetLibrary: assetLibraryRouter,
   meta: metaRouter,
   channels: channelsRouter,
+  googleAds: googleAdsRouter,
   publishing: publishingRouter,
   crawl: crawlRouter,
   catalog: catalogRouter,

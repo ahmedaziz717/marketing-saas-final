@@ -7,6 +7,15 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+vi.mock("@/components/GoogleAdsConnections", () => ({
+  GoogleAdsConnectionCard: () => (
+    <article>
+      <h3>Google Ads</h3>
+      <button>Connect with Google</button>
+    </article>
+  ),
+  GoogleAdsConnectionSelection: () => null,
+}));
 vi.mock("@/components/WorkspaceGate", () => ({
   WorkspaceGate: ({ children }: any) => children,
 }));
@@ -18,8 +27,13 @@ vi.mock("@/components/CatalogSources", () => ({
     <div>{storesOnly ? "Store connections only" : "Scan website"}</div>
   ),
 }));
-vi.mock('@/components/ChannelConnections', () => ({
-  ChannelConnectionCard: ({ channel }: any) => <article><h3>{channel === 'facebook' ? 'Facebook Pages' : 'Meta Ads'}</h3><button>Connect account</button></article>,
+vi.mock("@/components/ChannelConnections", () => ({
+  ChannelConnectionCard: ({ channel }: any) => (
+    <article>
+      <h3>{channel === "facebook" ? "Facebook Pages" : "Meta Ads"}</h3>
+      <button>Connect account</button>
+    </article>
+  ),
   MetaConnectionSelection: () => null,
 }));
 import IntegrationsPage from "./IntegrationsPage";

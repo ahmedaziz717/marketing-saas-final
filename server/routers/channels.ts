@@ -111,7 +111,12 @@ export const channelsRouter = router({
       const rows = await db
         .select()
         .from(channelConnections)
-        .where(eq(channelConnections.organizationId, input.organizationId))
+        .where(
+          and(
+            eq(channelConnections.organizationId, input.organizationId),
+            inArray(channelConnections.channel, ["facebook", "meta_ads"])
+          )
+        )
         .orderBy(channelConnections.channel, channelConnections.name);
       const legacy = (
         await db
@@ -126,7 +131,12 @@ export const channelsRouter = router({
           .limit(1)
       )[0];
       return {
-        items: rows.map(safeConnection),
+        items: rows
+          .filter(
+            (c): c is typeof c & { channel: "facebook" | "meta_ads" } =>
+              c.channel === "facebook" || c.channel === "meta_ads"
+          )
+          .map(safeConnection),
         oauthConfigured: oauthConfigured(),
         advancedEnabled: process.env.META_ADVANCED_TOKEN_ENABLED === "true",
         callbackUrl: oauthConfigured() ? callbackUrl() : null,

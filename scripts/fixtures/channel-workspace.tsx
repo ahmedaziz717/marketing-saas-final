@@ -476,6 +476,53 @@ function respond(path: string, input: any) {
     return { success: true, previewOnly: true };
   }
 
+  if (path === "catalogSources.list" && which.startsWith("google-")) return [];
+  if (path === "googleAds.connections")
+    return {
+      oauthConfigured: which.startsWith("google-"),
+      items:
+        which === "google-manage"
+          ? Array.from({ length: 12 }, (_, i) => ({
+              id: `google-${i}`,
+              name:
+                i === 0 ? "CLX Gaming" : `Google advertising account ${i + 1}`,
+              accountId: String(2222222222 + i),
+              status: "connected",
+              needsReconnect: i === 1,
+              details: {
+                currency: "USD",
+                timezone: "America/New_York",
+                warnings: [],
+                google: { testAccount: false, loginCustomerId: "1111111111" },
+              },
+            }))
+          : [],
+    };
+  if (path === "googleAds.selection")
+    return {
+      accounts:
+        which === "google-empty"
+          ? []
+          : Array.from({ length: 20 }, (_, i) => ({
+              id: String(2222222222 + i),
+              name:
+                i === 0 ? "CLX Gaming" : `Google advertising account ${i + 1}`,
+              currency: "USD",
+              timezone: "America/New_York",
+              testAccount: false,
+              loginCustomerId: "1111111111",
+            })),
+      warnings:
+        which === "google-selection"
+          ? [
+              "One account group could not be loaded. If an account is missing, try connecting again.",
+            ]
+          : [],
+    };
+  if (path === "googleAds.cancelSelection") {
+    mutations.push(path);
+    return { success: true };
+  }
   if (path === "channels.connections") {
     if (which === "advertising-empty" || which === "social-empty")
       return { ...connections, items: [] };
@@ -932,6 +979,12 @@ const routeForPage: Record<string, string> = {
   "analytics-ads": "/app/analytics/advertising",
   "analytics-social": "/app/analytics/social",
   integrations: "/app/settings/integrations",
+  "google-connect": "/app/settings/integrations",
+  "google-selection":
+    "/app/settings/integrations?googleSelection=11111111-1111-4111-8111-111111111111",
+  "google-empty":
+    "/app/settings/integrations?googleSelection=11111111-1111-4111-8111-111111111111",
+  "google-manage": "/app/settings/integrations",
 };
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
@@ -1914,6 +1967,76 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(
         !!document.querySelector('[aria-label="Specification 1 name"]'),
         "Catalog specifications have structured name and value fields"
+      );
+      layout();
+    } else if (which === "google-connect") {
+      check(
+        button("Connect with Google") &&
+          !button("Connect with Google")?.disabled,
+        "Google login is available when configured"
+      );
+      check(
+        mutations.length === 0,
+        "Browsing connections does not authorize any account"
+      );
+      layout();
+    } else if (which === "google-selection" || which === "google-empty") {
+      check(
+        document
+          .querySelector('[role="dialog"]')
+          ?.textContent?.includes("Choose your Google Ads accounts"),
+        "Google account picker is open"
+      );
+      check(
+        button("Connect selected")?.disabled,
+        "Connecting requires an explicit account choice"
+      );
+      if (which === "google-selection") {
+        const choice = document.querySelector<HTMLInputElement>(
+          '[role="dialog"] input[type="checkbox"]'
+        );
+        check(choice && !choice.checked, "No Google account is preselected");
+        choice!.click();
+        await pause();
+        const action = button("Connect selected (1)")!;
+        check(action && !action.disabled, "Selected accounts can be connected");
+        const r = action.getBoundingClientRect();
+        check(
+          r.top >= 0 && r.bottom <= innerHeight,
+          "Google selection action remains visible with a long account list"
+        );
+        const warning = document.querySelector(
+          '[role="dialog"] [role="status"]'
+        )!;
+        check(
+          warning.getBoundingClientRect().bottom <= innerHeight,
+          "Google discovery warning stays visible"
+        );
+      } else
+        check(
+          document.body.textContent?.includes("No active advertising accounts"),
+          "Empty Google access is explained"
+        );
+      check(
+        mutations.length === 0,
+        "Choosing accounts does not connect until confirmed"
+      );
+      layout();
+    } else if (which === "google-manage") {
+      const card = Array.from(document.querySelectorAll("article")).find(
+        el => el.querySelector("h3")?.textContent === "Google Ads"
+      )!;
+      card.querySelector<HTMLButtonElement>("button")!.click();
+      await pause();
+      await click("Disconnect");
+      const action = button("Confirm disconnect")!;
+      check(
+        action && action.getBoundingClientRect().bottom <= innerHeight,
+        "Disconnect confirmation stays visible beneath long account lists"
+      );
+      check(
+        mutations.length === 0,
+        "Disconnect requires explicit confirmation"
       );
       layout();
     } else if (which === "integrations") {

@@ -206,7 +206,10 @@ export async function buildInsightResult(
     );
   const accounts: InsightAccount[] = [];
   for (const id of config.connectionIds) {
-    const c = connections.find(c => c.id === id);
+    const c = connections.find(
+      (c): c is typeof c & { channel: "facebook" | "meta_ads" } =>
+        c.id === id && (c.channel === "facebook" || c.channel === "meta_ads")
+    );
     try {
       if (!c || c.status !== "connected")
         throw new Error("connection unavailable");
