@@ -2328,7 +2328,13 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "Rechecking enables import with warnings"
       );
       check(
-        imageInput.value === "https://cdn.example/clx/",
+        // Re-preview replaces the optional-details panel; inspect the new input.
+        Array.from(dialog.querySelectorAll<HTMLLabelElement>("label"))
+          .find(label =>
+            label.textContent?.includes("Website address where product images")
+          )
+          ?.querySelector<HTMLInputElement>("input")?.value ===
+          "https://cdn.example/clx/",
         "The image directory is normalized without losing its folder"
       );
       check(

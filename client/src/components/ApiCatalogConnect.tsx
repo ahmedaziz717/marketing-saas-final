@@ -210,459 +210,471 @@ function ApiCatalogForm({
     }
   }
   return (
-    <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      aria-busy={busy}
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+    >
       <div
         data-dialog-scroll
-        className="min-h-0 overflow-y-auto px-5 py-4 space-y-4"
+        className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
         onChangeCapture={() => setError("")}
       >
-        <p className="text-sm text-muted-foreground">
-          1. Add your source · 2. Review products · 3. Connect
-        </p>
-        <label className="block text-sm">
-          API endpoint
-          <Input
-            className="mt-1"
-            id="catalog-api-endpoint"
-            type="url"
-            placeholder="https://example.com/api/products"
-            value={endpoint}
-            onChange={e => {
-              setEndpoint(e.target.value);
-              setEndpointError("");
-            }}
-            aria-invalid={!!endpointError}
-            aria-describedby={
-              endpointError ? "catalog-endpoint-error" : undefined
-            }
-            autoComplete="off"
-          />
-        </label>
-        {endpointError && (
-          <p id="catalog-endpoint-error" className="text-sm text-destructive">
-            {endpointError}
+        <fieldset disabled={busy} className="min-w-0 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            1. Add your source · 2. Review products · 3. Connect
           </p>
-        )}
-        <ChoiceField className="block text-sm">
-          Authentication
-          <VisualSelect
-            className="mt-1 w-full rounded border bg-background p-2"
-            value={config.auth.type}
-            onChange={e => {
-              const type = e.target.value;
-              setConfig({
-                ...config,
-                auth:
-                  type === "basic"
-                    ? { type, username: "", password: "" }
-                    : type === "bearer"
-                      ? { type, token: "" }
-                      : type === "header"
-                        ? { type, name: "X-API-Key", value: "" }
-                        : { type: "none" },
-              });
-            }}
-          >
-            <option value="none">None · public endpoint</option>
-            <option value="basic">Username and password</option>
-            <option value="bearer">Bearer token</option>
-            <option value="header">API key header</option>
-          </VisualSelect>
-        </ChoiceField>
-        {config.auth.type === "basic" && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Username
-              <Input
-                autoComplete="off"
-                value={config.auth.username}
-                onChange={e => {
-                  if (config.auth.type === "basic")
-                    setConfig({
-                      ...config,
-                      auth: { ...config.auth, username: e.target.value },
-                    });
-                }}
-              />
-            </label>
-            <label className="text-sm">
-              Password
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={config.auth.password}
-                onChange={e => {
-                  if (config.auth.type === "basic")
-                    setConfig({
-                      ...config,
-                      auth: { ...config.auth, password: e.target.value },
-                    });
-                }}
-              />
-            </label>
-          </div>
-        )}
-        {config.auth.type === "bearer" && (
           <label className="block text-sm">
-            Bearer token
+            API endpoint
             <Input
-              type="password"
-              autoComplete="new-password"
-              value={config.auth.token}
+              className="mt-1"
+              id="catalog-api-endpoint"
+              type="url"
+              placeholder="https://example.com/api/products"
+              value={endpoint}
               onChange={e => {
-                if (config.auth.type === "bearer")
-                  setConfig({
-                    ...config,
-                    auth: { ...config.auth, token: e.target.value },
-                  });
+                setEndpoint(e.target.value);
+                setEndpointError("");
               }}
+              aria-invalid={!!endpointError}
+              aria-describedby={
+                endpointError ? "catalog-endpoint-error" : undefined
+              }
+              autoComplete="off"
             />
           </label>
-        )}
-        {config.auth.type === "header" && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Header name
-              <Input
-                value={config.auth.name}
-                onChange={e => {
-                  if (config.auth.type === "header")
-                    setConfig({
-                      ...config,
-                      auth: { ...config.auth, name: e.target.value },
-                    });
-                }}
-              />
-            </label>
-            <label className="text-sm">
-              API key
+          {endpointError && (
+            <p id="catalog-endpoint-error" className="text-sm text-destructive">
+              {endpointError}
+            </p>
+          )}
+          <ChoiceField className="block text-sm">
+            Authentication
+            <VisualSelect
+              className="mt-1 w-full rounded border bg-background p-2"
+              value={config.auth.type}
+              onChange={e => {
+                const type = e.target.value;
+                setConfig({
+                  ...config,
+                  auth:
+                    type === "basic"
+                      ? { type, username: "", password: "" }
+                      : type === "bearer"
+                        ? { type, token: "" }
+                        : type === "header"
+                          ? { type, name: "X-API-Key", value: "" }
+                          : { type: "none" },
+                });
+              }}
+            >
+              <option value="none">None · public endpoint</option>
+              <option value="basic">Username and password</option>
+              <option value="bearer">Bearer token</option>
+              <option value="header">API key header</option>
+            </VisualSelect>
+          </ChoiceField>
+          {config.auth.type === "basic" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm">
+                Username
+                <Input
+                  autoComplete="off"
+                  value={config.auth.username}
+                  onChange={e => {
+                    if (config.auth.type === "basic")
+                      setConfig({
+                        ...config,
+                        auth: { ...config.auth, username: e.target.value },
+                      });
+                  }}
+                />
+              </label>
+              <label className="text-sm">
+                Password
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={config.auth.password}
+                  onChange={e => {
+                    if (config.auth.type === "basic")
+                      setConfig({
+                        ...config,
+                        auth: { ...config.auth, password: e.target.value },
+                      });
+                  }}
+                />
+              </label>
+            </div>
+          )}
+          {config.auth.type === "bearer" && (
+            <label className="block text-sm">
+              Bearer token
               <Input
                 type="password"
                 autoComplete="new-password"
-                value={config.auth.value}
+                value={config.auth.token}
                 onChange={e => {
-                  if (config.auth.type === "header")
+                  if (config.auth.type === "bearer")
                     setConfig({
                       ...config,
-                      auth: { ...config.auth, value: e.target.value },
+                      auth: { ...config.auth, token: e.target.value },
                     });
                 }}
               />
             </label>
-          </div>
-        )}
-        <details className="rounded-lg border p-3">
-          <summary className="cursor-pointer text-sm font-medium">
-            Instructions & attachments · optional
-          </summary>
-          <label className="mt-3 block text-sm">
-            Explain your API
-            <textarea
-              className="mt-1 min-h-28 w-full rounded border bg-background p-2"
-              maxLength={12000}
-              value={config.notes}
-              placeholder="Paste your API documentation or explain where product pages and images live. You can also paste a screenshot or attach a file."
-              onChange={e => setConfig({ ...config, notes: e.target.value })}
-              onPaste={e => {
-                const pasted = Array.from(e.clipboardData.files);
-                if (pasted.length) {
-                  e.preventDefault();
-                  void addFiles(pasted);
-                }
-              }}
-            />
-          </label>
-          <label className="mt-3 block text-sm">
-            Attach instructions or screenshots
-            <input
-              className="mt-1 block w-full text-sm"
-              type="file"
-              multiple
-              disabled={busy}
-              accept=".pdf,.txt,.md,.json,image/png,image/jpeg,image/webp"
-              onChange={e => {
-                void addFiles(Array.from(e.target.files ?? []));
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {files.map((file, i) => (
-            <div
-              key={i}
-              className="mt-2 flex items-center justify-between gap-2 text-sm"
-            >
-              <span className="truncate">{file.name}</span>
-              <button
-                type="button"
-                className="underline"
-                onClick={() => {
-                  setFiles(files.filter((_, n) => n !== i));
-                  setVerified("");
-                }}
-              >
-                Remove
-              </button>
+          )}
+          {config.auth.type === "header" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm">
+                Header name
+                <Input
+                  value={config.auth.name}
+                  onChange={e => {
+                    if (config.auth.type === "header")
+                      setConfig({
+                        ...config,
+                        auth: { ...config.auth, name: e.target.value },
+                      });
+                  }}
+                />
+              </label>
+              <label className="text-sm">
+                API key
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={config.auth.value}
+                  onChange={e => {
+                    if (config.auth.type === "header")
+                      setConfig({
+                        ...config,
+                        auth: { ...config.auth, value: e.target.value },
+                      });
+                  }}
+                />
+              </label>
             </div>
-          ))}
-          <p className="mt-2 text-xs text-muted-foreground">
-            PDF, TXT, Markdown, JSON or images. Up to 3 files; 4 MB each, 6 MB
-            total. AI reads these as reference material to suggest field
-            mappings. Keep passwords and API keys in the authentication fields.
-            EvokeLoop does not store instruction files.
-          </p>
-        </details>
-        <details className="rounded-lg border p-3">
-          <summary className="cursor-pointer text-sm font-medium">
-            Advanced settings · optional mapping overrides
-          </summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {(["itemsPath", "nextPath"] as const).map(key => (
-              <label key={key} className="text-sm">
-                {key === "itemsPath"
-                  ? "Product array path"
-                  : "Next-page URL path"}
-                <Input
-                  value={config[key]}
-                  placeholder={
-                    key === "itemsPath" ? "data.products" : "links.next"
+          )}
+          <details className="rounded-lg border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Instructions & attachments · optional
+            </summary>
+            <label className="mt-3 block text-sm">
+              Explain your API
+              <textarea
+                className="mt-1 min-h-28 w-full rounded border bg-background p-2"
+                maxLength={12000}
+                value={config.notes}
+                placeholder="Paste your API documentation or explain where product pages and images live. You can also paste a screenshot or attach a file."
+                onChange={e => setConfig({ ...config, notes: e.target.value })}
+                onPaste={e => {
+                  const pasted = Array.from(e.clipboardData.files);
+                  if (pasted.length) {
+                    e.preventDefault();
+                    void addFiles(pasted);
                   }
-                  onChange={e => {
-                    setConfig({ ...config, [key]: e.target.value });
-                    setManualMapping({
-                      ...manualMapping,
-                      [key]: e.target.value,
-                    });
+                }}
+              />
+            </label>
+            <label className="mt-3 block text-sm">
+              Attach instructions or screenshots
+              <input
+                className="mt-1 block w-full text-sm"
+                type="file"
+                multiple
+                disabled={busy}
+                accept=".pdf,.txt,.md,.json,image/png,image/jpeg,image/webp"
+                onChange={e => {
+                  void addFiles(Array.from(e.target.files ?? []));
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {files.map((file, i) => (
+              <div
+                key={i}
+                className="mt-2 flex items-center justify-between gap-2 text-sm"
+              >
+                <span className="truncate">{file.name}</span>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => {
+                    setFiles(files.filter((_, n) => n !== i));
+                    setVerified("");
                   }}
-                />
-              </label>
+                >
+                  Remove
+                </button>
+              </div>
             ))}
-            {API_CATALOG_FIELDS.map(key => (
-              <label key={key} className="text-sm">
-                {key}
-                <Input
-                  value={config.fields[key] ?? ""}
-                  placeholder="Automatic"
-                  onChange={e => {
-                    setManualMapping({
-                      ...manualMapping,
-                      fields: {
-                        ...manualMapping.fields,
+            <p className="mt-2 text-xs text-muted-foreground">
+              PDF, TXT, Markdown, JSON or images. Up to 3 files; 4 MB each, 6 MB
+              total. AI reads these as reference material to suggest field
+              mappings. Keep passwords and API keys in the authentication
+              fields. EvokeLoop does not store instruction files.
+            </p>
+          </details>
+          <details className="rounded-lg border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Advanced settings · optional mapping overrides
+            </summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(["itemsPath", "nextPath"] as const).map(key => (
+                <label key={key} className="text-sm">
+                  {key === "itemsPath"
+                    ? "Product array path"
+                    : "Next-page URL path"}
+                  <Input
+                    value={config[key]}
+                    placeholder={
+                      key === "itemsPath" ? "data.products" : "links.next"
+                    }
+                    onChange={e => {
+                      setConfig({ ...config, [key]: e.target.value });
+                      setManualMapping({
+                        ...manualMapping,
                         [key]: e.target.value,
-                      },
-                    });
-                    setConfig({
-                      ...config,
-                      fields: { ...config.fields, [key]: e.target.value },
-                    });
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Read-only GET JSON endpoints. Pagination follows same-origin
-            next-page URLs; up to 200 pages. Cursor tokens and POST/GraphQL APIs
-            need a dedicated connector.
-          </p>
-        </details>
-        {preview.data?.issues?.length ? (
-          <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 space-y-3 dark:bg-violet-950/20">
-            <p className="font-medium">
-              Optional details to improve this import
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Missing links or images do not prevent importing product data for
-              review.
-            </p>
-            {!currentPreview && (
-              <p className="text-xs text-muted-foreground">
-                Update the preview to recheck these details. The fields below
-                are from the last preview.
-              </p>
-            )}
-            <ul className="text-sm space-y-1">
-              {Array.from(
-                new Set(
-                  preview.data.issues
-                    .filter(i => i.field === "productUrl")
-                    .map(i => i.product)
-                )
-              )
-                .slice(0, currentPreview ? 3 : 0)
-                .map(name => (
-                  <li key={name}>Product-page link needed: {name}</li>
-                ))}
-            </ul>
-            {preview.data.issues.some(i => i.field === "productUrl") && (
-              <label className="block text-sm">
-                An example product-page link
-                <Input
-                  type="url"
-                  className="mt-1"
-                  placeholder="https://your-store.com/products/product-code"
-                  value={exampleProductUrl}
-                  onChange={e => setExampleProductUrl(e.target.value)}
-                />
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Use a product from this feed. We’ll match its code and show
-                  the resulting links for review. If product groups use
-                  different links, explain those rules in Instructions.
-                </span>
-              </label>
-            )}
-            {preview.data.issues.some(i => i.field === "imageUrl") && (
-              <label className="block text-sm">
-                Website address where product images are stored
-                <Input
-                  type="url"
-                  className="mt-1"
-                  placeholder="https://images.your-store.com/catalog/"
-                  value={config.imageBaseUrl ?? ""}
-                  onChange={e => {
-                    setConfig({
-                      ...config,
-                      imageBaseUrl: e.target.value || undefined,
-                    });
-                    setManualMapping({
-                      ...manualMapping,
-                      imageBaseUrl: e.target.value || undefined,
-                    });
-                  }}
-                />
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Include the folder if your instructions specify one. Leave
-                  blank if this feed has no images.
-                </span>
-              </label>
-            )}
-            {preview.data.issues.some(i => i.field === "currency") && (
-              <label className="block text-sm">
-                Currency for prices in this feed
-                <Input
-                  className="mt-1 max-w-32"
-                  placeholder="USD"
-                  maxLength={3}
-                  value={config.defaultCurrency ?? ""}
-                  onChange={e => {
-                    setConfig({
-                      ...config,
-                      defaultCurrency:
-                        e.target.value.toUpperCase() || undefined,
-                    });
-                    setManualMapping({
-                      ...manualMapping,
-                      defaultCurrency:
-                        e.target.value.toUpperCase() || undefined,
-                    });
-                  }}
-                />
-              </label>
-            )}
-            {preview.data.issues.some(i => i.field === "imageUrl") && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!!config.skipImages}
-                  onChange={e => {
-                    setConfig({ ...config, skipImages: e.target.checked });
-                    setManualMapping({
-                      ...manualMapping,
-                      skipImages: e.target.checked,
-                    });
-                  }}
-                />
-                Import without product images
-              </label>
-            )}
-            {preview.data.issues
-              .filter(i => currentPreview && i.field === "imageUrl")
-              .slice(0, 1)
-              .map(i => (
-                <p className="text-sm text-amber-700" key={i.index}>
-                  {i.message}
-                </p>
+                      });
+                    }}
+                  />
+                </label>
               ))}
-            <p className="text-xs text-muted-foreground">
-              You may import now and complete these details in Catalog. After
-              editing this setup, preview again. Your instructions and other
-              choices stay in place.
-            </p>
-          </div>
-        ) : null}
-        {currentPreview && preview.data?.exampleWarning && (
-          <p
-            role="status"
-            className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
-          >
-            {preview.data.exampleWarning}
-          </p>
-        )}
-
-        {preview.data && verified === signature() && (
-          <div className="rounded-lg border p-3">
-            <p className="text-sm font-medium">
-              {preview.data.count} products on this page
-              {preview.data.hasNext ? " · more pages available" : ""}
-            </p>
-            {config.detailUrlTemplate && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Product configuration details are connected. After import, open
-                a product’s Installed components & available upgrades panel to
-                inspect its current options.
-              </p>
-            )}
-            <ul className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
-              {preview.data.samples.map((sample, i) => (
-                <li key={i} className="min-w-0 rounded-xl border p-3 space-y-2">
-                  {sample.imageUrl && (
-                    <ProductPreviewImage
-                      key={sample.imageUrl}
-                      url={sample.imageUrl}
-                      name={sample.name}
-                    />
-                  )}
-                  <p className="font-semibold">{sample.name}</p>
-                  {sample.sku && (
-                    <p className="text-xs text-muted-foreground">
-                      {sample.sku}
-                    </p>
-                  )}
-                  {sample.price && (
-                    <p>
-                      {sample.currency || "Currency needed"} {sample.price}
-                    </p>
-                  )}
-                  {sample.availability && <p>{sample.availability}</p>}
-                  <ul className="list-disc pl-4 space-y-1">
-                    {Object.entries(sample.specifications ?? {})
-                      .slice(0, 8)
-                      .map(([key, value]) => (
-                        <li key={key}>
-                          <strong className="capitalize">{key}:</strong> {value}
-                        </li>
-                      ))}
-                  </ul>
-                  {sample.productUrl ? (
-                    <a
-                      className="block break-all text-primary underline"
-                      href={sample.productUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Check product page
-                    </a>
-                  ) : (
-                    <p className="text-amber-700">Product-page link needed</p>
-                  )}
-                </li>
+              {API_CATALOG_FIELDS.map(key => (
+                <label key={key} className="text-sm">
+                  {key}
+                  <Input
+                    value={config.fields[key] ?? ""}
+                    placeholder="Automatic"
+                    onChange={e => {
+                      setManualMapping({
+                        ...manualMapping,
+                        fields: {
+                          ...manualMapping.fields,
+                          [key]: e.target.value,
+                        },
+                      });
+                      setConfig({
+                        ...config,
+                        fields: { ...config.fields, [key]: e.target.value },
+                      });
+                    }}
+                  />
+                </label>
               ))}
-            </ul>
+            </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Imports are saved for review. Credentials are encrypted; requests
-              are limited to public HTTPS addresses.
+              Read-only GET JSON endpoints. Pagination follows same-origin
+              next-page URLs; up to 200 pages. Cursor tokens and POST/GraphQL
+              APIs need a dedicated connector.
             </p>
-          </div>
-        )}
+          </details>
+          {preview.data?.issues?.length ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 space-y-3 dark:bg-violet-950/20">
+              <p className="font-medium">
+                Optional details to improve this import
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Missing links or images do not prevent importing product data
+                for review.
+              </p>
+              {!currentPreview && (
+                <p className="text-xs text-muted-foreground">
+                  Update the preview to recheck these details. The fields below
+                  are from the last preview.
+                </p>
+              )}
+              <ul className="text-sm space-y-1">
+                {Array.from(
+                  new Set(
+                    preview.data.issues
+                      .filter(i => i.field === "productUrl")
+                      .map(i => i.product)
+                  )
+                )
+                  .slice(0, currentPreview ? 3 : 0)
+                  .map(name => (
+                    <li key={name}>Product-page link needed: {name}</li>
+                  ))}
+              </ul>
+              {preview.data.issues.some(i => i.field === "productUrl") && (
+                <label className="block text-sm">
+                  An example product-page link
+                  <Input
+                    type="url"
+                    className="mt-1"
+                    placeholder="https://your-store.com/products/product-code"
+                    value={exampleProductUrl}
+                    onChange={e => setExampleProductUrl(e.target.value)}
+                  />
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Use a product from this feed. We’ll match its code and show
+                    the resulting links for review. If product groups use
+                    different links, explain those rules in Instructions.
+                  </span>
+                </label>
+              )}
+              {preview.data.issues.some(i => i.field === "imageUrl") && (
+                <label className="block text-sm">
+                  Website address where product images are stored
+                  <Input
+                    type="url"
+                    className="mt-1"
+                    placeholder="https://images.your-store.com/catalog/"
+                    value={config.imageBaseUrl ?? ""}
+                    onChange={e => {
+                      setConfig({
+                        ...config,
+                        imageBaseUrl: e.target.value || undefined,
+                      });
+                      setManualMapping({
+                        ...manualMapping,
+                        imageBaseUrl: e.target.value || undefined,
+                      });
+                    }}
+                  />
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Include the folder if your instructions specify one. Leave
+                    blank if this feed has no images.
+                  </span>
+                </label>
+              )}
+              {preview.data.issues.some(i => i.field === "currency") && (
+                <label className="block text-sm">
+                  Currency for prices in this feed
+                  <Input
+                    className="mt-1 max-w-32"
+                    placeholder="USD"
+                    maxLength={3}
+                    value={config.defaultCurrency ?? ""}
+                    onChange={e => {
+                      setConfig({
+                        ...config,
+                        defaultCurrency:
+                          e.target.value.toUpperCase() || undefined,
+                      });
+                      setManualMapping({
+                        ...manualMapping,
+                        defaultCurrency:
+                          e.target.value.toUpperCase() || undefined,
+                      });
+                    }}
+                  />
+                </label>
+              )}
+              {preview.data.issues.some(i => i.field === "imageUrl") && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!config.skipImages}
+                    onChange={e => {
+                      setConfig({ ...config, skipImages: e.target.checked });
+                      setManualMapping({
+                        ...manualMapping,
+                        skipImages: e.target.checked,
+                      });
+                    }}
+                  />
+                  Import without product images
+                </label>
+              )}
+              {preview.data.issues
+                .filter(i => currentPreview && i.field === "imageUrl")
+                .slice(0, 1)
+                .map(i => (
+                  <p
+                    className="text-sm text-amber-700"
+                    key={`${i.field}-${i.index ?? i.product}`}
+                  >
+                    {i.message}
+                  </p>
+                ))}
+              <p className="text-xs text-muted-foreground">
+                You may import now and complete these details in Catalog. After
+                editing this setup, preview again. Your instructions and other
+                choices stay in place.
+              </p>
+            </div>
+          ) : null}
+          {currentPreview && preview.data?.exampleWarning && (
+            <p
+              role="status"
+              className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
+            >
+              {preview.data.exampleWarning}
+            </p>
+          )}
+
+          {preview.data && verified === signature() && (
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-medium">
+                {preview.data.count} products on this page
+                {preview.data.hasNext ? " · more pages available" : ""}
+              </p>
+              {config.detailUrlTemplate && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Product configuration details are connected. After import,
+                  open a product’s Installed components & available upgrades
+                  panel to inspect its current options.
+                </p>
+              )}
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
+                {preview.data.samples.map((sample, i) => (
+                  <li
+                    key={i}
+                    className="min-w-0 rounded-xl border p-3 space-y-2"
+                  >
+                    {sample.imageUrl && (
+                      <ProductPreviewImage
+                        key={sample.imageUrl}
+                        url={sample.imageUrl}
+                        name={sample.name}
+                      />
+                    )}
+                    <p className="font-semibold">{sample.name}</p>
+                    {sample.sku && (
+                      <p className="text-xs text-muted-foreground">
+                        {sample.sku}
+                      </p>
+                    )}
+                    {sample.price && (
+                      <p>
+                        {sample.currency || "Currency needed"} {sample.price}
+                      </p>
+                    )}
+                    {sample.availability && <p>{sample.availability}</p>}
+                    <ul className="list-disc pl-4 space-y-1">
+                      {Object.entries(sample.specifications ?? {})
+                        .slice(0, 8)
+                        .map(([key, value]) => (
+                          <li key={key}>
+                            <strong className="capitalize">{key}:</strong>{" "}
+                            {value}
+                          </li>
+                        ))}
+                    </ul>
+                    {sample.productUrl ? (
+                      <a
+                        className="block break-all text-primary underline"
+                        href={sample.productUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Check product page
+                      </a>
+                    ) : (
+                      <p className="text-amber-700">Product-page link needed</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Imports are saved for review. Credentials are encrypted;
+                requests are limited to public HTTPS addresses.
+              </p>
+            </div>
+          )}
+        </fieldset>
       </div>
       <DialogActionFooter
         message={footerMessage}
@@ -756,6 +768,6 @@ function ApiCatalogForm({
           {connect.isPending ? "Connecting…" : "Connect and import catalog"}
         </Button>
       </DialogActionFooter>
-    </fieldset>
+    </div>
   );
 }
