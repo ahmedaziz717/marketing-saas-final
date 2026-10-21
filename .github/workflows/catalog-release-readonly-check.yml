@@ -6,43 +6,53 @@ on:
 permissions:
   contents: read
 jobs:
-  verify-public-feed:
+  verify-live-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
+    env:
+      EXPECTED_RELEASE_SHA: c74cc07da3dee7c563c678ca5e5bfec31471ae17
+      VERIFY_STAGE: web-before-worker
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: 7c0f6f90c6557db283098922e4150612dd3c8f8c
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: corepack enable && pnpm install --frozen-lockfile --prod=false
-      - name: Preview the public product feed with the corrected directory rule
+      - name: Check public health and released assets without account access
         shell: bash
         run: |
-          cat > .catalog-feed-check.ts <<'TS'
+          node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
-          import {apiCatalogConfigSchema} from './shared/apiCatalog';
-          import {fetchApiCatalog,parseApiCatalog} from './server/lib/apiCatalog';
-          import {safeFetchImage} from './server/lib/websiteCrawler';
-          async function main() {
-            const endpoint='https://api.cybertron.com/v1/products/kits?pagination=false';
-            const config=apiCatalogConfigSchema.parse({imageBaseUrl:'https://static.cybertron.com/clx',defaultCurrency:'USD'});
-            assert.equal(config.imageBaseUrl,'https://static.cybertron.com/clx/');
-            const data=await fetchApiCatalog(endpoint,config);
-            const result=parseApiCatalog(data,endpoint,config,{preview:true});
-            assert(result.items.length>0);
-            assert.equal(new Set(result.items.map(p=>p.externalId)).size,result.items.length);
-            assert(!result.issues.some(i=>i.blocking));
-            let imagesVerified=0;
-            for (const item of result.items.filter(p=>p.imageUrl).slice(0,3)) {
-              assert(item.imageUrl.startsWith('https://static.cybertron.com/clx/'));
-              try { await safeFetchImage(item.imageUrl); imagesVerified++; }
-              catch { console.log(JSON.stringify({sku:item.sku,image:'unavailable; import remains reviewable'})); }
-            }
-            console.log(JSON.stringify({check:'actual Cybertron feed',products:result.items.length,stableIdentities:result.items.length,missingProductLinks:result.items.filter(p=>!p.productUrl).length,productsWithSpecifications:result.items.filter(p=>Object.keys(p.specifications).length).length,imagesVerified,imageBase:config.imageBaseUrl,blockingIssues:result.issues.filter(i=>i.blocking).length,mode:'read only; no database import, paid generation, or advertising actions'}));
+          import {createHash} from 'node:crypto';
+          import {setTimeout as wait} from 'node:timers/promises';
+          const origins=['https://app.evokeloop.com','https://frame-staging.onrender.com'];
+          async function get(url) {
+            const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000),redirect:'error'});
+            assert.equal(response.status,200,`HTTP health/asset check failed: ${url}`);
+            return response;
           }
-          main().catch(e=>{console.error(e.message);process.exit(1)});
-          TS
-          pnpm exec tsx .catalog-feed-check.ts
+          for (const origin of origins) {
+            let health;
+            for (let attempt=0;attempt<18;attempt++) {
+              try {
+                health=await (await get(`${origin}/healthz`)).json();
+                if(health.ok===true && health.commit===process.env.EXPECTED_RELEASE_SHA) break;
+              } catch { /* Public deployment may still be becoming healthy. */ }
+              if(attempt===17) throw new Error(`Expected healthy release not available: ${origin}`);
+              await wait(5000);
+            }
+            assert.equal(health.ok,true);
+            assert.equal(health.commit,process.env.EXPECTED_RELEASE_SHA);
+            const html=await (await get(`${origin}/login`)).text();
+            const assets=['/assets/index-CPmgwZme.js','/assets/index-CifhTMQx.css'];
+            const verified=[];
+            for (const path of assets) {
+              assert(html.includes(path),`Login page does not reference the verified asset: ${path}`);
+              const text=await (await get(`${origin}${path}`)).text();
+              if(path.endsWith('.js')) {
+                assert(text.includes('products can be imported for review'));
+                assert(text.includes('data-dialog-actions'));
+              }
+              verified.push({path,sha256:createHash('sha256').update(text).digest('hex')});
+            }
+            console.log(JSON.stringify({stage:process.env.VERIFY_STAGE,origin,http:200,ok:health.ok,commit:health.commit,assets:verified,checkedAt:new Date().toISOString()}));
+          }
+          JS
