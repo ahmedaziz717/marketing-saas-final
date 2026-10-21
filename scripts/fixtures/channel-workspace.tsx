@@ -447,7 +447,17 @@ function respond(path: string, input: any) {
   if (path === "insights.dashboards" || path === "insights.list") return [];
   if (path === "insights.options")
     return {
-      connections: connections.items,
+      connections: [
+        ...connections.items,
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          name: "Demo Google Ads",
+          channel: "google_ads",
+          status: "connected",
+          currency: "USD",
+          timezone: "America/New_York",
+        },
+      ],
       members: [],
       recipients: [],
       canEdit: true,
@@ -1747,6 +1757,50 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         mutations.length === 0,
         "Navigation never runs a report or analysis"
       );
+      if (which === "insights-studio") {
+        await click("Accounts & dates");
+        await click("Google Ads");
+        check(
+          !!button("Google Ads account Demo Google Ads"),
+          "Google Ads accounts are available in Insights"
+        );
+        check(
+          !button("Meta advertising account Demo ad account"),
+          "Channel filter separates Google and Meta accounts"
+        );
+        await click("Google Ads account Demo Google Ads");
+        check(
+          button("Google Ads account Demo Google Ads")?.getAttribute(
+            "aria-pressed"
+          ) === "true",
+          "Google source is selected explicitly"
+        );
+        layout();
+        Array.from(
+          document.querySelectorAll<HTMLButtonElement>(
+            ".journey-sections button"
+          )
+        )
+          .find(b => b.textContent?.startsWith("Report setup"))!
+          .click();
+        await pause();
+        await click("Key metrics");
+        await click("Google Ads");
+        check(
+          document.body.textContent?.includes("Click CTR"),
+          "Google click metrics are offered"
+        );
+        check(
+          !document
+            .querySelector(".insight-metric-choices")
+            ?.textContent?.includes("Link clicks"),
+          "Google metrics preserve Meta link-click meaning"
+        );
+        check(
+          mutations.length === 0,
+          "Browsing Google metrics does not run reports"
+        );
+      }
       layout();
     }
     if (which === "model-picker") {

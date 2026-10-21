@@ -11,6 +11,8 @@ export const googleAccountSchema = z.object({
 });
 export type GoogleAdsAccount = z.infer<typeof googleAccountSchema>;
 export const googleConnectionErrors: Record<string, string> = {
+  reporting:
+    "Google Ads reporting setup is incomplete. Contact your administrator.",
   state:
     "This Google connection request could not be verified. Start again from this workspace.",
   expired: "Your Google connection request expired. Please connect again.",

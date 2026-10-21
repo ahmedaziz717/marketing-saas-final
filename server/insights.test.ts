@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   db: null as any,
   ads: vi.fn(),
   social: vi.fn(),
+  google: vi.fn(),
 }));
 vi.mock("./db", () => ({
   getDb: async () => state.db,
@@ -25,6 +26,9 @@ vi.mock("./db", () => ({
 vi.mock("./lib/channelReports", () => ({
   adsReport: (...args: unknown[]) => state.ads(...args),
   facebookReport: (...args: unknown[]) => state.social(...args),
+}));
+vi.mock("./lib/googleAdsReports", () => ({
+  googleAdsReport: (...args: unknown[]) => state.google(...args),
 }));
 import { insightsRouter } from "./routers/insights";
 import {
@@ -159,11 +163,53 @@ let engine: PGlite,
   reviewerId: number,
   adsId = randomUUID(),
   pageId = randomUUID(),
-  foreignId = randomUUID();
+  foreignId = randomUUID(),
+  googleId = randomUUID(),
+  foreignGoogleId = randomUUID();
 let owner: ReturnType<typeof insightsRouter.createCaller>,
   reviewer: typeof owner,
   outsider: typeof owner;
 const now = Date.parse("2026-10-16T13:00:00Z");
+const googleData = () => ({
+  summary: {
+    spend: 250,
+    impressions: 10000,
+    clicks: 100,
+    clickCtr: 1,
+    cpc: 2.5,
+    conversions: 5.5,
+    conversionValue: 600,
+    purchases: 2.5,
+    purchaseValue: 500,
+    roas: 2,
+    cpa: 100,
+  },
+  currency: "EUR",
+  timezone: "Europe/Paris",
+  warnings: [],
+  attribution: "Google Ads attribution. PURCHASE category; interaction date.",
+  daily: [
+    {
+      date: insightRange(defaultInsightConfig()).since,
+      values: { spend: 250, clicks: 100, purchases: 2.5, roas: 2 },
+    },
+  ],
+  campaigns: [
+    {
+      id: "1",
+      name: "Google PMax",
+      type: "PERFORMANCE_MAX",
+      status: "ENABLED",
+      values: {
+        spend: 250,
+        clicks: 100,
+        conversions: 5.5,
+        purchaseValue: 500,
+        roas: 2,
+      },
+    },
+  ],
+});
 const adsData = () => ({
   summary: {
     spend: 200,
@@ -242,17 +288,17 @@ beforeAll(async () => {
   await state.db.insert(organizationMemberships).values(
     people.map((p: any, i: number) => ({
       userId: p.id,
-      organizationId: i === 2 ? other : org,
+      organizationId: i === 2 || i === 4 ? other : org,
       role: i === 1 ? "reviewer" : "owner",
       status: "active",
       createdAtMs: now,
     }))
   );
   await state.db.insert(channelConnections).values(
-    [adsId, pageId, foreignId].map((id, i) => ({
+    [adsId, pageId, foreignId, googleId, foreignGoogleId].map((id, i) => ({
       id,
-      organizationId: i === 2 ? other : org,
-      channel: i === 1 ? "facebook" : "meta_ads",
+      organizationId: i === 2 || i === 4 ? other : org,
+      channel: i >= 3 ? "google_ads" : i === 1 ? "facebook" : "meta_ads",
       name: i === 1 ? "CLX Page" : "CLX Ads",
       accountId: String(100 + i),
       status: "connected",
@@ -278,6 +324,7 @@ beforeEach(async () => {
     .update(organizationMemberships)
     .set({ status: "active" })
     .where(eq(organizationMemberships.organizationId, org));
+  state.google.mockReset().mockImplementation(async () => googleData());
   state.ads.mockReset().mockImplementation(async () => adsData());
   state.social.mockReset().mockResolvedValue({
     followersNow: 1000,
@@ -947,5 +994,128 @@ describe.sequential("Insights reports, worker, delivery and dashboards", () => {
         await reviewer.dashboards({ organizationId: org, surface: "measure" })
       )[0].widgets[0].reportId
     ).toBe(tile.report.id);
+  });
+});
+
+describe("Google Ads reports through the existing Insights pipeline", () => {
+  const googleConfig = () => ({
+    ...defaultInsightConfig(),
+    connectionIds: [googleId],
+    metrics: [
+      "spend",
+      "clicks",
+      "conversions",
+      "purchaseValue",
+      "purchases",
+      "roas",
+    ] as import("../shared/insights").InsightMetric[],
+  });
+  it("includes connected Google sources, enforces workspace ownership and rejects Meta-only metrics", async () => {
+    expect(
+      (await owner.options({ organizationId: org })).connections.some(
+        c => c.id === googleId && c.channel === "google_ads"
+      )
+    ).toBe(true);
+    await expect(
+      owner.save({
+        organizationId: org,
+        config: { ...googleConfig(), connectionIds: [foreignGoogleId] },
+      })
+    ).rejects.toThrow("belonging to this workspace");
+    await expect(
+      owner.save({
+        organizationId: org,
+        config: {
+          ...googleConfig(),
+          metrics: ["linkClicks"],
+          chartMetric: "linkClicks",
+        },
+      })
+    ).rejects.toThrow("every selected channel");
+    expect(state.google).not.toHaveBeenCalled();
+  });
+  it("runs Google reports with comparisons, PDFs and independent dashboard metrics", async () => {
+    const report = await owner.save({
+      organizationId: org,
+      config: googleConfig(),
+    });
+    const queued = await owner.run({
+      organizationId: org,
+      id: report.id,
+      revision: 1,
+    });
+    await processNextInsight(state.db);
+    const run = await owner.runDetail({ organizationId: org, id: queued.id });
+    expect(run.status).toBe("completed");
+    expect(run.result!.accounts[0]).toMatchObject({
+      channel: "google_ads",
+      currency: "EUR",
+      timezone: "Europe/Paris",
+    });
+    expect(
+      run.result!.accounts[0].metrics.find(m => m.key === "purchases")
+    ).toMatchObject({ value: 2.5, previous: 2.5, change: 0 });
+    expect(run.result!.accounts[0].details[0].name).toContain(
+      "PERFORMANCE MAX"
+    );
+    expect(state.ads).not.toHaveBeenCalled();
+    expect(state.social).not.toHaveBeenCalled();
+    expect(state.google).toHaveBeenCalledTimes(2);
+    expect(state.google.mock.calls[0].slice(1, 3)).toEqual([org, googleId]);
+    const [stored] = await state.db
+      .select()
+      .from(insightRuns)
+      .where(eq(insightRuns.id, queued.id));
+    const pdf = await insightPdf(stored);
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    if (process.env.GOOGLE_INSIGHT_PDF_QA)
+      writeFileSync(process.env.GOOGLE_INSIGHT_PDF_QA, pdf);
+    const dashboard = await owner.saveDashboard({
+      organizationId: org,
+      layout: {
+        name: "Google overview",
+        surface: "measure",
+        widgets: [
+          {
+            id: randomUUID(),
+            reportId: report.id,
+            kind: "kpi",
+            connectionId: googleId,
+            metric: "spend",
+            size: "medium",
+            height: "standard",
+          },
+        ],
+      },
+    });
+    expect(dashboard.widgets[0].reportId).not.toBe(report.id);
+    expect(dashboard.widgets[0].metric).toBe("spend");
+  });
+  it("keeps current Google results when comparison fails and isolates failures in mixed reports", async () => {
+    state.google
+      .mockResolvedValueOnce(googleData())
+      .mockRejectedValueOnce(new Error("private upstream data"));
+    const report = await owner.save({
+      organizationId: org,
+      config: { ...googleConfig(), connectionIds: [googleId, adsId] },
+    });
+    const queued = await owner.run({
+      organizationId: org,
+      id: report.id,
+      revision: 1,
+    });
+    await processNextInsight(state.db);
+    const run = await owner.runDetail({ organizationId: org, id: queued.id });
+    expect(run.status).toBe("partial");
+    expect(run.result!.accounts[0].metrics[0]).toMatchObject({
+      value: 250,
+      previous: null,
+    });
+    expect(run.result!.accounts[1]).toMatchObject({
+      channel: "meta_ads",
+      currency: "USD",
+      status: "ready",
+    });
+    expect(JSON.stringify(run)).not.toContain("private upstream");
   });
 });

@@ -51,6 +51,7 @@ import { availableWorkflowResults } from "@shared/workflowResults";
 import { workflowRunStatusLabel } from "@shared/workflowRunActivity";
 import "@/styles/configurator.css";
 import "@/styles/insights.css";
+import { GoogleAdsStudioEntry } from "@/components/GoogleAdsStudioEntry";
 import "@/styles/optimizationStudio.css";
 
 const sections = [
@@ -565,6 +566,7 @@ function Studio({
                     </p>
                   </div>
                 </div>
+                <div className="cfg-card-grid mb-6"><GoogleAdsStudioEntry context="optimization" /></div>
                 <div className="space-y-6">
                   <label className="insight-label">
                     Meta ad account

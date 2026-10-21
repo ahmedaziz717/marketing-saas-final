@@ -1,3 +1,4 @@
+import { googleOAuthConfigured } from "./lib/googleAdsApi";
 import { processWorkflowTriggers } from "./lib/workflowTriggers";
 import { processNextInsight, scheduleInsights } from "./lib/insights";
 import { processHistoryPage } from "./lib/optimizationIngestion";
@@ -31,6 +32,7 @@ async function main() {
   const db = await getDb();
   if (!db) throw new Error("Worker requires PostgreSQL");
   console.info("Publishing worker readiness", {
+    googleAdsReportingConfigured: googleOAuthConfigured(),
     liveSocialEnabled: process.env.LIVE_SOCIAL_ACTIONS_ENABLED === "true",
     liveAdsEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === "true",
   });

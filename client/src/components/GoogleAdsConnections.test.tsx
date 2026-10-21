@@ -27,7 +27,8 @@ vi.mock("@/hooks/useWorkspace", () => ({
     membership: { role: fixture.role },
   }),
 }));
-vi.mock("wouter", () => ({
+vi.mock("wouter", async importOriginal => ({
+  ...(await importOriginal<typeof import("wouter")>()),
   useSearch: () => fixture.search,
   useLocation: () => ["/app/settings/integrations", fixture.navigate],
 }));

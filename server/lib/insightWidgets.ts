@@ -13,7 +13,7 @@ import {
   dashboardLayoutSchema,
   independentWidgetConfig,
   insightConfigSchema,
-  insightMetrics,
+  supportsInsightMetric,
   nextInsightRun,
   type DashboardWidget,
 } from "../../shared/insights";
@@ -119,7 +119,7 @@ export async function saveInsightDashboard(
         (!account ||
           !config.connectionIds.includes(account.id) ||
           !config.metrics.includes(widget.metric) ||
-          insightMetrics[widget.metric].channel !== account.channel)
+          !supportsInsightMetric(widget.metric, account.channel))
       )
         throw new TRPCError({
           code: "BAD_REQUEST",

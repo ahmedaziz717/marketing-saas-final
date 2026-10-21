@@ -183,3 +183,39 @@ function clickJourney(element: Element) {
   });
   if (keep) fireEvent.click(keep);
 }
+
+it("opens the Google Ads preset, separates Google metrics, and saves the chosen account", async () => {
+  const google = {
+    ...state.options.connections[0],
+    id: "45a96289-711f-419a-b6aa-45ff38e5cd02",
+    name: "Example Google Ads",
+    channel: "google_ads",
+  };
+  state.options.connections.push(google);
+  try {
+    setup("/app/analytics/studio?channel=google_ads");
+    clickJourney(screen.getByRole("button", { name: /Example Google Ads/ }));
+    expect(
+      screen.queryByRole("button", { name: /Meta advertising.*Example Ads/ })
+    ).toBeNull();
+    clickJourney(screen.getByRole("button", { name: /^Report setup/ }));
+    clickJourney(
+      screen.getByRole("button", { name: "Open Key metrics category" })
+    );
+    expect(screen.getByRole("button", { name: /^Clicks / })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Link clicks / })).toBeNull();
+    clickJourney(screen.getByRole("button", { name: /^Review & run/ }));
+    clickJourney(screen.getByRole("button", { name: "Save & run report" }));
+    await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1));
+    expect(state.save.mock.calls[0][0].config).toMatchObject({
+      name: "Google Ads performance",
+      connectionIds: [google.id],
+    });
+    expect(state.save.mock.calls[0][0].config.metrics).toContain("conversions");
+    expect(state.save.mock.calls[0][0].config.metrics).not.toContain(
+      "linkClicks"
+    );
+  } finally {
+    state.options.connections.pop();
+  }
+});

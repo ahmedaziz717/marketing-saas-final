@@ -29,7 +29,7 @@ export type {
 
 export const CREATIVE_CHANNELS = [
   { id: "meta", name: "Meta" },
-  { id: "google_display", name: "Google Display" },
+  { id: "google_display", name: "Google Ads · Display" },
   { id: "microsoft", name: "Microsoft Ads" },
 ] as const;
 export type CreativeChannel = (typeof CREATIVE_CHANNELS)[number]["id"];

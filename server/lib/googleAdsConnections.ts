@@ -548,6 +548,23 @@ export async function verifyGoogleConnection(
     });
   return { success: true, message: "Google Ads account access verified." };
 }
+/** Internal reads use the current workspace connection and retry expired access once. */
+export async function withGoogleAdsAccess<T>(
+  db: LibraryDatabase,
+  organizationId: number,
+  id: string,
+  read: (connection: ChannelConnection, accessToken: string) => Promise<T>
+): Promise<T> {
+  let access = await googleConnectionGrant(db, organizationId, id);
+  try {
+    return await read(access.connection, access.grant.accessToken);
+  } catch (error) {
+    if (!(error instanceof GoogleAdsError) || error.reason !== "expired")
+      throw error;
+    access = await googleConnectionGrant(db, organizationId, id, true);
+    return read(access.connection, access.grant.accessToken);
+  }
+}
 export async function disconnectGoogleAccount(
   db: LibraryDatabase,
   organizationId: number,

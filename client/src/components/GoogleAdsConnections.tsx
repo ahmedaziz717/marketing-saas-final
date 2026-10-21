@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Plug, RefreshCw, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -85,7 +85,8 @@ export function GoogleAdsConnectionCard() {
       <h3 className="mt-5 font-semibold">Google Ads</h3>
       <p className="mb-6 mt-2 flex-1 text-sm text-muted-foreground">
         Connect your Google account and choose the Ads accounts for this
-        workspace. Campaign tools and reporting are coming next.
+        workspace. Report on spend, conversions and campaign performance in
+        Insights Studio.
       </p>
       {query.error && (
         <p role="alert" className="mb-3 text-sm">
@@ -118,6 +119,13 @@ export function GoogleAdsConnectionCard() {
             ? "Manage connections"
             : "Connect with Google"}
       </Button>
+      {connected > 0 && (
+        <Button variant="outline" className="mt-3 w-fit" asChild>
+          <Link href="/app/analytics/studio?channel=google_ads">
+            Open Google Ads reports
+          </Link>
+        </Button>
+      )}
       {!manage && (
         <p className="mt-3 text-xs text-muted-foreground">
           A workspace owner or administrator can connect accounts.
