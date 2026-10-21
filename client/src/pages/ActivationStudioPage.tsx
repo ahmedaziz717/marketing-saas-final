@@ -1,6 +1,7 @@
 import { StudioJourney, StudioSummary, useStudioJourney } from "@/components/configurator/StudioJourney";
 import type { ReactNode } from "react";
 import { PartnerLogo } from "@/components/PartnerLogo";
+import { GoogleAdsStudioEntry } from "@/components/GoogleAdsStudioEntry";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -189,6 +190,7 @@ function ActivationStudio() {
                     </p>
                   )}
                   <div className="cfg-card-grid activation-channel-grid">
+                    <GoogleAdsStudioEntry context="activation" />
                     {supported.map(value => {
                       const accounts = connected.filter(
                         c => c.channel === value

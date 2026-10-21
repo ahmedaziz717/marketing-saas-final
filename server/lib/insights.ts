@@ -20,7 +20,8 @@ import {
 } from "../../drizzle/insightsSchema";
 import {
   insightConfigSchema,
-  insightMetrics,
+  supportsInsightMetric,
+  insightChannels,
   nextInsightRun,
   type InsightConfig,
 } from "../../shared/insights";
@@ -93,7 +94,7 @@ export async function validateInsightConfig(
       and(
         eq(channelConnections.organizationId, organizationId),
         eq(channelConnections.status, "connected"),
-        inArray(channelConnections.channel, ["facebook", "meta_ads"]),
+        inArray(channelConnections.channel, [...insightChannels]),
         inArray(channelConnections.id, config.connectionIds)
       )
     );
@@ -105,7 +106,7 @@ export async function validateInsightConfig(
   for (const a of accounts)
     if (
       !allowUnusedSources &&
-      !config.metrics.some(m => insightMetrics[m].channel === a.channel)
+      !config.metrics.some(m => supportsInsightMetric(m, a.channel))
     )
       throw new TRPCError({
         code: "BAD_REQUEST",

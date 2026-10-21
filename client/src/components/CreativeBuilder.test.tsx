@@ -231,7 +231,7 @@ describe("Creative Builder controls", () => {
   it("shows channel sizes and replaces edited copy when a different theme is selected", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.queryByText("300 × 250")).toBeNull();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Google Display" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Google Ads · Display" }));
     expect(screen.getByText("300 × 250")).toBeTruthy();
     changeField(screen.getByLabelText("Headline"), {
       target: { value: "My exact headline" },

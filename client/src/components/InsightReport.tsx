@@ -23,6 +23,7 @@ import {
   insightChartMetric,
   insightChartPoints,
   insightMetrics,
+  insightChannelLabels,
   insightNumber,
   independentWidgetConfig,
   recommendedWidgetLayout,
@@ -471,9 +472,7 @@ export function InsightReport({
             <div className="insight-section-title">
               <div>
                 <span className="insight-eyebrow">
-                  {a.channel === "meta_ads"
-                    ? "Meta advertising"
-                    : "Facebook Page"}
+                  {insightChannelLabels[a.channel]}
                 </span>
                 <h3>{a.name}</h3>
                 <small>
@@ -540,7 +539,7 @@ export function InsightReport({
                       <thead>
                         <tr>
                           <th>
-                            {a.channel === "meta_ads" ? "Campaign" : "Post"}
+                            {a.channel === "facebook" ? "Post" : "Campaign"}
                           </th>
                           {a.detailMetrics.map(key => (
                             <th key={key}>{insightMetrics[key].label}</th>

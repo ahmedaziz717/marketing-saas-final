@@ -56,6 +56,7 @@ import {
   registerGoogleAdsOAuth,
   safeGoogleConnection,
   verifyGoogleConnection,
+  withGoogleAdsAccess,
 } from "./lib/googleAdsConnections";
 import { GOOGLE_ADS_SCOPE, GoogleAdsError } from "./lib/googleAdsApi";
 import {
@@ -533,4 +534,30 @@ describe.sequential("Google OAuth and workspace isolation", () => {
       "disconnect",
     ]);
   });
+});
+
+it("refreshes a reporting read once and refuses foreign or disconnected workspace connections", async () => {
+  const c = (await connect()).accounts[0];
+  const read = vi
+    .fn()
+    .mockRejectedValueOnce(new GoogleAdsError("expired"))
+    .mockResolvedValue({ spend: 10 });
+  await expect(
+    withGoogleAdsAccess(fixture.db, org2, c.id, read)
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(read).not.toHaveBeenCalled();
+  expect(await withGoogleAdsAccess(fixture.db, org, c.id, read)).toEqual({
+    spend: 10,
+  });
+  expect(read).toHaveBeenLastCalledWith(
+    expect.objectContaining({ organizationId: org, accountId: accounts[0].id }),
+    "refreshed-access"
+  );
+  expect(fixture.refresh).toHaveBeenCalledTimes(1);
+  await disconnectGoogleAccount(fixture.db, org, owner.id, c.id);
+  read.mockClear();
+  await expect(
+    withGoogleAdsAccess(fixture.db, org, c.id, read)
+  ).rejects.toMatchObject({ reason: "expired" });
+  expect(read).not.toHaveBeenCalled();
 });

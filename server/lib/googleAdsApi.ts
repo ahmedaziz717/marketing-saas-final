@@ -206,7 +206,7 @@ async function adsRead(
     }
   );
 }
-async function accountRows(
+export async function googleAdsRows(
   accessToken: string,
   customerId: string,
   query: string,
@@ -255,7 +255,7 @@ export async function discoverGoogleAccounts(accessToken: string) {
     await Promise.all(
       roots.slice(start, start + 4).map(async root => {
         try {
-          const rows = await accountRows(
+          const rows = await googleAdsRows(
             accessToken,
             root,
             "SELECT customer_client.id, customer_client.manager, customer_client.descriptive_name, customer_client.currency_code, customer_client.time_zone, customer_client.test_account, customer_client.status FROM customer_client WHERE customer_client.status = 'ENABLED'"
@@ -302,7 +302,7 @@ export async function verifyGoogleAccount(
   accessToken: string,
   account: Pick<GoogleAdsAccount, "id" | "loginCustomerId">
 ) {
-  const rows = await accountRows(
+  const rows = await googleAdsRows(
     accessToken,
     account.id,
     "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account, customer.status FROM customer LIMIT 1",

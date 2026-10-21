@@ -12,6 +12,7 @@ import { channelConnections } from "../../drizzle/channelSchema";
 import {
   dashboardLayoutSchema,
   insightConfigSchema,
+  isInsightChannel,
   nextInsightRun,
 } from "../../shared/insights";
 import { scopeSchema } from "../../shared/channels";
@@ -56,7 +57,13 @@ export const insightsRouter = router({
         .where(eq(channelConnections.organizationId, input.organizationId));
       return {
         connections: connections
-          .filter(c => c.channel === "facebook" || c.channel === "meta_ads")
+          .filter(
+            (
+              c
+            ): c is typeof c & {
+              channel: import("../../shared/insights").InsightChannel;
+            } => isInsightChannel(c.channel)
+          )
           .map(c => ({
             id: c.id,
             name: c.name,

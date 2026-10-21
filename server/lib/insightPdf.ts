@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 const requireFont = createRequire(import.meta.url);
 import {
   insightMetrics,
+  insightChannelLabels,
   insightChartMetric,
   insightNumber,
   type InsightMetric,
@@ -116,7 +117,7 @@ export async function insightPdf(run: InsightRunRow): Promise<Buffer> {
     if (index || y > 510) page();
     heading(account.name);
     paragraph(
-      `${account.channel === "meta_ads" ? "Meta advertising" : "Facebook Page"} · ${account.currency || "No currency supplied"} · Source timezone: ${account.timezone || "not supplied"}`,
+      `${insightChannelLabels[account.channel]} · ${account.currency || "No currency supplied"} · Source timezone: ${account.timezone || "not supplied"}`,
       9
     );
     if (account.error) {
@@ -235,13 +236,25 @@ export async function insightPdf(run: InsightRunRow): Promise<Buffer> {
       }
     }
     if (run.config.sections.details && account.details.length) {
+      ensure(190);
       heading(account.detailLabel);
       const metrics = account.detailMetrics;
       const nameWidth = 215,
         cellWidth = (width - nameWidth) / metrics.length;
       const tableHeader = () => {
-        ensure(55);
-        doc.rect(42, y, width, 38).fill(ink);
+        doc.font("ReportBold").fontSize(8);
+        const headerHeight = Math.max(
+          38,
+          ...metrics.map(
+            key =>
+              doc.heightOfString(insightMetrics[key].label, {
+                width: cellWidth - 8,
+                lineGap: 3,
+              }) + 18
+          )
+        );
+        ensure(headerHeight + 17);
+        doc.rect(42, y, width, headerHeight).fill(ink);
         doc.font("ReportBold");
         line("Campaign / post", 50, y + 10, 9, "#FFFFFF", {
           width: nameWidth - 16,
@@ -253,11 +266,11 @@ export async function insightPdf(run: InsightRunRow): Promise<Buffer> {
             y + 8,
             8,
             "#FFFFFF",
-            { width: cellWidth - 8, height: 28, align: "right" }
+            { width: cellWidth - 8, height: headerHeight - 16, align: "right" }
           )
         );
         doc.font("ReportRegular");
-        y += 38;
+        y += headerHeight;
       };
       tableHeader();
       for (const [i, row] of Array.from(account.details.entries())) {

@@ -8,6 +8,7 @@ import {
   rangeSchema,
   timezoneSchema,
   type DateRange,
+  type ConnectionChannel,
 } from "./channels";
 import { presetRange } from "./reportDates";
 
@@ -72,6 +73,48 @@ export const insightMetrics = {
     channel: "meta_ads",
     direction: "up",
   },
+  clicks: {
+    label: "Clicks",
+    unit: "number",
+    channel: "google_ads",
+    direction: "up",
+  },
+  clickCtr: {
+    label: "Click CTR",
+    unit: "percent",
+    channel: "google_ads",
+    direction: "up",
+  },
+  cpc: {
+    label: "Cost per click",
+    unit: "currency",
+    channel: "google_ads",
+    direction: "down",
+  },
+  conversions: {
+    label: "Conversions",
+    unit: "number",
+    channel: "google_ads",
+    direction: "up",
+  },
+  conversionValue: {
+    label: "Conversion value",
+    unit: "currency",
+    channel: "google_ads",
+    direction: "up",
+  },
+  conversionRoas: {
+    label: "Conversion value / cost",
+    unit: "ratio",
+    channel: "google_ads",
+    direction: "up",
+  },
+  costPerConversion: {
+    label: "Cost per conversion",
+    unit: "currency",
+    channel: "google_ads",
+    direction: "down",
+  },
   posts: {
     label: "Posts published",
     unit: "number",
@@ -116,6 +159,44 @@ export const insightMetrics = {
   },
 } as const;
 export type InsightMetric = keyof typeof insightMetrics;
+export type InsightChannel = ConnectionChannel;
+export const insightChannels = ["meta_ads", "google_ads", "facebook"] as const;
+export const insightChannelLabels: Record<InsightChannel, string> = {
+  meta_ads: "Meta advertising",
+  google_ads: "Google Ads",
+  facebook: "Facebook Page",
+};
+export const insightChannelLogos: Record<InsightChannel, string> = {
+  meta_ads: "meta",
+  google_ads: "googleads",
+  facebook: "facebook",
+};
+export function isInsightChannel(channel: string): channel is InsightChannel {
+  return (insightChannels as readonly string[]).includes(channel);
+}
+export function supportsInsightMetric(
+  metric: InsightMetric,
+  channel: string | undefined
+) {
+  return (
+    insightMetrics[metric].channel === channel ||
+    (channel === "google_ads" &&
+      [
+        "spend",
+        "impressions",
+        "purchases",
+        "purchaseValue",
+        "roas",
+        "cpa",
+      ].includes(metric))
+  );
+}
+export function insightMetricSources(metric: InsightMetric) {
+  return insightChannels
+    .filter(channel => supportsInsightMetric(metric, channel))
+    .map(channel => insightChannelLabels[channel])
+    .join(" · ");
+}
 export const metricSchema = z.enum(
   Object.keys(insightMetrics) as [InsightMetric, ...InsightMetric[]]
 );
@@ -349,7 +430,7 @@ export type InsightMetricValue = {
 export type InsightAccount = {
   connectionId: string;
   name: string;
-  channel: "facebook" | "meta_ads";
+  channel: InsightChannel;
   currency: string | null;
   timezone: string | null;
   status: "ready" | "unavailable";
@@ -394,7 +475,10 @@ export function insightNumber(
   const def = insightMetrics[metric];
   const number = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: def.unit === "currency" ? 2 : 0,
-    maximumFractionDigits: def.unit === "number" ? 0 : 2,
+    maximumFractionDigits:
+      def.unit === "number" && !["purchases", "conversions"].includes(metric)
+        ? 0
+        : 2,
   }).format(value);
   return def.unit === "currency"
     ? `${currency || "Currency not supplied"} ${number}`

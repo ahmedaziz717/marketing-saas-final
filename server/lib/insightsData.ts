@@ -5,6 +5,9 @@ import {
 } from "../../drizzle/channelSchema";
 import {
   insightMetrics,
+  supportsInsightMetric,
+  isInsightChannel,
+  type InsightChannel,
   insightNumber,
   insightRange,
   metricChange,
@@ -16,6 +19,8 @@ import {
 } from "../../shared/insights";
 import { getDb } from "../db";
 import { adsReport, facebookReport, type AdMetrics } from "./channelReports";
+import { googleAdsReport } from "./googleAdsReports";
+import { GoogleAdsError } from "./googleAdsApi";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 const finite = (v: number | null | undefined) =>
@@ -34,12 +39,12 @@ export function insightAdValues(
 }
 const metricsFor = (
   config: InsightConfig,
-  channel: "meta_ads" | "facebook",
+  channel: InsightChannel,
   current: Partial<Record<InsightMetric, number | null>>,
   prior: Partial<Record<InsightMetric, number | null>>
 ) =>
   config.metrics
-    .filter(key => insightMetrics[key].channel === channel)
+    .filter(key => supportsInsightMetric(key, channel))
     .map(key => {
       const value = finite(current[key]),
         previous =
@@ -86,6 +91,48 @@ export function normalizeAdInsight(
       .sort((a, b) => (b.spend ?? -1) - (a.spend ?? -1))
       .slice(0, 30)
       .map(d => ({ name: d.name, values: insightAdValues(d) })),
+  };
+}
+export function normalizeGoogleInsight(
+  connection: ChannelConnection,
+  config: InsightConfig,
+  data: Awaited<ReturnType<typeof googleAdsReport>>,
+  prior?: Awaited<ReturnType<typeof googleAdsReport>>
+): InsightAccount {
+  return {
+    connectionId: connection.id,
+    name: connection.name,
+    channel: "google_ads",
+    status: "ready",
+    currency: data.currency,
+    timezone: data.timezone,
+    warnings: [
+      data.attribution,
+      ...data.warnings,
+      ...(prior?.warnings.map(w => `Previous period: ${w}`) ?? []),
+      ...(!data.currency
+        ? [
+            "Account currency was not supplied. Monetary amounts are not combined with another account.",
+          ]
+        : []),
+    ],
+    metrics: metricsFor(
+      config,
+      "google_ads",
+      data.summary,
+      prior?.summary ?? {}
+    ),
+    series: data.daily,
+    detailLabel:
+      "Campaign performance · top 30 by spend · includes Performance Max",
+    detailMetrics: ["spend", "clicks", "conversions", "purchaseValue", "roas"],
+    details: [...data.campaigns]
+      .sort((a, b) => (b.values.spend ?? -1) - (a.values.spend ?? -1))
+      .slice(0, 30)
+      .map(c => ({
+        name: `${c.name} · ${c.type.replaceAll("_", " ")} · ${c.status.toLowerCase()}`,
+        values: c.values,
+      })),
   };
 }
 function socialValues(data: Awaited<ReturnType<typeof facebookReport>>) {
@@ -207,8 +254,8 @@ export async function buildInsightResult(
   const accounts: InsightAccount[] = [];
   for (const id of config.connectionIds) {
     const c = connections.find(
-      (c): c is typeof c & { channel: "facebook" | "meta_ads" } =>
-        c.id === id && (c.channel === "facebook" || c.channel === "meta_ads")
+      (c): c is typeof c & { channel: InsightChannel } =>
+        c.id === id && isInsightChannel(c.channel)
     );
     try {
       if (!c || c.status !== "connected")
@@ -224,6 +271,20 @@ export async function buildInsightResult(
             })
           : undefined;
         account = normalizeAdInsight(c, config, data, previous);
+      } else if (c.channel === "google_ads") {
+        const data = await googleAdsReport(db, organizationId, c.id, range);
+        const previous = previousRange
+          ? await googleAdsReport(
+              db,
+              organizationId,
+              c.id,
+              previousRange
+            ).catch(() => {
+              comparisonFailed = true;
+              return undefined;
+            })
+          : undefined;
+        account = normalizeGoogleInsight(c, config, data, previous);
       } else {
         const data = await facebookReport(c, range);
         const previous = previousRange
@@ -239,7 +300,7 @@ export async function buildInsightResult(
           "Previous-period data could not be loaded. Current-period values remain available."
         );
       accounts.push(account);
-    } catch {
+    } catch (error) {
       accounts.push({
         connectionId: id,
         name: c?.name ?? "Unavailable account",
@@ -248,7 +309,9 @@ export async function buildInsightResult(
         timezone: c?.details.timezone ?? null,
         status: "unavailable",
         error:
-          "Data could not be loaded. Check the account connection, reporting permissions, and date range, then run again.",
+          error instanceof GoogleAdsError
+            ? error.message
+            : "Data could not be loaded. Check the account connection, reporting permissions, and date range, then run again.",
         warnings: [],
         metrics: [],
         series: [],

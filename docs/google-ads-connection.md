@@ -5,14 +5,14 @@ EvokeLoop with their own Google login, and explicitly select up to 25 advertisin
 accounts. Direct accounts and clients below a manager account are discovered.
 Workspace owners and admins manage connections; other members can see status.
 
-This release implements account connectivity and access verification. Google Ads
-campaign publishing, campaign changes, deletion, reporting, and AI-agent actions
+This release implements account connectivity, access verification, and Insights Studio reporting. Google Ads
+campaign publishing, campaign changes, deletion, and optimization-agent actions
 are not implemented. Google credentials cannot pass into the Meta publishing or
 workflow adapters. The Google transport only permits account listing and search.
 
 ## Server configuration
 
-Set these on the existing EvokeLoop **web service** using its private environment
+Set these on the existing EvokeLoop **web service and background worker** using their private environment
 settings (never browser variables, repository files, or chat):
 
 | Variable                              | Value                                                 |
@@ -93,3 +93,42 @@ References:
 - https://developers.google.com/google-ads/api/docs/api-policy/access-levels
 - https://support.google.com/cloud/answer/15549257
 - https://support.google.com/cloud/answer/15549945
+
+## Reporting in the studios
+
+Use **Integrations → Google Ads → Open Google Ads reports**, or choose Google Ads
+under **Insights Studio → Accounts & dates**. The Google preset includes spend,
+impressions, clicks, click CTR, CPC, conversions, conversion value, purchases,
+purchase value, and purchase ROAS. Campaign details include Performance Max and
+historical paused/removed campaigns with reported activity. Up to 30 campaigns
+are shown in spend order; account totals use the account-level query, not this
+limited display. Date comparisons, report schedules, PDFs, and independent
+dashboard widgets use the existing Insights pipeline.
+
+Google Display creative formats are labeled **Google Ads · Display**. Activation
+and Optimization studios link to Google reporting and identify their publishing
+and optimization limitations.
+
+Dates use each Ads account's timezone. Standard Google `metrics.conversions`
+and `metrics.conversions_value` are interaction-date metrics, following the
+account's Conversions columns. Purchase metrics query the PURCHASE conversion
+category separately; other goals are never counted as purchases. Spend is
+converted from micros; conversion values are already in account currency.
+Fractional conversion attribution is preserved. Google clicks/CTR are separate
+from Meta link clicks/link CTR. Sources and currencies are not aggregated.
+
+Only fixed GAQL SELECT queries are sent. The server validates dates/customer IDs,
+uses the workspace's connected account and manager header, paginates reads,
+refreshes access tokens, and retries an expired access token once. Failed
+breakdowns are marked unavailable, and do not erase available totals or turn
+missing data into zero. Scheduled runs recheck the editor's workspace access.
+
+The worker needs the **same** `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`,
+`APP_ORIGIN`, and `INTEGRATION_TOKEN_ENCRYPTION_SECRET` as the web service.
+Use a shared private Render environment group or the Blueprint service references.
+Existing account connections do not need to be recreated for reporting.
+
+API references checked October 21, 2026:
+- https://developers.google.com/google-ads/api/docs/reporting/overview
+- https://developers.google.com/google-ads/api/docs/reporting/paging
+- https://developers.google.com/google-ads/api/docs/conversions/reporting

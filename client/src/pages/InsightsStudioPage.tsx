@@ -1,4 +1,7 @@
-import { ConnectedAccountIdentity } from "@/components/AccountIdentity";
+import {
+  AccountIdentity,
+  ConnectedAccountIdentity,
+} from "@/components/AccountIdentity";
 import { PartnerLogo } from "@/components/PartnerLogo";
 import { WorkspaceRecipients } from "@/components/WorkspaceRecipients";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
@@ -38,6 +41,12 @@ import {
   defaultInsightConfig,
   insightConfigSchema,
   insightMetrics,
+  insightChannelLabels,
+  insightChannelLogos,
+  insightMetricSources,
+  supportsInsightMetric,
+  isInsightChannel,
+  type InsightChannel,
   insightRange,
   nextInsightRun,
   reportPeriods,
@@ -118,10 +127,12 @@ function Studio({
   organizationId,
   reportId,
   initialRun,
+  initialChannel,
 }: {
   organizationId: number;
   reportId?: string;
   initialRun?: string;
+  initialChannel?: InsightChannel;
 }) {
   const [, navigate] = useLocation();
   const workspace = useWorkspace();
@@ -134,19 +145,43 @@ function Studio({
     { organizationId, id: reportId! },
     { enabled: !!reportId, refetchOnWindowFocus: false }
   );
-  const [config, setConfig] = useState<InsightConfig>(() =>
-    defaultInsightConfig(
+  const [config, setConfig] = useState<InsightConfig>(() => {
+    const config = defaultInsightConfig(
       Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
-    )
-  );
+    );
+    if (initialChannel === "google_ads" && !reportId) {
+      config.name = "Google Ads performance";
+      config.metrics = [
+        "spend",
+        "impressions",
+        "clicks",
+        "clickCtr",
+        "cpc",
+        "conversions",
+        "conversionValue",
+        "purchases",
+        "purchaseValue",
+        "roas",
+      ];
+      config.chartMetric = "spend";
+    }
+    return config;
+  });
   const [revision, setRevision] = useState<number>();
   const [loaded, setLoaded] = useState(!reportId);
   const [dirty, setDirty] = useState(false);
-  const [page, setPage] = useState(initialRun ? "results" : "purpose");
+  const [page, setPage] = useState(
+    initialRun ? "results" : initialChannel && !reportId ? "sources" : "purpose"
+  );
   const [selectedRun, setSelectedRun] = useState(initialRun || "");
   const [notifyNow, setNotifyNow] = useState(false);
   const [error, setError] = useState("");
-  const [metricFilter, setMetricFilter] = useState("all");
+  const [metricFilter, setMetricFilter] = useState<string>(
+    initialChannel || "all"
+  );
+  const [sourceFilter, setSourceFilter] = useState<string>(
+    initialChannel || "all"
+  );
   const utils = trpc.useUtils();
   const save = trpc.insights.save.useMutation();
   const run = trpc.insights.run.useMutation();
@@ -252,7 +287,7 @@ function Studio({
     })),
     section: currentSection.id,
     category: page,
-    initialFocus: !!initialRun,
+    initialFocus: !!initialRun || !!initialChannel,
     onNavigate: (_, id) => {
       setPage(id);
       scrollStudioChoices(root.current);
@@ -524,65 +559,89 @@ function Studio({
                   </div>
                   <span>{config.connectionIds.length} / 8 selected</span>
                 </div>
+                <StudioCategories
+                  compact
+                  label="Filter accounts by channel"
+                  current={sourceFilter}
+                  items={[
+                    { id: "all", title: "All channels" },
+                    { id: "meta_ads", title: "Meta Ads" },
+                    { id: "google_ads", title: "Google Ads" },
+                    { id: "facebook", title: "Facebook" },
+                  ]}
+                  onSelect={setSourceFilter}
+                />
                 <div className="insight-choice-grid">
-                  {options.data?.connections.map(a => (
-                    <button
-                      type="button"
-                      key={a.id}
-                      className="insight-choice"
-                      disabled={
-                        a.status !== "connected" ||
-                        (config.connectionIds.length >= 8 &&
-                          !config.connectionIds.includes(a.id))
-                      }
-                      aria-pressed={config.connectionIds.includes(a.id)}
-                      onClick={() =>
-                        update({
-                          connectionIds: config.connectionIds.includes(a.id)
-                            ? config.connectionIds.filter(x => x !== a.id)
-                            : [...config.connectionIds, a.id],
-                        })
-                      }
-                    >
-                      <span className="insight-eyebrow flex items-center gap-2">
-                        <PartnerLogo
-                          slug={a.channel === "meta_ads" ? "meta" : "facebook"}
-                          name={a.channel === "meta_ads" ? "Meta" : "Facebook"}
-                          size={24}
-                        />
-                        {a.channel === "meta_ads"
-                          ? "Meta advertising"
-                          : "Facebook Page"}
-                      </span>
-                      <ConnectedAccountIdentity
-                        organizationId={organizationId}
-                        id={a.id}
-                        name={a.name}
-                        imageUrl={a.imageUrl}
-                        source={a.imageSource}
-                      />
-                      <strong>{a.name}</strong>
-                      <span>
-                        {a.status !== "connected"
-                          ? "Reconnect in Integrations"
-                          : [a.currency, a.timezone]
-                              .filter(Boolean)
-                              .join(" · ") || "Connected"}
-                      </span>
-                      {config.connectionIds.includes(a.id) && (
-                        <Check size={18} />
-                      )}
-                    </button>
-                  ))}
+                  {options.data?.connections
+                    .filter(
+                      a => sourceFilter === "all" || a.channel === sourceFilter
+                    )
+                    .map(a => (
+                      <button
+                        type="button"
+                        key={a.id}
+                        className="insight-choice"
+                        aria-label={`${insightChannelLabels[a.channel]} account ${a.name}`}
+                        disabled={
+                          a.status !== "connected" ||
+                          (config.connectionIds.length >= 8 &&
+                            !config.connectionIds.includes(a.id))
+                        }
+                        aria-pressed={config.connectionIds.includes(a.id)}
+                        onClick={() =>
+                          update({
+                            connectionIds: config.connectionIds.includes(a.id)
+                              ? config.connectionIds.filter(x => x !== a.id)
+                              : [...config.connectionIds, a.id],
+                          })
+                        }
+                      >
+                        <span className="insight-eyebrow flex items-center gap-2">
+                          <PartnerLogo
+                            slug={insightChannelLogos[a.channel]}
+                            name={insightChannelLabels[a.channel]}
+                            size={24}
+                          />
+                          {insightChannelLabels[a.channel]}
+                        </span>
+                        {a.channel === "google_ads" ? (
+                          <AccountIdentity name={a.name} />
+                        ) : (
+                          <ConnectedAccountIdentity
+                            organizationId={organizationId}
+                            id={a.id}
+                            name={a.name}
+                            imageUrl={a.imageUrl}
+                            source={a.imageSource}
+                          />
+                        )}
+                        <strong>{a.name}</strong>
+                        <span>
+                          {a.status !== "connected"
+                            ? "Reconnect in Integrations"
+                            : [a.currency, a.timezone]
+                                .filter(Boolean)
+                                .join(" · ") || "Connected"}
+                        </span>
+                        {config.connectionIds.includes(a.id) && (
+                          <Check size={18} />
+                        )}
+                      </button>
+                    ))}
                 </div>
-                {!options.isLoading && !options.data?.connections.length && (
-                  <p className="insight-empty">
-                    Connect an account in{" "}
-                    <Link href="/app/settings/integrations">Integrations</Link>{" "}
-                    to create a report. Meta ads and Facebook Page reporting are
-                    available.
-                  </p>
-                )}
+                {!options.isLoading &&
+                  !options.data?.connections.some(
+                    a => sourceFilter === "all" || a.channel === sourceFilter
+                  ) && (
+                    <p className="insight-empty">
+                      Connect an account in{" "}
+                      <Link href="/app/settings/integrations">
+                        Integrations
+                      </Link>{" "}
+                      to create a report. Google Ads, Meta ads and Facebook Page
+                      reporting are available.
+                    </p>
+                  )}
                 <div className="insight-form-grid">
                   <ChoiceField className="insight-label">
                     Reporting period
@@ -718,7 +777,8 @@ function Studio({
                   current={metricFilter}
                   items={[
                     { id: "all", title: "All metrics" },
-                    { id: "meta_ads", title: "Advertising" },
+                    { id: "meta_ads", title: "Meta Ads" },
+                    { id: "google_ads", title: "Google Ads" },
                     { id: "facebook", title: "Social" },
                   ]}
                   onSelect={setMetricFilter}
@@ -728,7 +788,7 @@ function Studio({
                     .filter(
                       key =>
                         metricFilter === "all" ||
-                        insightMetrics[key].channel === metricFilter
+                        supportsInsightMetric(key, metricFilter)
                     )
                     .map(key => (
                       <button
@@ -746,11 +806,7 @@ function Studio({
                           )}
                         </span>
                         <strong>{insightMetrics[key].label}</strong>
-                        <small>
-                          {insightMetrics[key].channel === "meta_ads"
-                            ? "Advertising"
-                            : "Social"}
-                        </small>
+                        <small>{insightMetricSources(key)}</small>
                       </button>
                     ))}
                 </div>
@@ -1448,10 +1504,15 @@ function WorkspaceStudio() {
   const id = params.get("id") || undefined;
   return organizationId ? (
     <Studio
-      key={`${organizationId}:${id || "new"}`}
+      key={`${organizationId}:${id || `new:${params.get("channel") || "all"}`}`}
       organizationId={organizationId}
       reportId={id}
       initialRun={params.get("run") || undefined}
+      initialChannel={
+        isInsightChannel(params.get("channel") || "")
+          ? (params.get("channel") as InsightChannel)
+          : undefined
+      }
     />
   ) : null;
 }

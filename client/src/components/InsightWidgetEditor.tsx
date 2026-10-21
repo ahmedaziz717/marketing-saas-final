@@ -14,6 +14,7 @@ import {
   independentWidgetConfig,
   insightConfigSchema,
   insightMetrics,
+  supportsInsightMetric,
   reportPeriods,
   selectableMetrics,
   widgetColors,
@@ -120,7 +121,7 @@ export function InsightWidgetEditor({
     (draft.kind === "report"
       ? available
       : available.filter(a => a.id === draft.connectionId)
-    ).some(a => a.channel === insightMetrics[m].channel)
+    ).some(a => supportsInsightMetric(m, a.channel))
   );
   const title = widgetTitle(draft, setup);
   const colors = widgetColors(draft.appearance);
@@ -135,7 +136,7 @@ export function InsightWidgetEditor({
     const account =
       available.find(a => a.id === draft.connectionId) ?? available[0];
     const metric =
-      setup.metrics.find(m => insightMetrics[m].channel === account?.channel) ??
+      setup.metrics.find(m => supportsInsightMetric(m, account?.channel)) ??
       setup.chartMetric;
     update({
       kind,
@@ -328,8 +329,8 @@ export function InsightWidgetEditor({
                       value={draft.connectionId ?? ""}
                       onChange={e => {
                         const a = available.find(c => c.id === e.target.value);
-                        const m = selectableMetrics.find(
-                          m => insightMetrics[m].channel === a?.channel
+                        const m = selectableMetrics.find(m =>
+                          supportsInsightMetric(m, a?.channel)
                         )!;
                         update({ connectionId: e.target.value, metric: m });
                         updateSetup({
