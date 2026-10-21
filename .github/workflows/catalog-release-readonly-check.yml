@@ -25,9 +25,18 @@ jobs:
           import {setTimeout as wait} from 'node:timers/promises';
           const origins=['https://app.evokeloop.com','https://frame-staging.onrender.com'];
           async function get(url) {
-            const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000),redirect:'error'});
-            assert.equal(response.status,200,`HTTP health/asset check failed: ${url}`);
-            return response;
+            for(let redirect=0;redirect<4;redirect++) {
+              assert(origins.includes(new URL(url).origin),'Unexpected redirect origin');
+              const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000),redirect:'manual'});
+              if([301,302,303,307,308].includes(response.status)) {
+                assert(response.headers.get('location'),'Missing redirect location');
+                url=new URL(response.headers.get('location'),url).href;
+                continue;
+              }
+              assert.equal(response.status,200,`HTTP health/asset check failed: ${url}`);
+              return response;
+            }
+            throw new Error('Unexpected redirect loop');
           }
           for (const origin of origins) {
             let health;
