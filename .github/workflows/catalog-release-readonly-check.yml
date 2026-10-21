@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 4
     env:
       EXPECTED_RELEASE_SHA: c74cc07da3dee7c563c678ca5e5bfec31471ae17
-      VERIFY_STAGE: web-before-worker
+      VERIFY_STAGE: both-services-live
     steps:
       - uses: actions/setup-node@v4
         with:
