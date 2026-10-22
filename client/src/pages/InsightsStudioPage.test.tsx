@@ -112,7 +112,7 @@ it("keeps report direction in section categories and submits the full setup once
   clickJourney(screen.getByRole("button", { name: /Example Ads/ }));
   clickJourney(screen.getByRole("button", { name: /^Schedule & delivery/ }));
   clickJourney(screen.getByLabelText(/Run this report automatically/));
-  changeField(screen.getByRole("radiogroup", { name: "Frequency" }), {
+  changeField(screen.getByRole("combobox", { name: "Frequency" }), {
     target: { value: "monthly" },
   });
   changeField(screen.getByLabelText(/Day of month/), {

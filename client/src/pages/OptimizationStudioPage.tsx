@@ -411,6 +411,7 @@ function Studio({
         </div>
         <div className="optimization-header-actions">
           <VisualSelect
+            density="select"
             aria-label="Saved optimization plans"
             value={workflowId ?? ""}
             onChange={e => go(e.target.value || undefined)}
@@ -585,6 +586,7 @@ function Studio({
                 <label className="insight-label">
                   Advertising channel
                   <VisualSelect
+                    density="compact"
                     aria-label="Optimization channel"
                     value={settings.channel ?? "meta_ads"}
                     onChange={e =>
@@ -693,6 +695,7 @@ function Studio({
                 <ChoiceField className="insight-label">
                   Minimum classification confidence
                   <VisualSelect
+                    density="select"
                     aria-label="Minimum classification confidence"
                     value={settings.minimumConfidence}
                     onChange={e =>

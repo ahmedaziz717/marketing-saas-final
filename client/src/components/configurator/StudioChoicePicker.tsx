@@ -88,7 +88,7 @@ export function StudioChoicePicker({
               {availableGroups.find(g => g.id === activeGroup)?.title ?? "All"}
             </summary>
             <VisualSelect
-              density="compact"
+              density="select"
               aria-label={`${title} collection`}
               value={activeGroup}
               onChange={event => setGroup(event.target.value)}

@@ -19,7 +19,10 @@ export function WorkflowConnectionInput({
   title: string;
   summary?: boolean;
 }) {
-  const meta = trpc.channels.connections.useQuery({ organizationId });
+  const meta = trpc.channels.connections.useQuery(
+    { organizationId },
+    { enabled: channel !== "google_ads" }
+  );
   const google = trpc.googleAds.connections.useQuery(
     { organizationId },
     { enabled: channel === "google_ads" }
@@ -66,7 +69,9 @@ export function WorkflowConnectionInput({
       </span>
       <VisualSelect
         visual="account"
-        imageOrganizationId={organizationId}
+        imageOrganizationId={
+          channel === "google_ads" ? undefined : organizationId
+        }
         aria-label={title}
         value={value}
         disabled={disabled || query.isLoading}

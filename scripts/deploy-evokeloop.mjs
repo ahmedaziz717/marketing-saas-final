@@ -94,6 +94,24 @@ export async function deployRelease(
       "Another web release started; worker deployment is blocked."
     );
   const worker = await deploy(releaseServices.worker);
+  // A live replacement can overlap the previous worker. Let that process drain
+  // before callers begin verification jobs that use the new release's format.
+  const workerDrainSeconds =
+    60 +
+    (services[1].serviceDetails?.maxShutdownDelaySeconds ??
+      services[1].maxShutdownDelaySeconds ??
+      30) +
+    30;
+  for (let elapsed = 0; elapsed < workerDrainSeconds; elapsed += 15) {
+    await wait(15000);
+    await healthy();
+  }
+  const workerLatest = await api(
+    `/services/${releaseServices.worker}/deploys?limit=1`
+  );
+  const latestWorker = workerLatest[0]?.deploy ?? workerLatest[0];
+  if (latestWorker?.id !== worker.id || latestWorker?.status !== "live")
+    throw new Error("Another worker release started; verification is blocked.");
   await healthy();
   log(`Release ${commit} is live on web and worker.`);
   return { web: web.id, worker: worker.id, commit };

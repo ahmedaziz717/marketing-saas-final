@@ -503,6 +503,7 @@ function Studio({
                   <label className="insight-label">
                     Google detail breakdown
                     <VisualSelect
+                      density="select"
                       aria-label="Google detail breakdown"
                       value={config.googleDetailLevel ?? "campaign"}
                       onChange={e =>
@@ -727,6 +728,7 @@ function Studio({
                   <ChoiceField className="insight-label">
                     Reporting period
                     <VisualSelect
+                      density="select"
                       value={config.period}
                       onChange={e =>
                         update({
@@ -971,6 +973,7 @@ function Studio({
                     <ChoiceField className="insight-label">
                       Preferred trend metric
                       <VisualSelect
+                        density="select"
                         value={selection.chartMetric}
                         onChange={e =>
                           update({
@@ -1062,6 +1065,7 @@ function Studio({
                       <ChoiceField className="insight-label">
                         Frequency
                         <VisualSelect
+                          density="select"
                           value={config.schedule.frequency}
                           onChange={e =>
                             update({
@@ -1082,6 +1086,7 @@ function Studio({
                         <ChoiceField className="insight-label">
                           Day of week
                           <VisualSelect
+                            density="select"
                             value={config.schedule.weekday}
                             onChange={e =>
                               update({

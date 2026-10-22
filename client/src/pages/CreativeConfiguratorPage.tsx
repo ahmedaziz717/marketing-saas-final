@@ -1020,6 +1020,7 @@ function Configurator({
                 help={property.description}
               >
                 <VisualSelect
+                  density="segmented"
                   value={String(
                     (video.modelOptions?.[key] ?? property.default ?? false) ===
                       true
@@ -1256,6 +1257,7 @@ function Configurator({
                 <ChoiceField className="cfg-logo-position">
                   Logo position
                   <VisualSelect
+                    density="compact"
                     aria-label="Logo position"
                     value={image.logoPosition ?? "top-left"}
                     onChange={e =>

@@ -196,6 +196,8 @@ try {
       "product-home",
       "studio-overview",
       "workflow-library",
+      "workflow-density",
+      "studio-channels",
       "video-studio",
       "video-ugc",
       "studio-drafts",
@@ -231,6 +233,8 @@ try {
     ]),
     ...[
       "activation-failed",
+      "workflow-density",
+      "studio-channels",
       "creative-editor",
       "creative-scene",
       "creative-type",
@@ -437,10 +441,11 @@ try {
           (!layout.previewArt ||
             layout.previewArt.height < 200 ||
             !layout.artwork ||
-            layout.artwork.height < 250))
+            layout.artwork.height < 100 ||
+            layout.artwork.height > 140))
       ) {
         report.passed = false;
-        report.error = `Studio sections, preview and artwork need comfortable height and visible section detail: ${JSON.stringify(layout)}`;
+        report.error = `Studio sections and preview retain detail while choice artwork stays compact: ${JSON.stringify(layout)}`;
       }
       if (
         [

@@ -1,6 +1,6 @@
 # Google studios, account-aware reporting and catalog repair
 
-Status: implemented and verified locally; full PostgreSQL-backed CI and deployment are pending publication approval.
+Released in PR #84 at `4862495f64e2b23032e7c4f2b0c0ac9d47dff263`. PostgreSQL-backed CI passed with 1,422 tests, one existing skip, migrations, production builds, HTTP smoke and browser checks. Both existing My Workspace services are live on that exact commit: web `dep-dbcoao8m7kps73cd8cag`, worker `dep-dbcocbuq1p3s73cpcdpg`.
 
 Requested next-release work: #80, #82 and #83. This release implements product controls; verification does not launch real advertising or run paid generation.
 
@@ -59,3 +59,11 @@ Official API references checked during implementation:
 - The broader local run passed 1,360 tests and skipped the existing live-access test. Its two failures were obsolete Meta-only account-label assertions in Optimization Intelligence; both passed after updating the assertion to the shared advertising-account label and verifying Google selection. Seven suites requiring isolated PostgreSQL were excluded locally and remain mandatory in CI.
 - All 20 selected actual-page Chrome cases passed at desktop, laptop, mobile and short-mobile sizes. New Google campaign and asset-group screenshots were visually inspected.
 - The signed-in application was accessible for subsequent live verification. No production campaign was launched, budget changed, paid creative generated, or live catalog repair executed during these checks.
+
+## Deployed verification
+
+Both health URLs returned HTTP 200 and the exact release SHA. The private Google campaign draft table has RLS enabled. A live Google report completed with five active campaign rows and 30 daily points in each comparison period. The setup hid Meta-specific attributes for Google-only selection. Campaign inventory showed five enabled campaigns by default and nineteen with inactive campaigns included. Existing Performance Max assets opened in the asset editor; no provider write was submitted.
+
+The authorized CLX image-only repair completed for 159 products, restoring 144 stored product images. Fifteen source images remained unavailable or undecodable. A hash covering product facts and review decisions was identical before and after repair. The initial repair briefly reached the previous worker during its rollout overlap; resuming after that process exited completed successfully. Future release verification waits for worker drain as well as web drain.
+
+The Google Optimize handoff retained the selected account. Its account-photo component incorrectly attempted a Meta-only lookup, producing a misleading connection error; this is addressed in the following studio-density release.
