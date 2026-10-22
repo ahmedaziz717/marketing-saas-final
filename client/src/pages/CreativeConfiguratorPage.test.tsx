@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -639,21 +640,23 @@ it("keeps video generation, playback and approval in the same Studio layout", as
   const config = newConfiguration();
   config.kind = "video";
   config.video.prompt = "A slow sunrise over a mountain lake";
-  const view = openSaved(config);
+  let view: ReturnType<typeof openSaved>;
+  // Advance the quote debounce deterministically, independent of CI CPU load.
+  vi.useFakeTimers();
+  try {
+    view = openSaved(config);
+    await act(() => vi.advanceTimersByTimeAsync(500));
+  } finally {
+    vi.useRealTimers();
+  }
   const heading = screen.getByRole("heading", { level: 1 }).textContent;
-  // Quoting intentionally debounces setup changes by 500 ms. Allow the
-  // shared CI runner to render the saved setup before checking its quote.
-  await waitFor(
-    () =>
-      expect(
-        (
-          screen.getByRole("button", {
-            name: "Generate video",
-          }) as HTMLButtonElement
-        ).disabled
-      ).toBe(false),
-    { timeout: 3000 }
-  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Generate video",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(false);
   clickJourney(screen.getByRole("button", { name: "Generate video" }));
   api.videoJob = {
     id: "video-draft",
