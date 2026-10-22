@@ -18,6 +18,20 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("@/components/WorkspaceGate", () => ({
   WorkspaceGate: ({ children }: any) => children,
 }));
+vi.mock("./GoogleCampaignStudioPage", () => ({
+  GoogleCampaignComposer: ({ channelChoices }: any) => {
+    const [text, setText] = useState("");
+    return (
+      <>
+        <label>
+          Google draft
+          <input value={text} onChange={e => setText(e.target.value)} />
+        </label>
+        {channelChoices}
+      </>
+    );
+  },
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     channels: {
@@ -109,6 +123,38 @@ beforeEach(() => {
   ];
 });
 afterEach(cleanup);
+it("keeps independent Google and Meta drafts while switching within Activation Studio", () => {
+  api.accounts.push({
+    id: "google",
+    channel: "google_ads",
+    name: "Google",
+    status: "connected",
+    details: { capabilities: ["report"] },
+  });
+  setup();
+  fireEvent.click(screen.getByRole("button", { name: "Select Google Ads" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Google draft" }), {
+    target: { value: "PMax draft" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Select Meta Ads" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Draft text" }), {
+    target: { value: "Meta draft" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Channel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Select Google Ads" }));
+  expect(
+    (screen.getByRole("textbox", { name: "Google draft" }) as HTMLInputElement)
+      .value
+  ).toBe("PMax draft");
+  fireEvent.click(screen.getByRole("button", { name: "Select Meta Ads" }));
+  expect(
+    (screen.getByRole("textbox", { name: "Draft text" }) as HTMLInputElement)
+      .value
+  ).toBe("Meta draft");
+  expect(
+    screen.getByRole("heading", { name: /Activation Studio/ })
+  ).toBeTruthy();
+});
 it("only presents connected channels and carries an approved creative into the scoped composer", () => {
   api.accounts = api.accounts.filter(a => a.channel === "meta_ads");
   setup("?asset=asset%3A1");
@@ -121,7 +167,10 @@ it("only presents connected channels and carries an approved creative into the s
       initialAssetKey: "asset:1",
     })
   );
-  expect(api.connections).toHaveBeenCalledWith({ organizationId: 42 });
+  expect(api.connections).toHaveBeenCalledWith({
+    organizationId: 42,
+    includeGoogle: true,
+  });
 });
 it("gates unavailable assets and lets the user choose a different creative", () => {
   setup("?asset=draft%3A1");

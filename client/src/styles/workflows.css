@@ -364,6 +364,15 @@
   pointer-events: stroke;
   cursor: pointer;
 }
+.wf-edge.is-selected > path:first-child,
+.wf-edge:focus-within > path:first-child {
+  stroke: var(--primary);
+  stroke-width: 3px;
+  opacity: 1;
+}
+.wf-edge-hit:focus-visible {
+  outline: none;
+}
 .wf-connection-draft {
   stroke: #9c87e6;
   stroke-width: 2px;

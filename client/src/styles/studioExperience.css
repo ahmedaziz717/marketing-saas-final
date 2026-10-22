@@ -914,7 +914,7 @@
   .studio-journey.is-focused .journey-mobile-section {
     display: none;
   }
-  .cfg-root:has(.studio-journey.is-focused)
+  .cfg-root:has(.studio-journey.is-focused:not([hidden] *))
     .journey-summary:not([data-forced="true"]) {
     display: none;
   }

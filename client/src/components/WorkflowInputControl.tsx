@@ -2,6 +2,7 @@ import { WorkflowChoiceInput } from "./WorkflowChoiceInput";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
 import { WorkflowPerformanceInput } from "./WorkflowPerformanceInput";
+import { WorkflowModelInput } from "./WorkflowModelField";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -39,7 +40,15 @@ export function WorkflowInputControl({
   return (
     <div className="wf-input-control">
       {field.help && <p className="wf-field-help">{field.help}</p>}
-      {field.kind === "connection" ? (
+      {field.kind === "model" ? (
+        <WorkflowModelInput
+          field={field}
+          title={title}
+          value={value}
+          onChange={onChange}
+          organizationId={organizationId}
+        />
+      ) : field.kind === "connection" ? (
         <WorkflowConnectionInput
           organizationId={organizationId}
           value={value}

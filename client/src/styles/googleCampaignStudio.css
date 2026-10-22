@@ -1,12 +1,5 @@
 .google-campaign-studio {
-  max-width: 1480px;
-  margin: auto;
-  padding: 24px;
-}
-.google-campaign-studio h1 {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  min-width: 0;
 }
 .google-account-bar,
 .google-form-grid,
@@ -84,20 +77,61 @@
   margin: 12px 0;
 }
 .google-preview {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 18px;
-  padding: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px;
   overflow-wrap: anywhere;
 }
+.google-preview-ad {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+.google-preview-ad .cfg-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.google-preview-summary {
+  min-width: 0;
+}
 .google-preview h2 {
-  font-size: 30px;
-  line-height: 1.15;
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 6px 0;
 }
 .google-preview h3 {
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1.4;
+  margin: 12px 0 4px;
+  color: var(--primary);
+}
+.google-preview p,
+.google-preview small {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.google-preview p {
+  margin: 6px 0;
+}
+.google-summary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.google-summary-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.google-campaign-studio .cfg-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
 }
 .google-chips {
   display: flex;
@@ -189,7 +223,9 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 700px) {
-  .google-campaign-studio {
+  .google-preview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
     padding: 12px;
   }
   .google-fields {

@@ -39,6 +39,11 @@ vi.mock("@/lib/trpc", () => ({
       adObjects: { useQuery: () => ({}) },
     },
     models: {
+      textCatalog: {
+        useQuery: () => ({
+          data: [{ id: "gpt-5.5", name: "GPT-5.5", available: true }],
+        }),
+      },
       nodeQuote: { useQuery: () => ({ data: { credits: 40 } }) },
       catalog: { useQuery: () => ({ data: [] }) },
     },
@@ -60,9 +65,11 @@ import {
 function Harness({
   initial,
   family = "create",
+  connectedChannels = ["meta_ads"],
 }: {
   initial: WorkflowGraph;
   family?: WorkflowFamily;
+  connectedChannels?: string[];
 }) {
   const [graph, setGraph] = useState(initial);
   return (
@@ -74,7 +81,7 @@ function Harness({
         organizationId={1}
         role="owner"
         family={family}
-        connectedChannels={["meta_ads"]}
+        connectedChannels={connectedChannels}
         busy={false}
         onRunNode={api.run}
       />
@@ -100,12 +107,9 @@ it("exposes copy-evidence wiring, source requirements and editable purchase comp
   expect(
     screen.getByText(/Account totals and weekday\/hour reports/)
   ).toBeTruthy();
-  changeField(
-    screen.getByRole("combobox", { name: "Comparison objective" }),
-    {
-      target: { value: "roas" },
-    }
-  );
+  changeField(screen.getByRole("combobox", { name: "Comparison objective" }), {
+    target: { value: "roas" },
+  });
   changeField(screen.getByLabelText("Minimum purchases per value"), {
     target: { value: "8" },
   });
@@ -266,12 +270,9 @@ it("builds scheduling from public fields and steps, exposes working settings and
   expect(
     screen.getByRole("combobox", { name: "Performance to fetch" })
   ).toBeTruthy();
-  changeField(
-    screen.getByRole("combobox", { name: "Performance to fetch" }),
-    {
-      target: { value: "daily" },
-    }
-  );
+  changeField(screen.getByRole("combobox", { name: "Performance to fetch" }), {
+    target: { value: "daily" },
+  });
   expect(graph().nodes[1].config.metaPerformance?.includeHourly).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Add step" }));
   changeField(screen.getByRole("textbox", { name: "Search steps" }), {
@@ -333,4 +334,72 @@ it("builds scheduling from public fields and steps, exposes working settings and
   expect(graph().edges).toHaveLength(3);
   expect(workflowGraphProblem(graph())).toBeNull();
   expect(api.error).not.toHaveBeenCalled();
+});
+
+it("deletes a selected connecting line without deleting nodes and restores it with undo/redo", () => {
+  const original: WorkflowGraph = {
+    nodes: [
+      newWorkflowNode("text", "text"),
+      newWorkflowNode("generate_image", "image"),
+    ],
+    edges: [{ id: "edge", source: "text", target: "image", port: "text" }],
+  };
+  render(<Harness initial={original} />);
+  const line = screen.getAllByRole("button", { name: /^Connection from/ })[0];
+  fireEvent.click(line);
+  expect(
+    screen.getByRole("complementary", { name: "Connection settings" })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Delete connection" }));
+  expect(graph().nodes).toEqual(original.nodes);
+  expect(graph().edges).toHaveLength(original.edges.length - 1);
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(graph()).toEqual(original);
+  fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+  expect(graph().edges).toHaveLength(original.edges.length - 1);
+});
+it("supports keyboard line selection and Backspace while ignoring keys outside the editor", () => {
+  const original: WorkflowGraph = {
+    nodes: [
+      newWorkflowNode("text", "text"),
+      newWorkflowNode("generate_image", "image"),
+    ],
+    edges: [{ id: "edge", source: "text", target: "image", port: "text" }],
+  };
+  render(<Harness initial={original} />);
+  const line = screen.getAllByRole("button", { name: /^Connection from/ })[0];
+  fireEvent.keyDown(line, { key: "Enter" });
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  expect(graph()).toEqual(original);
+  fireEvent.keyDown(line, { key: "Backspace" });
+  expect(graph().nodes).toEqual(original.nodes);
+  expect(graph().edges).toHaveLength(original.edges.length - 1);
+});
+it("reveals Google steps only for connected Google accounts and includes shared analysis", () => {
+  const view = render(
+    <Harness
+      initial={{ nodes: [], edges: [] }}
+      family="measure"
+      connectedChannels={[]}
+    />
+  );
+  expect(
+    screen.queryByRole("button", { name: /Google Ads performance Read/ })
+  ).toBeNull();
+  view.rerender(
+    <Harness
+      initial={{ nodes: [], edges: [] }}
+      family="measure"
+      connectedChannels={["google_ads"]}
+    />
+  );
+  expect(
+    screen.getByRole("button", { name: /Google Ads performance/ })
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: /Fetch Google Ads history/ })
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: /Fetch Meta Ads history/ })
+  ).toBeNull();
 });

@@ -13,7 +13,9 @@ import {
   workflowNodes,
 } from "../../shared/creativeWorkflow";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
-import { getConnection } from "./channelConnections";
+import { getOptimizationConnection } from "./optimizationConnections";
+import { getWorkflowConnection } from "./workflowConnections";
+import { workflowNodeChannels } from "../../shared/workflowChannels";
 import { stableHash } from "./policy";
 
 export async function getWorkflowApp(
@@ -94,7 +96,10 @@ export async function resolveWorkflowApps(
     );
     const incoming = result.edges.filter(e => e.target === call.id);
     const inputs = nested.nodes.filter(
-      n => n.type === "app_input" && !nested.edges.some(e => e.target === n.id)
+      n =>
+        n.type === "app_input" &&
+        n.config.field?.kind !== "model" &&
+        !nested.edges.some(e => e.target === n.id)
     );
     if (incoming.length && !inputs.length)
       throw new TRPCError({
@@ -224,12 +229,32 @@ export async function validateWorkflowConnections(
         code: "BAD_REQUEST",
         message: `Choose a connected account for “${node.title}”.`,
       });
-    const connection = await getConnection(
-      db,
-      organizationId,
-      node.config.connectionId,
-      channel
-    );
+    const sharedHistory = [
+      "meta_history",
+      "classify_history",
+      "analyze_history",
+    ].includes(node.type);
+    const connection = sharedHistory
+      ? await getOptimizationConnection(
+          db,
+          organizationId,
+          node.config.connectionId
+        )
+      : await getWorkflowConnection(
+          db,
+          organizationId,
+          node.config.connectionId,
+          channel
+        );
+    const allowed =
+      node.type === "meta_history"
+        ? ["meta_ads", "google_ads"]
+        : workflowNodeChannels(node.type);
+    if (!allowed.includes(connection.channel))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Choose an account matching “${node.title}”.`,
+      });
     if (connection.status !== "connected")
       throw new TRPCError({
         code: "PRECONDITION_FAILED",

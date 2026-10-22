@@ -197,6 +197,8 @@ try {
       "studio-overview",
       "workflow-library",
       "workflow-density",
+      "workflow-app-preview",
+      "workflow-model-form",
       "studio-channels",
       "video-studio",
       "video-ugc",
@@ -234,6 +236,8 @@ try {
     ...[
       "activation-failed",
       "workflow-density",
+      "workflow-app-preview",
+      "workflow-model-form",
       "studio-channels",
       "creative-editor",
       "creative-scene",

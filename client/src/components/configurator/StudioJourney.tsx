@@ -216,8 +216,15 @@ export function StudioJourney({
     const measure = () => {
       frame = 0;
       if (!rail.getClientRects().length) return;
-      const footer = studio
-        ?.querySelector(".cfg-bottom, .activation-footer")
+      const footer = Array.from(
+        studio?.querySelectorAll<HTMLElement>(
+          ".cfg-bottom, .activation-footer"
+        ) ?? []
+      )
+        .find(
+          element =>
+            !element.closest("[hidden]") && element.getClientRects().length > 0
+        )
         ?.getBoundingClientRect();
       const bottom = Math.min(
         window.innerHeight,

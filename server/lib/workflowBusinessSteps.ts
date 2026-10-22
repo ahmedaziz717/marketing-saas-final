@@ -26,6 +26,9 @@ import { metaChangeSchema } from "../../shared/metaManagement";
 import { publishingRouter } from "../routers/channels";
 import type { TrpcContext } from "../_core/context";
 import { getConnection } from "./channelConnections";
+import { getWorkflowConnection } from "./workflowConnections";
+import { googleAdsReport } from "./googleAdsReports";
+import { googleCampaignInventory } from "./googleCampaigns";
 import { adsReport, facebookReport } from "./channelReports";
 import { readMetaObject, reviewMetaChange } from "./metaManagement";
 import { readLibraryAsset, type LibraryDatabase } from "./assetLibrary";
@@ -90,9 +93,12 @@ export async function executeWorkflowBusinessStep(
       });
     return complete(input);
   }
+  // Selection is applied before estimation/queueing. It is configuration, not prompt content.
+  if (node.type === "app_input" && node.config.field?.kind === "model")
+    return complete([]);
   if (node.type === "app_input" && node.config.field?.kind === "connection") {
     if (!node.config.connectionId) return complete([]);
-    const connection = await getConnection(
+    const connection = await getWorkflowConnection(
       db,
       run.organizationId,
       node.config.connectionId,
@@ -216,6 +222,86 @@ export async function executeWorkflowBusinessStep(
         type: "decision",
         name: "Objective evaluation",
         data: evaluateEvidence(evidence.data, node.config),
+      },
+    ]);
+  }
+  if (node.type === "google_report" || node.type === "google_inventory") {
+    const c = await getWorkflowConnection(
+      db,
+      run.organizationId,
+      node.config.connectionId!,
+      "google_ads"
+    );
+    if (c.status !== "connected")
+      throw new Error("Reconnect the selected Google Ads account.");
+    if (node.type === "google_inventory") {
+      const inventory = await googleCampaignInventory(
+        db,
+        run.organizationId,
+        c.id,
+        node.config.includeInactiveCampaigns ?? false,
+        node.config.campaignId || undefined
+      );
+      return complete([
+        {
+          type: "data",
+          name: `${c.name} · Google campaigns & assets`,
+          data: {
+            source: "google_campaign_inventory",
+            channel: "google_ads",
+            accountId: c.accountId,
+            connectionId: c.id,
+            observedAtMs: now,
+            ...inventory,
+          },
+        },
+      ]);
+    }
+    const selected =
+      node.config.datePreset === "custom"
+        ? rangeSchema.parse(node.config.range)
+        : presetRange(
+            node.config.datePreset ?? "30",
+            now,
+            c.details.timezone ?? "UTC"
+          );
+    const range = node.config.previousPeriod
+      ? previousRange(selected)
+      : selected;
+    const report = await googleAdsReport(
+      db,
+      run.organizationId,
+      c.id,
+      range,
+      node.config.includeInactiveCampaigns ?? false,
+      node.config.googleDetail ?? "campaign"
+    );
+    const campaign = node.config.campaignId
+      ? report.campaigns.find(r => r.id === node.config.campaignId)
+      : null;
+    return complete([
+      {
+        type: "data",
+        name: `${c.name} · Google Ads performance`,
+        data: {
+          channel: "google_ads",
+          accountId: c.accountId,
+          connectionId: c.id,
+          campaignId: node.config.campaignId || null,
+          range,
+          observedAtMs: now,
+          currency: report.currency,
+          timezone: report.timezone,
+          attribution: report.attribution,
+          metrics: node.config.campaignId
+            ? (campaign?.values ?? {})
+            : report.summary,
+          incomplete:
+            !!report.warnings.length || (!!node.config.campaignId && !campaign),
+          includeInactiveCampaigns:
+            node.config.includeInactiveCampaigns ?? false,
+          report,
+        },
       },
     ]);
   }

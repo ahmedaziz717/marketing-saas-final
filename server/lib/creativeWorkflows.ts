@@ -6,6 +6,7 @@ import { withPerformanceInputs } from "../../shared/workflowPerformanceInputs";
 import { prepareImageRequest } from "./imageRequest";
 import { readGenerationSource } from "./creativeImages";
 import { resolveWorkflowInputs } from "./workflowInputs";
+import { resolveWorkflowTextModel } from "./workflowModels";
 import {
   generationModel,
   modelVideoMode,
@@ -183,7 +184,10 @@ export async function workflowNodeCredits(
     ).credits;
   }
   const kind = "text",
-    model = REQUIRED_TEXT_MODEL_ID;
+    model =
+      node.type === "assistant"
+        ? await resolveWorkflowTextModel(db, node.config.modelId)
+        : REQUIRED_TEXT_MODEL_ID;
   return estimatedActionCredits(
     textActionRate(
       await effectiveRate(db, "openai", model, kind),
@@ -306,6 +310,9 @@ export async function prepareWorkflowRun(
             (n.config.performanceRequest ||
               [
                 "meta_history",
+                "google_history",
+                "google_report",
+                "google_inventory",
                 "meta_performance",
                 "meta_copy_performance",
                 "compare_copy_styles",

@@ -1,4 +1,7 @@
 import { WorkflowCanvas } from "../../client/src/components/WorkflowCanvas";
+import { WorkflowFormEditor } from "../../client/src/components/WorkflowFormEditor";
+import { WorkflowAppStudio } from "../../client/src/components/WorkflowAppStudio";
+import { WorkflowResultPreview } from "../../client/src/components/WorkflowResultPreview";
 import {
   newWorkflowNode,
   type WorkflowGraph,
@@ -271,8 +274,20 @@ const fixtureModels = [
     m => m.kind === "video" && modelVideoMode(m) === "motion"
   )!,
   generationModels.find(m => m.kind === "image")!,
+  generationModels.find(m => m.id === "openai:gpt-image-2.5-flare")!,
 ];
 function respond(path: string, input: any) {
+  if (path === "models.textCatalog")
+    return [
+      {
+        id: "gpt-5.5",
+        name: "GPT-5.5",
+        kind: "text",
+        enabled: true,
+        available: true,
+        reason: null,
+      },
+    ];
   if (path === "creativeBuilder.enhancementSetup")
     return {
       setup: {
@@ -629,6 +644,30 @@ function respond(path: string, input: any) {
     return { success: true };
   }
   if (path === "channels.connections") {
+    if (
+      input.includeGoogle &&
+      ["studio-channels", "google-campaigns", "google-campaign-new"].includes(
+        which
+      )
+    )
+      return {
+        ...connections,
+        items: [
+          ...connections.items,
+          {
+            id: googleFixtureId,
+            name: "Demo Google Ads",
+            channel: "google_ads",
+            status: "connected",
+            expired: false,
+            details: {
+              currency: "USD",
+              timezone: "America/New_York",
+              capabilities: ["report"],
+            },
+          },
+        ],
+      };
     if (which === "advertising-empty" || which === "social-empty")
       return { ...connections, items: [] };
     if (which === "studio-post-empty")
@@ -1024,6 +1063,8 @@ const routeForPage: Record<string, string> = {
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
   "workflow-density": "/app/workflow-density-fixture",
+  "workflow-app-preview": "/app/workflow-app-preview-fixture",
+  "workflow-model-form": "/app/workflow-model-form-fixture",
   "studio-channels": "/app/activate/studio",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
@@ -1211,8 +1252,77 @@ function ModelPickerFixture() {
     </DashboardLayout>
   );
 }
+function WorkflowPreviewFixture() {
+  const [page, setPage] = useState("review");
+  const [values, setValues] = useState<Record<string, string>>({});
+  return (
+    <WorkflowAppStudio
+      graph={{ nodes: [], edges: [] }}
+      organizationId={1}
+      title="Product image App"
+      description="Saved output remains visible while reviewing inputs."
+      values={values}
+      onChange={(id, value) => setValues({ ...values, [id]: value })}
+      page={page}
+      onPageChange={setPage}
+      status="Completed"
+      resultPreview={
+        <WorkflowResultPreview
+          values={[
+            {
+              type: "image",
+              key: "asset:2",
+              fingerprint: "fixture",
+              url: studioDraftAssets[1].url,
+              name: "Saved product image",
+            },
+          ]}
+        />
+      }
+      review={<p>Review credits and inputs here.</p>}
+      results={<p>Full saved result and run history.</p>}
+    />
+  );
+}
+function WorkflowModelFormFixture() {
+  const [graph, setGraph] = useState<WorkflowGraph>({
+    nodes: [newWorkflowNode("generate_image", "render")],
+    edges: [],
+  });
+  const [preview, setPreview] = useState(false);
+  return (
+    <>
+      <h1>Workflow App form</h1>
+      <button onClick={() => setPreview(!preview)}>
+        {preview ? "Edit App form" : "Preview App"}
+      </button>
+      <WorkflowFormEditor
+        graph={graph}
+        onChange={setGraph}
+        organizationId={1}
+        preview={preview}
+        appName="Model choice App"
+      />
+      <output data-testid="model-form-graph" hidden>
+        {JSON.stringify(graph)}
+      </output>
+    </>
+  );
+}
 function RoutedPage() {
   const [path] = useLocation();
+  if (path === "/app/workflow-model-form-fixture")
+    return (
+      <DashboardLayout>
+        <WorkflowModelFormFixture />
+      </DashboardLayout>
+    );
+  if (path === "/app/workflow-app-preview-fixture")
+    return (
+      <DashboardLayout>
+        <WorkflowPreviewFixture />
+      </DashboardLayout>
+    );
   if (path === "/app/catalog-api-fixture")
     return (
       <DashboardLayout>
@@ -1621,12 +1731,139 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
   try {
     await pause();
     layout();
+    if (which === "workflow-model-form") {
+      await fillControl('[aria-label="New field type"]', "model");
+      await click("+ Add field");
+      const state = () =>
+        JSON.parse(
+          document.querySelector('[data-testid="model-form-graph"]')!
+            .textContent!
+        );
+      check(
+        state().nodes[1].config.field.allowedModelIds.length === 1,
+        "One model is allowed by default"
+      );
+      check(
+        state().edges[0].port === "model",
+        "Selector binds to the generation model port"
+      );
+      const flare = document.querySelector<HTMLInputElement>(
+        '[aria-label="Allow GPT Image 2.5 Flare"]'
+      )!;
+      await pressStudioControl(
+        flare as unknown as HTMLButtonElement,
+        "Allow another model"
+      );
+      check(
+        state().nodes[1].config.field.allowedModelIds.length === 2,
+        "Designer controls allowed models"
+      );
+      const defaultSelect = document
+        .querySelector('[aria-label="Default model"]')!
+        .closest(".choice-select")!
+        .querySelector("select")!;
+      await chooseVisual(defaultSelect, "openai:gpt-image-2.5-flare");
+      await click("Preview App");
+      if (innerWidth <= 700) await click("Models");
+      check(
+        document
+          .querySelector(
+            '[aria-label="Model selector"] [data-value="openai:gpt-image-2.5-flare"]'
+          )
+          ?.getAttribute("aria-checked") === "true",
+        "App uses the authored default"
+      );
+      const selected = document
+        .querySelector('[aria-label="Model selector"]')!
+        .closest(".choice-select")!
+        .querySelector("select")!;
+      await chooseVisual(selected, "openai:gpt-image-2.5-sunburst");
+      check(
+        document
+          .querySelector(
+            '[aria-label="Model selector"] [data-value="openai:gpt-image-2.5-sunburst"]'
+          )
+          ?.getAttribute("aria-checked") === "true",
+        "App user chooses one allowed model"
+      );
+      check(
+        document.querySelectorAll(
+          '[aria-label="Model selector"] [aria-checked="true"]'
+        ).length === 1,
+        "Only one model is selected"
+      );
+      check(!mutations.length, "Preview does not start generation");
+      layout();
+    }
+    if (which === "workflow-app-preview") {
+      if (innerWidth <= 700) await click("All categories");
+      const summaryToggle = document.querySelector<HTMLButtonElement>(
+        ".journey-summary-toggle"
+      )!;
+      if (summaryToggle.getAttribute("aria-expanded") !== "true")
+        await pressStudioControl(summaryToggle, "Open saved result preview");
+      const stage = document.querySelector<HTMLElement>(".wf-studio-stage")!;
+      const preview = document.querySelector<HTMLElement>(
+        ".wf-studio-stage-preview"
+      )!;
+      const summary = document.querySelector<HTMLElement>(
+        ".wf-studio-stage-summary"
+      )!;
+      const image = preview.querySelector<HTMLImageElement>("img")!;
+      check(
+        !!image &&
+          image.getBoundingClientRect().height > 0 &&
+          getComputedStyle(image).objectFit === "contain",
+        "Saved image preview preserves its aspect ratio"
+      );
+      check(
+        image.getBoundingClientRect().height <= 220,
+        "Preview stays compact"
+      );
+      if (innerWidth > 700)
+        check(
+          preview.getBoundingClientRect().right <=
+            summary.getBoundingClientRect().left,
+          "Output sits to the top left of summary"
+        );
+      check(
+        stage.getBoundingClientRect().top <
+          document.querySelector(".studio-journey")!.getBoundingClientRect()
+            .top,
+        "Preview is above App tabs"
+      );
+      await click("View results");
+      check(
+        document.querySelector<HTMLElement>('[aria-label="App results"]')
+          ?.hidden === false,
+        "Results tab keeps full run details"
+      );
+      if (innerWidth <= 700) await click("All categories");
+      await click("Review inputs");
+      check(
+        document.body.textContent?.includes("Review credits and inputs here."),
+        "Review and run remains available"
+      );
+      check(
+        !mutations.length,
+        "Browsing saved outputs does not start another run"
+      );
+      layout();
+    }
     if (which === "google-campaigns" || which === "google-campaign-new") {
       check(
         !!document.querySelector(".studio-journey"),
         "Google uses the shared studio"
       );
-      await click("Campaign");
+      check(
+        document
+          .querySelector("h1")
+          ?.textContent?.includes("Activation Studio"),
+        "Google is inside Activation Studio"
+      );
+      await click("Open Account category");
+      await click("Select Demo Google Ads");
+      if (innerWidth <= 700) await click("Open Campaign category");
       check(
         document.querySelectorAll(".google-campaign-list button").length === 2,
         "Inactive Google campaigns are off by default"

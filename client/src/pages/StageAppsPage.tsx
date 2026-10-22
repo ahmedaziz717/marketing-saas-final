@@ -22,7 +22,7 @@ const tools = {
     {
       name: "Google Ads",
       description: "Create campaigns, add ads and manage asset groups.",
-      href: "/app/activate/google",
+      href: "/app/activate/studio?channel=google_ads",
       icon: Megaphone,
     },
     {

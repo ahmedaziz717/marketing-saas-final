@@ -1,5 +1,6 @@
 import { resolveWorkflowMedia } from "./workflowMedia";
 import { getConnection } from "./channelConnections";
+import { getWorkflowConnection } from "./workflowConnections";
 import { TRPCError } from "@trpc/server";
 import type { WorkflowGraph } from "../../shared/creativeWorkflow";
 import {
@@ -8,6 +9,13 @@ import {
   fieldPrompt,
 } from "../../shared/workflowInputs";
 import type { LibraryDatabase } from "./assetLibrary";
+import {
+  applyWorkflowModel,
+  workflowModelFieldProblem,
+  workflowModelCompatibility,
+} from "../../shared/workflowModels";
+import { resolveModel } from "./modelCatalog";
+import { resolveWorkflowTextModel } from "./workflowModels";
 
 /** Resolve declared inputs server-side, using only workspace-owned catalog facts. */
 export async function resolveWorkflowInputs(
@@ -38,7 +46,43 @@ export async function resolveWorkflowInputs(
     const condition = f.visibleWhen;
     const hidden =
       condition && values.get(condition.fieldId) !== condition.equals;
-    const value = hidden ? "" : (values.get(n.id) ?? "");
+    const value = hidden
+      ? f.kind === "model"
+        ? f.defaultValue
+        : ""
+      : (values.get(n.id) ?? "");
+    if (f.kind === "model") {
+      const problem =
+        workflowModelFieldProblem(graph, n) || fieldValueProblem(f, value);
+      if (problem)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `${n.title}: ${problem}`,
+        });
+      const routeId =
+        f.modelKind === "text"
+          ? await resolveWorkflowTextModel(db, value)
+          : (await resolveModel(db, value, f.modelKind!)).id;
+      n.config.text = "";
+      n.config.imageKey = null;
+      n.config.fieldValue = value;
+      for (const edge of graph.edges.filter(e => e.source === n.id)) {
+        const target = graph.nodes.find(t => t.id === edge.target)!;
+        const compatibility = workflowModelCompatibility(
+          graph,
+          target,
+          routeId,
+          f.modelSettings?.[value]
+        );
+        if (compatibility)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${n.title}: ${compatibility}`,
+          });
+        applyWorkflowModel(target, f, value, routeId);
+      }
+      continue;
+    }
     if (!hidden) {
       const problem = fieldValueProblem(f, value);
       if (problem)
@@ -57,16 +101,21 @@ export async function resolveWorkflowInputs(
         const target = graph.nodes.find(t => t.id === edge.target)!;
         if (
           edge.port !== "destination" ||
-          target.type !== (channel === "facebook" ? "facebook_post" : "meta_ad")
+          !(channel === "google_ads"
+            ? ["google_history", "google_report", "google_inventory"].includes(
+                target.type
+              )
+            : target.type ===
+              (channel === "facebook" ? "facebook_post" : "meta_ad"))
         )
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `${n.title}: connect this field to a matching publication destination.`,
+            message: `${n.title}: connect this field to a matching channel step's account input.`,
           });
         delete target.config.connectionId;
       }
       if (!value) continue;
-      const connection = await getConnection(
+      const connection = await getWorkflowConnection(
         db,
         organizationId,
         value,

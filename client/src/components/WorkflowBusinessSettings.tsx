@@ -7,6 +7,10 @@ import { Input } from "./ui/input";
 import { datePresets } from "@shared/reportDates";
 import { dateInZone, localScheduleToUtc } from "@shared/channels";
 import { workflowNodes, type WorkflowNode } from "@shared/creativeWorkflow";
+import {
+  workflowChannels,
+  workflowNodeChannels,
+} from "@shared/workflowChannels";
 
 export function WorkflowBusinessSettings({
   node,
@@ -28,9 +32,13 @@ export function WorkflowBusinessSettings({
     "classify_history",
     "analyze_history",
   ].includes(node.type);
+  const channels =
+    node.type === "meta_history"
+      ? ["meta_ads", "google_ads"]
+      : workflowNodeChannels(node.type);
   const connections = trpc.channels.connections.useQuery({
     organizationId,
-    includeGoogle: advertisingHistory,
+    includeGoogle: channels.includes("google_ads"),
   });
   const objects = trpc.channels.adObjects.useQuery(
     {
@@ -47,16 +55,17 @@ export function WorkflowBusinessSettings({
   const choices =
     connections.data?.items.filter(
       c =>
-        c.status === "connected" &&
-        (advertisingHistory
-          ? ["meta_ads", "google_ads"].includes(c.channel)
-          : c.channel === meta.channel)
+        c.status === "connected" && !c.expired && channels.includes(c.channel)
     ) ?? [];
   const timezone =
     config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
     <>
-      <OptimizationNodeSettings node={node} onChange={onChange} />
+      <OptimizationNodeSettings
+        node={node}
+        onChange={onChange}
+        channel={choices.find(c => c.id === config.connectionId)?.channel}
+      />
       {meta.channel && (
         <>
           <ChoiceField>
@@ -64,7 +73,7 @@ export function WorkflowBusinessSettings({
               ? "Connected advertising account"
               : meta.channel === "facebook"
                 ? "Connected Facebook Page"
-                : "Connected Meta ad account"}
+                : `Connected ${workflowChannels[meta.channel].account}`}
             <VisualSelect
               value={config.connectionId ?? ""}
               onChange={e =>
@@ -73,6 +82,7 @@ export function WorkflowBusinessSettings({
                   campaignId: undefined,
                   adSetId: undefined,
                   adId: undefined,
+                  measurePublishedOnly: false,
                 })
               }
             >
@@ -87,13 +97,23 @@ export function WorkflowBusinessSettings({
           {!connections.isLoading && !choices.length && (
             <Link href="/app/settings/integrations" className="wf-setting-help">
               Connect{" "}
-              {meta.channel === "facebook" ? "a Facebook Page" : "Meta Ads"} in
-              Integrations
+              {channels.length > 1
+                ? "an advertising account"
+                : workflowChannels[meta.channel].account}{" "}
+              in Integrations
             </Link>
           )}
           {connections.error && <p role="alert">{connections.error.message}</p>}
         </>
       )}
+      {["google_report", "google_inventory"].includes(node.type) &&
+        config.connectionId && (
+          <GoogleWorkflowSettings
+            node={node}
+            organizationId={organizationId}
+            onChange={onChange}
+          />
+        )}
       {["meta_ad", "meta_activate", "meta_report"].includes(node.type) &&
         config.connectionId && (
           <>
@@ -274,7 +294,9 @@ export function WorkflowBusinessSettings({
           </p>
         </>
       )}
-      {["meta_report", "facebook_report"].includes(node.type) && (
+      {["meta_report", "facebook_report", "google_report"].includes(
+        node.type
+      ) && (
         <>
           <ChoiceField>
             Reporting period
@@ -337,8 +359,8 @@ export function WorkflowBusinessSettings({
             Use the preceding period as a baseline
           </label>
           <small>
-            Relative periods are resolved when the step runs. Meta Ads uses the
-            account time zone; Facebook post reporting uses UTC.
+            Relative periods are resolved when the step runs. Advertising uses
+            the account time zone; Facebook post reporting uses UTC.
           </small>
         </>
       )}
@@ -451,6 +473,100 @@ export function WorkflowBusinessSettings({
           </p>
         </>
       )}
+    </>
+  );
+}
+
+function GoogleWorkflowSettings({
+  node,
+  organizationId,
+  onChange,
+}: {
+  node: WorkflowNode;
+  organizationId: number;
+  onChange: (value: Partial<WorkflowNode["config"]>) => void;
+}) {
+  const config = node.config;
+  const inventory = trpc.googleAds.campaigns.inventory.useQuery({
+    organizationId,
+    connectionId: config.connectionId!,
+    includeInactive: config.includeInactiveCampaigns ?? false,
+  });
+  return (
+    <>
+      <label className="wf-checkbox">
+        <input
+          type="checkbox"
+          checked={config.includeInactiveCampaigns ?? false}
+          onChange={e =>
+            onChange({
+              includeInactiveCampaigns: e.target.checked,
+              campaignId: undefined,
+            })
+          }
+        />
+        Include inactive campaigns
+      </label>
+      <ChoiceField>
+        Google campaign
+        <VisualSelect
+          value={config.campaignId ?? ""}
+          onChange={e => onChange({ campaignId: e.target.value || undefined })}
+        >
+          <option value="">Whole account</option>
+          {inventory.data?.campaigns.map(({ campaign }) => (
+            <option key={campaign.id} value={String(campaign.id)}>
+              {campaign.name} · {campaign.advertisingChannelType}
+            </option>
+          ))}
+        </VisualSelect>
+      </ChoiceField>
+      {config.campaignId &&
+        inventory.data &&
+        !inventory.data.campaigns.some(
+          c => String(c.campaign.id) === config.campaignId
+        ) && (
+          <p role="alert">
+            The selected campaign is not in this account’s current list. Choose
+            a campaign or the whole account.
+          </p>
+        )}
+      {inventory.isLoading && <small>Loading Google campaigns…</small>}
+      {inventory.error && <p role="alert">{inventory.error.message}</p>}
+      {inventory.data?.limited && (
+        <small>
+          This list reached its retrieval limit; some campaigns may be
+          unavailable.
+        </small>
+      )}
+      {node.type === "google_report" && (
+        <ChoiceField>
+          Breakdown
+          <VisualSelect
+            value={config.googleDetail ?? "campaign"}
+            onChange={e =>
+              onChange({
+                googleDetail: e.target
+                  .value as WorkflowNode["config"]["googleDetail"],
+              })
+            }
+          >
+            <option value="campaign">Campaigns</option>
+            <option value="ad_group">Ad groups</option>
+            <option value="asset_group">Asset groups (Performance Max)</option>
+            <option value="ad">Ads</option>
+            <option value="device">Devices</option>
+            <option value="country">Countries</option>
+            <option value="hour">Hours</option>
+          </VisualSelect>
+        </ChoiceField>
+      )}
+      <small>
+        {node.type === "google_inventory"
+          ? "Choose a campaign to include its native ad groups, ads, or Performance Max asset groups and asset associations."
+          : "Metrics retain Google’s attribution and account currency. Unsupported breakdowns are reported as unavailable."}{" "}
+        This step reads account data and does not change delivery.
+      </small>
     </>
   );
 }

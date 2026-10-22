@@ -27,6 +27,7 @@ export function workflowFieldPlacement(node: WorkflowNode) {
       "connection",
       "url",
       "number",
+      "model",
     ].includes(kind)
       ? "setup"
       : [
@@ -48,6 +49,7 @@ export function workflowFieldPlacement(node: WorkflowNode) {
       channel: "Destination",
       url: "Destination",
       number: "Settings",
+      model: "Models",
       theme: "Theme",
       art_style: "Visual style",
       audience: "Audience",

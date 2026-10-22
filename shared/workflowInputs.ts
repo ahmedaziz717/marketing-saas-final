@@ -13,6 +13,8 @@ export function parsePerformanceInput(value: string) {
 }
 import { CREATIVE_THEME_GROUPS } from "./creativeThemes";
 import { CREATIVE_ART_STYLES } from "./creativeBuilder";
+import { modelOptionsSchema } from "./modelCatalog";
+import { workflowModel } from "./workflowModelCatalog";
 
 export const inputKinds = [
   "connection",
@@ -27,6 +29,7 @@ export const inputKinds = [
   "theme",
   "art_style",
   "choice",
+  "model",
   "product",
   "asset",
   "channel",
@@ -49,6 +52,7 @@ export const inputLabels: Record<(typeof inputKinds)[number], string> = {
   theme: "Theme",
   art_style: "Art style",
   choice: "Custom choices",
+  model: "Model selector",
   product: "Product, service or plan",
   asset: "Reference image",
   channel: "Channel",
@@ -101,7 +105,10 @@ export type WorkflowMediaSelection = z.infer<
 >;
 export const appFieldSchema = z.object({
   kind: z.enum(inputKinds),
-  connectionChannel: z.enum(["facebook", "meta_ads"]).optional(),
+  connectionChannel: z.enum(["facebook", "meta_ads", "google_ads"]).optional(),
+  modelKind: z.enum(["text", "image", "video"]).optional(),
+  allowedModelIds: z.array(z.string().min(1).max(240)).max(50).optional(),
+  modelSettings: z.record(z.string().max(240), modelOptionsSchema).optional(),
   help: z.string().max(600).default(""),
   required: z.boolean().default(false),
   locked: z.boolean().default(false),
@@ -221,12 +228,18 @@ export function systemInputChoices(kind: AppField["kind"]): InputChoice[] {
   return [];
 }
 export function fieldChoices(field: AppField) {
+  if (field.kind === "model")
+    return (field.allowedModelIds ?? []).map(id => ({
+      id,
+      label: workflowModel(id)?.name ?? id,
+      direction: "",
+    }));
   return field.source === "system"
     ? systemInputChoices(field.kind)
     : field.options;
 }
 export const isChoiceField = (f: AppField) =>
-  ["theme", "art_style", "choice", "channel", "size"].includes(f.kind);
+  ["theme", "art_style", "choice", "channel", "size", "model"].includes(f.kind);
 export function selectionValues(value: string, multiple: boolean) {
   if (!multiple) return value ? [value] : [];
   try {
@@ -242,6 +255,22 @@ export function fieldValueProblem(
   field: AppField,
   value: string
 ): string | null {
+  if (field.kind === "model") {
+    const allowed = field.allowedModelIds ?? [];
+    if (
+      !allowed.length ||
+      allowed.length !== new Set(allowed).size ||
+      allowed.some(id => workflowModel(id)?.kind !== field.modelKind)
+    )
+      return "Choose at least one compatible allowed model.";
+    if (field.multiple || field.ai)
+      return "A model selector allows exactly one model per run.";
+    if (!allowed.includes(field.defaultValue))
+      return "Choose one of the allowed models as the default.";
+    if (!allowed.includes(value))
+      return "Choose one model allowed by this App.";
+    return null;
+  }
   if (field.kind === "performance_data" && !parsePerformanceInput(value))
     return "Choose a connected Meta ad account and a valid date range.";
   if (field.required && !value.trim()) return "This field is required.";

@@ -321,7 +321,10 @@ function WorkflowEditor({
     [appDescription, setAppDescription] = useState("");
   const publishApp = trpc.workflows.publishApp.useMutation();
   const utils = trpc.useUtils();
-  const connections = trpc.channels.connections.useQuery({ organizationId });
+  const connections = trpc.channels.connections.useQuery({
+    organizationId,
+    includeGoogle: true,
+  });
   const [editorView, setEditorView] = useState<"workflow" | "form" | "preview">(
     "workflow"
   );
@@ -645,7 +648,7 @@ function WorkflowEditor({
           family={family}
           connectedChannels={
             connections.data?.items
-              .filter(c => c.status === "connected")
+              .filter(c => c.status === "connected" && !c.expired)
               .map(c => c.channel) ?? []
           }
           onChange={setGraph}

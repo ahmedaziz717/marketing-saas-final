@@ -10,7 +10,9 @@ export function scrollStudioChoices(container: HTMLElement | null) {
         '.cfg-section-heading:has([aria-expanded="true"])'
       ) ?? []
     ).find(element => !element.closest("[hidden]"));
-    const journey = root?.querySelector<HTMLElement>(".studio-journey");
+    const journey = Array.from(
+      root?.querySelectorAll<HTMLElement>(".studio-journey") ?? []
+    ).find(element => !element.closest("[hidden]"));
     const target = journey
       ? mobile
         ? journey.querySelector<HTMLElement>(
@@ -36,8 +38,12 @@ export function scrollStudioChoices(container: HTMLElement | null) {
         journey.querySelector<HTMLElement>(".journey-editor");
       const choiceBounds = choice?.getBoundingClientRect();
       const footerTop =
-        root
-          ?.querySelector(".cfg-bottom, .activation-footer")
+        Array.from(
+          root?.querySelectorAll<HTMLElement>(
+            ".cfg-bottom, .activation-footer"
+          ) ?? []
+        )
+          .find(element => !element.closest("[hidden]"))
           ?.getBoundingClientRect().top ?? window.innerHeight;
       if (
         bounds.top >= top &&

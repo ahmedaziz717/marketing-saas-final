@@ -28,7 +28,11 @@ import {
 } from "@shared/workflowStudio";
 import { trpc } from "@/lib/trpc";
 import { WorkflowInputControl } from "./WorkflowInputControl";
-import { StudioJourney, useStudioJourney } from "./configurator/StudioJourney";
+import {
+  StudioJourney,
+  StudioSummary,
+  useStudioJourney,
+} from "./configurator/StudioJourney";
 import {
   scrollStudioChoices,
   useStudioNavigation,
@@ -57,6 +61,7 @@ export function WorkflowAppStudio({
   busy = false,
   review,
   results,
+  resultPreview,
   status,
   error,
 }: {
@@ -73,6 +78,7 @@ export function WorkflowAppStudio({
   busy?: boolean;
   review?: ReactNode;
   results?: ReactNode;
+  resultPreview?: ReactNode;
   status?: string;
   error?: string;
 }) {
@@ -277,6 +283,48 @@ export function WorkflowAppStudio({
       ) : (
         description && <p className="wf-studio-description">{description}</p>
       )}
+      <StudioSummary subtitle="Result preview & summary">
+        <div className="cfg-stage wf-studio-stage">
+          <div className="wf-studio-stage-preview">
+            {resultPreview ?? (
+              <p>
+                {preview
+                  ? "Your App's result will appear here after a run."
+                  : "Run this App to preview its result here."}
+              </p>
+            )}
+          </div>
+          <div className="wf-studio-stage-summary">
+            <span className="cfg-eyebrow">
+              {status ? "Selected run" : "Your App"}
+            </span>
+            <h2>{preview ? "Output preview" : "Run output"}</h2>
+            <p>{status || "Set your inputs, then review and run."}</p>
+            {status && (
+              <p className="wf-setting-help">
+                Showing saved run outputs. Editing inputs does not change an
+                existing result.
+              </p>
+            )}
+            <div className="cfg-actions">
+              <button
+                type="button"
+                className="cfg-secondary"
+                onClick={() => select("review")}
+              >
+                Review inputs
+              </button>
+              <button
+                type="button"
+                className="cfg-secondary"
+                onClick={() => select("results")}
+              >
+                View results
+              </button>
+            </div>
+          </div>
+        </div>
+      </StudioSummary>
       <StudioJourney journey={journey} label="App Studio sections">
         <div className="cfg-body">
           {error && (

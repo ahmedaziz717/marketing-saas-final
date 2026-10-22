@@ -24,11 +24,16 @@ import {
   requiresVideo,
 } from "./modelCatalog";
 import { videoDirectionSchema, defaultVideoDirection } from "./videoCreation";
+import { workflowModelFieldProblem } from "./workflowModels";
+import { workflowModel, workflowModelKind } from "./workflowModelCatalog";
 
 export const workflowNodeTypes = [
   "start_trigger",
   "run_workflow",
   "meta_history",
+  "google_history",
+  "google_report",
+  "google_inventory",
   "meta_performance",
   "meta_copy_performance",
   "compare_copy_styles",
@@ -73,7 +78,9 @@ export const workflowNodes: Record<
     description: string;
     group: string;
     family?: WorkflowFamily;
-    channel?: "facebook" | "meta_ads";
+    channel?: "facebook" | "meta_ads" | "google_ads";
+    channels?: ("facebook" | "meta_ads" | "google_ads")[];
+    families?: WorkflowFamily[];
     hidden?: boolean;
     output: WorkflowPortType;
     inputs: {
@@ -109,6 +116,42 @@ export const workflowNodes: Record<
     channel: "meta_ads",
     output: "data",
     inputs: [{ id: "context", name: "Start", type: "any", multiple: true }],
+  },
+  google_history: {
+    name: "Fetch Google Ads history",
+    description:
+      "Import Google campaign, ad and asset-group evidence with resumable checkpoints.",
+    group: "Google Ads",
+    family: "measure",
+    families: ["measure", "optimize"],
+    channel: "google_ads",
+    output: "data",
+    inputs: [
+      { id: "context", name: "Start", type: "any", multiple: true },
+      { id: "destination", name: "Google account", type: "data" },
+    ],
+  },
+  google_report: {
+    name: "Google Ads performance",
+    description:
+      "Read account or campaign performance for selected dates, preserving Google attribution and campaign structure.",
+    group: "Google Ads",
+    family: "measure",
+    families: ["measure", "optimize"],
+    channel: "google_ads",
+    output: "data",
+    inputs: [{ id: "destination", name: "Google account", type: "data" }],
+  },
+  google_inventory: {
+    name: "Google campaigns & assets",
+    description:
+      "Read campaigns and their native ad groups, ads or Performance Max asset groups and assets.",
+    group: "Google Ads",
+    family: "activate",
+    families: ["activate", "measure", "optimize"],
+    channel: "google_ads",
+    output: "data",
+    inputs: [{ id: "destination", name: "Google account", type: "data" }],
   },
   meta_performance: {
     name: "Fetch live Meta performance",
@@ -146,6 +189,8 @@ export const workflowNodes: Record<
     group: "Analysis",
     family: "measure",
     channel: "meta_ads",
+    channels: ["meta_ads", "google_ads"],
+    families: ["measure", "optimize"],
     output: "data",
     inputs: [{ id: "context", name: "History", type: "data" }],
   },
@@ -156,6 +201,8 @@ export const workflowNodes: Record<
     group: "Analysis",
     family: "measure",
     channel: "meta_ads",
+    channels: ["meta_ads", "google_ads"],
+    families: ["measure", "optimize"],
     output: "data",
     inputs: [
       { id: "context", name: "History", type: "data" },
@@ -196,6 +243,7 @@ export const workflowNodes: Record<
     group: "Generate",
     output: "text",
     inputs: [
+      { id: "model", name: "Model", type: "data" },
       { id: "text", name: "Brief", type: "text", multiple: true },
       { id: "image", name: "Images", type: "image", multiple: true },
     ],
@@ -213,6 +261,7 @@ export const workflowNodes: Record<
     group: "Generate",
     output: "image",
     inputs: [
+      { id: "model", name: "Model", type: "data" },
       { id: "text", name: "Prompt", type: "text", multiple: true },
       { id: "image", name: "References", type: "image", multiple: true },
     ],
@@ -223,6 +272,7 @@ export const workflowNodes: Record<
     group: "Generate",
     output: "video",
     inputs: [
+      { id: "model", name: "Model", type: "data" },
       { id: "text", name: "Prompt", type: "text", multiple: true },
       { id: "image", name: "References", type: "image", multiple: true },
       { id: "video", name: "Source video", type: "video", multiple: false },
@@ -479,6 +529,18 @@ export const workflowNodeSchema = z.object({
       .optional(),
     range: rangeSchema.optional(),
     previousPeriod: z.boolean().optional(),
+    includeInactiveCampaigns: z.boolean().optional(),
+    googleDetail: z
+      .enum([
+        "campaign",
+        "ad_group",
+        "asset_group",
+        "ad",
+        "device",
+        "country",
+        "hour",
+      ])
+      .optional(),
     metric: z
       .enum([
         "roas",
@@ -641,6 +703,14 @@ export function workflowGraphProblem(graph: WorkflowGraph): string | null {
       p => p.id === edge.port
     );
     if (
+      (edge.port === "model" || source.config.field?.kind === "model") &&
+      (source.type !== "app_input" ||
+        source.config.field?.kind !== "model" ||
+        edge.port !== "model" ||
+        workflowModelKind(target.type) !== source.config.field.modelKind)
+    )
+      return "Connect a Model selector to a matching generation step's Model input.";
+    if (
       !port ||
       source.type === "output" ||
       (port.type !== "any" &&
@@ -700,6 +770,14 @@ export function workflowRunProblem(
   if (structural) return structural;
   if (!graph.nodes.length) return "Add a step to your workflow first.";
   for (const node of graph.nodes.filter(n => !selected || selected.has(n.id))) {
+    const fieldProblem = workflowModelFieldProblem(graph, node);
+    if (fieldProblem) return fieldProblem;
+    if (
+      node.type === "assistant" &&
+      node.config.modelId &&
+      workflowModel(node.config.modelId)?.kind !== "text"
+    )
+      return `Choose a supported text model for “${node.title}”.`;
     const model = node.config.modelId
       ? generationModel(node.config.modelId)
       : undefined;
@@ -770,7 +848,7 @@ export function workflowRunProblem(
     )
       return "Enable hourly data in Fetch live Meta performance or choose Weekdays in Analyze scheduling.";
     if (
-      ["meta_report", "facebook_report"].includes(node.type) &&
+      ["meta_report", "facebook_report", "google_report"].includes(node.type) &&
       node.config.datePreset === "custom" &&
       !node.config.range
     )

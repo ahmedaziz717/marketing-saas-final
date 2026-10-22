@@ -6,6 +6,7 @@ import type { ProviderRate } from "../../shared/platformAdmin";
 
 const models = [
   "gpt-5.5",
+  "gpt-5.4-mini",
   "gpt-image-2.5-sunburst",
   "gpt-image-2.5-flare",
   "gpt-image-2",
