@@ -525,6 +525,8 @@ describe.sequential("Google OAuth and workspace isolation", () => {
     });
     expect(channelSchema.safeParse("google_ads").success).toBe(false);
     expect(Object.keys(googleAdsRouter._def.procedures)).toEqual([
+      "campaigns.videoUploadStatus",
+      "campaigns.uploadVideo",
       "campaigns.inventory",
       "campaigns.resources",
       "campaigns.drafts",
