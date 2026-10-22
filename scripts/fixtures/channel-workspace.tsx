@@ -1928,7 +1928,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         );
         await click("Select Google Ads Library");
         check(
-          !!document.querySelector('[aria-label="Search assets"]'),
+          !!document.querySelector('.google-field input[type="search"]'),
           "Google library supports visual browsing and search"
         );
         await click("Choose another asset type");
