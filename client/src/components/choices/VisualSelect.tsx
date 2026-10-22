@@ -36,8 +36,12 @@ type OptionProps = OptionHTMLAttributes<HTMLOptionElement> & {
   "data-visual"?: string;
   "data-account-id"?: string;
 };
+type ChoiceDensity = "tiles" | "compact" | "segmented" | "select";
+const ChoiceDensityContext = createContext<ChoiceDensity>("tiles");
+/** Narrow editors use ordinary form controls; visual pickers can opt in explicitly. */
+export const ChoiceDensityProvider = ChoiceDensityContext.Provider;
 type Props = SelectHTMLAttributes<HTMLSelectElement> & {
-  density?: "tiles" | "compact";
+  density?: ChoiceDensity;
   searchable?: boolean;
   showAll?: boolean;
   imageOrganizationId?: number;
@@ -131,7 +135,7 @@ function optionsFrom(
   });
 }
 
-/** Inline, searchable tiles backed by a native select for existing form/event contracts. */
+/** Native form controls or inline choices, preserving the same selection and event contract. */
 export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
   function VisualSelect(
     {
@@ -143,7 +147,7 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
       onValueChange,
       disabled,
       required,
-      density = "tiles",
+      density: requestedDensity,
       searchable = true,
       showAll = false,
       imageOrganizationId,
@@ -156,6 +160,8 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
     forwardedRef
   ) {
     const uid = useId();
+    const inheritedDensity = useContext(ChoiceDensityContext);
+    const density = requestedDensity ?? inheritedDensity;
     const fieldLabel = useContext(ChoiceLabel);
     const native = useRef<HTMLSelectElement>(null);
     const root = useRef<HTMLSpanElement>(null);
@@ -260,6 +266,42 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
       // React receives the genuine select event: target/currentTarget, form and name stay intact.
       select.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    if (density === "select")
+      return (
+        <span
+          ref={root}
+          className={`choice-select ${tileClassName}`}
+          data-density={density}
+          style={style}
+        >
+          <select
+            {...props}
+            ref={native}
+            className={className}
+            aria-label={props["aria-label"] ?? label}
+            value={multiple ? selectedValues : selected}
+            multiple={multiple}
+            disabled={disabled}
+            required={required}
+            onChange={event => {
+              setInternal(
+                multiple
+                  ? Array.from(event.target.selectedOptions, o => o.value)
+                  : event.target.value
+              );
+              onChange?.(event);
+              onValueChange?.(event.target.value);
+            }}
+          >
+            {missing.map(v => (
+              <option key={v} value={v}>
+                Selected item unavailable
+              </option>
+            ))}
+            {children}
+          </select>
+        </span>
+      );
     return (
       <span
         ref={root}
@@ -402,23 +444,25 @@ export const VisualSelect = forwardRef<HTMLSelectElement, Props>(
                   ?.focus();
               }}
             >
-              <span className="choice-tile-art" aria-hidden="true">
-                {option.accountId && imageOrganizationId ? (
-                  <ConnectedAccountIdentity
-                    organizationId={imageOrganizationId}
-                    id={option.accountId}
-                    name={option.label}
-                    imageUrl={option.image}
-                  />
-                ) : (
-                  <ChoiceVisual
-                    label={option.label}
-                    context={`${option.group ?? ""} ${label}`}
-                    visual={option.visual ?? visual}
-                    image={option.image}
-                  />
-                )}
-              </span>
+              {density !== "segmented" && (
+                <span className="choice-tile-art" aria-hidden="true">
+                  {option.accountId && imageOrganizationId ? (
+                    <ConnectedAccountIdentity
+                      organizationId={imageOrganizationId}
+                      id={option.accountId}
+                      name={option.label}
+                      imageUrl={option.image}
+                    />
+                  ) : (
+                    <ChoiceVisual
+                      label={option.label}
+                      context={`${option.group ?? ""} ${label}`}
+                      visual={option.visual ?? visual}
+                      image={option.image}
+                    />
+                  )}
+                </span>
+              )}
               <span className="choice-tile-copy">
                 {option.group && <small>{option.group}</small>}
                 <strong>{option.label}</strong>

@@ -1,4 +1,8 @@
-import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
+import {
+  VisualSelect,
+  ChoiceField,
+  ChoiceDensityProvider,
+} from "@/components/choices/VisualSelect";
 import { WorkflowDataResult } from "./WorkflowDataResult";
 import { CopyComparisonSettings } from "./CopyComparisonSettings";
 import {
@@ -24,6 +28,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ComponentProps,
 } from "react";
 import {
   Check,
@@ -149,7 +154,16 @@ const pathBetween = (
 ) =>
   `M${a.x},${a.y} C${a.x + Math.max(70, Math.abs(b.x - a.x) * 0.45)},${a.y} ${b.x - Math.max(70, Math.abs(b.x - a.x) * 0.45)},${b.y} ${b.x},${b.y}`;
 type Run = { graph: WorkflowGraph; steps: WorkflowSteps; status: string };
-export function WorkflowCanvas({
+export function WorkflowCanvas(
+  props: ComponentProps<typeof WorkflowCanvasContent>
+) {
+  return (
+    <ChoiceDensityProvider value="select">
+      <WorkflowCanvasContent {...props} />
+    </ChoiceDensityProvider>
+  );
+}
+function WorkflowCanvasContent({
   graph,
   onChange,
   organizationId,
@@ -952,6 +966,9 @@ export function WorkflowCanvas({
                 <ChoiceField className="wf-palette-filter">
                   Capabilities
                   <VisualSelect
+                    density="segmented"
+                    showAll
+                    searchable={false}
                     aria-label="Node section"
                     value={paletteFamily}
                     onChange={e =>

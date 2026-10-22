@@ -11,7 +11,14 @@ function fixture() {
     calls.push({ path, body });
     if (path.endsWith("?limit=20")) return [];
     if (path.endsWith("?limit=1"))
-      return [{ deploy: { id: "web-deploy", status: "live" } }];
+      return [
+        {
+          deploy: {
+            id: path.includes(s.web) ? "web-deploy" : "worker-deploy",
+            status: "live",
+          },
+        },
+      ];
     if (path.endsWith("/web-deploy") || path.endsWith("/worker-deploy"))
       return {
         id: path.split("/").pop(),
@@ -25,6 +32,9 @@ function fixture() {
       branch: s.branch,
       repo: s.repo,
       autoDeploy: "no",
+      serviceDetails: {
+        maxShutdownDelaySeconds: path.includes(s.worker) ? 300 : 30,
+      },
     };
   });
   return {
@@ -58,8 +68,8 @@ it("deploys the exact web commit, drains old connections, then starts the worker
     `/services/${s.web}/deploys`,
     `/services/${s.worker}/deploys`,
   ]);
-  expect(f.wait).toHaveBeenCalledTimes(8);
-  expect(f.health).toHaveBeenCalledTimes(10);
+  expect(f.wait).toHaveBeenCalledTimes(34);
+  expect(f.health).toHaveBeenCalledTimes(36);
 });
 it("never starts the worker after failed web health or deploys to an unexpected workspace", async () => {
   const f = fixture();

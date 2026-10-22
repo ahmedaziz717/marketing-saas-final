@@ -226,7 +226,7 @@ function ActivationStudio() {
                                 name={
                                   value === "meta_ads" ? "Meta" : "Facebook"
                                 }
-                                size={88}
+                                size={48}
                               />
                               <span>
                                 {value === "meta_ads"

@@ -1,3 +1,15 @@
+:root {
+  --studio-card-min-width: 200px;
+  --studio-card-art-height: 120px;
+  --studio-card-gap: 12px;
+  --studio-card-columns: repeat(
+    auto-fill,
+    minmax(
+      min(100%, max(var(--studio-card-min-width), calc((100% - 36px) / 4))),
+      1fr
+    )
+  );
+}
 .cfg-root {
   --cfg-bg: #f4f3f8;
   --cfg-panel: #fff;
@@ -700,8 +712,8 @@
 }
 .cfg-card-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: var(--studio-card-columns);
+  gap: var(--studio-card-gap);
   align-items: stretch;
 }
 .cfg-card {
@@ -738,7 +750,7 @@
   opacity: 0.55;
 }
 .cfg-card-art {
-  height: 140px;
+  height: var(--studio-card-art-height);
   position: relative;
   overflow: hidden;
   background: var(--cfg-soft);
@@ -784,13 +796,13 @@
   border-color: var(--cfg-lime);
 }
 .cfg-card-copy {
-  padding: 15px;
+  padding: 12px;
 }
 .cfg-card-copy h3 {
   font-size: 14px;
   font-weight: 650;
   letter-spacing: -0.2px;
-  margin: 0 0 7px;
+  margin: 0 0 5px;
   overflow-wrap: anywhere;
 }
 .cfg-card-copy p {
@@ -1223,14 +1235,6 @@
   flex: 1;
   overflow-wrap: anywhere;
 }
-@media (min-width: 1600px) {
-  .cfg-card-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .cfg-card-art {
-    height: 160px;
-  }
-}
 @media (max-width: 1100px) {
   .cfg-root {
     padding: 16px;
@@ -1257,9 +1261,6 @@
   }
   .cfg-heading {
     align-items: flex-start;
-  }
-  .cfg-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 700px) {
@@ -2960,8 +2961,8 @@
 }
 @media (max-width: 700px) {
   .cfg-card-art {
-    height: auto;
-    aspect-ratio: 1.65;
+    height: var(--studio-card-art-height);
+    aspect-ratio: auto;
   }
   .cfg-card-copy {
     padding: 14px 14px 6px;

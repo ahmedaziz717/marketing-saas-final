@@ -50,7 +50,7 @@ export function DateRangeFilter({
       <ChoiceField className="w-full text-sm">
         {label}
         <VisualSelect
-          density="tiles"
+          density="segmented"
           showAll
           searchable={false}
           tileClassName="date-range-choices"

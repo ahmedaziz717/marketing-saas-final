@@ -101,7 +101,7 @@ it("exposes copy-evidence wiring, source requirements and editable purchase comp
     screen.getByText(/Account totals and weekday\/hour reports/)
   ).toBeTruthy();
   changeField(
-    screen.getByRole("radiogroup", { name: "Comparison objective" }),
+    screen.getByRole("combobox", { name: "Comparison objective" }),
     {
       target: { value: "roas" },
     }
@@ -152,7 +152,7 @@ it("updates node settings, runs one step, and removes connected edges on deletio
   fireEvent.click(
     screen.getByRole("button", { name: "Settings for Generate image" })
   );
-  changeField(screen.getByRole("radiogroup", { name: "Aspect ratio" }), {
+  changeField(screen.getByRole("combobox", { name: "Aspect ratio" }), {
     target: { value: "9:16" },
   });
   expect(graph().nodes.find(n => n.id === "image")!.config.ratio).toBe("9:16");
@@ -177,7 +177,7 @@ it("adds searchable steps and exposes compact optional creative direction", () =
     screen.getByRole("checkbox", { name: "Apply a theme and style" })
   );
   expect(graph().nodes[0].config.direction?.theme).toBe("spotlight");
-  changeField(screen.getByRole("radiogroup", { name: "Mood" }), {
+  changeField(screen.getByRole("combobox", { name: "Mood" }), {
     target: { value: "premium" },
   });
   expect(graph().nodes[0].config.direction?.mood).toBe("premium");
@@ -190,24 +190,24 @@ it("offers built-in and custom Apps and configures executable built-ins", () => 
   fireEvent.click(
     screen.getByRole("button", { name: "Settings for Run an App" })
   );
-  allChoiceLabels(screen.getByRole("radiogroup", { name: "App" }));
-  expect(screen.getByRole("radio", { name: "Image creator" })).toBeTruthy();
-  expect(screen.getByRole("radio", { name: /Custom review/ })).toBeTruthy();
+  allChoiceLabels(screen.getByRole("combobox", { name: "App" }));
+  expect(screen.getByRole("option", { name: "Image creator" })).toBeTruthy();
+  expect(screen.getByRole("option", { name: /Custom review/ })).toBeTruthy();
   expect(
-    (screen.getByRole("radio", { name: /Creator video/ }) as HTMLOptionElement)
+    (screen.getByRole("option", { name: /Creator video/ }) as HTMLOptionElement)
       .disabled
   ).toBe(true);
-  changeField(screen.getByRole("radiogroup", { name: "App" }), {
+  changeField(screen.getByRole("combobox", { name: "App" }), {
     target: { value: "builtin:image-creator" },
   });
   expect(graph().nodes[0].type).toBe("generate_image");
   expect(graph().nodes[0].config.builtinAppId).toBe("image-creator");
-  expect(screen.getByRole("radiogroup", { name: "Aspect ratio" })).toBeTruthy();
-  changeField(screen.getByRole("radiogroup", { name: "Aspect ratio" }), {
+  expect(screen.getByRole("combobox", { name: "Aspect ratio" })).toBeTruthy();
+  changeField(screen.getByRole("combobox", { name: "Aspect ratio" }), {
     target: { value: "9:16" },
   });
   expect(graph().nodes[0].config.ratio).toBe("9:16");
-  changeField(screen.getByRole("radiogroup", { name: "App" }), {
+  changeField(screen.getByRole("combobox", { name: "App" }), {
     target: { value: "00000000-0000-4000-8000-000000000001" },
   });
   expect(graph().nodes[0].type).toBe("app");
@@ -264,10 +264,10 @@ it("builds scheduling from public fields and steps, exposes working settings and
     })
   );
   expect(
-    screen.getByRole("radiogroup", { name: "Performance to fetch" })
+    screen.getByRole("combobox", { name: "Performance to fetch" })
   ).toBeTruthy();
   changeField(
-    screen.getByRole("radiogroup", { name: "Performance to fetch" }),
+    screen.getByRole("combobox", { name: "Performance to fetch" }),
     {
       target: { value: "daily" },
     }
@@ -280,7 +280,7 @@ it("builds scheduling from public fields and steps, exposes working settings and
   fireEvent.click(
     screen.getByRole("button", { name: /Optimization engine Reusable/ })
   );
-  changeField(screen.getByRole("radiogroup", { name: "Optimizer" }), {
+  changeField(screen.getByRole("combobox", { name: "Optimizer" }), {
     target: { value: "weekday_time" },
   });
   expect(screen.queryByLabelText("Verified brief")).toBeNull();

@@ -1,3 +1,8 @@
+import { WorkflowCanvas } from "../../client/src/components/WorkflowCanvas";
+import {
+  newWorkflowNode,
+  type WorkflowGraph,
+} from "../../shared/creativeWorkflow";
 import { ReleaseDetailsFixture } from "./release-details";
 import { ApiCatalogConnect } from "../../client/src/components/ApiCatalogConnect";
 import { catalogImageDirectory } from "../../shared/apiCatalog";
@@ -1018,6 +1023,8 @@ const routeForPage: Record<string, string> = {
   "report-layout": "/app/release-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
+  "workflow-density": "/app/workflow-density-fixture",
+  "studio-channels": "/app/activate/studio",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
   "creative-scene": "/app/creatives/studio",
@@ -1171,6 +1178,27 @@ if (which === "navigation-ten") {
     ),
   ];
 }
+function WorkflowDensityFixture() {
+  const [graph, setGraph] = useState<WorkflowGraph>({
+    nodes: [newWorkflowNode("start_trigger", "start")],
+    edges: [],
+  });
+  return (
+    <div className="wf-editor">
+      <header className="wf-editor-header">
+        <h1>Workflow builder</h1>
+      </header>
+      <WorkflowCanvas
+        graph={graph}
+        onChange={setGraph}
+        organizationId={1}
+        role="owner"
+        busy={false}
+        onRunNode={() => {}}
+      />
+    </div>
+  );
+}
 function ModelPickerFixture() {
   const [setup, setSetup] = useState<CreativeSetup>({
     ...defaultCreativeSetup(),
@@ -1212,6 +1240,12 @@ function RoutedPage() {
     return (
       <DashboardLayout>
         <ReleaseDetailsFixture facts={which === "product-facts"} />
+      </DashboardLayout>
+    );
+  if (path === "/app/workflow-density-fixture")
+    return (
+      <DashboardLayout>
+        <WorkflowDensityFixture />
       </DashboardLayout>
     );
   if (path === "/app/creatives/workflows")
@@ -1540,7 +1574,10 @@ async function fillControl(selector: string, value: string) {
     HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
   >(selector)!;
   check(!!el, selector + " is present");
-  if (el.closest(".choice-select"))
+  if (
+    el.closest(".choice-select")?.getAttribute("data-density") !== "select" &&
+    el.closest(".choice-select")
+  )
     return chooseVisual(
       el.closest(".choice-select")!.querySelector("select")!,
       value
@@ -2450,6 +2487,88 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         !mutations.includes("video.generate"),
         "Saving creator video never starts generation"
       );
+      layout();
+    }
+    if (which === "studio-channels") {
+      await studioSection("Destination");
+      const cards = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".activation-channel-grid .cfg-card"
+        )
+      );
+      check(
+        cards.length === 3,
+        "Google, Meta and Facebook are available together"
+      );
+      const bounds = cards.map(c => c.getBoundingClientRect());
+      if (innerWidth >= 1366) {
+        check(
+          bounds.every(b => Math.abs(b.top - bounds[0].top) < 1),
+          "All three channels share one desktop row"
+        );
+        check(
+          bounds.every(b => b.width <= 340 && b.height <= 270),
+          "Channel cards use a compact comparable size"
+        );
+      }
+      check(
+        cards.every(
+          c =>
+            c.querySelector(".cfg-card-art")!.getBoundingClientRect().height <=
+            140
+        ),
+        "Channel artwork does not grow with the viewport"
+      );
+      check(!mutations.length, "Choosing a channel does not publish");
+      layout();
+    }
+    if (which === "workflow-density") {
+      await click("Add step");
+      const filters = document
+        .querySelector(".wf-palette-filter")!
+        .getBoundingClientRect();
+      const step = document
+        .querySelector(".wf-node-group button")!
+        .getBoundingClientRect();
+      const palette = document
+        .querySelector(".wf-node-library")!
+        .getBoundingClientRect();
+      check(
+        filters.height <= 160,
+        "Capabilities fit in a compact control group"
+      );
+      check(
+        step.bottom < Math.min(innerHeight, palette.bottom),
+        "The first actual step is visible below the filters"
+      );
+      await click("Close step library");
+      await click("Settings for Start trigger");
+      await chooseVisual(
+        document.querySelector(
+          '.choice-select[data-density="segmented"] select'
+        )!,
+        "scheduled"
+      );
+      const weekday = document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Weekday"]'
+      )!;
+      check(
+        !!weekday && !weekday.hidden,
+        "Weekday is a compact native control"
+      );
+      await fillControl('select[aria-label="Weekday"]', "5");
+      check(weekday.value === "5", "The schedule remains editable");
+      const inspector = document.querySelector<HTMLElement>(".wf-inspector")!;
+      inspector.scrollTop = 0;
+      const hour = inspector
+        .querySelector<HTMLInputElement>('input[type="number"]')!
+        .getBoundingClientRect();
+      check(
+        hour.bottom <
+          Math.min(innerHeight, inspector.getBoundingClientRect().bottom),
+        "Scheduling controls fit above the inspector fold"
+      );
+      check(!mutations.length, "Layout interactions do not run the workflow");
       layout();
     }
     if (which === "workflow-library") {

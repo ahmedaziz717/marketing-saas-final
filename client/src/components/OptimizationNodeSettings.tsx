@@ -45,6 +45,7 @@ export function OptimizationNodeSettings({
           <ChoiceField>
             Start mode
             <VisualSelect
+              density="segmented"
               value={trigger.kind}
               onChange={e =>
                 onChange({

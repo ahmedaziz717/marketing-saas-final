@@ -6,7 +6,8 @@ export function changeField(
   event: { target: { value?: unknown; [key: string]: unknown } }
 ) {
   const root = element.closest(".choice-select");
-  if (!root) return fireEvent.change(element, event);
+  if (!root || root.getAttribute("data-density") === "select")
+    return fireEvent.change(element, event);
   const value = String(event.target.value);
   const find = () =>
     Array.from(root.querySelectorAll<HTMLButtonElement>(".choice-tile")).find(
@@ -40,6 +41,8 @@ export function selectedChoice(element: Element) {
 }
 export function allChoiceLabels(element: Element) {
   const root = element.closest(".choice-select")!;
+  if (root.getAttribute("data-density") === "select")
+    return Array.from(root.querySelectorAll("option"), o => o.textContent);
   let more: HTMLButtonElement | undefined;
   while (
     (more = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(

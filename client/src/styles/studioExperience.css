@@ -1310,7 +1310,7 @@
   .cfg-root:has(.studio-journey) {
     /* Use the available height without flattening previews or choice artwork. */
     --journey-preview-height: clamp(208px, calc(50dvh - 180px), 320px);
-    --journey-art-height: clamp(260px, 32dvh, 340px);
+    --journey-art-height: var(--studio-card-art-height);
     padding: 0;
   }
   .cfg-root:has(.studio-journey) .cfg-heading .cfg-back {
@@ -1687,8 +1687,8 @@
     font-size: 11px;
   }
   .journey-editor .studio-choice-grid {
-    gap: 10px;
-    grid-template-columns: repeat(auto-fill, minmax(min(224px, 100%), 1fr));
+    gap: var(--studio-card-gap);
+    grid-template-columns: var(--studio-card-columns);
   }
   .journey-editor .studio-choice-grid .cfg-card-copy {
     padding: 9px 10px;

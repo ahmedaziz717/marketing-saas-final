@@ -8,8 +8,73 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { VisualSelect, ChoiceField } from "./VisualSelect";
+import {
+  VisualSelect,
+  ChoiceField,
+  ChoiceDensityProvider,
+} from "./VisualSelect";
 afterEach(cleanup);
+
+it("keeps native labels, validation, submission and reset in a narrow editor", () => {
+  const changed = vi.fn();
+  render(
+    <form aria-label="Compact setup">
+      <ChoiceDensityProvider value="select">
+        <ChoiceField>
+          Weekday
+          <VisualSelect
+            name="weekday"
+            defaultValue=""
+            required
+            onValueChange={changed}
+          >
+            <option value="">Choose a day</option>
+            <option value="1">Monday</option>
+            <option value="2" disabled>
+              Tuesday
+            </option>
+          </VisualSelect>
+        </ChoiceField>
+      </ChoiceDensityProvider>
+    </form>
+  );
+  const select = screen.getByRole("combobox", { name: "Weekday" });
+  const form = screen.getByRole("form") as HTMLFormElement;
+  expect(form.checkValidity()).toBe(false);
+  fireEvent.change(select, { target: { value: "1" } });
+  expect(changed).toHaveBeenCalledWith("1");
+  expect(form.checkValidity()).toBe(true);
+  expect(new FormData(form).get("weekday")).toBe("1");
+  fireEvent.reset(form);
+  expect(form.checkValidity()).toBe(false);
+  expect(new FormData(form).get("weekday")).toBe("");
+});
+
+it("lets short visible choices override the editor density and keeps keyboard selection", () => {
+  render(
+    <ChoiceDensityProvider value="select">
+      <VisualSelect
+        density="segmented"
+        aria-label="Start mode"
+        defaultValue="manual"
+      >
+        <option value="manual">Manual</option>
+        <option value="scheduled">Scheduled</option>
+      </VisualSelect>
+    </ChoiceDensityProvider>
+  );
+  fireEvent.keyDown(screen.getByRole("radio", { name: "Manual" }), {
+    key: "ArrowRight",
+  });
+  expect(
+    screen
+      .getByRole("radio", { name: "Scheduled" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
+  expect(document.activeElement).toBe(
+    screen.getByRole("radio", { name: "Scheduled" })
+  );
+});
 
 it("names a choice group without nesting interactive tiles inside a label", () => {
   render(

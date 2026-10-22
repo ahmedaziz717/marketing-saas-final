@@ -24,7 +24,7 @@ export function GoogleAdsStudioEntry({
       }
       media={
         <div className="activation-channel-art">
-          <PartnerLogo slug="googleads" name="Google Ads" size={88} />
+          <PartnerLogo slug="googleads" name="Google Ads" size={48} />
           <span>
             {context === "activation"
               ? "Campaign control"
@@ -39,12 +39,6 @@ export function GoogleAdsStudioEntry({
             : "/app/optimize/studio?channel=google_ads"
         )
       }
-    >
-      <p className="p-3 text-sm text-muted-foreground">
-        {context === "activation"
-          ? "Start with a new or existing campaign, then validate and review before publishing."
-          : "Choose a Google Ads account and the period you want to analyze."}
-      </p>
-    </StudioCard>
+    />
   );
 }

@@ -817,7 +817,7 @@
 .wf-inspector-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .wf-inspector-body :is(label, .choice-field) {
   display: flex;
