@@ -104,7 +104,7 @@ export function WorkflowFormEditor({
     );
 
   return (
-    <ChoiceDensityProvider density="compact">
+    <ChoiceDensityProvider value="compact">
       <section
         className={`wf-form-editor ${fieldId ? "wf-form-inspector" : ""}`}
       >
