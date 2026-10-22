@@ -1,3 +1,4 @@
+import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
   findSafeLogoPlacement,
   loadPreservedLogo,
@@ -6,7 +7,10 @@ import {
 } from "../lib/logoPreservation";
 import { productOverlayPlacementSchema } from "../../shared/productOverlay";
 import { alignCopyWithCampaign } from "../../shared/creativeMessaging";
-import { prepareEnhancement, readEnhancementSource } from "../lib/imageEnhancement";
+import {
+  prepareEnhancement,
+  readEnhancementSource,
+} from "../lib/imageEnhancement";
 import {
   renderProductOverlay,
   suggestProductPlacement,
@@ -279,11 +283,22 @@ export async function loadInputs(
     })
   );
   const enhancement = setup.enhancement
-    ? (await readEnhancementSource(db, organizationId, setup.enhancement.assetKey, setup.enhancement.revision)).source
+    ? (
+        await readEnhancementSource(
+          db,
+          organizationId,
+          setup.enhancement.assetKey,
+          setup.enhancement.revision
+        )
+      ).source
     : undefined;
   return {
     ...(enhancement ? { enhancement } : {}),
-    references: [...(enhancement ? [enhancement] : []), ...sourceReferences, ...references],
+    references: [
+      ...(enhancement ? [enhancement] : []),
+      ...sourceReferences,
+      ...references,
+    ],
     personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
@@ -369,11 +384,13 @@ export async function runBuilderJob(
         .sort((a, b) => b.width * b.height - a.width * a.height);
       for (const format of formats) {
         await renewBuilderJob(db, organizationId, jobId);
-        const cutouts = setup.enhancement ? preserved : group.length
-          ? preserved.filter(p =>
-              group.some(g => g.image?.storageKey === p.sourceKey)
-            )
-          : preserved;
+        const cutouts = setup.enhancement
+          ? preserved
+          : group.length
+            ? preserved.filter(p =>
+                group.some(g => g.image?.storageKey === p.sourceKey)
+              )
+            : preserved;
         const productLayers = cutouts.length
           ? await layoutPreservedProducts(cutouts, format, setup.placement)
           : [];
@@ -399,7 +416,8 @@ export async function runBuilderJob(
             hasLogo: !!resolved.logo,
             logoPlacement: logoLayout,
             adaptMaster: !!master,
-            enhancementReferencePosition: group.filter(p => p.image).length + 1 + (master ? 1 : 0),
+            enhancementReferencePosition:
+              group.filter(p => p.image).length + 1 + (master ? 1 : 0),
           }),
           outputSize: {
             width: format.width,
@@ -442,13 +460,13 @@ export async function runBuilderJob(
           organizationId: organizationId,
           briefId: briefId,
           jobId,
-          name: (
-            setup.enhancement ? setup.name :
-            (group.map(product => product.name).join(" + ") ||
-              setup.promotion?.title ||
-              resolved.brand.name) +
-            " · " +
-            format.name
+          name: (setup.enhancement
+            ? setup.name
+            : (group.map(product => product.name).join(" + ") ||
+                setup.promotion?.title ||
+                resolved.brand.name) +
+              " · " +
+              format.name
           ).slice(0, 180),
           concept:
             CREATIVE_THEMES[setup.theme].name +
@@ -468,15 +486,23 @@ export async function runBuilderJob(
           imageStorageKey: image.storageKey,
           renderMetadata: {
             requestedSetup: setup,
-            ...(setup.enhancement ? {
-              enhancement: {
-                sourceAssetKey: setup.enhancement.assetKey as import("../../shared/assetLibrary").AssetKey,
-                sourceRevision: setup.enhancement.revision,
-                instruction: setup.enhancement.instruction,
-              },
-              ...(setup.enhancement.assetKey.startsWith("creative:")
-                ? { parentVariantId: parseAssetKey(setup.enhancement.assetKey).id } : {}),
-            } : {}),
+            ...(setup.enhancement
+              ? {
+                  enhancement: {
+                    sourceAssetKey: setup.enhancement
+                      .assetKey as import("../../shared/assetLibrary").AssetKey,
+                    sourceRevision: setup.enhancement.revision,
+                    instruction: setup.enhancement.instruction,
+                  },
+                  ...(setup.enhancement.assetKey.startsWith("creative:")
+                    ? {
+                        parentVariantId: parseAssetKey(
+                          setup.enhancement.assetKey
+                        ).id,
+                      }
+                    : {}),
+                }
+              : {}),
             ...(preservedLogo && logoLayout
               ? {
                   logoPreservation: {
@@ -738,13 +764,34 @@ async function readOverlayDesign(
 
 export const creativeBuilderRouter = router({
   enhancementSetup: protectedProcedure
-    .input(organizationInput.extend({ key: z.string().regex(/^(asset|creative):[1-9][0-9]*$/), revision: z.string().regex(/^[a-f0-9]{64}$/) }))
+    .input(
+      organizationInput.extend({
+        key: z.string().regex(/^(asset|creative):[1-9][0-9]*$/),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+      })
+    )
     .query(async ({ ctx, input }) => {
-      await requireOrganizationRole(ctx.user.id, input.organizationId, [...editorRoles]);
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        ...editorRoles,
+      ]);
       const db = (await getDb())!;
-      const [brand] = await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1);
-      if (!brand) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Set up your Brand Kit before enhancing an image." });
-      return prepareEnhancement(db, input.organizationId, input.key, input.revision, brand);
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      if (!brand)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your Brand Kit before enhancing an image.",
+        });
+      return prepareEnhancement(
+        db,
+        input.organizationId,
+        input.key,
+        input.revision,
+        brand
+      );
     }),
   productOverlay: protectedProcedure
     .input(organizationInput.extend({ variantId: z.number().int().positive() }))
@@ -1231,73 +1278,87 @@ export const creativeBuilderRouter = router({
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [catalog, images, logos, kits, drafts, references] =
-        await Promise.all([
-          db
-            .select()
-            .from(products)
-            .where(
-              and(
-                eq(products.organizationId, input.organizationId),
-                eq(products.status, "approved")
-              )
+      const [
+        approvedCatalog,
+        catalog,
+        images,
+        logos,
+        kits,
+        drafts,
+        references,
+      ] = await Promise.all([
+        db
+          .select()
+          .from(products)
+          .where(
+            and(
+              eq(products.organizationId, input.organizationId),
+              eq(products.status, "approved")
             )
-            .orderBy(products.name)
-            .limit(750),
-          db
-            .select()
-            .from(productImages)
-            .where(eq(productImages.organizationId, input.organizationId))
-            .orderBy(desc(productImages.isPrimary), productImages.id),
-          db
-            .select()
-            .from(brandAssets)
-            .where(
-              and(
-                eq(brandAssets.organizationId, input.organizationId),
-                eq(brandAssets.type, "logo"),
-                eq(brandAssets.status, "approved")
-              )
+          )
+          .orderBy(products.name)
+          .limit(750),
+        db
+          .select()
+          .from(products)
+          .where(eq(products.organizationId, input.organizationId))
+          .orderBy(products.name)
+          .limit(2000),
+        db
+          .select()
+          .from(productImages)
+          .where(eq(productImages.organizationId, input.organizationId))
+          .orderBy(desc(productImages.isPrimary), productImages.id),
+        db
+          .select()
+          .from(brandAssets)
+          .where(
+            and(
+              eq(brandAssets.organizationId, input.organizationId),
+              eq(brandAssets.type, "logo"),
+              eq(brandAssets.status, "approved")
             )
-            .orderBy(desc(brandAssets.createdAtMs)),
-          db
-            .select()
-            .from(brandKits)
-            .where(eq(brandKits.organizationId, input.organizationId))
-            .limit(1),
-          db
-            .select({
-              id: campaignBriefs.id,
-              name: campaignBriefs.name,
-              setup: campaignBriefs.creativeSetup,
-              updatedAtMs: campaignBriefs.updatedAtMs,
-            })
-            .from(campaignBriefs)
-            .where(
-              and(
-                eq(campaignBriefs.organizationId, input.organizationId),
-                isNotNull(campaignBriefs.creativeSetup)
-              )
+          )
+          .orderBy(desc(brandAssets.createdAtMs)),
+        db
+          .select()
+          .from(brandKits)
+          .where(eq(brandKits.organizationId, input.organizationId))
+          .limit(1),
+        db
+          .select({
+            id: campaignBriefs.id,
+            name: campaignBriefs.name,
+            setup: campaignBriefs.creativeSetup,
+            updatedAtMs: campaignBriefs.updatedAtMs,
+          })
+          .from(campaignBriefs)
+          .where(
+            and(
+              eq(campaignBriefs.organizationId, input.organizationId),
+              isNotNull(campaignBriefs.creativeSetup)
             )
-            .orderBy(desc(campaignBriefs.updatedAtMs))
-            .limit(50),
-          db
-            .select()
-            .from(brandAssets)
-            .where(
-              and(
-                eq(brandAssets.organizationId, input.organizationId),
-                eq(brandAssets.type, "reference"),
-                eq(brandAssets.status, "approved")
-              )
+          )
+          .orderBy(desc(campaignBriefs.updatedAtMs))
+          .limit(50),
+        db
+          .select()
+          .from(brandAssets)
+          .where(
+            and(
+              eq(brandAssets.organizationId, input.organizationId),
+              eq(brandAssets.type, "reference"),
+              eq(brandAssets.status, "approved")
             )
-            .orderBy(desc(brandAssets.createdAtMs)),
-        ]);
+          )
+          .orderBy(desc(brandAssets.createdAtMs)),
+      ]);
       return {
         references: references.filter(
           r => r.metadata?.kind !== "lifestyle_person"
         ),
-        products: catalog.map(product => ({
+        products: approvedCatalog.map(product => ({
+          relatedSources: relatedCatalogSources(product, catalog),
           ...product,
           images: images.filter(image => image.productId === product.id),
         })),

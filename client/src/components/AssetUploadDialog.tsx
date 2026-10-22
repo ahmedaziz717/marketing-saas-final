@@ -38,6 +38,7 @@ async function base64(file: File): Promise<string> {
 }
 export function AssetUploadDialog({
   open,
+  inline = false,
   onClose,
   organizationId,
   role,
@@ -51,6 +52,7 @@ export function AssetUploadDialog({
   onComplete,
 }: {
   open: boolean;
+  inline?: boolean;
   onClose: () => void;
   organizationId: number;
   role: string;
@@ -164,14 +166,17 @@ export function AssetUploadDialog({
       : disposition === "submit"
         ? "Submit for approval"
         : "Approve & add to library";
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={value => {
-        if (!value && !busy) onClose();
-      }}
-    >
-      <DialogContent className="max-h-[90dvh] overflow-x-hidden overflow-y-auto">
+  const content = (
+    <>
+      {inline ? (
+        <header>
+          <h3>Upload assets</h3>
+          <p>
+            Preview your files, then save or approve them for your EvokeLoop
+            Library.
+          </p>
+        </header>
+      ) : (
         <DialogHeader className="min-w-0 pr-6">
           <DialogTitle>
             {parent ? "Prepare a revised version" : "Upload assets"}
@@ -182,151 +187,163 @@ export function AssetUploadDialog({
               : "Preview and categorize your files. Selecting files alone does not add them to the library."}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-w-0 space-y-4">
-          <div>
-            <Label htmlFor="workflow-files">Choose files</Label>
-            <Input
-              id="workflow-files"
-              type="file"
-              accept={allowedTypes.join(",")}
-              multiple={!parent}
-              disabled={busy}
-              className="mt-2"
-              onChange={event => {
-                const selected = Array.from(event.target.files ?? []);
-                if (selected.length > 20)
-                  toast.error("Choose up to 20 files at a time.");
-                setFiles(selected.slice(0, 20));
-              }}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Images up to 12 MB; MP4/WebM videos up to 20 MB each.
-            </p>
-          </div>
-          {!!previews.length && (
-            <div
-              aria-label="Upload preview"
-              className="grid max-h-56 grid-cols-2 gap-3 overflow-y-auto"
-            >
-              {previews.map((item, i) => (
-                <div key={item.url} className="min-w-0 rounded-xl border p-2">
-                  {item.file.type.startsWith("video/") ? (
-                    <video
-                      src={item.url}
-                      controls
-                      preload="metadata"
-                      className="h-24 w-full object-contain"
-                    />
-                  ) : (
-                    <img
-                      src={item.url}
-                      alt={`Preview ${i + 1}`}
-                      className="h-24 w-full object-contain"
-                    />
-                  )}
-                  <p className="mt-2 truncate text-xs" title={item.file.name}>
-                    {item.file.name}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-          <div>
-            <Label htmlFor="workflow-purpose">Purpose</Label>
-            <VisualSelect
-              id="workflow-purpose"
-              className={fieldClass}
-              value={purpose}
-              disabled={busy}
-              onChange={event =>
-                setPurpose(event.target.value as typeof purpose)
-              }
-            >
-              <option value="finished">Finished image or video</option>
-              <option value="source">Brand / product source material</option>
-            </VisualSelect>
-          </div>
-          {purpose === "source" && (
-            <div>
-              <Label htmlFor="workflow-source">Source type</Label>
-              <VisualSelect
-                id="workflow-source"
-                className={fieldClass}
-                value={sourceType}
-                disabled={busy}
-                onChange={event =>
-                  setSourceType(event.target.value as typeof sourceType)
-                }
-              >
-                <option value="other">Other</option>
-                <option value="logo">Logo</option>
-                <option value="product">Product image</option>
-                <option value="reference">Reference</option>
-              </VisualSelect>
-            </div>
-          )}
-          <label className="flex gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={ugc}
-              disabled={busy}
-              onChange={event => setUgc(event.target.checked)}
-            />
-            Creator or customer content
-          </label>
-          {ugc && (
-            <label className="flex items-start gap-2 rounded-xl bg-muted p-3 text-sm">
-              <input
-                className="mt-1"
-                type="checkbox"
-                checked={rights}
-                disabled={busy}
-                onChange={event => setRights(event.target.checked)}
-              />
-              We have permission to use this content.
-            </label>
-          )}
-          <div>
-            <Label htmlFor="workflow-disposition">After upload</Label>
-            <VisualSelect
-              id="workflow-disposition"
-              className={fieldClass}
-              value={disposition}
-              disabled={busy}
-              onChange={event =>
-                setDisposition(event.target.value as UploadDisposition)
-              }
-            >
-              <option value="draft">Keep as a draft in Content Studio</option>
-              <option value="submit">Send to Asset Library for approval</option>
-              {mayApproveAndAdd(role) && (
-                <option value="approve">
-                  Approve and add to Asset Library
-                </option>
-              )}
-            </VisualSelect>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              {disposition === "draft"
-                ? "Your work is saved, but stays out of the shared library until submitted."
-                : disposition === "submit"
-                  ? "An authorized reviewer must approve the submitted version before use."
-                  : "You are explicitly approving these files. Nothing will be published."}
-            </p>
-          </div>
-          {progress && (
-            <p role="status" className="break-words text-sm">
-              {progress}
-            </p>
-          )}
-          <Button
-            className="h-auto w-full whitespace-normal py-3"
-            disabled={busy || !files.length || (ugc && !rights)}
-            onClick={() => void save()}
-          >
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {label}
-          </Button>
+      )}
+      <div className="min-w-0 space-y-4">
+        <div>
+          <Label htmlFor="workflow-files">Choose files</Label>
+          <Input
+            id="workflow-files"
+            type="file"
+            accept={allowedTypes.join(",")}
+            multiple={!parent}
+            disabled={busy}
+            className="mt-2"
+            onChange={event => {
+              const selected = Array.from(event.target.files ?? []);
+              if (selected.length > 20)
+                toast.error("Choose up to 20 files at a time.");
+              setFiles(selected.slice(0, 20));
+            }}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Images up to 12 MB; MP4/WebM videos up to 20 MB each.
+          </p>
         </div>
+        {!!previews.length && (
+          <div
+            aria-label="Upload preview"
+            className="grid max-h-56 grid-cols-2 gap-3 overflow-y-auto"
+          >
+            {previews.map((item, i) => (
+              <div key={item.url} className="min-w-0 rounded-xl border p-2">
+                {item.file.type.startsWith("video/") ? (
+                  <video
+                    src={item.url}
+                    controls
+                    preload="metadata"
+                    className="h-24 w-full object-contain"
+                  />
+                ) : (
+                  <img
+                    src={item.url}
+                    alt={`Preview ${i + 1}`}
+                    className="h-24 w-full object-contain"
+                  />
+                )}
+                <p className="mt-2 truncate text-xs" title={item.file.name}>
+                  {item.file.name}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div>
+          <Label htmlFor="workflow-purpose">Purpose</Label>
+          <VisualSelect
+            id="workflow-purpose"
+            className={fieldClass}
+            value={purpose}
+            disabled={busy}
+            onChange={event => setPurpose(event.target.value as typeof purpose)}
+          >
+            <option value="finished">Finished image or video</option>
+            <option value="source">Brand / product source material</option>
+          </VisualSelect>
+        </div>
+        {purpose === "source" && (
+          <div>
+            <Label htmlFor="workflow-source">Source type</Label>
+            <VisualSelect
+              id="workflow-source"
+              className={fieldClass}
+              value={sourceType}
+              disabled={busy}
+              onChange={event =>
+                setSourceType(event.target.value as typeof sourceType)
+              }
+            >
+              <option value="other">Other</option>
+              <option value="logo">Logo</option>
+              <option value="product">Product image</option>
+              <option value="reference">Reference</option>
+            </VisualSelect>
+          </div>
+        )}
+        <label className="flex gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={ugc}
+            disabled={busy}
+            onChange={event => setUgc(event.target.checked)}
+          />
+          Creator or customer content
+        </label>
+        {ugc && (
+          <label className="flex items-start gap-2 rounded-xl bg-muted p-3 text-sm">
+            <input
+              className="mt-1"
+              type="checkbox"
+              checked={rights}
+              disabled={busy}
+              onChange={event => setRights(event.target.checked)}
+            />
+            We have permission to use this content.
+          </label>
+        )}
+        <div>
+          <Label htmlFor="workflow-disposition">After upload</Label>
+          <VisualSelect
+            id="workflow-disposition"
+            className={fieldClass}
+            value={disposition}
+            disabled={busy}
+            onChange={event =>
+              setDisposition(event.target.value as UploadDisposition)
+            }
+          >
+            <option value="draft">Keep as a draft in Content Studio</option>
+            <option value="submit">Send to Asset Library for approval</option>
+            {mayApproveAndAdd(role) && (
+              <option value="approve">Approve and add to Asset Library</option>
+            )}
+          </VisualSelect>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {disposition === "draft"
+              ? "Your work is saved, but stays out of the shared library until submitted."
+              : disposition === "submit"
+                ? "An authorized reviewer must approve the submitted version before use."
+                : "You are explicitly approving these files. Nothing will be published."}
+          </p>
+        </div>
+        {progress && (
+          <p role="status" className="break-words text-sm">
+            {progress}
+          </p>
+        )}
+        <Button
+          className="h-auto w-full whitespace-normal py-3"
+          disabled={busy || !files.length || (ugc && !rights)}
+          onClick={() => void save()}
+        >
+          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {label}
+        </Button>
+      </div>
+    </>
+  );
+  if (inline)
+    return open ? (
+      <section className="google-inline-upload">{content}</section>
+    ) : null;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={value => {
+        if (!value && !busy) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[90dvh] overflow-x-hidden overflow-y-auto">
+        {content}
       </DialogContent>
     </Dialog>
   );

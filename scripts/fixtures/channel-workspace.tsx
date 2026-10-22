@@ -540,7 +540,22 @@ function respond(path: string, input: any) {
 
   if (path === "catalogSources.list" && which.startsWith("google-")) return [];
   if (path === "googleAds.campaigns.drafts") return [];
-  if (path === "googleAds.campaigns.resources") return [];
+  if (path === "googleAds.campaigns.resources")
+    return input.kind === "assets"
+      ? [
+          {
+            id: "41",
+            name: "Google product image",
+            type: "IMAGE",
+            url:
+              "data:image/svg+xml," +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="314"><rect width="600" height="314" fill="#efeafb"/><text x="40" y="170" font-size="36" fill="#7041bd">Product image</text></svg>'
+              ),
+          },
+          { id: "42", name: "Google product video", type: "YOUTUBE_VIDEO" },
+        ]
+      : [];
   if (path === "googleAds.campaigns.inventory")
     return {
       campaigns: googleCampaignRows.filter(r =>
@@ -1886,7 +1901,49 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.body.textContent?.includes("Core products"),
           "Existing asset groups are available"
         );
-        await click("Manage group assets");
+        await click("Add images, videos & text");
+        check(
+          !!document.querySelector('[aria-label="Select Images"]') &&
+            !!document.querySelector('[aria-label="Select Videos"]'),
+          "Existing PMax offers image and video type tiles"
+        );
+        await click("Select Videos");
+        check(
+          !!document.querySelector('[aria-label="Select EvokeLoop Library"]') &&
+            !!document.querySelector('[aria-label="Select Upload"]') &&
+            !!document.querySelector(
+              '[aria-label="Select Google Ads Library"]'
+            ),
+          "All three asset sources use Studio tiles"
+        );
+        check(
+          !document.querySelector('[aria-label="Select Responsive display"]'),
+          "Video selection excludes image assets"
+        );
+        await click("Select Upload");
+        check(
+          !!document.querySelector(".google-inline-upload") &&
+            !document.querySelector('[role="dialog"]'),
+          "Upload stays inline in the Studio"
+        );
+        await click("Select Google Ads Library");
+        check(
+          !!document.querySelector('.google-field input[type="search"]'),
+          "Google library supports visual browsing and search"
+        );
+        await click("Choose another asset type");
+        await click("Select Images");
+        await click("Select Google Ads Library");
+        check(
+          !!document.querySelector(
+            '[aria-label="Select Google product image"]'
+          ),
+          "Google images render as selectable tiles"
+        );
+        check(
+          !document.querySelector('[aria-label="Select Google product video"]'),
+          "Google library filters to the selected format"
+        );
         check(
           document.body.textContent?.includes("Shop the collection"),
           "Existing Google assets can be selected for replacement"

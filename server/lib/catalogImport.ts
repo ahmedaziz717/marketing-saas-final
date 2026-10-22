@@ -11,7 +11,10 @@ import { fetchCatalogImage } from "./catalogImages";
 import { storagePut } from "../storage";
 import type { StoreItem } from "./storeCatalog";
 import { structuredCatalogFacts } from "../../shared/catalogFacts";
-import { reconcileCatalogRefresh } from "../../shared/catalogRefresh";
+import {
+  catalogFactsEqual,
+  reconcileCatalogRefresh,
+} from "../../shared/catalogRefresh";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export async function importCatalogEntry(
@@ -91,10 +94,8 @@ export async function importCatalogEntry(
   const unchanged =
     (source?.imageRepairOnly && !!old) ||
     (previousTruth &&
-      Object.entries(truth).every(
-        ([k, v]) =>
-          JSON.stringify((previousTruth as any)[k] ?? "") ===
-          JSON.stringify(v ?? "")
+      Object.entries(truth).every(([k, v]) =>
+        catalogFactsEqual((previousTruth as any)[k] ?? "", v ?? "")
       ));
   const values = {
     ...truth,

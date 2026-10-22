@@ -1,3 +1,27 @@
+/** Object key order is not a product-fact change; array order still matters. */
+export function catalogFactsEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null || typeof a !== "object" || typeof b !== "object")
+    return false;
+  if (Array.isArray(a) || Array.isArray(b))
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((value, i) => catalogFactsEqual(value, b[i]))
+    );
+  const left = a as Record<string, unknown>,
+    right = b as Record<string, unknown>;
+  return (
+    Object.keys(left).length === Object.keys(right).length &&
+    Object.keys(left).every(
+      key =>
+        Object.prototype.hasOwnProperty.call(right, key) &&
+        catalogFactsEqual(left[key], right[key])
+    )
+  );
+}
+
 export const catalogFactFields = [
   "name",
   "sku",
@@ -46,7 +70,7 @@ export function reconcileCatalogRefresh<T extends Record<string, unknown>>(
       provenance[key] = previous.provenance[key] ?? previous.provenance.source;
       preserved.push(key);
     }
-    if (JSON.stringify(old ?? "") !== JSON.stringify(values[key] ?? "")) {
+    if (!catalogFactsEqual(old ?? "", values[key] ?? "")) {
       before[key] = old;
       after[key] = values[key];
     }

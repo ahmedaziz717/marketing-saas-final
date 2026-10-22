@@ -1,3 +1,9 @@
+import {
+  GoogleFormatPicker,
+  googleCreativeFormats,
+  googleFormatLabel,
+  type GoogleCreativeFormat,
+} from "./GoogleCreativeFormat";
 import { AdEditor, AssetEditor } from "./GoogleAdEditor";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
@@ -78,6 +84,7 @@ export function GoogleCampaignComposer({
     [mode, setMode] = useState<"existing" | "new" | "drafts">(
       params.has("asset") ? "new" : "existing"
     );
+  const [format, setFormat] = useState<GoogleCreativeFormat>("image");
   const [includeInactive, setIncludeInactive] = useState(false),
     [campaignId, setCampaignId] = useState("");
   const [change, setChange] = useState<GoogleChange>(newCampaign),
@@ -99,7 +106,9 @@ export function GoogleCampaignComposer({
     validate = trpc.googleAds.campaigns.validate.useMutation(),
     publish = trpc.googleAds.campaigns.publish.useMutation();
   const busy = save.isPending || validate.isPending || publish.isPending;
-  const current = detail.data?.campaigns[0];
+  const current = detail.data?.campaigns.find(
+    r => String(r.campaign.id) === campaignId
+  );
   const locked =
     !!draft && ["publishing", "published", "uncertain"].includes(draft.state);
   const dirty =
@@ -115,16 +124,41 @@ export function GoogleCampaignComposer({
   const begin = (next: GoogleChange, target = "settings") => {
     edit(next);
     setDraft(null);
+    setFormat("image");
     setSection(target);
   };
   const hasAd = "ad" in change;
+  const hasAssets =
+    hasAd ||
+    change.kind === "asset_group_assets" ||
+    change.kind === "asset_group_create";
+  const creativeType = hasAd ? change.type : "PERFORMANCE_MAX";
+  const brandAssets = hasAd || !current?.campaign.brandGuidelinesEnabled;
+  const choices = googleCreativeFormats(creativeType, brandAssets).filter(
+    f => !hasAd || f !== "text" || creativeType === "SEARCH"
+  );
+  const activeFormat = choices.includes(format)
+    ? format
+    : (choices[0] ?? "image");
+  const selectedGroup = detail.data?.groups.find(
+    r =>
+      String((r.assetGroup ?? r.adGroup)?.id) ===
+      ("assetGroupId" in change
+        ? change.assetGroupId
+        : "adGroupId" in change
+          ? change.adGroupId
+          : "")
+  );
+
   const journey = useStudioJourney({
     scopeKey: `google:${organizationId}:${connectionId}`,
     section: ["channel", "account", "campaign"].includes(section)
       ? "setup"
       : ["settings", "targeting", "options"].includes(section)
         ? "delivery"
-        : section,
+        : section === "format"
+          ? "creative"
+          : section,
     category: section,
     onNavigate: (_section, category) => setSection(category),
     sections: [
@@ -157,12 +191,23 @@ export function GoogleCampaignComposer({
         subtitle: "Ads & asset groups",
         icon: Images,
         categories: [
+          ...(hasAssets && choices.length > 0
+            ? [
+                {
+                  id: "format",
+                  title:
+                    creativeType === "PERFORMANCE_MAX"
+                      ? "Asset type"
+                      : "Ad format",
+                  value: googleFormatLabel(activeFormat),
+                  disabled: !connection,
+                  reason: "Choose an account first",
+                },
+              ]
+            : []),
           {
             id: "creative",
-            title:
-              hasAd && change.type === "PERFORMANCE_MAX"
-                ? "Asset group"
-                : "Creative",
+            title: hasAssets ? "Assets & details" : "Creative",
             value: "Native formats & approved assets",
             disabled: !connection,
             reason: "Choose an account first",
@@ -191,35 +236,39 @@ export function GoogleCampaignComposer({
             },
           ]
         : []),
-      {
-        id: "delivery",
-        title: "Delivery",
-        subtitle: "Budget & targeting",
-        icon: Settings2,
-        categories: [
-          {
-            id: "settings",
-            title: "Budget & bidding",
-            value: "Account currency & schedule",
-            disabled: !connection,
-            reason: "Choose an account first",
-          },
-          ...(change.kind === "campaign_create"
-            ? [
+      ...(["campaign_create", "campaign_update"].includes(change.kind)
+        ? [
+            {
+              id: "delivery",
+              title: "Delivery",
+              subtitle: "Budget & targeting",
+              icon: Settings2,
+              categories: [
                 {
-                  id: "targeting",
-                  title: "Locations & languages",
-                  value: "Reach the right audience",
+                  id: "settings",
+                  title: "Budget & bidding",
+                  value: "Account currency & schedule",
+                  disabled: !connection,
+                  reason: "Choose an account first",
                 },
-                {
-                  id: "options",
-                  title: "Campaign options",
-                  value: googleCampaignTypes[change.type].label,
-                },
-              ]
-            : []),
-        ],
-      },
+                ...(change.kind === "campaign_create"
+                  ? [
+                      {
+                        id: "targeting",
+                        title: "Locations & languages",
+                        value: "Reach the right audience",
+                      },
+                      {
+                        id: "options",
+                        title: "Campaign options",
+                        value: googleCampaignTypes[change.type].label,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
       {
         id: "review",
         title: "Review & activate",
@@ -443,7 +492,10 @@ export function GoogleCampaignComposer({
                       key={m}
                       onClick={() => {
                         setMode(m);
-                        if (m === "new") begin(newCampaign(), "campaign");
+                        if (m === "new") {
+                          setCampaignId("");
+                          begin(newCampaign(), "campaign");
+                        }
                       }}
                     >
                       {label(
@@ -517,7 +569,24 @@ export function GoogleCampaignComposer({
                           className={
                             campaignId === r.campaign.id ? "is-selected" : ""
                           }
-                          onClick={() => setCampaignId(r.campaign.id)}
+                          onClick={() => {
+                            setCampaignId(String(r.campaign.id));
+                            begin(
+                              {
+                                kind: "campaign_update",
+                                campaignId: String(r.campaign.id),
+                                name: r.campaign.name,
+                                status:
+                                  r.campaign.status === "ENABLED"
+                                    ? "ENABLED"
+                                    : "PAUSED",
+                                dailyBudget:
+                                  Number(r.campaignBudget.amountMicros ?? 0) /
+                                  1e6,
+                              },
+                              "campaign"
+                            );
+                          }}
                         >
                           <strong>{r.campaign.name}</strong>
                           <span>
@@ -629,11 +698,11 @@ export function GoogleCampaignComposer({
                                         add: [],
                                         remove: [],
                                       },
-                                      "creative"
+                                      "format"
                                     )
                                   }
                                 >
-                                  Manage group assets
+                                  Add images, videos & text
                                 </Button>
                               ) : (
                                 ["SEARCH", "DISPLAY", "DEMAND_GEN"].includes(
@@ -657,7 +726,7 @@ export function GoogleCampaignComposer({
                                             name: group.name,
                                           },
                                         },
-                                        "creative"
+                                        "format"
                                       )
                                     }
                                   >
@@ -743,13 +812,42 @@ export function GoogleCampaignComposer({
                   disabled={locked || busy}
                 />
               )}
+            {section === "format" && !!connection && hasAssets && (
+              <fieldset disabled={locked || busy}>
+                <p>
+                  {current?.campaign.name}
+                  {selectedGroup
+                    ? ` · ${(selectedGroup.assetGroup ?? selectedGroup.adGroup).name}`
+                    : ""}
+                </p>
+                <GoogleFormatPicker
+                  type={creativeType}
+                  includeText={!hasAd}
+                  brandAssets={brandAssets}
+                  value={activeFormat}
+                  onChange={value => {
+                    setFormat(value);
+                    setSection("creative");
+                  }}
+                />
+              </fieldset>
+            )}
             {(section === "creative" || section === "copy") && !!connection && (
               <fieldset disabled={locked || busy}>
+                {change.kind !== "campaign_create" && (
+                  <p>
+                    {current?.campaign.name}
+                    {selectedGroup
+                      ? ` · ${(selectedGroup.assetGroup ?? selectedGroup.adGroup).name}`
+                      : ""}
+                  </p>
+                )}
                 {"ad" in change && (
                   <AdEditor
                     {...scope}
                     part={section === "copy" ? "copy" : "creative"}
                     type={change.type}
+                    format={activeFormat}
                     ad={change.ad}
                     onChange={ad => edit({ ...change, ad })}
                   />
@@ -804,6 +902,8 @@ export function GoogleCampaignComposer({
                           Campaign brand assets are retained.
                         </p>
                         <AssetEditor
+                          key={`${connectionId}:${campaignId}:${activeFormat}`}
+                          format={activeFormat}
                           {...scope}
                           assets={change.assets}
                           brandAssets={
@@ -817,73 +917,88 @@ export function GoogleCampaignComposer({
                 )}
                 {change.kind === "asset_group_assets" && (
                   <>
-                    <h3>Current group assets</h3>
-                    <p>
-                      Select associations to unlink. To replace an asset, select
-                      it here and add its replacement below. Shared Google
-                      assets remain available in other groups.
-                    </p>
-                    <div className="google-current-assets">
-                      {detail.data?.assets
-                        .filter(
-                          a => String(a.assetGroup.id) === change.assetGroupId
-                        )
-                        .map(a => {
-                          const selected = change.remove.some(
-                            r =>
-                              r.assetId === String(a.asset.id) &&
-                              r.field === a.assetGroupAsset.fieldType
-                          );
-                          return (
-                            <label key={a.assetGroupAsset.resourceName}>
-                              {a.asset.imageAsset?.fullSize?.url && (
-                                <img
-                                  src={a.asset.imageAsset.fullSize.url}
-                                  alt={a.asset.name || "Google asset"}
-                                />
-                              )}
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={e =>
-                                  edit({
-                                    ...change,
-                                    remove: e.target.checked
-                                      ? [
-                                          ...change.remove,
-                                          {
-                                            assetId: String(a.asset.id),
-                                            field: a.assetGroupAsset.fieldType,
-                                          },
-                                        ]
-                                      : change.remove.filter(
-                                          r =>
-                                            !(
-                                              r.assetId ===
-                                                String(a.asset.id) &&
-                                              r.field ===
-                                                a.assetGroupAsset.fieldType
-                                            )
-                                        ),
-                                  })
-                                }
-                              />
-                              <span>
-                                {label(a.assetGroupAsset.fieldType)} ·{" "}
-                                {a.asset.textAsset?.text ||
-                                  a.asset.name ||
-                                  a.asset.id}
-                              </span>
-                            </label>
-                          );
-                        })}
-                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setSection("format")}
+                    >
+                      Choose another asset type
+                    </Button>
                     <AssetEditor
+                      key={`${connectionId}:${campaignId}:${change.assetGroupId}:${activeFormat}`}
+                      format={activeFormat}
                       {...scope}
                       assets={change.add}
                       brandAssets={!current?.campaign.brandGuidelinesEnabled}
                       onChange={add => edit({ ...change, add })}
                     />
+                    <details className="google-existing-assets">
+                      <summary>
+                        Replace or remove existing assets (
+                        {change.remove.length} selected)
+                      </summary>
+                      <h3>Current group assets</h3>
+                      <p>
+                        Select associations to unlink. To replace an asset,
+                        select it here and add its replacement above. Shared
+                        Google assets remain available in other groups.
+                      </p>
+                      <div className="google-current-assets">
+                        {detail.data?.assets
+                          .filter(
+                            a => String(a.assetGroup.id) === change.assetGroupId
+                          )
+                          .map(a => {
+                            const selected = change.remove.some(
+                              r =>
+                                r.assetId === String(a.asset.id) &&
+                                r.field === a.assetGroupAsset.fieldType
+                            );
+                            return (
+                              <label key={a.assetGroupAsset.resourceName}>
+                                {a.asset.imageAsset?.fullSize?.url && (
+                                  <img
+                                    src={a.asset.imageAsset.fullSize.url}
+                                    alt={a.asset.name || "Google asset"}
+                                  />
+                                )}
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={e =>
+                                    edit({
+                                      ...change,
+                                      remove: e.target.checked
+                                        ? [
+                                            ...change.remove,
+                                            {
+                                              assetId: String(a.asset.id),
+                                              field:
+                                                a.assetGroupAsset.fieldType,
+                                            },
+                                          ]
+                                        : change.remove.filter(
+                                            r =>
+                                              !(
+                                                r.assetId ===
+                                                  String(a.asset.id) &&
+                                                r.field ===
+                                                  a.assetGroupAsset.fieldType
+                                              )
+                                          ),
+                                    })
+                                  }
+                                />
+                                <span>
+                                  {label(a.assetGroupAsset.fieldType)} ·{" "}
+                                  {a.asset.textAsset?.text ||
+                                    a.asset.name ||
+                                    a.asset.id}
+                                </span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </details>
                   </>
                 )}
               </fieldset>

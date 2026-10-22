@@ -50,3 +50,18 @@ it("uses page details only to fill gaps in API specifications", () => {
     specifications: { Memory: "32GB", Warranty: "1 year" },
   });
 });
+
+it("does not send unchanged JSONB specifications back for review when keys are reordered", () => {
+  const previous = {
+    specifications: { processor: "Core i9", memory: "96 GB" },
+    provenance: { source: "api" },
+  };
+  const result = reconcileCatalogRefresh(
+    previous,
+    { specifications: { memory: "96 GB", processor: "Core i9" } },
+    {},
+    "api"
+  );
+  expect(result.changed).toBe(false);
+  expect(result.provenance["refresh.status"]).toBeUndefined();
+});

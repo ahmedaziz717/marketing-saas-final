@@ -1,3 +1,4 @@
+import { googleLibraryVideo } from "../lib/googleVideoUploads";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -36,7 +37,23 @@ async function safe<T>(work: () => Promise<T>) {
     });
   }
 }
+const libraryVideo = account.extend({
+  key: z.string().regex(/^asset:[1-9][0-9]*$/),
+  revision: z.string().min(1).max(200),
+});
 export const googleCampaignsRouter = router({
+  videoUploadStatus: protectedProcedure
+    .input(libraryVideo)
+    .query(({ ctx, input }) =>
+      safe(() => googleLibraryVideo(ctx.user.id, input))
+    ),
+  uploadVideo: protectedProcedure
+    .input(
+      libraryVideo.extend({ confirm: z.literal(true), generated: z.boolean() })
+    )
+    .mutation(({ ctx, input }) =>
+      safe(() => googleLibraryVideo(ctx.user.id, input, true))
+    ),
   inventory: protectedProcedure
     .input(
       account.extend({

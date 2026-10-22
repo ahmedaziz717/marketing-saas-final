@@ -8,6 +8,7 @@ const f = vi.hoisted(() => ({
   db: null as any,
   read: vi.fn(),
   mutate: vi.fn(),
+  videoUpload: vi.fn(),
 }));
 vi.mock("./db", () => ({ getDb: async () => f.db }));
 vi.mock("./lib/googleAdsApi", async original => ({
@@ -18,7 +19,19 @@ vi.mock("./lib/googleAdsMutate", async original => ({
   ...(await original<any>()),
   mutateGoogleAds: (...args: unknown[]) => f.mutate(...args),
 }));
+vi.mock("./lib/googleVideoUploadApi", () => ({
+  uploadGoogleVideo: (...args: unknown[]) => f.videoUpload(...args),
+}));
+vi.mock("./storage", async original => ({
+  ...(await original<any>()),
+  storageGetBase64: async () =>
+    Buffer.from("synthetic-video").toString("base64"),
+}));
+import { googleLibraryVideo } from "./lib/googleVideoUploads";
+import { readLibraryAsset } from "./lib/assetLibrary";
 import {
+  brandAssets,
+  brandKits,
   users,
   organizations,
   organizationMemberships,
@@ -464,4 +477,98 @@ it("updates only the selected PMax group and gives new retail groups a product t
       },
     ])
   ).toThrow("not supported");
+});
+
+async function videoAsset() {
+  let kit = (
+    await f.db.select().from(brandKits).where(eq(brandKits.organizationId, org))
+  )[0];
+  if (!kit)
+    kit = (
+      await f.db
+        .insert(brandKits)
+        .values({
+          organizationId: org,
+          name: "Brand",
+          colors: [],
+          fonts: [],
+          updatedByUserId: owner,
+          updatedAtMs: 1,
+        })
+        .returning()
+    )[0];
+  const row = (
+    await f.db
+      .insert(brandAssets)
+      .values({
+        organizationId: org,
+        brandKitId: kit.id,
+        name: "Library clip",
+        type: "other",
+        storageKey: `org-${org}/clip-${randomUUID()}.mp4`,
+        url: "https://example.com/clip.mp4",
+        mimeType: "video/mp4",
+        status: "approved",
+        uploadedByUserId: owner,
+        createdAtMs: 1,
+        metadata: { library: { purpose: "finished" } },
+      })
+      .returning()
+  )[0];
+  const asset = await readLibraryAsset(f.db, org, `asset:${row.id}`);
+  return {
+    organizationId: org,
+    connectionId,
+    key: asset.key,
+    revision: asset.revision,
+    generated: false,
+  };
+}
+it("uploads approved library videos once, resumes processing and never changes campaigns", async () => {
+  const input = await videoAsset();
+  f.videoUpload
+    .mockReset()
+    .mockResolvedValue("customers/2222222222/youTubeVideoUploads/77");
+  expect(await googleLibraryVideo(owner, input)).toBeNull();
+  expect(f.videoUpload).not.toHaveBeenCalled();
+  expect(await googleLibraryVideo(owner, input, true)).toMatchObject({
+    state: "PROCESSING",
+  });
+  f.read.mockResolvedValue([
+    { youTubeVideoUpload: { state: "PROCESSED", videoId: "abcdefghijk" } },
+  ]);
+  expect(await googleLibraryVideo(owner, input, true)).toMatchObject({
+    state: "PROCESSED",
+    videoId: "abcdefghijk",
+  });
+  expect(f.videoUpload).toHaveBeenCalledTimes(1);
+  expect(f.mutate).not.toHaveBeenCalled();
+  await expect(googleLibraryVideo(creator, input, true)).rejects.toThrow();
+  await expect(
+    googleLibraryVideo(owner, { ...input, organizationId: org2 }, true)
+  ).rejects.toThrow();
+  await expect(
+    googleLibraryVideo(owner, { ...input, revision: "stale" }, true)
+  ).rejects.toThrow();
+});
+it("does not retry an uncertain video upload and retains its durable audit state", async () => {
+  const input = await videoAsset();
+  f.videoUpload
+    .mockReset()
+    .mockRejectedValue(new GoogleMutationError("Unconfirmed upload", true));
+  expect(await googleLibraryVideo(owner, input, true)).toMatchObject({
+    state: "UNCERTAIN",
+  });
+  expect(await googleLibraryVideo(owner, input, true)).toMatchObject({
+    state: "UNCERTAIN",
+  });
+  expect(f.videoUpload).toHaveBeenCalledTimes(1);
+});
+it("blocks video transfers when live actions are disabled", async () => {
+  const input = await videoAsset();
+  vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "false");
+  await expect(googleLibraryVideo(owner, input, true)).rejects.toThrow(
+    /disabled/
+  );
+  vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
 });
