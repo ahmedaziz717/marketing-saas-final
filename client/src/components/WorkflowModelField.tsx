@@ -170,14 +170,7 @@ export function WorkflowModelFieldEditor({
       ),
     });
   const bind = (nextKind: WorkflowModelKind, nextTarget?: WorkflowNode) => {
-    const defaults = nextTarget
-      ? workflowModelFieldDefaults(nextTarget)
-      : {
-          modelKind: nextKind,
-          allowedModelIds: [defaultWorkflowModel(nextKind)],
-          defaultValue: defaultWorkflowModel(nextKind),
-          modelSettings: {},
-        };
+    const defaults = workflowModelFieldDefaults(nextTarget, nextKind);
     onChange({
       ...graph,
       nodes: graph.nodes.map(n =>

@@ -3,7 +3,12 @@ import { optimizationStudioSchema } from "./optimizationStudioSchema";
 import { copyComparisonSchema } from "./copyEvidence";
 import { z } from "zod";
 import { performanceInputSchema, appFieldSchema } from "./workflowInputs";
-import { rangeSchema, timezoneSchema, linkSchema } from "./channels";
+import {
+  rangeSchema,
+  timezoneSchema,
+  linkSchema,
+  type ConnectionChannel,
+} from "./channels";
 export const workflowFamilies = [
   "create",
   "activate",
@@ -78,8 +83,8 @@ export const workflowNodes: Record<
     description: string;
     group: string;
     family?: WorkflowFamily;
-    channel?: "facebook" | "meta_ads" | "google_ads";
-    channels?: ("facebook" | "meta_ads" | "google_ads")[];
+    channel?: ConnectionChannel;
+    channels?: ConnectionChannel[];
     families?: WorkflowFamily[];
     hidden?: boolean;
     output: WorkflowPortType;

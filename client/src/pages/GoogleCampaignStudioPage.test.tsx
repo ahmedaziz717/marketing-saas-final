@@ -50,9 +50,8 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
-import GoogleCampaignStudioPage, {
-  GoogleCampaignComposer,
-} from "./GoogleCampaignStudioPage";
+import GoogleCampaignStudioPage from "./GoogleCampaignStudioPage";
+import { GoogleCampaignComposer } from "@/components/google/GoogleCampaignComposer";
 const click = (name: RegExp | string) =>
   fireEvent.click(screen.getByRole("button", { name }));
 const section = (name: string) => click(new RegExp(`^${name} `));

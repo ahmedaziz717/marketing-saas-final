@@ -5,7 +5,7 @@ import {
 } from "@/components/configurator/StudioJourney";
 import type { ReactNode } from "react";
 import { PartnerLogo } from "@/components/PartnerLogo";
-import { GoogleCampaignComposer } from "./GoogleCampaignStudioPage";
+import { GoogleCampaignComposer } from "@/components/google/GoogleCampaignComposer";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -18,12 +18,7 @@ import {
 } from "@/components/activation/ActivationNavigation";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
-import {
-  ArrowLeft,
-  CalendarDays,
-  Megaphone,
-  MessageCircle,
-} from "lucide-react";
+import { ArrowLeft, CalendarDays } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { trpc } from "@/lib/trpc";
@@ -40,7 +35,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { type Channel, editablePublication } from "@shared/channels";
+import {
+  type Channel,
+  editablePublication,
+  connectionChannelDefinitions,
+} from "@shared/channels";
 import { libraryAssetLink } from "@shared/assetWorkflow";
 import "@/styles/configurator.css";
 import "@/styles/activationStudio.css";
@@ -190,6 +189,7 @@ function ActivationStudio() {
     }));
     setView("edit");
   }
+  const googleDefinition = connectionChannelDefinitions.google_ads;
   const channelChoices = (
     <>
       <div className="activation-section-title">
@@ -212,15 +212,19 @@ function ActivationStudio() {
       <div className="cfg-card-grid activation-channel-grid">
         {connected.some(c => c.channel === "google_ads") && (
           <StudioCard
-            title="Google Ads"
-            description="Create campaigns, manage ads and work with Performance Max asset groups."
+            title={googleDefinition.name}
+            description={googleDefinition.description}
             badge={`${connected.filter(c => c.channel === "google_ads").length} connected accounts`}
             selected={googleSelected}
             onSelect={chooseGoogle}
             media={
               <div className="activation-channel-art">
-                <PartnerLogo slug="googleads" name="Google Ads" size={48} />
-                <span>Paid advertising</span>
+                <PartnerLogo
+                  slug={googleDefinition.logo}
+                  name={googleDefinition.name}
+                  size={48}
+                />
+                <span>{googleDefinition.category}</span>
               </div>
             }
           />
@@ -230,16 +234,12 @@ function ActivationStudio() {
           const available = accounts.some(c =>
             c.details.capabilities.includes("publish")
           );
-          const Icon = value === "meta_ads" ? Megaphone : MessageCircle;
+          const definition = connectionChannelDefinitions[value];
           return (
             <StudioCard
               key={value}
-              title={value === "meta_ads" ? "Meta Ads" : "Facebook"}
-              description={
-                value === "meta_ads"
-                  ? "Prepare paid ads for Facebook and Instagram placements."
-                  : "Publish organic posts to your connected Facebook Pages."
-              }
+              title={definition.name}
+              description={definition.description}
               badge={`${accounts.length} connected ${accounts.length === 1 ? "account" : "accounts"}`}
               disabled={
                 !available ||
@@ -250,15 +250,11 @@ function ActivationStudio() {
               media={
                 <div className={`activation-channel-art ${value}`}>
                   <PartnerLogo
-                    slug={value === "meta_ads" ? "meta" : "facebook"}
-                    name={value === "meta_ads" ? "Meta" : "Facebook"}
+                    slug={definition.logo}
+                    name={definition.name}
                     size={48}
                   />
-                  <span>
-                    {value === "meta_ads"
-                      ? "Paid advertising"
-                      : "Organic social"}
-                  </span>
+                  <span>{definition.category}</span>
                 </div>
               }
               selected={!googleSelected && currentChannel === value}

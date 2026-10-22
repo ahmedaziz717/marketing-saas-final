@@ -18,7 +18,7 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("@/components/WorkspaceGate", () => ({
   WorkspaceGate: ({ children }: any) => children,
 }));
-vi.mock("./GoogleCampaignStudioPage", () => ({
+vi.mock("@/components/google/GoogleCampaignComposer", () => ({
   GoogleCampaignComposer: ({ channelChoices }: any) => {
     const [text, setText] = useState("");
     return (

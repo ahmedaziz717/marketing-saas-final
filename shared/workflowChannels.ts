@@ -4,16 +4,9 @@ import {
   type WorkflowNodeType,
 } from "./creativeWorkflow";
 
-export const workflowChannels = {
-  facebook: { name: "Facebook", logo: "facebook", account: "Facebook Page" },
-  meta_ads: { name: "Meta Ads", logo: "meta", account: "Meta ad account" },
-  google_ads: {
-    name: "Google Ads",
-    logo: "googleads",
-    account: "Google Ads account",
-  },
-} as const;
-export type WorkflowChannel = keyof typeof workflowChannels;
+export { connectionChannelDefinitions as workflowChannels } from "./channels";
+import type { ConnectionChannel } from "./channels";
+export type WorkflowChannel = ConnectionChannel;
 
 export function workflowNodeChannels(
   type: WorkflowNodeType

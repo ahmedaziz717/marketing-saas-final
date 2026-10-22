@@ -121,6 +121,29 @@ const biddingSchema = z.object({
   ]),
   target: z.number().positive().max(1_000_000).optional(),
 });
+export const googleBiddingStrategies: Record<
+  z.infer<typeof googleCampaignTypeSchema>,
+  readonly z.infer<typeof biddingSchema>["strategy"][]
+> = {
+  SEARCH: [
+    "MAXIMIZE_CONVERSIONS",
+    "MAXIMIZE_CONVERSION_VALUE",
+    "MAXIMIZE_CLICKS",
+    "TARGET_CPA",
+    "TARGET_ROAS",
+    "MANUAL_CPC",
+  ],
+  PERFORMANCE_MAX: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CONVERSION_VALUE"],
+  DISPLAY: ["MAXIMIZE_CONVERSIONS", "TARGET_CPA", "TARGET_ROAS", "MANUAL_CPC"],
+  SHOPPING: ["MANUAL_CPC", "MAXIMIZE_CLICKS", "TARGET_ROAS"],
+  DEMAND_GEN: [
+    "MAXIMIZE_CONVERSIONS",
+    "MAXIMIZE_CLICKS",
+    "TARGET_CPA",
+    "TARGET_ROAS",
+  ],
+  APP: ["MAXIMIZE_CONVERSIONS", "TARGET_CPA"],
+};
 export const googleCampaignCreateSchema = z
   .object({
     kind: z.literal("campaign_create"),
@@ -191,32 +214,7 @@ export const googleCampaignCreateSchema = z
       !v.bidding.target
     )
       issue("Enter a bid target.");
-    const allowed: Record<typeof v.type, string[]> = {
-      SEARCH: [
-        "MAXIMIZE_CONVERSIONS",
-        "MAXIMIZE_CONVERSION_VALUE",
-        "MAXIMIZE_CLICKS",
-        "TARGET_CPA",
-        "TARGET_ROAS",
-        "MANUAL_CPC",
-      ],
-      PERFORMANCE_MAX: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CONVERSION_VALUE"],
-      DISPLAY: [
-        "MAXIMIZE_CONVERSIONS",
-        "TARGET_CPA",
-        "TARGET_ROAS",
-        "MANUAL_CPC",
-      ],
-      SHOPPING: ["MANUAL_CPC", "MAXIMIZE_CLICKS", "TARGET_ROAS"],
-      DEMAND_GEN: [
-        "MAXIMIZE_CONVERSIONS",
-        "MAXIMIZE_CLICKS",
-        "TARGET_CPA",
-        "TARGET_ROAS",
-      ],
-      APP: ["TARGET_CPA", "MAXIMIZE_CONVERSIONS"],
-    };
-    if (!allowed[v.type].includes(v.bidding.strategy))
+    if (!googleBiddingStrategies[v.type].includes(v.bidding.strategy))
       issue("Choose a bidding strategy supported by this campaign type.");
     if (!["SHOPPING", "APP"].includes(v.type) && !v.ad.finalUrl)
       issue("Enter an HTTPS landing page.");

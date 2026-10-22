@@ -269,9 +269,9 @@ it("adds Model selector in App form with one default, lets the designer allow al
     );
   }
   render(<Harness />);
-  changeField(screen.getByLabelText("New field type"), {
-    target: { value: "model" },
-  });
+  clickJourney(
+      screen.getByRole("radio", { name: "Model selector" })
+  );
   clickJourney(screen.getByRole("button", { name: "+ Add field" }));
   let graph = JSON.parse(screen.getByTestId("graph").textContent!);
   expect(graph.edges[0]).toMatchObject({

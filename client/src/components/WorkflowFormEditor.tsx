@@ -6,13 +6,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { workflowNodes, type WorkflowGraph } from "@shared/creativeWorkflow";
 import {
-  newWorkflowNode,
-  workflowNodes,
-  type WorkflowGraph,
-} from "@shared/creativeWorkflow";
-import {
-  appFieldSchema,
   workflowMediaOptions,
   inputKinds,
   inputLabels,
@@ -28,13 +23,13 @@ import {
   workflowFieldPlacement,
   workflowStudioSections,
 } from "@shared/workflowStudio";
-import { performanceField } from "@shared/workflowPerformanceInputs";
 import { WorkflowModelFieldEditor } from "./WorkflowModelField";
-import { workflowModelFieldDefaults } from "@shared/workflowModels";
+import { addWorkflowField } from "@shared/workflowFieldAuthoring";
 import {
-  defaultWorkflowModel,
-  workflowModelKind,
-} from "@shared/workflowModelCatalog";
+  connectionChannels,
+  connectionChannelDefinitions,
+  type ConnectionChannel,
+} from "@shared/channels";
 
 export function WorkflowFormEditor({
   graph,
@@ -128,66 +123,19 @@ export function WorkflowFormEditor({
             </VisualSelect>
             <Button
               onClick={() => {
-                if (graph.nodes.length >= 40) {
-                  toast.error("This workflow has reached 40 steps.");
-                  return;
+                try {
+                  const added = addWorkflowField(
+                    graph,
+                    kind,
+                    { x: 60, y: 80 + fields.length * 120 },
+                    { node: crypto.randomUUID(), edge: crypto.randomUUID() }
+                  );
+                  onChange(added.graph);
+                  setSelected(added.node.id);
+                  setProposals([]);
+                } catch (error) {
+                  toast.error((error as Error).message);
                 }
-                const n = newWorkflowNode(
-                  "app_input",
-                  crypto.randomUUID(),
-                  60,
-                  80 + fields.length * 120
-                );
-                n.title = inputLabels[kind];
-                const modelTarget =
-                  kind === "model"
-                    ? graph.nodes.find(
-                        target =>
-                          workflowModelKind(target.type) &&
-                          !graph.edges.some(
-                            e => e.target === target.id && e.port === "model"
-                          )
-                      )
-                    : undefined;
-                n.config.field =
-                  kind === "performance_data"
-                    ? performanceField()
-                    : appFieldSchema.parse({
-                        kind,
-                        source: systemInputChoices(kind).length
-                          ? "system"
-                          : "custom",
-                        ...(kind === "model"
-                          ? modelTarget
-                            ? workflowModelFieldDefaults(modelTarget)
-                            : {
-                                modelKind: "image",
-                                allowedModelIds: [
-                                  defaultWorkflowModel("image"),
-                                ],
-                                defaultValue: defaultWorkflowModel("image"),
-                                required: true,
-                                maxSelections: 1,
-                              }
-                          : {}),
-                      });
-                if (kind === "performance_data") n.config.inputType = "data";
-                onChange({
-                  ...graph,
-                  nodes: [...graph.nodes, n],
-                  edges: modelTarget
-                    ? [
-                        ...graph.edges,
-                        {
-                          id: crypto.randomUUID(),
-                          source: n.id,
-                          target: modelTarget.id,
-                          port: "model",
-                        },
-                      ]
-                    : graph.edges,
-                });
-                setSelected(n.id);
               }}
             >
               + Add field
@@ -330,17 +278,16 @@ export function WorkflowFormEditor({
                   value={f.connectionChannel ?? "facebook"}
                   onChange={e =>
                     update({
-                      connectionChannel: e.target.value as
-                        | "facebook"
-                        | "meta_ads"
-                        | "google_ads",
+                      connectionChannel: e.target.value as ConnectionChannel,
                       defaultValue: "",
                     })
                   }
                 >
-                  <option value="facebook">Facebook Page</option>
-                  <option value="meta_ads">Meta ad account</option>
-                  <option value="google_ads">Google Ads account</option>
+                  {connectionChannels.map(channel => (
+                    <option key={channel} value={channel}>
+                      {connectionChannelDefinitions[channel].account}
+                    </option>
+                  ))}
                 </VisualSelect>
                 <small>
                   Connect this field to a matching channel step's account or

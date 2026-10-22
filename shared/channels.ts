@@ -6,10 +6,58 @@ import { z } from "zod";
 export const channelSchema = z.enum(["facebook", "meta_ads"]);
 export type Channel = z.infer<typeof channelSchema>;
 // Account connectivity is separate from the channels with publishing adapters.
-export type ConnectionChannel = Channel | "google_ads";
+export const connectionChannels = [
+  "facebook",
+  "meta_ads",
+  "google_ads",
+] as const;
+export const connectionChannelSchema = z.enum(connectionChannels);
+export type ConnectionChannel = z.infer<typeof connectionChannelSchema>;
+/** Shared discovery/presentation; native services still own permission checks and delivery. */
+export const connectionChannelDefinitions = {
+  facebook: {
+    name: "Facebook",
+    logo: "facebook",
+    account: "Facebook Page",
+    accounts: "Facebook Pages",
+    category: "Organic social",
+    description: "Publish organic posts to your connected Facebook Pages.",
+    accountImageLookup: true,
+  },
+  meta_ads: {
+    name: "Meta Ads",
+    logo: "meta",
+    account: "Meta ad account",
+    accounts: "Meta accounts",
+    category: "Paid advertising",
+    description: "Prepare paid ads for Facebook and Instagram placements.",
+    accountImageLookup: true,
+  },
+  google_ads: {
+    name: "Google Ads",
+    logo: "googleads",
+    account: "Google Ads account",
+    accounts: "Google Ads accounts",
+    category: "Paid advertising",
+    description:
+      "Create campaigns, manage ads and work with Performance Max asset groups.",
+    accountImageLookup: false,
+  },
+} as const satisfies Record<
+  ConnectionChannel,
+  {
+    name: string;
+    logo: string;
+    account: string;
+    accounts: string;
+    category: string;
+    description: string;
+    accountImageLookup: boolean;
+  }
+>;
 export const channelNames: Record<Channel, string> = {
-  facebook: "Facebook",
-  meta_ads: "Meta Ads",
+  facebook: connectionChannelDefinitions.facebook.name,
+  meta_ads: connectionChannelDefinitions.meta_ads.name,
 };
 export const publicationStates = [
   "draft",

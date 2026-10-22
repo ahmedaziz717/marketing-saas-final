@@ -236,6 +236,15 @@ it("places PMax branding at campaign level and unlinks only the selected group a
       ),
     },
   });
+  const unsupportedBid = googleCampaignCreateSchema.safeParse({
+    ...change,
+    bidding: { strategy: "MANUAL_CPC", target: 1 },
+  });
+  expect(unsupportedBid.success).toBe(false);
+  if (!unsupportedBid.success)
+    expect(unsupportedBid.error.issues.map(issue => issue.message)).toContain(
+      "Choose a bidding strategy supported by this campaign type."
+    );
   const assets = googleChangeAssets(change).map((a, i) => ({
     field: a.field,
     resource: `customers/2222222222/assets/${i + 1}`,
