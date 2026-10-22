@@ -11,6 +11,7 @@ import {
   defaultWorkflowModel,
   workflowModel,
   workflowModelKind,
+  type WorkflowModelKind,
 } from "./workflowModelCatalog";
 import { fieldValueProblem, type AppField } from "./workflowInputs";
 
@@ -87,25 +88,27 @@ export function currentWorkflowModel(node: WorkflowNode) {
 
 /** One initial choice; preserve the author's settings for that choice. */
 export function workflowModelFieldDefaults(
-  node: WorkflowNode
+  node?: WorkflowNode,
+  kind: WorkflowModelKind = "image"
 ): Partial<AppField> {
-  const id = currentWorkflowModel(node);
+  const id = node ? currentWorkflowModel(node) : defaultWorkflowModel(kind);
   const media = generationModel(id);
-  const legacyOptions = media
-    ? (Object.fromEntries(
-        [
-          ["duration", node.config.duration],
-          ["resolution", node.config.resolution],
-          ["aspect_ratio", node.config.ratio],
-        ].filter(
-          ([key, value]) =>
-            value != null && !!media.inputSchema.properties[String(key)]
-        )
-      ) as ModelOptions)
-    : {};
+  const legacyOptions =
+    media && node
+      ? (Object.fromEntries(
+          [
+            ["duration", node.config.duration],
+            ["resolution", node.config.resolution],
+            ["aspect_ratio", node.config.ratio],
+          ].filter(
+            ([key, value]) =>
+              value != null && !!media.inputSchema.properties[String(key)]
+          )
+        ) as ModelOptions)
+      : {};
   return {
     kind: "model",
-    modelKind: workflowModelKind(node.type),
+    modelKind: node ? workflowModelKind(node.type) : kind,
     required: true,
     source: "curated",
     multiple: false,
@@ -118,7 +121,7 @@ export function workflowModelFieldDefaults(
           [id]: {
             ...modelDefaults(media),
             ...legacyOptions,
-            ...node.config.modelOptions,
+            ...node?.config.modelOptions,
           },
         }
       : {},

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { rangeSchema } from "./channels";
+import { rangeSchema, connectionChannelSchema } from "./channels";
 export const performanceInputSchema = z.object({
   connectionId: z.string().uuid(),
   range: rangeSchema,
@@ -20,6 +20,7 @@ export const inputKinds = [
   "connection",
   "performance_data",
   "text",
+  "model",
   "headline",
   "subheadline",
   "description",
@@ -29,7 +30,6 @@ export const inputKinds = [
   "theme",
   "art_style",
   "choice",
-  "model",
   "product",
   "asset",
   "channel",
@@ -105,7 +105,7 @@ export type WorkflowMediaSelection = z.infer<
 >;
 export const appFieldSchema = z.object({
   kind: z.enum(inputKinds),
-  connectionChannel: z.enum(["facebook", "meta_ads", "google_ads"]).optional(),
+  connectionChannel: connectionChannelSchema.optional(),
   modelKind: z.enum(["text", "image", "video"]).optional(),
   allowedModelIds: z.array(z.string().min(1).max(240)).max(50).optional(),
   modelSettings: z.record(z.string().max(240), modelOptionsSchema).optional(),

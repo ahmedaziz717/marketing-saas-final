@@ -1,6 +1,10 @@
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { trpc } from "@/lib/trpc";
 import { PartnerLogo } from "./PartnerLogo";
+import {
+  connectionChannelDefinitions,
+  type ConnectionChannel,
+} from "@shared/channels";
 
 export function WorkflowConnectionInput({
   organizationId,
@@ -14,23 +18,19 @@ export function WorkflowConnectionInput({
   organizationId: number;
   value: string;
   onChange: (value: string) => void;
-  channel?: "facebook" | "meta_ads" | "google_ads";
+  channel?: ConnectionChannel;
   disabled?: boolean;
   title: string;
   summary?: boolean;
 }) {
-  const meta = trpc.channels.connections.useQuery(
-    { organizationId },
-    { enabled: channel !== "google_ads" }
-  );
-  const google = trpc.googleAds.connections.useQuery(
-    { organizationId },
-    { enabled: channel === "google_ads" }
-  );
-  const query = channel === "google_ads" ? google : meta;
+  const definition = connectionChannelDefinitions[channel];
+  const query = trpc.channels.connections.useQuery({
+    organizationId,
+    includeGoogle: true,
+  });
   const items =
     query.data?.items.filter(
-      c => c.channel === channel && c.status === "connected"
+      c => c.channel === channel && c.status === "connected" && !c.expired
     ) ?? [];
   if (summary)
     return (
@@ -44,33 +44,13 @@ export function WorkflowConnectionInput({
   return (
     <div className="space-y-2">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        <PartnerLogo
-          slug={
-            channel === "google_ads"
-              ? "googleads"
-              : channel === "facebook"
-                ? "facebook"
-                : "meta"
-          }
-          name={
-            channel === "google_ads"
-              ? "Google Ads"
-              : channel === "facebook"
-                ? "Facebook"
-                : "Meta"
-          }
-          size={28}
-        />
-        {channel === "google_ads"
-          ? "Google Ads accounts"
-          : channel === "facebook"
-            ? "Facebook Pages"
-            : "Meta accounts"}
+        <PartnerLogo slug={definition.logo} name={definition.name} size={28} />
+        {definition.accounts}
       </span>
       <VisualSelect
         visual="account"
         imageOrganizationId={
-          channel === "google_ads" ? undefined : organizationId
+          definition.accountImageLookup ? organizationId : undefined
         }
         aria-label={title}
         value={value}
@@ -80,7 +60,7 @@ export function WorkflowConnectionInput({
         <option value="">
           {query.isLoading
             ? "Loading destinations…"
-            : `Choose a ${channel === "google_ads" ? "Google Ads account" : channel === "facebook" ? "Facebook Page" : "Meta ad account"}`}
+            : `Choose a ${definition.account}`}
         </option>
         {value && !items.some(c => c.id === value) && (
           <option value={value}>

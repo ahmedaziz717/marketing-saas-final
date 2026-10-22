@@ -9,22 +9,14 @@ import {
   schedulingGuide,
   WorkflowSchedulingGuide,
 } from "./WorkflowSchedulingGuide";
-import {
-  performanceField,
-  workflowDraftSignature as editorSignature,
-} from "@shared/workflowPerformanceInputs";
+import { workflowDraftSignature as editorSignature } from "@shared/workflowPerformanceInputs";
 import { WorkflowFormEditor } from "./WorkflowFormEditor";
 import { WorkflowTextModelPicker } from "./WorkflowModelField";
-import { workflowModelFieldDefaults } from "@shared/workflowModels";
-import {
-  workflowModelKind,
-  defaultWorkflowModel,
-} from "@shared/workflowModelCatalog";
+import { addWorkflowField } from "@shared/workflowFieldAuthoring";
 import {
   appFieldSchema,
   inputKinds,
   inputLabels,
-  systemInputChoices,
   fieldChoices,
   fieldPrompt,
   type AppField,
@@ -381,64 +373,36 @@ function WorkflowCanvasContent({
     }
     const x = (120 - view.x) / view.zoom,
       y = (100 - view.y) / view.zoom;
+    const position = {
+      x: Math.round(x + (graph.nodes.length % 3) * 45),
+      y: Math.round(y + (graph.nodes.length % 3) * 45),
+    };
+    if (fieldKind) {
+      try {
+        const added = addWorkflowField(graph, fieldKind, position, {
+          node: crypto.randomUUID(),
+          edge: crypto.randomUUID(),
+        });
+        change(added.graph);
+        selectNode(added.node.id);
+        setLibrary(false);
+      } catch (error) {
+        toast.error((error as Error).message);
+      }
+      return;
+    }
     const node = newWorkflowNode(
       type,
       crypto.randomUUID(),
-      Math.round(x + (graph.nodes.length % 3) * 45),
-      Math.round(y + (graph.nodes.length % 3) * 45)
+      position.x,
+      position.y
     );
     if (type === "image")
       node.config.field = appFieldSchema.parse({
         kind: "asset",
         required: true,
       });
-    const modelTarget =
-      fieldKind === "model"
-        ? graph.nodes.find(
-            n =>
-              workflowModelKind(n.type) &&
-              !graph.edges.some(e => e.target === n.id && e.port === "model")
-          )
-        : undefined;
-    if (fieldKind) {
-      node.title = inputLabels[fieldKind];
-      node.config.field =
-        fieldKind === "performance_data"
-          ? performanceField()
-          : appFieldSchema.parse({
-              kind: fieldKind,
-              source: systemInputChoices(fieldKind).length
-                ? "system"
-                : "custom",
-              ...(fieldKind === "model"
-                ? modelTarget
-                  ? workflowModelFieldDefaults(modelTarget)
-                  : {
-                      modelKind: "image",
-                      allowedModelIds: [defaultWorkflowModel("image")],
-                      defaultValue: defaultWorkflowModel("image"),
-                      required: true,
-                      maxSelections: 1,
-                    }
-                : {}),
-            });
-      if (fieldKind === "performance_data") node.config.inputType = "data";
-    }
-    change({
-      ...graph,
-      nodes: [...graph.nodes, node],
-      edges: modelTarget
-        ? [
-            ...graph.edges,
-            {
-              id: crypto.randomUUID(),
-              source: node.id,
-              target: modelTarget.id,
-              port: "model",
-            },
-          ]
-        : graph.edges,
-    });
+    change({ ...graph, nodes: [...graph.nodes, node] });
     selectNode(node.id);
     setLibrary(false);
   };
