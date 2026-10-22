@@ -135,3 +135,23 @@
   gap: 6px;
   line-height: 1.6;
 }
+
+.cfg-catalog-source-notice {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  font-size: 13px;
+}
+.cfg-catalog-source-notice p,
+.cfg-catalog-source-notice details {
+  margin-top: 8px;
+}
+.cfg-catalog-source-notice a {
+  text-decoration: underline;
+}
+.cfg-catalog-source-notice ul {
+  padding-left: 18px;
+  list-style: disc;
+}

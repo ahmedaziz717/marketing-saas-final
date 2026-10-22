@@ -87,8 +87,14 @@ function CatalogContent() {
       ? requestedTab
       : "products";
   const setTab = (value: string) => setLocation(`/app/catalog?view=${value}`);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [status, setStatus] = useState(
+    ["pending", "approved", "rejected"].includes(
+      searchParams.get("status") ?? ""
+    )
+      ? searchParams.get("status")!
+      : "all"
+  );
   const [category, setCategory] = useState("all");
   const [offset, setOffset] = useState(0);
   const filters = {

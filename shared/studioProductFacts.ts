@@ -13,6 +13,8 @@ export type ProductFactSelection = z.infer<typeof productFactSelectionSchema>;
 /** Public, approved catalog facts shared by the image and video studios. */
 export type StudioProduct = {
   id: number;
+  sourceId?: number | null;
+  relatedSources?: import("./catalogSources").RelatedCatalogSource[];
   name: string;
   sku?: string | null;
   description?: string | null;

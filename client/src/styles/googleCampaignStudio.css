@@ -252,3 +252,24 @@
   font-size: 13px;
   font-weight: 600;
 }
+.google-video-transfer {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.google-video-transfer video {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  margin: 12px 0;
+}
+.google-asset-picker video {
+  height: 120px;
+  width: 100%;
+  object-fit: contain;
+}
+.google-inline-upload {
+  padding: 16px 0;
+  max-width: 760px;
+}

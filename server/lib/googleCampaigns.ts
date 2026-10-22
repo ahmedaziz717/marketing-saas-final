@@ -136,7 +136,10 @@ export async function googleCampaignResources(
           name:
             r.asset.name || r.asset.textAsset?.text || `Asset ${r.asset.id}`,
           type: r.asset.type,
-          url: r.asset.imageAsset?.fullSize?.url as string | undefined,
+          url: (r.asset.imageAsset?.fullSize?.url ||
+            (/^[\w-]{11}$/.test(r.asset.youtubeVideoAsset?.youtubeVideoId ?? "")
+              ? `https://i.ytimg.com/vi/${r.asset.youtubeVideoAsset.youtubeVideoId}/hqdefault.jpg`
+              : undefined)) as string | undefined,
         }));
       if (kind === "audiences")
         return (

@@ -13,6 +13,7 @@ import { memoryLocation } from "wouter/memory-location";
 const api = vi.hoisted(() => ({
   calls: vi.fn(),
   mutate: vi.fn(),
+  videoUpload: vi.fn(),
   inventory: {} as any,
   library: [] as any[],
   resources: [] as any[],
@@ -30,7 +31,10 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    assetLibrary: { list: { useQuery: () => ({ data: api.library }) } },
+    assetLibrary: {
+      list: { useQuery: () => ({ data: api.library, refetch: vi.fn() }) },
+      upload: { useMutation: () => ({ mutateAsync: api.mutate }) },
+    },
     googleAds: {
       connections: {
         useQuery: () => ({
@@ -46,6 +50,10 @@ vi.mock("@/lib/trpc", () => ({
         },
         drafts: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
         resources: { useQuery: () => ({ data: api.resources }) },
+        videoUploadStatus: {
+          useQuery: () => ({ data: null, refetch: vi.fn() }),
+        },
+        uploadVideo: { useMutation: () => ({ mutateAsync: api.videoUpload }) },
         save: { useMutation: () => ({ mutateAsync: api.mutate }) },
         validate: { useMutation: () => ({ mutateAsync: api.mutate }) },
         publish: { useMutation: () => ({ mutateAsync: api.mutate }) },
@@ -220,6 +228,8 @@ function existingCampaign(
     {
       key: "asset:3",
       name: "Library video",
+      url: "https://example.com/clip.mp4",
+      revision: "approved-revision",
       mediaType: "video",
       state: "approved",
     },
@@ -244,7 +254,6 @@ it("adds images and videos to the selected existing asset group without changing
     screen.queryByRole("button", { name: "Select Library video" })
   ).toBeNull();
   click("Select Approved image");
-  click("Add asset");
   click("Choose another asset type");
   click("Select Videos");
   expect(
@@ -254,7 +263,6 @@ it("adds images and videos to the selected existing asset group without changing
     screen.queryByRole("button", { name: "Select Approved image" })
   ).toBeNull();
   click("Select Google video");
-  click("Add asset");
   expect(screen.getByText(/Approved image/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
   expect(api.mutate).not.toHaveBeenCalled();
@@ -288,17 +296,15 @@ it("adds images and videos to the selected existing asset group without changing
 it("validates YouTube entries and keeps video/text sources separate", () => {
   existingCampaign();
   click("Select Videos");
-  fireEvent.change(screen.getByLabelText("Asset source"), {
-    target: { value: "youtube" },
-  });
-  fireEvent.change(screen.getByLabelText("YouTube video ID"), {
+  click("Select YouTube link");
+  fireEvent.change(screen.getByLabelText("YouTube link or video ID"), {
     target: { value: "invalid" },
   });
   click("Add asset");
   expect(screen.getByRole("alert")).toBeTruthy();
   expect(api.mutate).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("YouTube video ID"), {
-    target: { value: "abcdefghijk" },
+  fireEvent.change(screen.getByLabelText("YouTube link or video ID"), {
+    target: { value: "https://youtu.be/abcdefghijk" },
   });
   click("Add asset");
   expect(screen.queryByRole("alert")).toBeNull();
@@ -330,4 +336,72 @@ it("keeps campaign-level brand assets out of the asset-group picker", () => {
       name: /Business/,
     })
   ).toBeNull();
+});
+
+it("offers all three source tiles and renders uploads inline without mutating on selection", () => {
+  existingCampaign();
+  click("Select Images");
+  expect(
+    screen.getByRole("button", { name: "Select EvokeLoop Library" })
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Select Google Ads Library" })
+  ).toBeTruthy();
+  click("Select Upload");
+  expect(screen.getByLabelText("Choose files")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it("filters the visual library and toggles image selection directly on its tile", () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Approved image" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  click("Select Approved image");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Approved image" })
+      .getAttribute("aria-pressed")
+  ).toBe("false");
+  fireEvent.change(screen.getByLabelText("Search assets"), {
+    target: { value: "no match" },
+  });
+  expect(
+    screen.queryByRole("button", { name: "Select Approved image" })
+  ).toBeNull();
+});
+it("requires a separate explicit confirmation before transferring an EL video to Google", async () => {
+  existingCampaign();
+  click("Select Videos");
+  click("Select EvokeLoop Library");
+  click("Select Library video");
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Upload video to Google",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(api.videoUpload).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByLabelText(
+      "I approve uploading this video to Google as unlisted"
+    )
+  );
+  api.videoUpload.mockResolvedValue({ state: "PROCESSING" });
+  click("Upload video to Google");
+  await waitFor(() =>
+    expect(api.videoUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "asset:3",
+        revision: "approved-revision",
+        confirm: true,
+      })
+    )
+  );
+  expect(api.mutate).not.toHaveBeenCalled();
 });

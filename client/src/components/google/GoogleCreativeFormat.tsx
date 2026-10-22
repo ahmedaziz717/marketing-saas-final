@@ -12,7 +12,7 @@ const formats = {
   },
   video: {
     title: "Videos",
-    description: "Reuse a Google video asset or add a YouTube video",
+    description: "Use EvokeLoop, upload a file or reuse a Google video",
     icon: Video,
   },
   text: {

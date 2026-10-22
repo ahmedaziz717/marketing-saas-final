@@ -119,13 +119,51 @@ export function StudioProductFacts({
           )}
           <div>
             <small>
-              CATALOG SOURCE{product.sku ? ` · ${product.sku}` : ""}
+              {product.provenance?.source?.toUpperCase() ||
+                (product.sourceId ? "CONNECTED CATALOG" : "WEBSITE SCAN")}
+              {product.sku ? ` · ${product.sku}` : ""}
             </small>
             <h3>{product.name}</h3>
             <span>{count} selected for this ad</span>
           </div>
           <Link href="/app/catalog">Edit in Catalog</Link>
         </header>
+        {product.relatedSources?.map(source => (
+          <aside
+            key={source.id}
+            className="cfg-catalog-source-notice"
+            role="status"
+          >
+            <strong>
+              {source.source.toUpperCase()} copy available ·{" "}
+              {Object.keys(source.specifications).length} specifications
+            </strong>
+            <p>
+              This ad uses the{" "}
+              {product.provenance?.source ||
+                (product.sourceId ? "connected catalog" : "website scan")}{" "}
+              copy.{" "}
+              {source.status === "approved"
+                ? "The other copy is approved; choose it in Subject & sources to use its facts."
+                : "The other copy needs catalog review before it can be used in an ad."}
+            </p>
+            <Link
+              href={`/app/catalog?${source.sourceId ? `sourceId=${source.sourceId}&` : ""}search=${encodeURIComponent(source.sku || source.name)}&status=${source.status}`}
+            >
+              Review this catalog copy →
+            </Link>
+            <details>
+              <summary>Preview its specifications</summary>
+              <ul>
+                {Object.entries(source.specifications).map(([key, value]) => (
+                  <li key={key}>
+                    <strong>{key}:</strong> {value}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </aside>
+        ))}
         <div className="cfg-fact-grid">
           <button
             type="button"
