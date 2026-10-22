@@ -13,6 +13,7 @@ import {
 import { presetRange } from "./reportDates";
 
 export type OptimizationSettings = {
+  channel?: "meta_ads" | "google_ads";
   connectionId: string;
   range: { since: string; until: string };
   focus: OptimizerKind[];
@@ -60,7 +61,7 @@ export function optimizationStudioGraph(
     engine.title = optimizerLibrary[kind].name;
     engine.config.optimizer = {
       kind,
-      channel: "meta_ads",
+      channel: settings.channel ?? "meta_ads",
       mode: "analyze",
       brief: studio.objective,
     };
@@ -88,6 +89,10 @@ export function optimizationStudioGraph(
   };
   if (settings.refreshHistory) {
     const history = node("meta_history", "history", 250);
+    history.title =
+      settings.channel === "google_ads"
+        ? "Fetch Google Ads history"
+        : history.title;
     history.config.connectionId = settings.connectionId || undefined;
     history.config.incremental = true;
     graph.nodes.splice(1, 0, history);
@@ -108,6 +113,11 @@ export function readOptimizationStudio(graph: WorkflowGraph) {
     .map(n => n.config.optimizer?.kind)
     .filter((k): k is OptimizerKind => !!k);
   const settings: OptimizationSettings = {
+    channel:
+      graph.nodes.find(n => n.type === "optimize_dimension")?.config.optimizer
+        ?.channel === "google_ads"
+        ? "google_ads"
+        : undefined,
     connectionId: analysis.config.connectionId ?? "",
     range: analysis.config.analysis.range,
     minimumConfidence: analysis.config.analysis.minimumConfidence,

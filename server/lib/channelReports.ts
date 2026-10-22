@@ -67,12 +67,27 @@ export function adMetrics(row: Record<string, unknown>): AdMetrics {
 }
 const fields =
   "spend,impressions,clicks,inline_link_clicks,actions,action_values";
-export async function adsReport(c: ChannelConnection, range: DateRange) {
+export async function adsReport(
+  c: ChannelConnection,
+  range: DateRange,
+  includeInactiveCampaigns = false
+) {
   const token = connectionToken(c);
   const params = {
     time_range: JSON.stringify(range),
     use_account_attribution_setting: "true",
     action_report_time: "conversion",
+    ...(!includeInactiveCampaigns
+      ? {
+          filtering: JSON.stringify([
+            {
+              field: "campaign.effective_status",
+              operator: "IN",
+              value: ["ACTIVE"],
+            },
+          ]),
+        }
+      : {}),
   };
   const [total, daily, platforms, campaigns] = await Promise.all([
     graphCollection(`act_${remoteId(c.accountId)}/insights`, token, {

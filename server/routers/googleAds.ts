@@ -8,6 +8,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { requireOrganizationRole } from "../lib/access";
 import { libraryDatabase } from "../lib/assetLibrary";
 import { GoogleAdsError, googleOAuthConfigured } from "../lib/googleAdsApi";
+import { googleCampaignsRouter } from "./googleCampaigns";
 import {
   beginGoogleOAuth,
   cancelGoogleSelection,
@@ -34,6 +35,7 @@ async function safe<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 export const googleAdsRouter = router({
+  campaigns: googleCampaignsRouter,
   connections: protectedProcedure
     .input(scopeSchema)
     .query(async ({ ctx, input }) => {
@@ -52,6 +54,7 @@ export const googleAdsRouter = router({
       return {
         items: rows.map(safeGoogleConnection),
         oauthConfigured: googleOAuthConfigured(),
+        livePublishingEnabled: process.env.LIVE_AD_ACTIONS_ENABLED === "true",
       };
     }),
   beginOAuth: protectedProcedure

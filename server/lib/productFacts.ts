@@ -59,7 +59,9 @@ export function selectProductFacts(
     availability: selection.includeAvailability ? availability : null,
     includeAvailability: !!selection.includeAvailability,
     featuredSpecifications: Object.fromEntries(
-      selection.featuredSpecKeys.map(key => [key, specifications[key]])
+      Object.entries(specifications).filter(([key]) =>
+        selection.featuredSpecKeys.includes(key)
+      )
     ),
     price: selection.includePrice ? product.price : null,
     currency: selection.includePrice ? product.currency : null,

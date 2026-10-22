@@ -4,6 +4,7 @@ import { catalogImageDirectory } from "../../shared/apiCatalog";
 import { ImageEnhanceAction } from "../../client/src/components/ImageEnhanceAction";
 import CreativeWorkflowsPage from "../../client/src/pages/CreativeWorkflowsPage";
 import CreativeConfiguratorPage from "../../client/src/pages/CreativeConfiguratorPage";
+import GoogleCampaignStudioPage from "../../client/src/pages/GoogleCampaignStudioPage";
 import InsightsStudioPage from "../../client/src/pages/InsightsStudioPage";
 import OptimizationStudioPage from "../../client/src/pages/OptimizationStudioPage";
 import { VideoStudio } from "../../client/src/components/VideoStudio";
@@ -218,6 +219,37 @@ const fixtureAdsets: any[] = [
   },
 ];
 const mutations: string[] = [];
+const googleFixtureId = "55555555-5555-4555-8555-555555555555";
+const googleCampaignRows = [
+  {
+    campaign: {
+      id: "11",
+      name: "Active Search",
+      status: "ENABLED",
+      advertisingChannelType: "SEARCH",
+    },
+    campaignBudget: { amountMicros: "15000000", period: "DAILY" },
+  },
+  {
+    campaign: {
+      id: "12",
+      name: "Active PMax",
+      status: "ENABLED",
+      advertisingChannelType: "PERFORMANCE_MAX",
+      brandGuidelinesEnabled: true,
+    },
+    campaignBudget: { amountMicros: "20000000", period: "DAILY" },
+  },
+  {
+    campaign: {
+      id: "13",
+      name: "Paused Search",
+      status: "PAUSED",
+      advertisingChannelType: "SEARCH",
+    },
+    campaignBudget: { amountMicros: "10000000", period: "DAILY" },
+  },
+];
 const copyRequests: any[] = [];
 const videoDrafts: any[] = [];
 const videoQuotes: any[] = [];
@@ -487,11 +519,69 @@ function respond(path: string, input: any) {
   }
 
   if (path === "catalogSources.list" && which.startsWith("google-")) return [];
+  if (path === "googleAds.campaigns.drafts") return [];
+  if (path === "googleAds.campaigns.resources") return [];
+  if (path === "googleAds.campaigns.inventory")
+    return {
+      campaigns: googleCampaignRows.filter(r =>
+        input.campaignId
+          ? r.campaign.id === input.campaignId
+          : input.includeInactive || r.campaign.status === "ENABLED"
+      ),
+      groups:
+        input.campaignId === "12"
+          ? [
+              {
+                assetGroup: {
+                  id: "21",
+                  name: "Core products",
+                  status: "ENABLED",
+                  adStrength: "GOOD",
+                  finalUrls: ["https://shop.example"],
+                },
+              },
+            ]
+          : [],
+      assets:
+        input.campaignId === "12"
+          ? [
+              {
+                assetGroup: { id: "21" },
+                assetGroupAsset: { fieldType: "HEADLINE", status: "ENABLED" },
+                asset: {
+                  id: "31",
+                  name: "Existing headline",
+                  textAsset: { text: "Shop the collection" },
+                },
+              },
+            ]
+          : [],
+      ads: [],
+      limited: false,
+      currency: "USD",
+      timezone: "America/New_York",
+    };
   if (path === "googleAds.connections")
     return {
       oauthConfigured: which.startsWith("google-"),
-      items:
-        which === "google-manage"
+      livePublishingEnabled: true,
+      items: ["google-campaigns", "google-campaign-new"].includes(which)
+        ? [
+            {
+              id: googleFixtureId,
+              name: "Demo Google Ads",
+              channel: "google_ads",
+              accountId: "2222222222",
+              status: "connected",
+              needsReconnect: false,
+              details: {
+                currency: "USD",
+                timezone: "America/New_York",
+                google: {},
+              },
+            },
+          ]
+        : which === "google-manage"
           ? Array.from({ length: 12 }, (_, i) => ({
               id: `google-${i}`,
               name:
@@ -936,6 +1026,8 @@ const routeForPage: Record<string, string> = {
   "creative-checkpoint": "/app/creatives/studio",
   "creative-video": "/app/creatives/video",
   "insights-studio": "/app/analytics/studio",
+  "google-campaigns": "/app/activate/google",
+  "google-campaign-new": "/app/activate/google",
   "optimization-studio": "/app/optimize/studio",
 
   "model-picker": "/app/model-picker",
@@ -1137,6 +1229,12 @@ function RoutedPage() {
         <CreativeConfiguratorPage
           initialKind={which === "creative-video" ? "video" : "image"}
         />
+      </DashboardLayout>
+    );
+  if (path === "/app/activate/google")
+    return (
+      <DashboardLayout>
+        <GoogleCampaignStudioPage />
       </DashboardLayout>
     );
   if (path === "/app/analytics/studio")
@@ -1486,6 +1584,58 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
   try {
     await pause();
     layout();
+    if (which === "google-campaigns" || which === "google-campaign-new") {
+      check(
+        !!document.querySelector(".studio-journey"),
+        "Google uses the shared studio"
+      );
+      await click("Campaign");
+      check(
+        document.querySelectorAll(".google-campaign-list button").length === 2,
+        "Inactive Google campaigns are off by default"
+      );
+      const inactive = Array.from(
+        document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+      ).find(i =>
+        i.parentElement?.textContent?.includes("Include inactive campaigns")
+      )!;
+      check(!inactive.checked, "Campaign status checkbox is off");
+      inactive.click();
+      await pause();
+      check(
+        document.querySelectorAll(".google-campaign-list button").length === 3,
+        "Inactive campaign opt-in includes paused campaigns"
+      );
+      if (which === "google-campaigns") {
+        await clickPrefix("Active PMax");
+        check(
+          document.body.textContent?.includes("Core products"),
+          "Existing asset groups are available"
+        );
+        await click("Manage group assets");
+        check(
+          document.body.textContent?.includes("Shop the collection"),
+          "Existing Google assets can be selected for replacement"
+        );
+      } else {
+        await click("New campaign");
+        check(
+          document.querySelectorAll(".cfg-card-grid .cfg-card").length === 6,
+          "Six supported campaign families are offered"
+        );
+        await click("Select Performance Max");
+        await studioSection("Delivery");
+        check(
+          document.body.textContent?.includes("Daily budget"),
+          "Campaign budget and bidding are editable"
+        );
+      }
+      check(
+        mutations.length === 0,
+        "Browsing campaign controls never launches ads"
+      );
+      layout();
+    }
     if (which.startsWith("activation-")) {
       const state = document.querySelector<HTMLElement>(
         '[aria-label="Delivery status"]'

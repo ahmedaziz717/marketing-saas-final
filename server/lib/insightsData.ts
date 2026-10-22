@@ -85,6 +85,10 @@ export function normalizeAdInsight(
       prior ? insightAdValues(prior.summary) : {}
     ),
     series: data.daily.map(d => ({ date: d.date, values: insightAdValues(d) })),
+    previousSeries: prior?.daily.map(d => ({
+      date: d.date,
+      values: insightAdValues(d),
+    })),
     detailLabel: "Campaign performance · ordered by spend",
     detailMetrics: ["spend", "purchases", "purchaseValue", "roas"],
     details: [...data.campaigns]
@@ -123,16 +127,22 @@ export function normalizeGoogleInsight(
       prior?.summary ?? {}
     ),
     series: data.daily,
+    previousSeries: prior?.daily,
     detailLabel:
+      data.breakdown?.label ??
       "Campaign performance · top 30 by spend · includes Performance Max",
     detailMetrics: ["spend", "clicks", "conversions", "purchaseValue", "roas"],
-    details: [...data.campaigns]
-      .sort((a, b) => (b.values.spend ?? -1) - (a.values.spend ?? -1))
-      .slice(0, 30)
-      .map(c => ({
-        name: `${c.name} · ${c.type.replaceAll("_", " ")} · ${c.status.toLowerCase()}`,
-        values: c.values,
-      })),
+    details: data.breakdown
+      ? data.breakdown.rows
+          .sort((a, b) => (b.values.spend ?? -1) - (a.values.spend ?? -1))
+          .slice(0, 30)
+      : [...data.campaigns]
+          .sort((a, b) => (b.values.spend ?? -1) - (a.values.spend ?? -1))
+          .slice(0, 30)
+          .map(c => ({
+            name: `${c.name} · ${c.type.replaceAll("_", " ")} · ${c.status.toLowerCase()}`,
+            values: c.values,
+          })),
   };
 }
 function socialValues(data: Awaited<ReturnType<typeof facebookReport>>) {
@@ -263,22 +273,38 @@ export async function buildInsightResult(
       let account: InsightAccount,
         comparisonFailed = false;
       if (c.channel === "meta_ads") {
-        const data = await adsReport(c, range);
+        const data = await adsReport(
+          c,
+          range,
+          config.includeInactiveCampaigns === true
+        );
         const previous = previousRange
-          ? await adsReport(c, previousRange).catch(() => {
+          ? await adsReport(
+              c,
+              previousRange,
+              config.includeInactiveCampaigns === true
+            ).catch(() => {
               comparisonFailed = true;
               return undefined;
             })
           : undefined;
         account = normalizeAdInsight(c, config, data, previous);
       } else if (c.channel === "google_ads") {
-        const data = await googleAdsReport(db, organizationId, c.id, range);
+        const data = await googleAdsReport(
+          db,
+          organizationId,
+          c.id,
+          range,
+          config.includeInactiveCampaigns === true,
+          config.googleDetailLevel
+        );
         const previous = previousRange
           ? await googleAdsReport(
               db,
               organizationId,
               c.id,
-              previousRange
+              previousRange,
+              config.includeInactiveCampaigns === true
             ).catch(() => {
               comparisonFailed = true;
               return undefined;
@@ -298,6 +324,12 @@ export async function buildInsightResult(
       if (comparisonFailed)
         account.warnings.push(
           "Previous-period data could not be loaded. Current-period values remain available."
+        );
+      if (c.channel !== "facebook")
+        account.warnings.push(
+          config.includeInactiveCampaigns
+            ? "Campaign scope: all statuses, including inactive campaigns."
+            : "Campaign scope: currently active campaigns only. The same current-status rule applies to both date ranges."
         );
       accounts.push(account);
     } catch (error) {

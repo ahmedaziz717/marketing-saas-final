@@ -134,6 +134,13 @@
       "when": 1792463682266,
       "tag": "0018_structured_product_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792628701986,
+      "tag": "0019_google_campaign_review",
+      "breakpoints": true
     }
   ]
 }

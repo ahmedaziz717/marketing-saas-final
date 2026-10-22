@@ -254,6 +254,18 @@ export const insightConfigSchema = z
     customRange: rangeSchema,
     rollingDays: z.number().int().min(1).max(366).optional(),
     includeToday: z.boolean(),
+    includeInactiveCampaigns: z.boolean().optional(),
+    googleDetailLevel: z
+      .enum([
+        "campaign",
+        "ad_group",
+        "asset_group",
+        "ad",
+        "device",
+        "country",
+        "hour",
+      ])
+      .optional(),
     compare: z.boolean(),
     metrics: z
       .array(metricSchema)
@@ -299,6 +311,33 @@ export const insightConfigSchema = z
   });
 export type InsightConfig = z.infer<typeof insightConfigSchema>;
 
+export function selectedInsightMetrics(
+  config: Pick<InsightConfig, "connectionIds" | "metrics" | "chartMetric">,
+  connections: Array<{ id: string; channel: string }>
+) {
+  const channels = Array.from(
+    new Set(
+      connections
+        .filter(c => config.connectionIds.includes(c.id))
+        .map(c => c.channel)
+        .filter(isInsightChannel)
+    )
+  );
+  const available = selectableMetrics.filter(m =>
+    channels.some(c => supportsInsightMetric(m, c))
+  );
+  const metrics = config.metrics.filter(m => available.includes(m));
+  return {
+    channels,
+    available,
+    metrics,
+    removed: config.metrics.filter(m => !available.includes(m)),
+    chartMetric: metrics.includes(config.chartMetric)
+      ? config.chartMetric
+      : (metrics[0] ?? available[0] ?? "spend"),
+  };
+}
+
 export function defaultInsightConfig(
   timezone = "America/New_York",
   now = Date.now()
@@ -311,6 +350,7 @@ export function defaultInsightConfig(
     period: "7",
     customRange: presetRange("7", now, timezone),
     includeToday: false,
+    includeInactiveCampaigns: false,
     compare: true,
     metrics: [
       "spend",
@@ -438,6 +478,10 @@ export type InsightAccount = {
   warnings: string[];
   metrics: InsightMetricValue[];
   series: Array<{
+    date: string;
+    values: Partial<Record<InsightMetric, number | null>>;
+  }>;
+  previousSeries?: Array<{
     date: string;
     values: Partial<Record<InsightMetric, number | null>>;
   }>;
@@ -577,6 +621,20 @@ export const dashboardWidgetSchema = z
     id: z.string().uuid(),
     reportId: z.string().uuid(),
     kind: z.enum(["report", "kpi", "trend"]),
+    visualization: z
+      .enum([
+        "area",
+        "line",
+        "bar",
+        "ranking",
+        "distribution",
+        "combo",
+        "table",
+        "platform",
+      ])
+      .optional(),
+    aggregation: z.enum(["day", "week", "month"]).optional(),
+    dateMode: z.enum(["dashboard", "custom"]).optional(),
     connectionId: z.string().uuid().nullable(),
     metric: metricSchema,
     size: z.enum(["small", "half", "medium", "wide"]),

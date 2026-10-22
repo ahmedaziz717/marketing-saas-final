@@ -45,6 +45,23 @@ vi.mock("@/lib/trpc", () => ({
       availability: { useQuery: () => ({ data: { enabled: state.enabled } }) },
       progress: { useQuery: () => ({ data: null }) },
     },
+    googleAds: {
+      connections: {
+        useQuery: () => ({
+          data: {
+            items: [
+              {
+                id: "00000000-0000-4000-8000-000000000077",
+                name: "Google Example",
+                channel: "google_ads",
+                status: "connected",
+                details: { timezone: "UTC" },
+              },
+            ],
+          },
+        }),
+      },
+    },
     channels: {
       accountImage: { useQuery: () => ({ data: {} }) },
       connections: {
@@ -134,7 +151,7 @@ it("uses five sections, saves the executable settings, then quotes and starts on
     target: { value: "Find the next headline to test" },
   });
   clickJourney(screen.getByRole("button", { name: /^Evidence Account/ }));
-  changeField(screen.getByLabelText("Meta ad account"), {
+  changeField(screen.getByLabelText("Advertising account"), {
     target: { value: cid },
   });
   clickJourney(screen.getByRole("button", { name: /^Review & run Confirm/ }));

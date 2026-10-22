@@ -1,4 +1,8 @@
-import { learningWeight, snapshotAssertions, type CreativeIntelligence } from "../../shared/creativeIntelligence";
+import {
+  learningWeight,
+  snapshotAssertions,
+  type CreativeIntelligence,
+} from "../../shared/creativeIntelligence";
 import { classifyCopyText } from "../../shared/copyTaxonomy";
 import { creativeCopy } from "../../shared/metaCreativeCopy";
 import { saveCopySnapshots } from "./copyClassificationStore";
@@ -30,7 +34,7 @@ import {
 } from "../../shared/optimization";
 import type { LibraryDatabase } from "./assetLibrary";
 import { adMetrics } from "./channelReports";
-import { getConnection } from "./channelConnections";
+import { getOptimizationConnection } from "./optimizationConnections";
 import { stableHash } from "./policy";
 import { withOrganizationTransaction } from "./activity";
 
@@ -45,7 +49,8 @@ export function classifyImported(
       {
         dimension: d,
         labels: [],
-        status: "unknown", basis: "observed",
+        status: "unknown",
+        basis: "observed",
         unknownReason:
           "No reliable source evidence. Add a reviewed classification.",
       },
@@ -69,7 +74,29 @@ export function classifyImported(
       evidence,
     });
   };
-  add("channel", "meta_ads", "Connected Meta ad account");
+  const google = ad.channel === "google_ads";
+  add(
+    "channel",
+    google ? "google_ads" : "meta_ads",
+    google ? "Connected Google Ads account" : "Connected Meta ad account"
+  );
+  if (google) {
+    add(
+      "asset_type",
+      ad.asset_type,
+      "Google current ad type or Performance Max asset-group snapshot"
+    );
+    add(
+      "bid_strategy",
+      adset.bidding_strategy,
+      "Google current campaign bidding strategy; not historical settings"
+    );
+    add(
+      "budget",
+      adset.budget_micros ? `daily_micros:${adset.budget_micros}` : undefined,
+      "Google current campaign budget in account currency micros"
+    );
+  }
   add(
     "asset_type",
     creative.video_id ? "video" : creative.image_url ? "image" : undefined,
@@ -101,7 +128,9 @@ export function classifyImported(
       `targeting:${stableHash(adset.targeting).slice(0, 12)}`,
       JSON.stringify(adset.targeting).slice(0, 1800)
     );
-  const copy = Object.values(creativeCopy(creative).copy).flat().join("\n");
+  const copy = google
+    ? (creative.google_copy ?? ad.google_copy ?? []).join("\n")
+    : Object.values(creativeCopy(creative).copy).flat().join("\n");
   for (const tag of classifyCopyText(copy).dimensions) {
     const assertion = assertions.get(tag.dimension)!;
     assertion.unknownReason = tag.unknownReason;
@@ -229,15 +258,43 @@ export function aggregateEvidence(rows: EvidenceRow[]) {
   if (!comparable) for (const k of metricNames) totals[k] = null;
   const weights = rows.map(r => r.learning?.weight ?? r.confidence);
   const weightSum = weights.reduce((a, b) => a + b, 0);
-  const weighted = Object.fromEntries(metricNames.map(k => [k, comparable && rows.length && rows.every(r => r.metrics[k] !== null) ? rows.reduce((n, r, i) => n + (r.metrics[k] ?? 0) * weights[i], 0) : null])) as Record<(typeof metricNames)[number], number | null>;
+  const weighted = Object.fromEntries(
+    metricNames.map(k => [
+      k,
+      comparable && rows.length && rows.every(r => r.metrics[k] !== null)
+        ? rows.reduce((n, r, i) => n + (r.metrics[k] ?? 0) * weights[i], 0)
+        : null,
+    ])
+  ) as Record<(typeof metricNames)[number], number | null>;
   return {
     ...totals,
     learning: {
       averageWeight: rows.length ? weightSum / rows.length : 0,
-      effectiveObservations: weights.some(w => w > 0) ? weightSum ** 2 / weights.reduce((n, w) => n + w * w, 0) : 0,
+      effectiveObservations: weights.some(w => w > 0)
+        ? weightSum ** 2 / weights.reduce((n, w) => n + w * w, 0)
+        : 0,
       weightedRoas: ratio(weighted.purchaseValue, weighted.spend),
       weightedCpa: ratio(weighted.spend, weighted.purchases),
-      factors: Object.fromEntries(["recency", "relevance", "confidence", "completeness", "versionReliability"].map(k => [k, rows.length ? rows.reduce((n, r) => n + ((r.learning as any)?.[k] ?? (k === "confidence" ? r.confidence : 1)), 0) / rows.length : 0])),
+      factors: Object.fromEntries(
+        [
+          "recency",
+          "relevance",
+          "confidence",
+          "completeness",
+          "versionReliability",
+        ].map(k => [
+          k,
+          rows.length
+            ? rows.reduce(
+                (n, r) =>
+                  n +
+                  ((r.learning as any)?.[k] ??
+                    (k === "confidence" ? r.confidence : 1)),
+                0
+              ) / rows.length
+            : 0,
+        ])
+      ),
     },
     ctr:
       ratio(totals.clicks, totals.impressions) === null
@@ -322,7 +379,7 @@ export async function analyzeHistory(
   connectionId: string,
   query: AnalysisQuery
 ) {
-  const c = await getConnection(db, organizationId, connectionId, "meta_ads");
+  const c = await getOptimizationConnection(db, organizationId, connectionId);
   const scope = and(
     eq(optimizationRecords.organizationId, organizationId),
     eq(optimizationRecords.connectionId, connectionId)
@@ -391,7 +448,17 @@ export async function analyzeHistory(
     byAd.set(row.adId, a);
   }
   const rows: EvidenceRow[] = insights.slice(0, 50000).map(r => {
-    const labels = effectiveClassifications((byAd.get(r.remoteId) ?? []).filter(a => a.basis !== "requested" && !a.labels.some(l => l.evidence.includes("selected settings, not a visual inference")) && (!a.validSince || a.validSince <= r.date) && (!a.validUntil || a.validUntil >= r.date)));
+    const labels = effectiveClassifications(
+      (byAd.get(r.remoteId) ?? []).filter(
+        a =>
+          a.basis !== "requested" &&
+          !a.labels.some(l =>
+            l.evidence.includes("selected settings, not a visual inference")
+          ) &&
+          (!a.validSince || a.validSince <= r.date) &&
+          (!a.validUntil || a.validUntil >= r.date)
+      )
+    );
     const dimensions: EvidenceRow["dimensions"] = {};
     for (const [d, a] of Object.entries(labels))
       dimensions[d as Dimension] = a.labels
@@ -410,7 +477,22 @@ export async function analyzeHistory(
     const evidence: EvidenceRow = {
       adId: r.remoteId,
       date: r.date,
-      metrics: adMetrics(r.data),
+      metrics:
+        r.data.channel === "google_ads"
+          ? {
+              registrations: null,
+              leads: null,
+              trials: null,
+              subscriptions: null,
+              linkClicks: null,
+              spend: r.data.googleValues?.spend ?? null,
+              impressions: r.data.googleValues?.impressions ?? null,
+              clicks: r.data.googleValues?.clicks ?? null,
+              purchases: r.data.googleValues?.purchases ?? null,
+              purchaseValue: r.data.googleValues?.purchaseValue ?? null,
+              roas: r.data.googleValues?.roas ?? null,
+            }
+          : adMetrics(r.data),
       dimensions,
       confidence: query.dimensions.length
         ? Math.min(
@@ -430,15 +512,51 @@ export async function analyzeHistory(
       attribution: r.provenance.attribution,
     };
     const ad = objects.find(o => o.remoteId === r.remoteId);
-    const updated = typeof ad?.data.updated_time === "string" ? ad.data.updated_time.slice(0, 10) : null;
-    const relevant = [...query.dimensions, ...query.filters.map(f => f.dimension)];
+    const updated =
+      typeof ad?.data.updated_time === "string"
+        ? ad.data.updated_time.slice(0, 10)
+        : null;
+    const relevant = [
+      ...query.dimensions,
+      ...query.filters.map(f => f.dimension),
+    ];
     const dateFacts = ["weekday", "hour", "placement", "timezone"];
-    const exactVersion = relevant.length > 0 && relevant.every(d => dateFacts.includes(d) || (labels[d]?.validSince && (labels[d]?.assetVersion || (labels[d]?.source === "human" && labels[d]?.validUntil))));
-    const confidence = relevant.length ? Math.min(evidence.confidence, ...relevant.map(d => dateFacts.includes(d) ? 1 : Math.max(0, ...(labels[d]?.labels ?? []).map(l => l.confidence)))) : evidence.confidence;
-    evidence.learning = learningWeight({ date: r.date, referenceDate: query.range.until, confidence,
-      completeness: metricNames.filter(k => evidence.metrics[k] !== null).length / metricNames.length,
-      versionReliability: exactVersion ? 1 : updated && r.date < updated ? .35 : .6,
-      dimensions }, query.learning);
+    const exactVersion =
+      relevant.length > 0 &&
+      relevant.every(
+        d =>
+          dateFacts.includes(d) ||
+          (labels[d]?.validSince &&
+            (labels[d]?.assetVersion ||
+              (labels[d]?.source === "human" && labels[d]?.validUntil)))
+      );
+    const confidence = relevant.length
+      ? Math.min(
+          evidence.confidence,
+          ...relevant.map(d =>
+            dateFacts.includes(d)
+              ? 1
+              : Math.max(0, ...(labels[d]?.labels ?? []).map(l => l.confidence))
+          )
+        )
+      : evidence.confidence;
+    evidence.learning = learningWeight(
+      {
+        date: r.date,
+        referenceDate: query.range.until,
+        confidence,
+        completeness:
+          metricNames.filter(k => evidence.metrics[k] !== null).length /
+          metricNames.length,
+        versionReliability: exactVersion
+          ? 1
+          : updated && r.date < updated
+            ? 0.35
+            : 0.6,
+        dimensions,
+      },
+      query.learning
+    );
     return evidence;
   });
   const result = dimensionAnalysis(rows, query),
@@ -453,6 +571,7 @@ export async function analyzeHistory(
     connectionId,
     account: {
       id: c.accountId,
+      channel: c.channel,
       name: c.name,
       currency: c.details.currency,
       timezone: c.details.timezone,
@@ -483,9 +602,16 @@ export async function analyzeHistory(
         query.range.until > (sync.checkpoint.coverage?.until ?? sync.until),
       warnings: sync?.checkpoint.warnings ?? [],
     },
-    caveats: evidenceCaveats,
+    caveats:
+      c.channel === "google_ads"
+        ? [
+            ...evidenceCaveats,
+            "Google ads and Performance Max asset groups are distinct evidence units. Group outcomes cannot establish the performance of individual assets. Placement breakdowns represent Google device categories. Purchase values use Google PURCHASE-category conversions and interaction dates; current creative and settings may differ from those active historically.",
+          ]
+        : evidenceCaveats,
     taxonomyVersion: TAXONOMY_VERSION,
-    learningExplanation: "Learning weight = relevance × label confidence × metric completeness × version reliability × recency. Recency halves over the chosen half-life, measured from the report end date. Legacy and new records use the same rules. Reported metrics remain unweighted.",
+    learningExplanation:
+      "Learning weight = relevance × label confidence × metric completeness × version reliability × recency. Recency halves over the chosen half-life, measured from the report end date. Legacy and new records use the same rules. Reported metrics remain unweighted.",
   };
 }
 export function evidenceCsv(
@@ -531,7 +657,11 @@ export function evidenceCsv(
         ...header
           .slice(report.query.dimensions.length)
           .map(k =>
-            k === "sourceAdIds" ? g.sourceAdIds.join(";") : k === "learningWeight" ? g.learning.averageWeight : (g as any)[k]
+            k === "sourceAdIds"
+              ? g.sourceAdIds.join(";")
+              : k === "learningWeight"
+                ? g.learning.averageWeight
+                : (g as any)[k]
           ),
       ]
         .map(cell)
@@ -573,10 +703,28 @@ async function saveImportedBatch(
     for (const row of prior)
       if (!latest.has(key(row.adId, row.dimension, row.source)))
         latest.set(key(row.adId, row.dimension, row.source), row);
-    const imported = new Set(pending.filter(p => p.source === "import").map(p => key(p.adId, p.assertion.dimension, p.source)));
-    for (const row of Array.from(latest.values())) if (row.source === "import" && !imported.has(key(row.adId, row.dimension, row.source))) {
-      pending.push({ adId: row.adId, source: "import", assertion: { dimension: row.dimension as Dimension, labels: [], retired: true, unknownReason: "The delivery creative no longer matches the captured asset version." } });
-    }
+    const imported = new Set(
+      pending
+        .filter(p => p.source === "import")
+        .map(p => key(p.adId, p.assertion.dimension, p.source))
+    );
+    for (const row of Array.from(latest.values()))
+      if (
+        row.source === "import" &&
+        !imported.has(key(row.adId, row.dimension, row.source))
+      ) {
+        pending.push({
+          adId: row.adId,
+          source: "import",
+          assertion: {
+            dimension: row.dimension as Dimension,
+            labels: [],
+            retired: true,
+            unknownReason:
+              "The delivery creative no longer matches the captured asset version.",
+          },
+        });
+      }
     const values: Array<typeof optimizationClassifications.$inferInsert> = [];
     for (const item of pending) {
       const parsed = assertionSchema.parse(item.assertion);
@@ -610,7 +758,9 @@ async function saveImportedBatch(
       });
     }
     for (let start = 0; start < values.length; start += 1000)
-      await tx.insert(optimizationClassifications).values(values.slice(start, start + 1000));
+      await tx
+        .insert(optimizationClassifications)
+        .values(values.slice(start, start + 1000));
   });
 }
 export async function classifyHistoryBatch(
@@ -620,7 +770,11 @@ export async function classifyHistoryBatch(
   after = ""
 ) {
   const batchSize = 100;
-  await getConnection(db, organizationId, connectionId, "meta_ads");
+  const connection = await getOptimizationConnection(
+    db,
+    organizationId,
+    connectionId
+  );
   const scope = and(
     eq(optimizationRecords.organizationId, organizationId),
     eq(optimizationRecords.connectionId, connectionId)
@@ -676,11 +830,26 @@ export async function classifyHistoryBatch(
           )
         )
     : [];
-  const publicationEvents = published.length ? await db.select().from(activityEvents).where(and(
-    eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityType, "publication"),
-    inArray(activityEvents.entityId, published.map(p => p.id)),
-    inArray(activityEvents.action, ["publication.approved", "publication.draft_saved"])
-  )).orderBy(desc(activityEvents.id)) : [];
+  const publicationEvents = published.length
+    ? await db
+        .select()
+        .from(activityEvents)
+        .where(
+          and(
+            eq(activityEvents.organizationId, organizationId),
+            eq(activityEvents.entityType, "publication"),
+            inArray(
+              activityEvents.entityId,
+              published.map(p => p.id)
+            ),
+            inArray(activityEvents.action, [
+              "publication.approved",
+              "publication.draft_saved",
+            ])
+          )
+        )
+        .orderBy(desc(activityEvents.id))
+    : [];
   for (const ad of page) {
     for (const assertion of classifyImported(
       ad.data,
@@ -692,16 +861,47 @@ export async function classifyHistoryBatch(
     ))
       pending.push({ adId: ad.remoteId, assertion, source: "rule" });
     const publication = published.find(p => p.externalId === ad.remoteId);
-    const frozen = publication && publicationEvents.find(e => e.entityId === publication.id && Array.isArray(e.payload?.creativeSnapshots));
-    const snapshots = (frozen?.payload?.creativeSnapshots ?? []) as CreativeIntelligence[];
-    const uniqueVersions = Array.from(new Set(snapshots.map(v => v.assetVersion)));
-    if (publication && uniqueVersions.length === 1 && String(publication.result?.creativeId ?? "") === String(ad.data.creative?.id ?? "unverified")) {
+    const frozen =
+      publication &&
+      publicationEvents.find(
+        e =>
+          e.entityId === publication.id &&
+          Array.isArray(e.payload?.creativeSnapshots)
+      );
+    const snapshots = (frozen?.payload?.creativeSnapshots ??
+      []) as CreativeIntelligence[];
+    const uniqueVersions = Array.from(
+      new Set(snapshots.map(v => v.assetVersion))
+    );
+    if (
+      publication &&
+      uniqueVersions.length === 1 &&
+      String(publication.result?.creativeId ?? "") ===
+        String(ad.data.creative?.id ?? "unverified")
+    ) {
       const snapshot = snapshots[0];
       for (const assertion of snapshotAssertions(snapshot)) {
         // Delivered copy/channel are classified from Meta; do not overwrite them with image copy.
-        if (["channel", "cta", "messaging_style", "emotional_appeal", "emotional_tone", "benefit_feature", "specificity", "copy_length", "urgency", "messaging_angle"].includes(assertion.dimension)) continue;
-        if (!assertion.labels.length && assertion.status !== "not_applicable") continue;
-        assertion.validSince = new Date(frozen!.createdAtMs).toISOString().slice(0, 10);
+        if (
+          [
+            "channel",
+            "cta",
+            "messaging_style",
+            "emotional_appeal",
+            "emotional_tone",
+            "benefit_feature",
+            "specificity",
+            "copy_length",
+            "urgency",
+            "messaging_angle",
+          ].includes(assertion.dimension)
+        )
+          continue;
+        if (!assertion.labels.length && assertion.status !== "not_applicable")
+          continue;
+        assertion.validSince = new Date(frozen!.createdAtMs)
+          .toISOString()
+          .slice(0, 10);
         pending.push({ adId: ad.remoteId, assertion, source: "import" });
       }
     } else if (publication?.assetKey && !snapshots.length) {
@@ -790,30 +990,31 @@ export async function classifyHistoryBatch(
     }
   }
   await saveImportedBatch(db, organizationId, connectionId, pending);
-  await saveCopySnapshots(
-    db,
-    organizationId,
-    connectionId,
-    page.map(ad => ({
-      id: ad.remoteId,
-      observedAtMs: Math.max(
-        ad.updatedAtMs,
-        related.find(
-          r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
-        )?.updatedAtMs ?? 0
-      ),
-      name: String(ad.data.name ?? "Untitled ad"),
-      copy: creativeCopy(
-        related.find(
-          r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
-        )?.data ??
-          ad.data.creative ??
-          {}
-      ).copy,
-    })),
-    "imported_meta",
-    Date.now()
-  );
+  if (connection.channel === "meta_ads")
+    await saveCopySnapshots(
+      db,
+      organizationId,
+      connectionId,
+      page.map(ad => ({
+        id: ad.remoteId,
+        observedAtMs: Math.max(
+          ad.updatedAtMs,
+          related.find(
+            r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
+          )?.updatedAtMs ?? 0
+        ),
+        name: String(ad.data.name ?? "Untitled ad"),
+        copy: creativeCopy(
+          related.find(
+            r => r.kind === "creative" && r.remoteId === ad.data.creative?.id
+          )?.data ??
+            ad.data.creative ??
+            {}
+        ).copy,
+      })),
+      "imported_meta",
+      Date.now()
+    );
   // Count against the persisted cursor, including runs created before progress
   // metadata existed. Never infer completed work from elapsed time.
   const cursor = page.at(-1)?.remoteId ?? after;

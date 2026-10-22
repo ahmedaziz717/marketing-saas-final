@@ -13,7 +13,13 @@ import {
 } from "../../shared/optimization";
 import { moveDate } from "../../shared/channels";
 import { libraryDatabase, type LibraryDatabase } from "./assetLibrary";
-import { getConnection, connectionToken } from "./channelConnections";
+import { connectionToken } from "./channelConnections";
+import { getOptimizationConnection } from "./optimizationConnections";
+import {
+  googleHistoryTasks,
+  readGoogleHistory,
+} from "./googleOptimizationHistory";
+import { GoogleAdsError, googleConfig } from "./googleAdsApi";
 import {
   ChannelGraphError,
   GRAPH_VERSION,
@@ -132,6 +138,14 @@ export function retryDelay(
 ) {
   if (attempts >= 8) return null;
   if (
+    error instanceof GoogleAdsError &&
+    ["quota", "connection"].includes(error.reason)
+  )
+    return Math.max(
+      providerDelayMs,
+      Math.min(86400000, Math.pow(2, attempts) * 5000)
+    );
+  if (
     error instanceof ChannelGraphError &&
     (error.retryAfterMs ||
       !error.definitive ||
@@ -160,9 +174,9 @@ export async function queueHistory(
     "creator",
     "publisher",
   ]);
-  const c = await getConnection(db, organizationId, connectionId, "meta_ads");
+  const c = await getOptimizationConnection(db, organizationId, connectionId);
   if (c.status !== "connected")
-    throw new Error("Reconnect this Meta ad account before syncing.");
+    throw new Error("Reconnect this advertising account before syncing.");
   return withOrganizationTransaction(db, organizationId, async tx => {
     const [existing] = await tx
       .select()
@@ -178,12 +192,18 @@ export async function queueHistory(
       return existing;
     const today = new Date().toISOString().slice(0, 10);
     const until = requestedRange?.until ?? today;
-    if (until > today) throw new Error("Choose a history range ending today or earlier.");
+    if (until > today)
+      throw new Error("Choose a history range ending today or earlier.");
     // Re-fetch attribution lag, including empty slices; never append overlapping totals.
     const since =
       incremental && existing?.status === "completed"
-        ? [existing.checkpoint.coverage?.since ?? existing.since, moveDate(existing.until, -28)].sort().at(-1)!
-        : requestedRange?.since ?? `${new Date().getUTCFullYear()}-01-01`;
+        ? [
+            existing.checkpoint.coverage?.since ?? existing.since,
+            moveDate(existing.until, -28),
+          ]
+            .sort()
+            .at(-1)!
+        : (requestedRange?.since ?? `${new Date().getUTCFullYear()}-01-01`);
     const values = {
       organizationId,
       connectionId,
@@ -191,7 +211,10 @@ export async function queueHistory(
       status: "queued" as const,
       since,
       until,
-      tasks: historyTasks({ since, until }),
+      tasks: (c.channel === "google_ads" ? googleHistoryTasks : historyTasks)({
+        since,
+        until,
+      }),
       checkpoint: {
         task: 0,
         cursors: [],
@@ -301,14 +324,13 @@ export async function processHistoryPage(
       "creator",
       "publisher",
     ]);
-    const c = await getConnection(
+    const c = await getOptimizationConnection(
       db,
       job.organizationId,
-      job.connectionId,
-      "meta_ads"
+      job.connectionId
     );
     if (c.status !== "connected")
-      throw new Error("Meta connection is no longer active.");
+      throw new Error("Advertising connection is no longer active.");
     if (!task) {
       await db
         .update(optimizationSyncs)
@@ -332,7 +354,9 @@ export async function processHistoryPage(
       return true;
     }
     const path =
-      `act_${remoteId(c.accountId)}` + (task.edge ? `/${task.edge}` : "");
+      c.channel === "google_ads"
+        ? `customers/${c.accountId}/${task.edge}`
+        : `act_${remoteId(c.accountId)}` + (task.edge ? `/${task.edge}` : "");
     const params: Record<string, string> = {
       fields: task.fields,
       ...(task.edge ? { limit: "100" } : {}),
@@ -350,20 +374,23 @@ export async function processHistoryPage(
       params.breakdowns = "publisher_platform,platform_position";
     if (task.grain === "hourly")
       params.breakdowns = "hourly_stats_aggregated_by_advertiser_time_zone";
-    const response = await graphRequest<Record<string, any>>(
-      path,
-      connectionToken(c),
-      params,
-      undefined,
-      false,
-      h => {
-        providerDelayMs = usageDelay(h);
-      }
-    );
+    const response =
+      c.channel === "google_ads"
+        ? await readGoogleHistory(db, job.organizationId, c, task)
+        : await graphRequest<Record<string, any>>(
+            path,
+            connectionToken(c),
+            params,
+            undefined,
+            false,
+            h => {
+              providerDelayMs = usageDelay(h);
+            }
+          );
     const rows = task.kind === "account" ? [response] : response.data;
     if (!Array.isArray(rows))
       throw new ChannelGraphError(
-        "Meta returned an invalid history page.",
+        "The provider returned an invalid history page.",
         true
       );
     const after = response.paging?.next
@@ -376,7 +403,7 @@ export async function processHistoryPage(
         job.checkpoint.cursors.includes(after))
     )
       throw new ChannelGraphError(
-        "Meta pagination did not advance. Resume after checking the provider.",
+        "History pagination did not advance. Resume after checking the provider.",
         true
       );
     const fetchedAtMs = Date.now();
@@ -407,9 +434,15 @@ export async function processHistoryPage(
       >();
       for (const data of rows) {
         const id = String(task.kind === "insight" ? data.ad_id : data.id);
-        if (!/^\d+$/.test(id.replace(/^act_/, "")))
+        if (
+          !(
+            c.channel === "google_ads"
+              ? /^(?:\d+|g_(?:ad_\d+_\d+|ad_group_\d+|asset_group_\d+))$/
+              : /^\d+$/
+          ).test(id.replace(/^act_/, ""))
+        )
           throw new ChannelGraphError(
-            "Meta history contained an invalid object ID.",
+            "History contained an invalid object ID.",
             true
           );
         const date = task.kind === "insight" ? String(data.date_start) : "";
@@ -420,11 +453,12 @@ export async function processHistoryPage(
             date > task.range!.until)
         )
           throw new Error(
-            "Meta history returned a date outside the requested slice."
+            "History returned a date outside the requested slice."
           );
         const fields = task.fields.split(",").map(f => f.replace(/\{.*$/, ""));
         const provenance: Provenance = {
-          apiVersion: GRAPH_VERSION,
+          apiVersion:
+            c.channel === "google_ads" ? googleConfig().version : GRAPH_VERSION,
           path,
           fetchedAtMs,
           requestedFields: fields,
@@ -433,13 +467,16 @@ export async function processHistoryPage(
             fields.map(f => [
               f,
               {
-                source: `meta:${path}:${f}`,
+                source: `${c.channel === "google_ads" ? "google_ads" : "meta"}:${path}:${f}`,
                 observedAtMs: fetchedAtMs,
                 status: data[f] === undefined ? "unavailable" : "returned",
               },
             ])
           ),
-          attribution: "account setting; action_report_time=conversion",
+          attribution:
+            c.channel === "google_ads"
+              ? "Google Ads Conversions columns; PURCHASE category; interaction date; account timezone; fractional attribution; PMax measured by asset group"
+              : "account setting; action_report_time=conversion",
           timezone: c.details.timezone ?? null,
           currency: c.details.currency ?? null,
           granularity: task.grain ?? "current_snapshot",

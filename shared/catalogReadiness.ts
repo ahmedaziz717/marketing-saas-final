@@ -16,7 +16,12 @@ export function catalogReviewNotices(product: {
     notices.push(
       "Price currency missing. Confirm it before using this price in an ad."
     );
-  if (product.provenance["api.imageStatus"] === "unavailable")
+  if (
+    ["unavailable", "partial"].includes(
+      product.provenance["media.status"] ??
+        product.provenance["api.imageStatus"]
+    )
+  )
     notices.push(
       product.images?.length
         ? "A source image could not be loaded. Previously saved images are retained."

@@ -97,6 +97,9 @@ export const apiCatalogMappingSchema = z.object({
     .optional(),
   productBaseUrl: publicLink.optional(),
   imageBaseUrl: publicLink.transform(catalogImageDirectory).optional(),
+  imagePathMode: z.enum(["url", "directory"]).optional(),
+  imagesPath: path.optional(),
+  specificationOrderPath: path.optional(),
   imageUrlTemplate: linkTemplate.optional(),
   skipImages: z.boolean().optional(),
   componentsPath: path.optional(),
@@ -169,3 +172,22 @@ export const apiInstructionFileSchema = z.object({
 export type ApiCatalogConfig = z.infer<typeof apiCatalogConfigSchema>;
 export type ApiCatalogMapping = z.infer<typeof apiCatalogMappingSchema>;
 export type ApiInstructionFile = z.infer<typeof apiInstructionFileSchema>;
+
+/** Standard URL semantics unless the source explicitly documents directory-relative paths. */
+export function resolveCatalogImage(
+  value: string,
+  base: string,
+  mode: "url" | "directory" = "url"
+) {
+  const raw = value.trim();
+  const relative =
+    mode === "directory" && !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)
+      ? raw.replace(/^\/+/, "")
+      : raw;
+  const url = new URL(relative, base);
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password)
+    throw new Error(
+      "Catalog images require public HTTP(S) URLs without credentials."
+    );
+  return url.href;
+}

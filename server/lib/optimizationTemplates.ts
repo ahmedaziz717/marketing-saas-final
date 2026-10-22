@@ -13,7 +13,7 @@ import { optimizerKinds, type OptimizerKind } from "../../shared/optimization";
 import { optimizerLibrary } from "../../shared/optimizerLibrary";
 import { stableHash } from "./policy";
 import { withOrganizationTransaction } from "./activity";
-import { getConnection } from "./channelConnections";
+import { getOptimizationConnection } from "./optimizationConnections";
 import { requireOrganizationRole } from "./access";
 import { requireOptimization } from "./optimizationFlags";
 import type { LibraryDatabase } from "./assetLibrary";
@@ -302,13 +302,15 @@ export async function installOptimizationTemplates(
     "admin",
     "creator",
   ]);
-  const connection = await getConnection(
+  const connection = await getOptimizationConnection(
     db,
     organizationId,
-    connectionId,
-    "meta_ads"
+    connectionId
   );
-  if (includeClx && !/clx/i.test(connection.name))
+  if (
+    includeClx &&
+    (connection.channel !== "meta_ads" || !/clx/i.test(connection.name))
+  )
     throw new Error(
       "Select the authorized CLX ad account to install its refresh example."
     );
@@ -324,6 +326,29 @@ export async function installOptimizationTemplates(
       description: string,
       graph: WorkflowGraph
     ) => {
+      if (connection.channel === "google_ads") {
+        name = `Google Ads · ${name}`;
+        graph = {
+          ...graph,
+          nodes: graph.nodes.map(n => ({
+            ...n,
+            ...(n.type === "meta_history"
+              ? { title: "Fetch Google Ads history" }
+              : {}),
+            config: {
+              ...n.config,
+              ...(n.config.optimizer
+                ? {
+                    optimizer: {
+                      ...n.config.optimizer,
+                      channel: "google_ads" as const,
+                    },
+                  }
+                : {}),
+            },
+          })),
+        };
+      }
       const problem = workflowGraphProblem(graph);
       if (problem) throw new Error(problem);
       const workflowId = uuid({

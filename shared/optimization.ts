@@ -42,8 +42,19 @@ export const dimensionNames = [
   "timezone",
   "budget",
   "bid_strategy",
-  "font_family", "font_weight", "font_size", "product", "product_category", "creator_content",
-  "video_duration", "video_hook", "video_pacing", "video_audio", "video_captions", "objective", "attribution_window",
+  "font_family",
+  "font_weight",
+  "font_size",
+  "product",
+  "product_category",
+  "creator_content",
+  "video_duration",
+  "video_hook",
+  "video_pacing",
+  "video_audio",
+  "video_captions",
+  "objective",
+  "attribution_window",
 ] as const;
 export type Dimension = (typeof dimensionNames)[number];
 export const messagingStyles = [
@@ -90,10 +101,19 @@ export const assertionSchema = z.object({
   basis: z.enum(["requested", "observed"]).optional(),
   status: z.enum(["known", "unknown", "not_applicable"]).optional(),
   assetVersion: z.string().max(100).optional(),
-  assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/).optional(),
+  assetKey: z
+    .string()
+    .regex(/^(asset|creative):[1-9][0-9]*$/)
+    .optional(),
   retired: z.boolean().optional(),
-  validSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  validSince: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  validUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 export type Assertion = z.infer<typeof assertionSchema>;
 export type Classification = Assertion & {
@@ -123,7 +143,8 @@ export function effectiveClassifications(
   const latest = new Map<string, Classification>();
   for (const row of rows) {
     const key = `${row.dimension}:${row.source}`;
-    if (!latest.has(key) || latest.get(key)!.revision < row.revision) latest.set(key, row);
+    if (!latest.has(key) || latest.get(key)!.revision < row.revision)
+      latest.set(key, row);
   }
   for (const row of Array.from(latest.values())) {
     if (row.retired) continue;
@@ -158,7 +179,15 @@ export const historyRangeSchema = z
   );
 export const analysisQuerySchema = z.object({
   range: historyRangeSchema,
-  adIds: z.array(z.string().regex(/^\d+$/).max(100)).max(100).optional(),
+  adIds: z
+    .array(
+      z
+        .string()
+        .regex(/^(?:\d+|g_(?:ad_\d+_\d+|asset_group_\d+))$/)
+        .max(100)
+    )
+    .max(100)
+    .optional(),
   grain: z.enum(["daily", "placement", "hourly"]).default("daily"),
   dimensions: z.array(z.enum(dimensionNames)).max(4).default([]),
   filters: z
@@ -171,7 +200,20 @@ export const analysisQuerySchema = z.object({
     .max(20)
     .default([]),
   minimumConfidence: z.number().min(0).max(1).default(0),
-  learning: z.object({ halfLifeDays: z.number().min(1).max(3650).default(365), context: z.array(z.object({ dimension: z.enum(dimensionNames), values: z.array(z.string().max(120)).min(1).max(30) })).max(20).default([]) }).optional(),
+  learning: z
+    .object({
+      halfLifeDays: z.number().min(1).max(3650).default(365),
+      context: z
+        .array(
+          z.object({
+            dimension: z.enum(dimensionNames),
+            values: z.array(z.string().max(120)).min(1).max(30),
+          })
+        )
+        .max(20)
+        .default([]),
+    })
+    .optional(),
 });
 export type AnalysisQuery = z.infer<typeof analysisQuerySchema>;
 export const optimizerKinds = [

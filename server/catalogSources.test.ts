@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { catalogDraftEntrySchema } from "../shared/catalog";
 import { parseApiCatalog } from "./lib/apiCatalog";
+import { apiMappingRevision } from "./lib/apiCatalog";
 import { apiCatalogConfigSchema } from "../shared/apiCatalog";
 import { catalogRouter } from "./routers/catalog";
 import { safeFetchImage, safeStoreRequest } from "./lib/websiteCrawler";
@@ -26,6 +27,7 @@ import { readStorePage, storeAddress } from "./lib/storeCatalog";
 import { processNextStoreJob } from "./jobs/storeWorker";
 import {
   products,
+  productImages,
   catalogSources,
   organizations,
   organizationMemberships,
@@ -93,6 +95,7 @@ afterAll(async () => {
   await engine.close();
   delete process.env.CATALOG_TOKEN_ENCRYPTION_SECRET;
 });
+
 describe("Catalog sources", () => {
   it("parses CSV quotations, embedded newlines and service fields", () => {
     const rows = parseCatalogCsv(
@@ -331,7 +334,13 @@ it("completes a mixed API import, keeps blank URLs distinct, supports repair and
     });
     vi.mocked(safeFetchImage).mockImplementation(async url => {
       if (url.includes("fail")) throw new Error("Image not found");
-      return { data: Buffer.from("image"), contentType: "image/png" } as any;
+      return {
+        data: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+          "base64"
+        ),
+        contentType: "image/png",
+      } as any;
     });
     vi.mocked(storagePut).mockResolvedValue({
       key: "test/image",
@@ -386,7 +395,10 @@ it("completes a mixed API import, keeps blank URLs distinct, supports repair and
       },
     });
     vi.mocked(safeFetchImage).mockResolvedValue({
-      data: Buffer.from("image"),
+      data: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+        "base64"
+      ),
       contentType: "image/png",
     } as any);
     await caller.action({
@@ -417,3 +429,132 @@ it("completes a mixed API import, keeps blank URLs distinct, supports repair and
     delete process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET;
   }
 });
+
+it("uses saved directory mapping for all 159 products and repairs images without replacing manual facts or duplicating media", async () => {
+  process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET = "isolated-parity-test-key";
+  try {
+    await state.db.update(catalogSources).set({ status: "disconnected" });
+    const endpoint = "https://api.example/all-kits";
+    const raw = Array.from({ length: 159 }, (_, i) => ({
+      id: String(i),
+      name: `Product ${i}`,
+      imageUrl: `/kits/${i}.png`,
+      productUrl: `https://shop.example/${i}`,
+    }));
+    const config = apiCatalogConfigSchema.parse({
+      imageBaseUrl: "https://cdn.example/brand/",
+      imagePathMode: "url",
+    });
+    vi.mocked(readStorePage).mockImplementation(
+      async (_provider, url, credentials: any) => ({
+        ...parseApiCatalog(raw, url, credentials.api),
+        total: 159,
+      })
+    );
+    vi.mocked(safeFetchImage).mockRejectedValue(new Error("HTTP 404"));
+    const source = await caller.connect({
+      organizationId: orgId,
+      provider: "api",
+      storeUrl: endpoint,
+      api: config,
+      previewRevision: apiMappingRevision(endpoint, config),
+    });
+    for (let i = 0; i < 16; i++) await processNextStoreJob(state.db);
+    const before = await state.db
+      .select()
+      .from(products)
+      .where(eq(products.sourceId, source.id));
+    expect(before).toHaveLength(159);
+    await state.db
+      .update(products)
+      .set({
+        name: "Manually reviewed",
+        status: "approved",
+        reviewedByUserId: userId,
+        reviewedAtMs: 100,
+        provenance: { "specifications.order.user": '["Warranty"]' },
+      })
+      .where(eq(products.id, before[0].id));
+    const settings = await caller.imageSettings({
+      organizationId: orgId,
+      sourceId: source.id,
+    });
+    const repairedConfig = { ...config, imagePathMode: "directory" as const };
+    vi.mocked(safeStoreRequest).mockResolvedValue({ data: raw } as any);
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+      "base64"
+    );
+    vi.mocked(safeFetchImage).mockImplementation(async url => {
+      expect(url).toMatch(/^https:\/\/cdn.example\/brand\/kits\/\d+\.png$/);
+      return { data: png, contentType: "image/png" } as any;
+    });
+    const preview = await caller.previewApi({
+      organizationId: orgId,
+      endpoint,
+      config: repairedConfig,
+    });
+    expect(preview.mappingRevision).toBe(
+      apiMappingRevision(endpoint, repairedConfig)
+    );
+    vi.mocked(storagePut).mockResolvedValue({
+      key: "fixture/image",
+      url: "https://storage.example/image.png",
+    });
+    await caller.repairImages({
+      organizationId: orgId,
+      sourceId: source.id,
+      expectedUpdatedAtMs: settings.updatedAtMs,
+      imageBaseUrl: settings.imageBaseUrl,
+      imagePathMode: "directory",
+      imagesPath: "",
+    });
+    for (let i = 0; i < 16; i++) await processNextStoreJob(state.db);
+    const after = await state.db
+      .select()
+      .from(products)
+      .where(eq(products.sourceId, source.id));
+    expect(after.map((p: any) => p.id).sort()).toEqual(
+      before.map((p: any) => p.id).sort()
+    );
+    expect(after.find((p: any) => p.id === before[0].id)).toMatchObject({
+      name: "Manually reviewed",
+      status: "approved",
+      reviewedAtMs: 100,
+      provenance: {
+        "specifications.order.user": '["Warranty"]',
+        "api.mappingRevision": preview.mappingRevision,
+        "media.status": "available",
+      },
+    });
+    const sourceStatus = (await caller.list({ organizationId: orgId })).find(
+      s => s.id === source.id
+    )!;
+    expect(sourceStatus).toMatchObject({
+      status: "connected",
+      processed: 159,
+      storedFiles: 159,
+      productsWithStoredImages: 159,
+      media: { available: 159 },
+    });
+    const filesBefore = (await state.db.select().from(productImages)).length;
+    const nextSettings = await caller.imageSettings({
+      organizationId: orgId,
+      sourceId: source.id,
+    });
+    await caller.repairImages({
+      organizationId: orgId,
+      sourceId: source.id,
+      expectedUpdatedAtMs: nextSettings.updatedAtMs,
+      imageBaseUrl: settings.imageBaseUrl,
+      imagePathMode: "directory",
+      imagesPath: "",
+    });
+    for (let i = 0; i < 16; i++) await processNextStoreJob(state.db);
+    expect((await state.db.select().from(productImages)).length).toBe(
+      filesBefore
+    );
+  } finally {
+    delete process.env.INTEGRATION_TOKEN_ENCRYPTION_SECRET;
+  }
+}, 30000);

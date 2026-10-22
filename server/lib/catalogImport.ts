@@ -7,7 +7,7 @@ import {
   type CatalogEntry,
 } from "../../shared/catalog";
 import { stableHash } from "./policy";
-import { safeFetchImage } from "./websiteCrawler";
+import { fetchCatalogImage } from "./catalogImages";
 import { storagePut } from "../storage";
 import type { StoreItem } from "./storeCatalog";
 import { structuredCatalogFacts } from "../../shared/catalogFacts";
@@ -23,6 +23,8 @@ export async function importCatalogEntry(
     externalId: string;
     provider: string;
     detailUrl?: string;
+    mappingRevision?: string;
+    imageRepairOnly?: boolean;
   },
   variants: StoreItem["variants"] = []
 ) {
@@ -53,7 +55,10 @@ export async function importCatalogEntry(
               // Unresolved links are not identity keys: two blank URLs must
               // never merge different products (or overwrite another source).
               item.productUrl
-                ? eq(products.productUrl, item.productUrl)
+                ? and(
+                    eq(products.productUrl, item.productUrl),
+                    eq(products.sourceId, source.id)
+                  )
                 : undefined
             )
           : eq(products.dedupeKey, key)
@@ -77,15 +82,20 @@ export async function importCatalogEntry(
     ? reconcileCatalogRefresh(old, truth, {}, source?.provider ?? "manual")
     : null;
   if (refreshed) truth = refreshed.values;
+  if (source?.imageRepairOnly && old) {
+    for (const key of Object.keys(truth))
+      (truth as any)[key] = (old as any)[key];
+  }
   // Imported changes require review again. Never silently approve updated claims.
   const previousTruth = old ? { ...old, ...structuredCatalogFacts(old) } : null;
   const unchanged =
-    previousTruth &&
-    Object.entries(truth).every(
-      ([k, v]) =>
-        JSON.stringify((previousTruth as any)[k] ?? "") ===
-        JSON.stringify(v ?? "")
-    );
+    (source?.imageRepairOnly && !!old) ||
+    (previousTruth &&
+      Object.entries(truth).every(
+        ([k, v]) =>
+          JSON.stringify((previousTruth as any)[k] ?? "") ===
+          JSON.stringify(v ?? "")
+      ));
   const values = {
     ...truth,
     organizationId,
@@ -97,28 +107,46 @@ export async function importCatalogEntry(
       source: source?.provider ?? "manual",
       importedAt: new Date().toISOString(),
       ...(source?.detailUrl ? { "api.detailUrl": source.detailUrl } : {}),
+      ...(source?.mappingRevision
+        ? { "api.mappingRevision": source.mappingRevision }
+        : {}),
+      ...(item.specificationOrder && !source?.imageRepairOnly
+        ? {
+            "specifications.order.source": JSON.stringify(
+              item.specificationOrder
+            ),
+          }
+        : {}),
     },
     status: unchanged ? old.status : ("pending" as const),
     reviewedByUserId: unchanged ? old.reviewedByUserId : null,
     reviewedAtMs: unchanged ? old.reviewedAtMs : null,
     updatedAtMs: Date.now(),
   };
-  const [product] = old
-    ? await db
-        .update(products)
-        .set(values)
-        .where(
-          and(
-            eq(products.id, old.id),
-            eq(products.organizationId, organizationId)
-          )
-        )
-        .returning()
-    : await db
-        .insert(products)
-        .values({ ...values, createdAtMs: Date.now() })
-        .returning();
-  for (const v of variants) {
+  const [product] =
+    old && source?.imageRepairOnly
+      ? [old]
+      : old
+        ? await db
+            .update(products)
+            .set(values)
+            .where(
+              and(
+                eq(products.id, old.id),
+                eq(products.organizationId, organizationId),
+                eq(products.updatedAtMs, old.updatedAtMs)
+              )
+            )
+            .returning()
+        : await db
+            .insert(products)
+            .values({ ...values, createdAtMs: Date.now() })
+            .returning();
+  if (!product)
+    throw new Error(
+      "Product changed during import. Resume to reconcile the newer version."
+    );
+  for (const v of source?.imageRepairOnly ? [] : variants) {
     const value = {
       organizationId,
       productId: product.id,
@@ -144,55 +172,154 @@ export async function importCatalogEntry(
         set: value,
       });
   }
-  let imageState = item.imageUrl ? "available" : "missing";
-  if (item.imageUrl) {
-    const [present] = await db
-      .select()
+  const imageUrls = Array.from(
+    new Set([item.imageUrl, ...(item.imageUrls ?? [])].filter(Boolean))
+  );
+  let saved = 0;
+  const failures: Array<{
+    position: number;
+    reason: string;
+    retryable: boolean;
+  }> = [];
+  let storageFailed = false;
+  for (const [position, imageUrl] of Array.from(imageUrls.entries())) {
+    const present = await db
+      .select({ id: productImages.id })
       .from(productImages)
       .where(
         and(
           eq(productImages.organizationId, organizationId),
           eq(productImages.productId, product.id),
-          eq(productImages.sourceUrl, item.imageUrl)
+          eq(productImages.sourceUrl, imageUrl)
         )
       )
       .limit(1);
-    if (!present) {
-      // A missing/blocked remote image is a product review issue, not an API
-      // connection failure. Safe fetching remains mandatory; no unsafe URL is
-      // retried through an unguarded request. Storage/DB failures still surface.
-      const image = await safeFetchImage(item.imageUrl).catch(error => {
-        if (!apiSource) throw error;
-        imageState = "unavailable";
-        return null;
+    if (present.length) {
+      saved++;
+      continue;
+    }
+    let image: Awaited<ReturnType<typeof fetchCatalogImage>> | undefined;
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          image = await fetchCatalogImage(imageUrl);
+          break;
+        } catch (error) {
+          const temporary =
+            /HTTP (429|5\d\d)|timeout|timed out|ECONNRESET|EAI_AGAIN/i.test(
+              String(error)
+            );
+          if (!temporary || attempt === 2) throw error;
+          await new Promise(resolve => setTimeout(resolve, 250 * 2 ** attempt));
+        }
+      }
+    } catch (error) {
+      if (!source)
+        throw new Error(
+          "The supplied image could not be decoded or downloaded."
+        );
+      const status = String(error).match(/HTTP (\d{3})/)?.[1];
+      failures.push({
+        position,
+        reason: status
+          ? `Image server returned HTTP ${status}.`
+          : "Image unavailable, blocked, oversized or not a supported decodable image.",
+        retryable:
+          /HTTP (429|5\d\d)|timeout|timed out|ECONNRESET|EAI_AGAIN/i.test(
+            String(error)
+          ),
       });
-      if (image) {
+      continue;
+    }
+    try {
+      await db.transaction(async tx => {
+        await tx
+          .select({ id: products.id })
+          .from(products)
+          .where(
+            and(
+              eq(products.id, product.id),
+              eq(products.organizationId, organizationId)
+            )
+          )
+          .for("update");
+        const existing = await tx
+          .select()
+          .from(productImages)
+          .where(
+            and(
+              eq(productImages.organizationId, organizationId),
+              eq(productImages.productId, product.id)
+            )
+          );
+        if (existing.some(v => v.sourceUrl === imageUrl)) return;
         const stored = await storagePut(
           `organizations/${organizationId}/products/${product.id}/import`,
-          image.data,
-          image.contentType
+          image!.data,
+          image!.contentType
         );
-        await db.insert(productImages).values({
+        await tx.insert(productImages).values({
           organizationId,
           productId: product.id,
-          sourceUrl: item.imageUrl,
+          sourceUrl: imageUrl,
           storageKey: stored.key,
           url: stored.url,
           altText: item.name,
-          isPrimary: 1,
+          isPrimary: existing.some(v => v.isPrimary) ? 0 : 1,
           createdAtMs: Date.now(),
         });
-      }
+      });
+      saved++;
+    } catch {
+      storageFailed = true;
+      failures.push({
+        position,
+        reason: "Image could not be saved. Retry image repair.",
+        retryable: true,
+      });
     }
   }
-  if (apiSource) {
-    const [updated] = await db
+  const imageState = !imageUrls.length
+    ? "missing"
+    : failures.length
+      ? saved
+        ? "partial"
+        : "unavailable"
+      : "available";
+  const updated = await db.transaction(async tx => {
+    const [latest] = await tx
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.id, product.id),
+          eq(products.organizationId, organizationId)
+        )
+      )
+      .for("update");
+    if (!latest) throw new Error("Product no longer exists.");
+    const [updated] = await tx
       .update(products)
       .set({
         provenance: {
-          ...values.provenance,
-          "api.imageStatus": imageState,
-          "api.imageSourceUrl": item.imageUrl,
+          ...latest.provenance,
+          ...(source?.mappingRevision
+            ? { "api.mappingRevision": source.mappingRevision }
+            : {}),
+          ...(apiSource
+            ? {
+                "api.imageStatus": imageState,
+                "api.imageSourceUrl": item.imageUrl,
+              }
+            : {}),
+          "media.status": imageState,
+          "media.summary": JSON.stringify({
+            supplied: imageUrls.length,
+            saved,
+            failed: failures.length,
+            failures,
+            checkedAt: new Date().toISOString(),
+          }),
         },
       })
       .where(
@@ -203,6 +330,10 @@ export async function importCatalogEntry(
       )
       .returning();
     return updated;
-  }
-  return product;
+  });
+  if (storageFailed)
+    throw new Error(
+      "Product imported, but image storage failed. Resume to retry; existing images are preserved."
+    );
+  return updated;
 }

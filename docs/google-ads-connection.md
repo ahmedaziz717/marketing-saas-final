@@ -5,10 +5,7 @@ EvokeLoop with their own Google login, and explicitly select up to 25 advertisin
 accounts. Direct accounts and clients below a manager account are discovered.
 Workspace owners and admins manage connections; other members can see status.
 
-This release implements account connectivity, access verification, and Insights Studio reporting. Google Ads
-campaign publishing, campaign changes, deletion, and optimization-agent actions
-are not implemented. Google credentials cannot pass into the Meta publishing or
-workflow adapters. The Google transport only permits account listing and search.
+Google now has dedicated campaign controls, Insights reporting and Optimization evidence in the existing studios. Read-only analytics remain isolated from the reviewed mutation transport. Google credentials cannot be passed into Meta publishing adapters. See [the release capability matrix](releases/2026-10-22-google-studios.md) for supported creation and editing controls.
 
 ## Server configuration
 
@@ -41,12 +38,12 @@ Ads scope and its consent text includes editing and deletion.
 
 Use the **standard web client** for this user-driven integration. Google requires
 a separate client tagged for AI agents before adding agent workflows; do not reuse
-these tokens for agent actions. This release adds no agentic routes or tools.
+these tokens for agent actions. Optimization uses user-configured history and evidence workflows; it does not execute autonomous Google advertising changes.
 
 ## Storage and lifecycle
 
 - Uses the existing `app_private.channel_connections` and `channel_oauth_sessions`
-  tables with provider `google_ads`. No schema migration or dependency is required.
+  tables with provider `google_ads`. Migration `0019_google_campaign_review.sql` adds tenant-scoped reviewed campaign drafts. No dependency is added.
   Existing RLS/private-schema configuration is retained. No public API grants added.
 - OAuth state is random, hashed, time-limited, single-use, cookie-bound and bound
   to the initiating EvokeLoop user and workspace. PKCE verifiers, OAuth grants and
@@ -99,15 +96,10 @@ References:
 Use **Integrations → Google Ads → Open Google Ads reports**, or choose Google Ads
 under **Insights Studio → Accounts & dates**. The Google preset includes spend,
 impressions, clicks, click CTR, CPC, conversions, conversion value, purchases,
-purchase value, and purchase ROAS. Campaign details include Performance Max and
-historical paused/removed campaigns with reported activity. Up to 30 campaigns
-are shown in spend order; account totals use the account-level query, not this
-limited display. Date comparisons, report schedules, PDFs, and independent
+purchase value, and purchase ROAS. Campaign details include Performance Max. **Include inactive campaigns** is off by default for both Google and Meta. The same current-campaign-status filter applies to rows, totals, daily series and previous-period comparisons. Enabling it includes historical paused/removed campaigns with activity. Detail tables display up to 30 rows; totals use complete provider result sets, not this display limit. Date comparisons, report schedules, PDFs, and independent
 dashboard widgets use the existing Insights pipeline.
 
-Google Display creative formats are labeled **Google Ads · Display**. Activation
-and Optimization studios link to Google reporting and identify their publishing
-and optimization limitations.
+Google Display creative formats are labeled **Google Ads · Display**. Activation opens the Google campaign studio. Optimization supports Google history, classification, evidence, recommendations and reusable workflows.
 
 Dates use each Ads account's timezone. Standard Google `metrics.conversions`
 and `metrics.conversions_value` are interaction-date metrics, following the
@@ -117,7 +109,7 @@ converted from micros; conversion values are already in account currency.
 Fractional conversion attribution is preserved. Google clicks/CTR are separate
 from Meta link clicks/link CTR. Sources and currencies are not aggregated.
 
-Only fixed GAQL SELECT queries are sent. The server validates dates/customer IDs,
+Reporting sends only fixed GAQL SELECT queries. The server validates dates/customer IDs,
 uses the workspace's connected account and manager header, paginates reads,
 refreshes access tokens, and retries an expired access token once. Failed
 breakdowns are marked unavailable, and do not erase available totals or turn
@@ -129,6 +121,7 @@ Use a shared private Render environment group or the Blueprint service reference
 Existing account connections do not need to be recreated for reporting.
 
 API references checked October 21, 2026:
+
 - https://developers.google.com/google-ads/api/docs/reporting/overview
 - https://developers.google.com/google-ads/api/docs/reporting/paging
 - https://developers.google.com/google-ads/api/docs/conversions/reporting

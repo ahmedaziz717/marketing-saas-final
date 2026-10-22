@@ -347,6 +347,8 @@ function Analytics() {
   const search = useSearch();
   const tab = analyticsViewForRoute(location, search);
   const { range, compare, account, channel } = analyticsFilters(search);
+  const includeInactiveCampaigns =
+    new URLSearchParams(search).get("includeInactiveCampaigns") === "true";
   const setFilters = (updates: Record<string, string>) => {
     const params = new URLSearchParams(search);
     params.delete("tab");
@@ -382,12 +384,19 @@ function Analytics() {
   const bounded = selected.slice(0, 8);
   const queries = useQueries({
     queries: bounded.map(c => ({
-      queryKey: ["frame-channel-report", organizationId, c.id, range],
+      queryKey: [
+        "frame-channel-report",
+        organizationId,
+        c.id,
+        range,
+        includeInactiveCampaigns,
+      ],
       queryFn: () =>
         utils.client.channels.report.query({
           organizationId: organizationId!,
           connectionId: c.id,
           range,
+          includeInactiveCampaigns,
         }),
       staleTime: 120000,
       retry: false,
@@ -400,12 +409,14 @@ function Analytics() {
         organizationId,
         c.id,
         previousRange(range),
+        includeInactiveCampaigns,
       ],
       queryFn: () =>
         utils.client.channels.report.query({
           organizationId: organizationId!,
           connectionId: c.id,
           range: previousRange(range),
+          includeInactiveCampaigns,
         }),
       enabled: compare,
       staleTime: 120000,
@@ -451,6 +462,23 @@ function Analytics() {
               : "Review social content and audience engagement. Filter by channel, Page and date range."
         }
       />
+      {tab !== "social" && (
+        <label className="mb-4 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={includeInactiveCampaigns}
+            onChange={e =>
+              setFilters({
+                includeInactiveCampaigns: e.target.checked ? "true" : "",
+              })
+            }
+          />
+          Include inactive campaigns{" "}
+          <span className="text-xs text-muted-foreground">
+            Applies to totals, charts and both comparison periods.
+          </span>
+        </label>
+      )}
       <div className="mb-5 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-6">
         <div className="sm:col-span-2 xl:col-span-3">
           <DateRangeFilter
@@ -496,7 +524,10 @@ function Analytics() {
             <option value="all">All connected accounts</option>
             {availableAccounts.map(c => (
               <option key={c.id} value={c.id}>
-                {c.name} / {channelNames[c.channel]}
+                {c.name} /{" "}
+                {c.channel === "google_ads"
+                  ? "Google Ads"
+                  : channelNames[c.channel]}
               </option>
             ))}
           </VisualSelect>
@@ -613,7 +644,11 @@ function Analytics() {
               <section key={c.id} className="surface min-w-0 p-4 md:p-6">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="eyebrow">{channelNames[c.channel]}</p>
+                    <p className="eyebrow">
+                      {c.channel === "google_ads"
+                        ? "Google Ads"
+                        : channelNames[c.channel]}
+                    </p>
                     <h2 className="mt-2 text-xl font-semibold">{c.name}</h2>
                   </div>
                   {queries[i].data && (

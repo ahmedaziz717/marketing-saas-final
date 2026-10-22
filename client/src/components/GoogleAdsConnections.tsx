@@ -126,6 +126,11 @@ export function GoogleAdsConnectionCard() {
           </Link>
         </Button>
       )}
+      {connected > 0 && (
+        <Button asChild variant="outline" className="mt-2 w-fit">
+          <Link href="/app/activate/google">Open Google campaign studio</Link>
+        </Button>
+      )}
       {!manage && (
         <p className="mt-3 text-xs text-muted-foreground">
           A workspace owner or administrator can connect accounts.
@@ -226,7 +231,8 @@ export function GoogleAdsConnectionCard() {
             )}
             <p className="text-xs text-muted-foreground">
               Connecting an account does not launch, change, or delete ads.
-              Google campaign management is not available in EvokeLoop yet.
+              Campaign changes are reviewed separately in the Google campaign
+              studio.
             </p>
           </div>
           <div className="shrink-0 space-y-3 border-t pt-4">

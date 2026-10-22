@@ -1618,3 +1618,31 @@
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 6%, var(--card));
 }
+
+.insight-quick-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+.insight-quick-dates label {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.insight-quick-dates select,
+.insight-quick-dates input[type="date"],
+.insight-quick-dates button {
+  border: 1px solid var(--widget-border, var(--border));
+  border-radius: 6px;
+  padding: 0.3rem;
+  background: var(--widget-bg, var(--card));
+  color: inherit;
+  max-width: 100%;
+}
+.insight-quick-dates button {
+  cursor: pointer;
+}

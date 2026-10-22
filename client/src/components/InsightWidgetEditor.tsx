@@ -1,5 +1,7 @@
+import { googleReportDetails } from "@shared/googleReportDetails";
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
+import { chartTypes } from "@shared/insightCharts";
 import { useId, useState, type CSSProperties } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -264,6 +266,44 @@ export function InsightWidgetEditor({
                   <option value="trend">Trend chart</option>
                 </VisualSelect>
               </ChoiceField>
+              {draft.kind === "trend" && (
+                <div className="insight-form-grid">
+                  <label className="insight-label">
+                    Chart style
+                    <VisualSelect
+                      value={draft.visualization ?? "area"}
+                      onChange={e =>
+                        update({
+                          visualization: e.target
+                            .value as DashboardWidget["visualization"],
+                        })
+                      }
+                    >
+                      {chartTypes.map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </VisualSelect>
+                  </label>
+                  <label className="insight-label">
+                    Group dates by
+                    <VisualSelect
+                      value={draft.aggregation ?? "day"}
+                      onChange={e =>
+                        update({
+                          aggregation: e.target
+                            .value as DashboardWidget["aggregation"],
+                        })
+                      }
+                    >
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                    </VisualSelect>
+                  </label>
+                </div>
+              )}
               {draft.kind === "report" ? (
                 <>
                   <ReportComponentPicker
@@ -368,6 +408,54 @@ export function InsightWidgetEditor({
           )}
           {tab === "dates" && (
             <>
+              <label className="insight-label">
+                Date source
+                <VisualSelect
+                  value={draft.dateMode ?? "custom"}
+                  onChange={e =>
+                    update({
+                      dateMode: e.target.value as "dashboard" | "custom",
+                    })
+                  }
+                >
+                  <option value="custom">Custom range</option>
+                  <option value="dashboard">Follow dashboard</option>
+                </VisualSelect>
+              </label>
+              {available.some(a => a.channel === "google_ads") && (
+                <label className="insight-label">
+                  Google detail breakdown
+                  <select
+                    value={setup.googleDetailLevel ?? "campaign"}
+                    onChange={e =>
+                      updateSetup({
+                        googleDetailLevel: e.target
+                          .value as InsightConfig["googleDetailLevel"],
+                      })
+                    }
+                  >
+                    {Object.entries(googleReportDetails).map(([v, t]) => (
+                      <option key={v} value={v}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {available.some(a => a.channel !== "facebook") && (
+                <label className="insight-widget-check">
+                  <input
+                    type="checkbox"
+                    checked={setup.includeInactiveCampaigns === true}
+                    onChange={e =>
+                      updateSetup({
+                        includeInactiveCampaigns: e.target.checked,
+                      })
+                    }
+                  />
+                  Include inactive campaigns
+                </label>
+              )}
               <div className="insight-form-grid">
                 <ChoiceField className="insight-label">
                   Reporting period

@@ -1,3 +1,4 @@
+import { googleReportDetails } from "@shared/googleReportDetails";
 import {
   AccountIdentity,
   ConnectedAccountIdentity,
@@ -45,6 +46,7 @@ import {
   insightChannelLogos,
   insightMetricSources,
   supportsInsightMetric,
+  selectedInsightMetrics,
   isInsightChannel,
   type InsightChannel,
   insightRange,
@@ -128,11 +130,13 @@ function Studio({
   reportId,
   initialRun,
   initialChannel,
+  initialConnection,
 }: {
   organizationId: number;
   reportId?: string;
   initialRun?: string;
   initialChannel?: InsightChannel;
+  initialConnection?: string;
 }) {
   const [, navigate] = useLocation();
   const workspace = useWorkspace();
@@ -165,6 +169,12 @@ function Studio({
       ];
       config.chartMetric = "spend";
     }
+    if (
+      !reportId &&
+      initialConnection &&
+      /^[a-f0-9-]{36}$/i.test(initialConnection)
+    )
+      config.connectionIds = [initialConnection];
     return config;
   });
   const [revision, setRevision] = useState<number>();
@@ -226,7 +236,24 @@ function Studio({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   const update = (patch: Partial<InsightConfig>) => {
-    setConfig(c => ({ ...c, ...patch }));
+    setConfig(c => {
+      const next = { ...c, ...patch };
+      if (patch.connectionIds || patch.metrics) {
+        const selection = selectedInsightMetrics(
+          next,
+          options.data?.connections ?? []
+        );
+        next.metrics = selection.metrics.length
+          ? selection.metrics
+          : patch.connectionIds?.length
+            ? selection.available.slice(0, 4)
+            : [];
+        next.chartMetric = next.metrics.includes(next.chartMetric)
+          ? next.chartMetric
+          : (next.metrics[0] ?? "spend");
+      }
+      return next;
+    });
     setDirty(true);
     setError("");
   };
@@ -239,7 +266,21 @@ function Studio({
   const pageIndex = pages.findIndex(p => p.id === page);
   const busy = save.isPending || run.isPending;
   const canEdit = !!options.data?.canEdit;
-  const validation = insightConfigSchema.safeParse(config);
+  const selection = selectedInsightMetrics(
+    config,
+    options.data?.connections ?? []
+  );
+  const selectedMetrics = selection.metrics;
+  const activeMetricFilter =
+    metricFilter === "all" ||
+    selection.channels.includes(metricFilter as InsightChannel)
+      ? metricFilter
+      : "all";
+  const validation = insightConfigSchema.safeParse({
+    ...config,
+    metrics: selectedMetrics,
+    chartMetric: selection.chartMetric,
+  });
   let range: ReturnType<typeof insightRange> | undefined,
     rangeError = "",
     next: number | null = null;
@@ -256,7 +297,7 @@ function Studio({
   const categoryValues: Record<string, string> = {
     purpose: config.name || "Name your report",
     sources: `${config.connectionIds.length} accounts · ${reportPeriods.find(p => p[0] === config.period)?.[1] || config.period}`,
-    metrics: `${config.metrics.length} metrics selected`,
+    metrics: `${selectedMetrics.length} metrics selected`,
     layout:
       Object.entries(config.sections)
         .filter(([, enabled]) => enabled)
@@ -344,9 +385,9 @@ function Studio({
     }
   };
   const metricToggle = (key: InsightMetric) => {
-    const metrics = config.metrics.includes(key)
-      ? config.metrics.filter(m => m !== key)
-      : [...config.metrics, key];
+    const metrics = selectedMetrics.includes(key)
+      ? selectedMetrics.filter(m => m !== key)
+      : [...selectedMetrics, key];
     update({
       metrics,
       chartMetric: metrics.includes(config.chartMetric)
@@ -458,6 +499,27 @@ function Studio({
                     </p>
                   </div>
                 </div>
+                {selection.channels.includes("google_ads") && (
+                  <label className="insight-label">
+                    Google detail breakdown
+                    <VisualSelect
+                      aria-label="Google detail breakdown"
+                      value={config.googleDetailLevel ?? "campaign"}
+                      onChange={e =>
+                        update({
+                          googleDetailLevel: e.target
+                            .value as InsightConfig["googleDetailLevel"],
+                        })
+                      }
+                    >
+                      {Object.entries(googleReportDetails).map(([v, t]) => (
+                        <option key={v} value={v}>
+                          {t}
+                        </option>
+                      ))}
+                    </VisualSelect>
+                  </label>
+                )}
                 <div className="insight-choice-grid">
                   {[
                     {
@@ -559,6 +621,25 @@ function Studio({
                   </div>
                   <span>{config.connectionIds.length} / 8 selected</span>
                 </div>
+                {selection.channels.some(c => c !== "facebook") && (
+                  <label className="insight-widget-check">
+                    <input
+                      type="checkbox"
+                      checked={config.includeInactiveCampaigns === true}
+                      onChange={e =>
+                        update({ includeInactiveCampaigns: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <strong>Include inactive campaigns</strong>
+                      <small>
+                        Off: report only currently active campaigns. This
+                        applies to totals, trends and campaign tables in both
+                        comparison periods.
+                      </small>
+                    </span>
+                  </label>
+                )}
                 <StudioCategories
                   compact
                   label="Filter accounts by channel"
@@ -774,32 +855,37 @@ function Studio({
                 <StudioCategories
                   compact
                   label="Filter metrics"
-                  current={metricFilter}
+                  current={activeMetricFilter}
                   items={[
                     { id: "all", title: "All metrics" },
                     { id: "meta_ads", title: "Meta Ads" },
                     { id: "google_ads", title: "Google Ads" },
                     { id: "facebook", title: "Social" },
-                  ]}
+                  ].filter(
+                    item =>
+                      item.id === "all" ||
+                      selection.channels.includes(item.id as InsightChannel)
+                  )}
                   onSelect={setMetricFilter}
                 />
                 <div className="insight-metric-choices">
                   {selectableMetrics
                     .filter(
                       key =>
-                        metricFilter === "all" ||
-                        supportsInsightMetric(key, metricFilter)
+                        selection.available.includes(key) &&
+                        (activeMetricFilter === "all" ||
+                          supportsInsightMetric(key, activeMetricFilter))
                     )
                     .map(key => (
                       <button
                         type="button"
                         className="insight-metric-choice"
                         key={key}
-                        aria-pressed={config.metrics.includes(key)}
+                        aria-pressed={selectedMetrics.includes(key)}
                         onClick={() => metricToggle(key)}
                       >
                         <span>
-                          {config.metrics.includes(key) ? (
+                          {selectedMetrics.includes(key) ? (
                             <Check size={16} />
                           ) : (
                             <PlusMark />
@@ -810,9 +896,24 @@ function Studio({
                       </button>
                     ))}
                 </div>
+                {!selection.channels.length && (
+                  <p className="insight-notice">
+                    Select accounts in Accounts & dates to choose relevant
+                    metrics.
+                  </p>
+                )}
+                {!!selection.removed.length && !!selection.channels.length && (
+                  <p className="insight-notice">
+                    {selection.removed.length} previously selected metric(s) do
+                    not apply to these accounts and will be excluded when you
+                    save. Historical results are retained.
+                  </p>
+                )}
                 <p className="insight-caption">
-                  Purchases are platform attributed. Followers are a current
-                  snapshot. No conversion rate is inferred from ad clicks.
+                  {selection.channels.some(c => c !== "facebook") &&
+                    "Purchases are platform attributed. No conversion rate is inferred from ad clicks. "}
+                  {selection.channels.includes("facebook") &&
+                    "Followers are a current snapshot."}
                 </p>
               </>
             )}
@@ -870,14 +971,14 @@ function Studio({
                     <ChoiceField className="insight-label">
                       Preferred trend metric
                       <VisualSelect
-                        value={config.chartMetric}
+                        value={selection.chartMetric}
                         onChange={e =>
                           update({
                             chartMetric: e.target.value as InsightMetric,
                           })
                         }
                       >
-                        {config.metrics.map(key => (
+                        {selectedMetrics.map(key => (
                           <option key={key} value={key}>
                             {insightMetrics[key].label}
                           </option>
@@ -1271,7 +1372,7 @@ function Studio({
                     <BarChart3 size={22} />
                     <strong>Metrics & output</strong>
                     <p>
-                      {config.metrics
+                      {selectedMetrics
                         .map(m => insightMetrics[m].label)
                         .join(", ") || "Choose metrics"}
                     </p>
@@ -1504,10 +1605,11 @@ function WorkspaceStudio() {
   const id = params.get("id") || undefined;
   return organizationId ? (
     <Studio
-      key={`${organizationId}:${id || `new:${params.get("channel") || "all"}`}`}
+      key={`${organizationId}:${id || `new:${params.get("channel") || "all"}:${params.get("connectionId") || ""}`}`}
       organizationId={organizationId}
       reportId={id}
       initialRun={params.get("run") || undefined}
+      initialConnection={params.get("connectionId") ?? undefined}
       initialChannel={
         isInsightChannel(params.get("channel") || "")
           ? (params.get("channel") as InsightChannel)

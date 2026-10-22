@@ -3,7 +3,11 @@ import {
   creativeIntelligence,
   learningWeight,
 } from "../shared/creativeIntelligence";
-import { dimensionNames, historyRangeSchema, effectiveClassifications } from "../shared/optimization";
+import {
+  dimensionNames,
+  historyRangeSchema,
+  effectiveClassifications,
+} from "../shared/optimization";
 import {
   aggregateEvidence,
   type EvidenceRow,
@@ -117,13 +121,27 @@ it("turns comparable supported cohorts into a reviewable test and abstains on mi
       evidence: { ...evidence, groups: [cohort("unknown", 10)] },
     }).decision
   ).toBe("insufficient_evidence");
-  expect(optimizeEvidence({ ...input, channel: "google_ads" }).decision).toBe(
-    "unsupported_channel"
-  );
+  expect(
+    optimizeEvidence({ ...input, channel: "microsoft_ads" }).decision
+  ).toBe("unsupported_channel");
 });
 
 it("retires stale imported versions without resurrecting older revisions or erasing reviewed labels", () => {
-  const base = { dimension: "theme" as const, labels: [{ id: "spotlight", label: "Spotlight", confidence: 1, evidence: "Frozen delivery" }], source: "import" as const, version: 3, observedAtMs: 1, revision: 1 };
+  const base = {
+    dimension: "theme" as const,
+    labels: [
+      {
+        id: "spotlight",
+        label: "Spotlight",
+        confidence: 1,
+        evidence: "Frozen delivery",
+      },
+    ],
+    source: "import" as const,
+    version: 3,
+    observedAtMs: 1,
+    revision: 1,
+  };
   const retired = { ...base, labels: [], retired: true, revision: 2 };
   expect(effectiveClassifications([base, retired]).theme).toBeUndefined();
   const human = { ...base, source: "human" as const };
