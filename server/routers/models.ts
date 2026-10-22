@@ -50,6 +50,7 @@ import {
   type TextAction,
 } from "../../shared/textActionEstimate";
 import { studioPlanningEstimate } from "../lib/studioEstimate";
+import { publicWorkflowTextModels } from "../lib/workflowModels";
 const scope = z.object({ organizationId: z.number().int().positive() });
 async function authorized(userId: number, organizationId: number) {
   await requireOrganizationRole(userId, organizationId, [
@@ -62,6 +63,13 @@ async function authorized(userId: number, organizationId: number) {
   return libraryDatabase();
 }
 export const modelsRouter = router({
+  textCatalog: protectedProcedure
+    .input(scope)
+    .query(async ({ ctx, input }) =>
+      publicWorkflowTextModels(
+        await authorized(ctx.user.id, input.organizationId)
+      )
+    ),
   studioCatalog: protectedProcedure
     .input(scope)
     .query(async ({ ctx, input }) => {

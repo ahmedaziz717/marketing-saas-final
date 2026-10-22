@@ -1,4 +1,8 @@
-import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
+import {
+  VisualSelect,
+  ChoiceField,
+  ChoiceDensityProvider,
+} from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +29,12 @@ import {
   workflowStudioSections,
 } from "@shared/workflowStudio";
 import { performanceField } from "@shared/workflowPerformanceInputs";
+import { WorkflowModelFieldEditor } from "./WorkflowModelField";
+import { workflowModelFieldDefaults } from "@shared/workflowModels";
+import {
+  defaultWorkflowModel,
+  workflowModelKind,
+} from "@shared/workflowModelCatalog";
 
 export function WorkflowFormEditor({
   graph,
@@ -94,694 +104,760 @@ export function WorkflowFormEditor({
     );
 
   return (
-    <section className={`wf-form-editor ${fieldId ? "wf-form-inspector" : ""}`}>
-      {!fieldId && (
-        <aside>
-          <h2>App form</h2>
-          <p>
-            Choose what users provide and group fields into Studio sections and
-            category tabs. Connect each field to the steps that need it.
-          </p>
-          <VisualSelect
-            aria-label="New field type"
-            value={kind}
-            onChange={e => setKind(e.target.value as AppField["kind"])}
-          >
-            {inputKinds.map(k => (
-              <option key={k} value={k}>
-                {inputLabels[k]}
-              </option>
-            ))}
-          </VisualSelect>
-          <Button
-            onClick={() => {
-              if (graph.nodes.length >= 40) {
-                toast.error("This workflow has reached 40 steps.");
-                return;
-              }
-              const n = newWorkflowNode(
-                "app_input",
-                crypto.randomUUID(),
-                60,
-                80 + fields.length * 120
-              );
-              n.title = inputLabels[kind];
-              n.config.field =
-                kind === "performance_data"
-                  ? performanceField()
-                  : appFieldSchema.parse({
-                      kind,
-                      source: systemInputChoices(kind).length
-                        ? "system"
-                        : "custom",
-                    });
-              if (kind === "performance_data") n.config.inputType = "data";
-              onChange({ ...graph, nodes: [...graph.nodes, n] });
-              setSelected(n.id);
-            }}
-          >
-            + Add field
-          </Button>
-          {fields.map((n, index) => (
-            <div className="wf-field-row" key={n.id}>
-              <button
-                className={node?.id === n.id ? "is-selected" : ""}
-                onClick={() => {
-                  setSelected(n.id);
-                  setProposals([]);
-                }}
-              >
-                {n.title}
-                <small>
-                  {
-                    workflowStudioSections.find(
-                      s => s.id === workflowFieldPlacement(n).section
-                    )?.title
-                  }{" "}
-                  / {workflowFieldPlacement(n).category}
-                </small>
-              </button>
-              <button
-                aria-label={`Move ${n.title} up`}
-                disabled={!index}
-                onClick={() => {
-                  const nodes = [...graph.nodes];
-                  const a = nodes.findIndex(x => x.id === n.id),
-                    b = nodes.findIndex(x => x.id === fields[index - 1].id);
-                  [nodes[a], nodes[b]] = [nodes[b], nodes[a]];
-                  onChange({ ...graph, nodes });
-                }}
-              >
-                ↑
-              </button>
-            </div>
-          ))}
-        </aside>
-      )}
-      {node && f ? (
-        <div className="wf-field-settings" key={node.id}>
-          <h2>{node.title}</h2>
-          <label>
-            Field label
-            <input
-              value={node.title}
-              maxLength={100}
-              onChange={e =>
-                onChange({
-                  ...graph,
-                  nodes: graph.nodes.map(n =>
-                    n.id === node.id ? { ...n, title: e.target.value } : n
-                  ),
-                })
-              }
-            />
-          </label>
-          <ChoiceField>
-            Studio section
+    <ChoiceDensityProvider value="compact">
+      <section
+        className={`wf-form-editor ${fieldId ? "wf-form-inspector" : ""}`}
+      >
+        {!fieldId && (
+          <aside>
+            <h2>App form</h2>
+            <p>
+              Choose what users provide and group fields into Studio sections
+              and category tabs. Connect each field to the steps that need it.
+            </p>
             <VisualSelect
-              value={f.studio?.section ?? ""}
-              onChange={e =>
-                update({
-                  studio: {
-                    ...f.studio,
-                    section: (e.target.value || undefined) as NonNullable<
-                      AppField["studio"]
-                    >["section"],
-                  },
-                })
-              }
+              aria-label="New field type"
+              value={kind}
+              onChange={e => setKind(e.target.value as AppField["kind"])}
             >
-              <option value="">
-                Automatic (
-                {
-                  workflowStudioSections.find(
-                    s => s.id === automaticPlacement?.section
-                  )?.title
-                }
-                )
-              </option>
-              {workflowStudioSections.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.title}
+              {inputKinds.map(k => (
+                <option key={k} value={k}>
+                  {inputLabels[k]}
                 </option>
               ))}
             </VisualSelect>
-          </ChoiceField>
-          <label>
-            Category tab
-            <input
-              value={f.studio?.category ?? ""}
-              maxLength={60}
-              placeholder={automaticPlacement?.category}
-              onChange={e =>
-                update({ studio: { ...f.studio, category: e.target.value } })
-              }
-            />
-          </label>
-          <p>
-            Leave the category blank for automatic grouping. Use the same
-            category name to show related fields together. Field order also sets
-            the category order within each section. Review & run and Results are
-            included automatically.
-          </p>
-          <label>
-            Help text
-            <input
-              value={f.help}
-              maxLength={600}
-              onChange={e => update({ help: e.target.value })}
-            />
-          </label>
-          <div className="wf-field-flags">
+            <Button
+              onClick={() => {
+                if (graph.nodes.length >= 40) {
+                  toast.error("This workflow has reached 40 steps.");
+                  return;
+                }
+                const n = newWorkflowNode(
+                  "app_input",
+                  crypto.randomUUID(),
+                  60,
+                  80 + fields.length * 120
+                );
+                n.title = inputLabels[kind];
+                const modelTarget =
+                  kind === "model"
+                    ? graph.nodes.find(
+                        target =>
+                          workflowModelKind(target.type) &&
+                          !graph.edges.some(
+                            e => e.target === target.id && e.port === "model"
+                          )
+                      )
+                    : undefined;
+                n.config.field =
+                  kind === "performance_data"
+                    ? performanceField()
+                    : appFieldSchema.parse({
+                        kind,
+                        source: systemInputChoices(kind).length
+                          ? "system"
+                          : "custom",
+                        ...(kind === "model"
+                          ? modelTarget
+                            ? workflowModelFieldDefaults(modelTarget)
+                            : {
+                                modelKind: "image",
+                                allowedModelIds: [
+                                  defaultWorkflowModel("image"),
+                                ],
+                                defaultValue: defaultWorkflowModel("image"),
+                                required: true,
+                                maxSelections: 1,
+                              }
+                          : {}),
+                      });
+                if (kind === "performance_data") n.config.inputType = "data";
+                onChange({
+                  ...graph,
+                  nodes: [...graph.nodes, n],
+                  edges: modelTarget
+                    ? [
+                        ...graph.edges,
+                        {
+                          id: crypto.randomUUID(),
+                          source: n.id,
+                          target: modelTarget.id,
+                          port: "model",
+                        },
+                      ]
+                    : graph.edges,
+                });
+                setSelected(n.id);
+              }}
+            >
+              + Add field
+            </Button>
+            {fields.map((n, index) => (
+              <div className="wf-field-row" key={n.id}>
+                <button
+                  className={node?.id === n.id ? "is-selected" : ""}
+                  onClick={() => {
+                    setSelected(n.id);
+                    setProposals([]);
+                  }}
+                >
+                  {n.title}
+                  <small>
+                    {
+                      workflowStudioSections.find(
+                        s => s.id === workflowFieldPlacement(n).section
+                      )?.title
+                    }{" "}
+                    / {workflowFieldPlacement(n).category}
+                  </small>
+                </button>
+                <button
+                  aria-label={`Move ${n.title} up`}
+                  disabled={!index}
+                  onClick={() => {
+                    const nodes = [...graph.nodes];
+                    const a = nodes.findIndex(x => x.id === n.id),
+                      b = nodes.findIndex(x => x.id === fields[index - 1].id);
+                    [nodes[a], nodes[b]] = [nodes[b], nodes[a]];
+                    onChange({ ...graph, nodes });
+                  }}
+                >
+                  ↑
+                </button>
+              </div>
+            ))}
+          </aside>
+        )}
+        {node && f ? (
+          <div className="wf-field-settings" key={node.id}>
+            <h2>{node.title}</h2>
             <label>
+              Field label
               <input
-                type="checkbox"
-                checked={f.kind === "performance_data" || f.required}
-                disabled={f.kind === "performance_data"}
-                onChange={e => update({ required: e.target.checked })}
+                value={node.title}
+                maxLength={100}
+                onChange={e =>
+                  onChange({
+                    ...graph,
+                    nodes: graph.nodes.map(n =>
+                      n.id === node.id ? { ...n, title: e.target.value } : n
+                    ),
+                  })
+                }
               />
-              Required
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={f.locked}
-                onChange={e => update({ locked: e.target.checked })}
-              />
-              Lock default value
-            </label>
-          </div>
-          {f.kind === "connection" && (
             <ChoiceField>
-              Destination channel
+              Studio section
               <VisualSelect
-                value={f.connectionChannel ?? "facebook"}
+                value={f.studio?.section ?? ""}
                 onChange={e =>
                   update({
-                    connectionChannel: e.target.value as
-                      | "facebook"
-                      | "meta_ads",
-                    defaultValue: "",
+                    studio: {
+                      ...f.studio,
+                      section: (e.target.value || undefined) as NonNullable<
+                        AppField["studio"]
+                      >["section"],
+                    },
                   })
                 }
               >
-                <option value="facebook">Facebook Page</option>
-                <option value="meta_ads">Meta ad account</option>
-              </VisualSelect>
-              <small>
-                Connect this field to the matching post or ad destination port.
-              </small>
-            </ChoiceField>
-          )}
-          {(f.kind === "asset" || f.kind === "product") && (
-            <div className="wf-media-settings">
-              <h3>Image sources & product content</h3>
-              <p>
-                These settings belong to this workflow field and are included in
-                every published App version.
-              </p>
-              {f.kind === "asset" &&
-                (
-                  [
-                    ["productImages", "Allow product images"],
-                    ["approvedAssets", "Allow approved assets"],
-                    ["finishedAssetsOnly", "Require finished library assets"],
-                    ["allowUpload", "Offer image upload"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key}>
-                    <input
-                      type="checkbox"
-                      checked={!!workflowMediaOptions(f)[key]}
-                      disabled={
-                        key === "allowUpload" &&
-                        !workflowMediaOptions(f).approvedAssets
-                      }
-                      onChange={e => {
-                        const media = {
-                          ...workflowMediaOptions(f),
-                          [key]: e.target.checked,
-                        };
-                        if (!media.productImages && !media.approvedAssets) {
-                          toast.error(
-                            "Keep at least one image source available."
-                          );
-                          return;
-                        }
-                        if (!media.approvedAssets) media.allowUpload = false;
-                        update({ media, defaultValue: "" });
-                      }}
-                    />
-                    {label}
-                  </label>
-                ))}
-              {f.kind === "asset" && (
-                <p>
-                  Uploads use the Asset Library approval process. Approved
-                  uploads can be selected as reference images.
-                </p>
-              )}
-              <ChoiceField>
-                Feature bullets
-                <VisualSelect
-                  value={workflowMediaOptions(f).bullets}
-                  onChange={e =>
-                    update({
-                      media: {
-                        ...workflowMediaOptions(f),
-                        bullets: e.target.value as "choose" | "all" | "none",
-                      },
-                    })
+                <option value="">
+                  Automatic (
+                  {
+                    workflowStudioSections.find(
+                      s => s.id === automaticPlacement?.section
+                    )?.title
                   }
-                >
-                  <option value="choose">User chooses bullets</option>
-                  <option value="all">Feature all catalog bullets</option>
-                  <option value="none">Do not feature bullets</option>
-                </VisualSelect>
-              </ChoiceField>
-              {(
-                [
-                  ["price", "Price"],
-                  ["description", "Description"],
-                  ["link", "Product link"],
-                ] as const
-              ).map(([key, label]) => (
-                <ChoiceField key={key}>
-                  {label}
-                  <VisualSelect
-                    value={workflowMediaOptions(f)[key]}
-                    onChange={e =>
-                      update({
-                        media: {
-                          ...workflowMediaOptions(f),
-                          [key]: e.target.value as
-                            | "choose"
-                            | "always"
-                            | "never",
-                        },
-                      })
-                    }
-                  >
-                    <option value="choose">User chooses</option>
-                    <option value="always">Always include</option>
-                    <option value="never">Never include</option>
-                  </VisualSelect>
-                </ChoiceField>
-              ))}
+                  )
+                </option>
+                {workflowStudioSections.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </VisualSelect>
+            </ChoiceField>
+            <label>
+              Category tab
+              <input
+                value={f.studio?.category ?? ""}
+                maxLength={60}
+                placeholder={automaticPlacement?.category}
+                onChange={e =>
+                  update({ studio: { ...f.studio, category: e.target.value } })
+                }
+              />
+            </label>
+            <p>
+              Leave the category blank for automatic grouping. Use the same
+              category name to show related fields together. Field order also
+              sets the category order within each section. Review & run and
+              Results are included automatically.
+            </p>
+            <label>
+              Help text
+              <input
+                value={f.help}
+                maxLength={600}
+                onChange={e => update({ help: e.target.value })}
+              />
+            </label>
+            <div className="wf-field-flags">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={
+                    ["performance_data", "model"].includes(f.kind) || f.required
+                  }
+                  disabled={["performance_data", "model"].includes(f.kind)}
+                  onChange={e => update({ required: e.target.checked })}
+                />
+                Required
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={f.locked}
+                  onChange={e => update({ locked: e.target.checked })}
+                />
+                Lock default value
+              </label>
             </div>
-          )}
-          {isChoiceField(f) && (
-            <>
+            {f.kind === "connection" && (
               <ChoiceField>
-                Available choices
+                Destination channel
                 <VisualSelect
-                  value={f.source}
+                  value={f.connectionChannel ?? "facebook"}
                   onChange={e =>
                     update({
-                      source: e.target.value as AppField["source"],
-                      options:
-                        e.target.value === "curated"
-                          ? systemInputChoices(f.kind)
-                          : f.options,
+                      connectionChannel: e.target.value as
+                        | "facebook"
+                        | "meta_ads"
+                        | "google_ads",
                       defaultValue: "",
                     })
                   }
                 >
-                  {systemInputChoices(f.kind).length > 0 && (
-                    <>
-                      <option value="system">All system choices</option>
-                      <option value="curated">Choose a subset</option>
-                    </>
-                  )}
-                  <option value="custom">My own list</option>
+                  <option value="facebook">Facebook Page</option>
+                  <option value="meta_ads">Meta ad account</option>
+                  <option value="google_ads">Google Ads account</option>
                 </VisualSelect>
+                <small>
+                  Connect this field to a matching channel step's account or
+                  destination port.
+                </small>
               </ChoiceField>
-              {f.source === "curated" && (
-                <details>
-                  <summary>
-                    {f.options.length} choices included · edit selection
-                  </summary>
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      update({ options: systemInputChoices(f.kind) })
-                    }
-                  >
-                    Select all
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => update({ options: [], defaultValue: "" })}
-                  >
-                    Clear
-                  </Button>
-                  <div className="wf-choice-list">
-                    {systemInputChoices(f.kind).map(o => (
-                      <label key={o.id}>
-                        <input
-                          type="checkbox"
-                          checked={f.options.some(x => x.id === o.id)}
-                          onChange={e =>
-                            update({
-                              options: e.target.checked
-                                ? [...f.options, o]
-                                : f.options.filter(x => x.id !== o.id),
-                              defaultValue: "",
-                            })
+            )}
+            {(f.kind === "asset" || f.kind === "product") && (
+              <div className="wf-media-settings">
+                <h3>Image sources & product content</h3>
+                <p>
+                  These settings belong to this workflow field and are included
+                  in every published App version.
+                </p>
+                {f.kind === "asset" &&
+                  (
+                    [
+                      ["productImages", "Allow product images"],
+                      ["approvedAssets", "Allow approved assets"],
+                      ["finishedAssetsOnly", "Require finished library assets"],
+                      ["allowUpload", "Offer image upload"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      <input
+                        type="checkbox"
+                        checked={!!workflowMediaOptions(f)[key]}
+                        disabled={
+                          key === "allowUpload" &&
+                          !workflowMediaOptions(f).approvedAssets
+                        }
+                        onChange={e => {
+                          const media = {
+                            ...workflowMediaOptions(f),
+                            [key]: e.target.checked,
+                          };
+                          if (!media.productImages && !media.approvedAssets) {
+                            toast.error(
+                              "Keep at least one image source available."
+                            );
+                            return;
                           }
-                        />
-                        {o.label}
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              )}
-              {f.source === "custom" && (
-                <>
-                  <div className="wf-custom-choices">
-                    {f.options.map((o, i) => (
-                      <div key={o.id}>
-                        <input
-                          aria-label={`Choice ${i + 1} name`}
-                          value={o.label}
-                          maxLength={160}
-                          onChange={e =>
-                            update({
-                              options: f.options.map(x =>
-                                x.id === o.id
-                                  ? { ...x, label: e.target.value }
-                                  : x
-                              ),
-                            })
-                          }
-                        />
-                        <textarea
-                          aria-label={`Choice ${i + 1} instructions`}
-                          value={o.direction}
-                          maxLength={2000}
-                          placeholder="Creative instructions for this choice"
-                          onChange={e =>
-                            update({
-                              options: f.options.map(x =>
-                                x.id === o.id
-                                  ? { ...x, direction: e.target.value }
-                                  : x
-                              ),
-                            })
-                          }
-                        />
-                        <button
-                          onClick={() =>
-                            update({
-                              options: f.options.filter(x => x.id !== o.id),
-                              defaultValue: "",
-                            })
-                          }
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    disabled={f.options.length >= 200}
-                    onClick={() =>
+                          if (!media.approvedAssets) media.allowUpload = false;
+                          update({ media, defaultValue: "" });
+                        }}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                {f.kind === "asset" && (
+                  <p>
+                    Uploads use the Asset Library approval process. Approved
+                    uploads can be selected as reference images.
+                  </p>
+                )}
+                <ChoiceField>
+                  Feature bullets
+                  <VisualSelect
+                    value={workflowMediaOptions(f).bullets}
+                    onChange={e =>
                       update({
-                        options: [
-                          ...f.options,
-                          {
-                            id: crypto.randomUUID(),
-                            label: "New choice",
-                            direction: "",
-                          },
-                        ],
+                        media: {
+                          ...workflowMediaOptions(f),
+                          bullets: e.target.value as "choose" | "all" | "none",
+                        },
                       })
                     }
                   >
-                    Add choice
-                  </Button>
-                </>
-              )}
-              <details>
-                <summary>Generate a new list with AI</summary>
-                <label>
-                  Describe the choices
-                  <textarea
-                    value={direction}
-                    maxLength={3000}
-                    onChange={e => setDirection(e.target.value)}
-                    placeholder="Seasonal themes for a premium jewelry brand…"
-                  />
-                </label>
-                <label>
-                  Number of choices
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={count}
-                    onChange={e => setCount(Number(e.target.value))}
-                  />
-                </label>
-                <Button
-                  disabled={assist.isPending || !direction.trim()}
-                  onClick={async () => {
-                    try {
-                      setProposals(
-                        (
-                          await assist.mutateAsync({
-                            organizationId,
-                            field: f,
-                            title: node.title,
-                            direction,
-                            count,
-                            mode: "choices",
-                          })
-                        ).options
-                      );
-                    } catch (e) {
-                      toast.error((e as Error).message);
+                    <option value="choose">User chooses bullets</option>
+                    <option value="all">Feature all catalog bullets</option>
+                    <option value="none">Do not feature bullets</option>
+                  </VisualSelect>
+                </ChoiceField>
+                {(
+                  [
+                    ["price", "Price"],
+                    ["description", "Description"],
+                    ["link", "Product link"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <ChoiceField key={key}>
+                    {label}
+                    <VisualSelect
+                      value={workflowMediaOptions(f)[key]}
+                      onChange={e =>
+                        update({
+                          media: {
+                            ...workflowMediaOptions(f),
+                            [key]: e.target.value as
+                              | "choose"
+                              | "always"
+                              | "never",
+                          },
+                        })
+                      }
+                    >
+                      <option value="choose">User chooses</option>
+                      <option value="always">Always include</option>
+                      <option value="never">Never include</option>
+                    </VisualSelect>
+                  </ChoiceField>
+                ))}
+              </div>
+            )}
+            {f.kind === "model" && (
+              <WorkflowModelFieldEditor
+                graph={graph}
+                node={node}
+                onChange={onChange}
+                organizationId={organizationId}
+              />
+            )}
+            {isChoiceField(f) && f.kind !== "model" && (
+              <>
+                <ChoiceField>
+                  Available choices
+                  <VisualSelect
+                    value={f.source}
+                    onChange={e =>
+                      update({
+                        source: e.target.value as AppField["source"],
+                        options:
+                          e.target.value === "curated"
+                            ? systemInputChoices(f.kind)
+                            : f.options,
+                        defaultValue: "",
+                      })
                     }
-                  }}
-                >
-                  {assist.isPending ? "Generating…" : "Generate choices"}
-                </Button>
-                <small>
-                  Uses AI credits. Your current list stays unchanged until you
-                  apply the result.
-                </small>
-                {proposals.length > 0 && (
-                  <>
+                  >
+                    {systemInputChoices(f.kind).length > 0 && (
+                      <>
+                        <option value="system">All system choices</option>
+                        <option value="curated">Choose a subset</option>
+                      </>
+                    )}
+                    <option value="custom">My own list</option>
+                  </VisualSelect>
+                </ChoiceField>
+                {f.source === "curated" && (
+                  <details>
+                    <summary>
+                      {f.options.length} choices included · edit selection
+                    </summary>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        update({ options: systemInputChoices(f.kind) })
+                      }
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => update({ options: [], defaultValue: "" })}
+                    >
+                      Clear
+                    </Button>
                     <div className="wf-choice-list">
-                      {proposals.map(o => (
+                      {systemInputChoices(f.kind).map(o => (
+                        <label key={o.id}>
+                          <input
+                            type="checkbox"
+                            checked={f.options.some(x => x.id === o.id)}
+                            onChange={e =>
+                              update({
+                                options: e.target.checked
+                                  ? [...f.options, o]
+                                  : f.options.filter(x => x.id !== o.id),
+                                defaultValue: "",
+                              })
+                            }
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {f.source === "custom" && (
+                  <>
+                    <div className="wf-custom-choices">
+                      {f.options.map((o, i) => (
                         <div key={o.id}>
-                          <strong>{o.label}</strong>
-                          <p>{o.direction}</p>
+                          <input
+                            aria-label={`Choice ${i + 1} name`}
+                            value={o.label}
+                            maxLength={160}
+                            onChange={e =>
+                              update({
+                                options: f.options.map(x =>
+                                  x.id === o.id
+                                    ? { ...x, label: e.target.value }
+                                    : x
+                                ),
+                              })
+                            }
+                          />
+                          <textarea
+                            aria-label={`Choice ${i + 1} instructions`}
+                            value={o.direction}
+                            maxLength={2000}
+                            placeholder="Creative instructions for this choice"
+                            onChange={e =>
+                              update({
+                                options: f.options.map(x =>
+                                  x.id === o.id
+                                    ? { ...x, direction: e.target.value }
+                                    : x
+                                ),
+                              })
+                            }
+                          />
+                          <button
+                            onClick={() =>
+                              update({
+                                options: f.options.filter(x => x.id !== o.id),
+                                defaultValue: "",
+                              })
+                            }
+                          >
+                            Remove
+                          </button>
                         </div>
                       ))}
                     </div>
                     <Button
-                      onClick={() => {
+                      variant="outline"
+                      disabled={f.options.length >= 200}
+                      onClick={() =>
                         update({
-                          source: "custom",
-                          options: proposals,
-                          defaultValue: "",
-                        });
-                        setProposals([]);
-                      }}
+                          options: [
+                            ...f.options,
+                            {
+                              id: crypto.randomUUID(),
+                              label: "New choice",
+                              direction: "",
+                            },
+                          ],
+                        })
+                      }
                     >
-                      Use this list
+                      Add choice
                     </Button>
                   </>
                 )}
-              </details>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={f.multiple}
-                  disabled={f.kind === "size"}
-                  onChange={e =>
-                    update({ multiple: e.target.checked, defaultValue: "" })
-                  }
-                />
-                Allow multiple selections
-              </label>
-              {f.multiple && (
-                <label>
-                  Maximum selections
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={f.maxSelections}
-                    onChange={e =>
-                      update({ maxSelections: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              )}
-            </>
-          )}
-          <label>Default value</label>
-          <WorkflowInputControl
-            field={{ ...f, locked: false, ai: false }}
-            title={node.title}
-            value={f.defaultValue}
-            organizationId={organizationId}
-            onChange={v => update({ defaultValue: v })}
-          />
-          {!isChoiceField(f) &&
-            !["asset", "product", "url", "number"].includes(f.kind) && (
-              <>
+                <details>
+                  <summary>Generate a new list with AI</summary>
+                  <label>
+                    Describe the choices
+                    <textarea
+                      value={direction}
+                      maxLength={3000}
+                      onChange={e => setDirection(e.target.value)}
+                      placeholder="Seasonal themes for a premium jewelry brand…"
+                    />
+                  </label>
+                  <label>
+                    Number of choices
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={count}
+                      onChange={e => setCount(Number(e.target.value))}
+                    />
+                  </label>
+                  <Button
+                    disabled={assist.isPending || !direction.trim()}
+                    onClick={async () => {
+                      try {
+                        setProposals(
+                          (
+                            await assist.mutateAsync({
+                              organizationId,
+                              field: f,
+                              title: node.title,
+                              direction,
+                              count,
+                              mode: "choices",
+                            })
+                          ).options
+                        );
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      }
+                    }}
+                  >
+                    {assist.isPending ? "Generating…" : "Generate choices"}
+                  </Button>
+                  <small>
+                    Uses AI credits. Your current list stays unchanged until you
+                    apply the result.
+                  </small>
+                  {proposals.length > 0 && (
+                    <>
+                      <div className="wf-choice-list">
+                        {proposals.map(o => (
+                          <div key={o.id}>
+                            <strong>{o.label}</strong>
+                            <p>{o.direction}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={() => {
+                          update({
+                            source: "custom",
+                            options: proposals,
+                            defaultValue: "",
+                          });
+                          setProposals([]);
+                        }}
+                      >
+                        Use this list
+                      </Button>
+                    </>
+                  )}
+                </details>
                 <label>
                   <input
                     type="checkbox"
-                    checked={f.ai}
-                    onChange={e => update({ ai: e.target.checked })}
+                    checked={f.multiple}
+                    disabled={f.kind === "size"}
+                    onChange={e =>
+                      update({ multiple: e.target.checked, defaultValue: "" })
+                    }
                   />
-                  Let users generate alternatives with AI
+                  Allow multiple selections
                 </label>
-                {f.ai && (
+                {f.multiple && (
                   <label>
-                    AI instructions
-                    <textarea
-                      value={f.aiInstructions}
-                      maxLength={3000}
-                      onChange={e => update({ aiInstructions: e.target.value })}
+                    Maximum selections
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={f.maxSelections}
+                      onChange={e =>
+                        update({ maxSelections: Number(e.target.value) })
+                      }
                     />
                   </label>
                 )}
               </>
             )}
-          <details>
-            <summary>Conditional visibility</summary>
-            <ChoiceField>
-              Show when
-              <VisualSelect
-                value={f.visibleWhen?.fieldId ?? ""}
-                onChange={e =>
-                  update({
-                    visibleWhen: e.target.value
-                      ? { fieldId: e.target.value, equals: "" }
-                      : undefined,
-                  })
-                }
-              >
-                <option value="">Always visible</option>
-                {fields
-                  .filter(n => n.id !== node.id)
-                  .map(n => (
-                    <option value={n.id} key={n.id}>
-                      {n.title}
-                    </option>
-                  ))}
-              </VisualSelect>
-            </ChoiceField>
-            {f.visibleWhen && (
-              <label>
-                Equals (choice ID or value)
-                <input
-                  value={f.visibleWhen.equals}
+            {f.kind !== "model" && (
+              <>
+                <label>Default value</label>
+                <WorkflowInputControl
+                  field={{ ...f, locked: false, ai: false }}
+                  title={node.title}
+                  value={f.defaultValue}
+                  organizationId={organizationId}
+                  onChange={v => update({ defaultValue: v })}
+                />
+              </>
+            )}
+            {!isChoiceField(f) &&
+              !["asset", "product", "url", "number"].includes(f.kind) && (
+                <>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={f.ai}
+                      onChange={e => update({ ai: e.target.checked })}
+                    />
+                    Let users generate alternatives with AI
+                  </label>
+                  {f.ai && (
+                    <label>
+                      AI instructions
+                      <textarea
+                        value={f.aiInstructions}
+                        maxLength={3000}
+                        onChange={e =>
+                          update({ aiInstructions: e.target.value })
+                        }
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+            <details>
+              <summary>Conditional visibility</summary>
+              <ChoiceField>
+                Show when
+                <VisualSelect
+                  value={f.visibleWhen?.fieldId ?? ""}
                   onChange={e =>
                     update({
-                      visibleWhen: {
-                        ...f.visibleWhen!,
-                        equals: e.target.value,
-                      },
+                      visibleWhen: e.target.value
+                        ? { fieldId: e.target.value, equals: "" }
+                        : undefined,
                     })
                   }
-                />
-              </label>
-            )}
-          </details>
-          <h3>Use this field in</h3>
-          <p>
-            Connect to generation, copy, optimization or other steps. A size
-            field sets the format of directly connected generation steps.
-          </p>
-          {graph.nodes
-            .filter(
-              n =>
-                n.id !== node.id &&
-                n.type !== "app_input" &&
-                workflowNodes[n.type].inputs.length
-            )
-            .map(n => {
-              const ports = workflowNodes[n.type].inputs.filter(
-                p =>
-                  p.type === "any" ||
-                  (f.kind === "product"
-                    ? ["text", "image"].includes(p.type)
-                    : p.type === (f.kind === "asset" ? "image" : "text"))
-              );
-              if (!ports.length) return null;
-              const connected = graph.edges.some(
-                e => e.source === node.id && e.target === n.id
-              );
-              return (
-                <label key={n.id}>
+                >
+                  <option value="">Always visible</option>
+                  {fields
+                    .filter(n => n.id !== node.id)
+                    .map(n => (
+                      <option value={n.id} key={n.id}>
+                        {n.title}
+                      </option>
+                    ))}
+                </VisualSelect>
+              </ChoiceField>
+              {f.visibleWhen && (
+                <label>
+                  Equals (choice ID or value)
                   <input
-                    type="checkbox"
-                    checked={connected}
+                    value={f.visibleWhen.equals}
                     onChange={e =>
-                      onChange({
-                        ...graph,
-                        edges: e.target.checked
-                          ? [
-                              ...graph.edges,
-                              ...ports.map(port => ({
-                                id: crypto.randomUUID(),
-                                source: node.id,
-                                target: n.id,
-                                port: port.id,
-                              })),
-                            ]
-                          : graph.edges.filter(
-                              edge =>
-                                !(
-                                  edge.source === node.id &&
-                                  edge.target === n.id
-                                )
-                            ),
+                      update({
+                        visibleWhen: {
+                          ...f.visibleWhen!,
+                          equals: e.target.value,
+                        },
                       })
                     }
                   />
-                  {n.title}
                 </label>
-              );
-            })}
-          {!graph.edges.some(e => e.source === node.id) && (
-            <p className="wf-field-warning">
-              This field is not connected yet. Select a step above so its value
-              affects the result.
+              )}
+            </details>
+            {f.kind !== "model" && (
+              <>
+                <h3>Use this field in</h3>
+                <p>
+                  Connect to generation, copy, optimization or other steps. A
+                  size field sets the format of directly connected generation
+                  steps.
+                </p>
+                {graph.nodes
+                  .filter(
+                    n =>
+                      n.id !== node.id &&
+                      n.type !== "app_input" &&
+                      workflowNodes[n.type].inputs.length
+                  )
+                  .map(n => {
+                    const ports = workflowNodes[n.type].inputs.filter(
+                      p =>
+                        p.type === "any" ||
+                        (f.kind === "product"
+                          ? ["text", "image"].includes(p.type)
+                          : p.type === (f.kind === "asset" ? "image" : "text"))
+                    );
+                    if (!ports.length) return null;
+                    const connected = graph.edges.some(
+                      e => e.source === node.id && e.target === n.id
+                    );
+                    return (
+                      <label key={n.id}>
+                        <input
+                          type="checkbox"
+                          checked={connected}
+                          onChange={e =>
+                            onChange({
+                              ...graph,
+                              edges: e.target.checked
+                                ? [
+                                    ...graph.edges,
+                                    ...ports.map(port => ({
+                                      id: crypto.randomUUID(),
+                                      source: node.id,
+                                      target: n.id,
+                                      port: port.id,
+                                    })),
+                                  ]
+                                : graph.edges.filter(
+                                    edge =>
+                                      !(
+                                        edge.source === node.id &&
+                                        edge.target === n.id
+                                      )
+                                  ),
+                            })
+                          }
+                        />
+                        {n.title}
+                      </label>
+                    );
+                  })}
+              </>
+            )}
+            {!graph.edges.some(e => e.source === node.id) && (
+              <p className="wf-field-warning">
+                This field is not connected yet. Select a step above so its
+                value affects the result.
+              </p>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                onChange({
+                  ...graph,
+                  nodes: graph.nodes.filter(n => n.id !== node.id),
+                  edges: graph.edges.filter(
+                    e => e.source !== node.id && e.target !== node.id
+                  ),
+                });
+                setSelected("");
+              }}
+            >
+              Remove field
+            </Button>
+          </div>
+        ) : (
+          <div className="wf-field-settings">
+            <h2>Design your App’s inputs</h2>
+            <p>
+              Add reusable fields, curate the available choices, and connect
+              them to workflow steps. Changes are saved as part of the workflow
+              draft.
             </p>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              onChange({
-                ...graph,
-                nodes: graph.nodes.filter(n => n.id !== node.id),
-                edges: graph.edges.filter(
-                  e => e.source !== node.id && e.target !== node.id
-                ),
-              });
-              setSelected("");
-            }}
-          >
-            Remove field
-          </Button>
-        </div>
-      ) : (
-        <div className="wf-field-settings">
-          <h2>Design your App’s inputs</h2>
-          <p>
-            Add reusable fields, curate the available choices, and connect them
-            to workflow steps. Changes are saved as part of the workflow draft.
-          </p>
-        </div>
-      )}
-    </section>
+          </div>
+        )}
+      </section>
+    </ChoiceDensityProvider>
   );
 }

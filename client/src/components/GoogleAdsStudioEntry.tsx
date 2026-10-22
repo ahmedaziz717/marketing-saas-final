@@ -35,7 +35,7 @@ export function GoogleAdsStudioEntry({
       onSelect={() =>
         navigate(
           context === "activation"
-            ? `/app/activate/google${asset ? `?asset=${encodeURIComponent(asset)}` : ""}`
+            ? `/app/activate/studio?channel=google_ads${asset ? `&asset=${encodeURIComponent(asset)}` : ""}`
             : "/app/optimize/studio?channel=google_ads"
         )
       }

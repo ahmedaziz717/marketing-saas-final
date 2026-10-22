@@ -1,7 +1,11 @@
-import { StudioJourney, StudioSummary, useStudioJourney } from "@/components/configurator/StudioJourney";
+import {
+  StudioJourney,
+  StudioSummary,
+  useStudioJourney,
+} from "@/components/configurator/StudioJourney";
 import type { ReactNode } from "react";
 import { PartnerLogo } from "@/components/PartnerLogo";
-import { GoogleAdsStudioEntry } from "@/components/GoogleAdsStudioEntry";
+import { GoogleCampaignComposer } from "./GoogleCampaignStudioPage";
 import {
   useStudioNavigation,
   scrollStudioChoices,
@@ -51,6 +55,10 @@ function ActivationStudio() {
     ? (params.get("channel") as Channel)
     : null;
   const [channel, setChannel] = useState<Channel | null>(initialChannel);
+  const [googleSelected, setGoogleSelected] = useState(
+    params.get("channel") === "google_ads"
+  );
+  const [googleVisited, setGoogleVisited] = useState(googleSelected);
   const [assetKey, setAssetKey] = useState(params.get("asset") ?? "");
   const [publicationId, setPublicationId] = useState(
     params.get("publication") ?? ""
@@ -60,7 +68,7 @@ function ActivationStudio() {
   const [changeChannel, setChangeChannel] = useState(false);
   const [editVisit, setEditVisit] = useState(0);
   const [showChannels, setShowChannels] = useState(
-    !publicationId && !initialChannel
+    !publicationId && !initialChannel && !googleSelected
   );
   const [studioEntry, setStudioEntry] = useState<ActivationEntry>({
     section: (["setup", "creative", "copy", "delivery", "preview"].includes(
@@ -86,9 +94,12 @@ function ActivationStudio() {
     Partial<Record<Channel, Publication>>
   >({});
   const scope = { organizationId: organizationId! };
-  const connections = trpc.channels.connections.useQuery(scope, {
-    enabled: !!organizationId,
-  });
+  const connections = trpc.channels.connections.useQuery(
+    { ...scope, includeGoogle: true },
+    {
+      enabled: !!organizationId,
+    }
+  );
   const assets = trpc.assetLibrary.list.useQuery(scope, {
     enabled: !!organizationId,
   });
@@ -142,6 +153,7 @@ function ActivationStudio() {
     ])
   );
   function chooseChannel(value: Channel) {
+    setGoogleSelected(false);
     setChannel(value);
     setVisitedChannels(previous =>
       previous.includes(value) ? previous : [...previous, value]
@@ -155,7 +167,16 @@ function ActivationStudio() {
     setView("edit");
     scrollStudioChoices(studioRoot.current);
   }
+  function chooseGoogle() {
+    setGoogleSelected(true);
+    setGoogleVisited(true);
+    setShowChannels(false);
+    setView("edit");
+    scrollStudioChoices(studioRoot.current);
+  }
   function reset() {
+    setGoogleSelected(false);
+    setGoogleVisited(false);
     setChangeChannel(false);
     setPublicationId("");
     setChannel(null);
@@ -169,110 +190,113 @@ function ActivationStudio() {
     }));
     setView("edit");
   }
-  const channelChoices = (<>
-                  <div className="activation-section-title">
-                    <span className="cfg-eyebrow">01 / Destination</span>
-                    <h2>Where would you like to show up?</h2>
-                    <p>
-                      Choose a connected channel. Your account, formats and
-                      delivery options will follow.
-                    </p>
-                  </div>
-                  {connections.isLoading && (
-                    <p role="status">Loading connected channels…</p>
-                  )}
-                  {connections.error && (
-                    <p role="alert">
-                      Connections could not be loaded.{" "}
-                      <button onClick={() => void connections.refetch()}>
-                        Try again
-                      </button>
-                    </p>
-                  )}
-                  <div className="cfg-card-grid activation-channel-grid">
-                    <GoogleAdsStudioEntry context="activation" />
-                    {supported.map(value => {
-                      const accounts = connected.filter(
-                        c => c.channel === value
-                      );
-                      const available = accounts.some(c =>
-                        c.details.capabilities.includes("publish")
-                      );
-                      const Icon =
-                        value === "meta_ads" ? Megaphone : MessageCircle;
-                      return (
-                        <StudioCard
-                          key={value}
-                          title={value === "meta_ads" ? "Meta Ads" : "Facebook"}
-                          description={
-                            value === "meta_ads"
-                              ? "Prepare paid ads for Facebook and Instagram placements."
-                              : "Publish organic posts to your connected Facebook Pages."
-                          }
-                          badge={`${accounts.length} connected ${accounts.length === 1 ? "account" : "accounts"}`}
-                          disabled={
-                            !available ||
-                            missingAsset ||
-                            assets.isLoading ||
-                            (value === "meta_ads" &&
-                              initialAsset?.mediaType === "video")
-                          }
-                          media={
-                            <div className={`activation-channel-art ${value}`}>
-                              <PartnerLogo
-                                slug={
-                                  value === "meta_ads" ? "meta" : "facebook"
-                                }
-                                name={
-                                  value === "meta_ads" ? "Meta" : "Facebook"
-                                }
-                                size={48}
-                              />
-                              <span>
-                                {value === "meta_ads"
-                                  ? "Paid advertising"
-                                  : "Organic social"}
-                              </span>
-                            </div>
-                          }
-                          selected={currentChannel === value}
-                          onSelect={() => chooseChannel(value)}
-                        >
-                          {value === "meta_ads" &&
-                            initialAsset?.mediaType === "video" && (
-                              <p className="p-3 text-sm">
-                                This ad flow supports images. Choose Facebook
-                                for this video, or select an image first.
-                              </p>
-                            )}
-                          {!available && (
-                            <p className="p-3 text-sm">
-                              Publishing permission is required. Reconnect this
-                              channel in Integrations.
-                            </p>
-                          )}
-                        </StudioCard>
-                      );
-                    })}
-                  </div>
-                  {!connections.isLoading &&
-                    !connections.error &&
-                    !supported.length && (
-                      <div className="activation-empty">
-                        <h3>Connect your first channel</h3>
-                        <p>
-                          Available social and advertising connections appear
-                          here automatically.
-                        </p>
-                      </div>
-                    )}
-                  <Link
-                    className="activation-connect"
-                    href="/app/settings/integrations"
-                  >
-                    Manage channel connections →
-                  </Link>
-  </>);
+  const channelChoices = (
+    <>
+      <div className="activation-section-title">
+        <span className="cfg-eyebrow">01 / Destination</span>
+        <h2>Where would you like to show up?</h2>
+        <p>
+          Choose a connected channel. Your account, formats and delivery options
+          will follow.
+        </p>
+      </div>
+      {connections.isLoading && (
+        <p role="status">Loading connected channels…</p>
+      )}
+      {connections.error && (
+        <p role="alert">
+          Connections could not be loaded.{" "}
+          <button onClick={() => void connections.refetch()}>Try again</button>
+        </p>
+      )}
+      <div className="cfg-card-grid activation-channel-grid">
+        {connected.some(c => c.channel === "google_ads") && (
+          <StudioCard
+            title="Google Ads"
+            description="Create campaigns, manage ads and work with Performance Max asset groups."
+            badge={`${connected.filter(c => c.channel === "google_ads").length} connected accounts`}
+            selected={googleSelected}
+            onSelect={chooseGoogle}
+            media={
+              <div className="activation-channel-art">
+                <PartnerLogo slug="googleads" name="Google Ads" size={48} />
+                <span>Paid advertising</span>
+              </div>
+            }
+          />
+        )}
+        {supported.map(value => {
+          const accounts = connected.filter(c => c.channel === value);
+          const available = accounts.some(c =>
+            c.details.capabilities.includes("publish")
+          );
+          const Icon = value === "meta_ads" ? Megaphone : MessageCircle;
+          return (
+            <StudioCard
+              key={value}
+              title={value === "meta_ads" ? "Meta Ads" : "Facebook"}
+              description={
+                value === "meta_ads"
+                  ? "Prepare paid ads for Facebook and Instagram placements."
+                  : "Publish organic posts to your connected Facebook Pages."
+              }
+              badge={`${accounts.length} connected ${accounts.length === 1 ? "account" : "accounts"}`}
+              disabled={
+                !available ||
+                missingAsset ||
+                assets.isLoading ||
+                (value === "meta_ads" && initialAsset?.mediaType === "video")
+              }
+              media={
+                <div className={`activation-channel-art ${value}`}>
+                  <PartnerLogo
+                    slug={value === "meta_ads" ? "meta" : "facebook"}
+                    name={value === "meta_ads" ? "Meta" : "Facebook"}
+                    size={48}
+                  />
+                  <span>
+                    {value === "meta_ads"
+                      ? "Paid advertising"
+                      : "Organic social"}
+                  </span>
+                </div>
+              }
+              selected={!googleSelected && currentChannel === value}
+              onSelect={() => chooseChannel(value)}
+            >
+              {value === "meta_ads" && initialAsset?.mediaType === "video" && (
+                <p className="p-3 text-sm">
+                  This ad flow supports images. Choose Facebook for this video,
+                  or select an image first.
+                </p>
+              )}
+              {!available && (
+                <p className="p-3 text-sm">
+                  Publishing permission is required. Reconnect this channel in
+                  Integrations.
+                </p>
+              )}
+            </StudioCard>
+          );
+        })}
+      </div>
+      {!connections.isLoading &&
+        !connections.error &&
+        !supported.length &&
+        !connected.some(c => c.channel === "google_ads") && (
+          <div className="activation-empty">
+            <h3>Connect your first channel</h3>
+            <p>
+              Available social and advertising connections appear here
+              automatically.
+            </p>
+          </div>
+        )}
+      <Link className="activation-connect" href="/app/settings/integrations">
+        Manage channel connections →
+      </Link>
+    </>
+  );
   return (
     <div className="cfg-root activation-root" ref={studioRoot}>
       <header className="cfg-heading">
@@ -369,7 +393,10 @@ function ActivationStudio() {
               </button>
             </p>
           )}
-          {publicationId && currentRecord && view !== "edit" ? (
+          {!googleSelected &&
+          publicationId &&
+          currentRecord &&
+          view !== "edit" ? (
             <>
               <ActivationSections
                 current="preview"
@@ -418,8 +445,19 @@ function ActivationStudio() {
               </ActivationSections>
             </>
           ) : showChannels ? (
-            <ActivationChannelStart organizationId={organizationId!} choices={channelChoices} />
+            <ActivationChannelStart
+              organizationId={organizationId!}
+              choices={channelChoices}
+            />
           ) : null}
+          {googleVisited && (
+            <div hidden={showChannels || !googleSelected}>
+              <GoogleCampaignComposer
+                organizationId={organizationId!}
+                channelChoices={channelChoices}
+              />
+            </div>
+          )}
           {draftChannels.map(draftChannel => {
             const item =
               publicationId && publication.data?.channel === draftChannel
@@ -430,6 +468,7 @@ function ActivationStudio() {
                 key={draftChannel}
                 hidden={
                   showChannels ||
+                  googleSelected ||
                   view !== "edit" ||
                   currentChannel !== draftChannel ||
                   missingAsset
@@ -442,6 +481,7 @@ function ActivationStudio() {
                   studioEntry={studioEntry}
                   studioActive={
                     !showChannels &&
+                    !googleSelected &&
                     view === "edit" &&
                     currentChannel === draftChannel
                   }
@@ -513,17 +553,69 @@ export default function ActivationStudioPage() {
   );
 }
 
-function ActivationChannelStart({ organizationId, choices }: { organizationId: number; choices: ReactNode }) {
+function ActivationChannelStart({
+  organizationId,
+  choices,
+}: {
+  organizationId: number;
+  choices: ReactNode;
+}) {
   const journey = useStudioJourney({
     scopeKey: `activation:${organizationId}:destination`,
-    section: "setup", category: "channel",
-    sections: activationSections.map(section => ({ ...section, categories: section.id === "setup"
-      ? [{ id: "channel", title: "Channel", value: "Choose a connected channel", needsInput: true }, { id: "account", title: "Account", value: "Choose a channel first", disabled: true, reason: "Choose a channel first" }]
-      : [{ id: section.id, title: section.title, value: "Choose a channel first", disabled: true, reason: "Choose a channel first" }] })),
+    section: "setup",
+    category: "channel",
+    sections: activationSections.map(section => ({
+      ...section,
+      categories:
+        section.id === "setup"
+          ? [
+              {
+                id: "channel",
+                title: "Channel",
+                value: "Choose a connected channel",
+                needsInput: true,
+              },
+              {
+                id: "account",
+                title: "Account",
+                value: "Choose a channel first",
+                disabled: true,
+                reason: "Choose a channel first",
+              },
+            ]
+          : [
+              {
+                id: section.id,
+                title: section.title,
+                value: "Choose a channel first",
+                disabled: true,
+                reason: "Choose a channel first",
+              },
+            ],
+    })),
     onNavigate: () => {},
   });
-  return <div className="activation-composer"><div className="cfg-workspace">
-    <StudioSummary subtitle="Your activation · Choose a destination"><div className="cfg-stage activation-preview"><div className="cfg-build activation-summary"><span className="cfg-eyebrow">Preview & summary</span><h3>Your next activation</h3><p>Choose a channel to see your creative, copy, account and delivery choices together.</p></div></div></StudioSummary>
-    <StudioJourney journey={journey} label="Activation sections"><section className="cfg-body activation-fields activation-channel-section">{choices}</section></StudioJourney>
-  </div></div>;
+  return (
+    <div className="activation-composer">
+      <div className="cfg-workspace">
+        <StudioSummary subtitle="Your activation · Choose a destination">
+          <div className="cfg-stage activation-preview">
+            <div className="cfg-build activation-summary">
+              <span className="cfg-eyebrow">Preview & summary</span>
+              <h3>Your next activation</h3>
+              <p>
+                Choose a channel to see your creative, copy, account and
+                delivery choices together.
+              </p>
+            </div>
+          </div>
+        </StudioSummary>
+        <StudioJourney journey={journey} label="Activation sections">
+          <section className="cfg-body activation-fields activation-channel-section">
+            {choices}
+          </section>
+        </StudioJourney>
+      </div>
+    </div>
+  );
 }

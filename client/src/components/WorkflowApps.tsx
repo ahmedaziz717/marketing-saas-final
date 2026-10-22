@@ -6,6 +6,7 @@ import { activationHref } from "@shared/contentWorkflow";
 import { availableWorkflowResults } from "@shared/workflowResults";
 import { WorkflowAutomationControls } from "./WorkflowAutomationControls";
 import { WorkflowAppStudio } from "./WorkflowAppStudio";
+import { WorkflowResultPreview } from "./WorkflowResultPreview";
 import {
   workflowAppFields,
   workflowFieldValue,
@@ -75,20 +76,30 @@ export function WorkflowApps({
                   new Set(
                     app.graph.nodes.flatMap(node => {
                       const channel =
-                        workflowNodes[node.type]?.channel ??
+                        (workflowNodes[node.type]?.channels
+                          ? undefined
+                          : workflowNodes[node.type]?.channel) ??
                         node.config.field?.connectionChannel;
                       return channel === "meta_ads"
                         ? ["meta"]
                         : channel === "facebook"
                           ? ["facebook"]
-                          : [];
+                          : channel === "google_ads"
+                            ? ["googleads"]
+                            : [];
                     })
                   )
                 ).map(slug => (
                   <PartnerLogo
                     key={slug}
                     slug={slug}
-                    name={slug === "meta" ? "Meta" : "Facebook"}
+                    name={
+                      slug === "meta"
+                        ? "Meta"
+                        : slug === "googleads"
+                          ? "Google Ads"
+                          : "Facebook"
+                    }
                     size={36}
                   />
                 ))}
@@ -316,6 +327,13 @@ function WorkflowAppRunnerSession({
         latest ? `${workflowRunStatusLabel(latest)} · View results` : undefined
       }
       error={problem}
+      resultPreview={
+        <WorkflowResultPreview
+          key={latest?.id ?? "empty"}
+          values={output}
+          pending={!!active}
+        />
+      }
       review={
         <>
           <div className="wf-studio-run" aria-live="polite">

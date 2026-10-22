@@ -9,6 +9,12 @@ import {
   isChoiceField,
 } from "../../shared/workflowInputs";
 import { marketingJson } from "../lib/marketingDrafts";
+import {
+  workflowModelFieldProblem,
+  workflowModelCompatibility,
+} from "../../shared/workflowModels";
+import { resolveModel } from "../lib/modelCatalog";
+import { resolveWorkflowTextModel } from "../lib/workflowModels";
 import { brandKits, products } from "../../drizzle/schema";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -294,6 +300,35 @@ export const workflowsRouter = router({
         for (const n of workflow.graph.nodes) {
           const f = n.config.field;
           if (!f) continue;
+          if (f.kind === "model") {
+            const problem = workflowModelFieldProblem(workflow.graph, n);
+            if (problem)
+              throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+            for (const id of f.allowedModelIds ?? []) {
+              const route =
+                f.modelKind === "text"
+                  ? await resolveWorkflowTextModel(tx, id)
+                  : (await resolveModel(tx, id, f.modelKind!)).id;
+              for (const edge of workflow.graph.edges.filter(
+                e => e.source === n.id
+              )) {
+                const target = workflow.graph.nodes.find(
+                  t => t.id === edge.target
+                )!;
+                const incompatible = workflowModelCompatibility(
+                  workflow.graph,
+                  target,
+                  route,
+                  f.modelSettings?.[id]
+                );
+                if (incompatible)
+                  throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: `${n.title}: ${incompatible}`,
+                  });
+              }
+            }
+          }
           let problem: string | null = null;
           if (
             n.type !== "app_input" &&

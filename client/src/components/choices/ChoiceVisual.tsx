@@ -87,7 +87,7 @@ export function ChoiceVisual({
     );
   const Icon = /campaign/.test(text)
     ? Megaphone
-    : /ad set|audience|people|gender|age|person/.test(text)
+    : /ad set|audience|people|gender|\bage\b|person/.test(text)
       ? Users
       : /chart|metric|insight|performance|trend|analytics/.test(text)
         ? BarChart3

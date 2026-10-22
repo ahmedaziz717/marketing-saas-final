@@ -1,10 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { channelConnections } from "../../drizzle/channelSchema";
-import type { LibraryDatabase } from "./assetLibrary";
+import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
 /** Analytics-only account lookup. Social publishing keeps its stricter channel guard. */
 export async function getOptimizationConnection(
-  db: LibraryDatabase,
+  db: LibraryDatabase | LibraryTransaction,
   organizationId: number,
   id: string
 ) {

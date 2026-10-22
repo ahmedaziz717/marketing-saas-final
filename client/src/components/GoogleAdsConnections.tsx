@@ -128,7 +128,9 @@ export function GoogleAdsConnectionCard() {
       )}
       {connected > 0 && (
         <Button asChild variant="outline" className="mt-2 w-fit">
-          <Link href="/app/activate/google">Open Google campaign studio</Link>
+          <Link href="/app/activate/studio?channel=google_ads">
+            Open Activation Studio
+          </Link>
         </Button>
       )}
       {!manage && (

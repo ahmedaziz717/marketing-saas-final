@@ -42,6 +42,7 @@ import { effectiveRate, getCreditPolicy } from "./creditPricing";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
 import { ENV } from "../_core/env";
 import { higgsfieldConfigured } from "./higgsfield";
+import { workflowTextModels } from "../../shared/workflowModelCatalog";
 type Database = LibraryDatabase | LibraryTransaction;
 export function defaultModelRate(model: ModelDefinition): ProviderRate {
   const isOpenAI = model.provider === "openai";
@@ -84,6 +85,30 @@ export async function initializeModelCatalog(db: Database) {
         updatedAtMs: Date.now(),
       }))
     )
+    .onConflictDoNothing();
+  // Additional prompt-writer model; unavailable until the provider account is verified.
+  await db
+    .insert(providerRates)
+    .values({
+      provider: "openai",
+      model: "gpt-5.4-mini",
+      kind: "text",
+      updatedAtMs: Date.now(),
+      config: {
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        kind: "text",
+        credits: 0,
+        inputPerMillion: 0.75,
+        cachedInputPerMillion: 0.075,
+        outputPerMillion: 4.5,
+        perRequestUsd: null,
+        automaticPricing: true,
+        pricingVerifiedAt: Date.UTC(2026, 9, 22),
+        sourceUrl: "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        note: "Standard API token pricing verified 2026-10-22; availability must be verified for this account.",
+      },
+    })
     .onConflictDoNothing();
 }
 export function compatibleRoutes(id: string) {
@@ -291,11 +316,14 @@ export async function syncOpenAIModelAvailability(db: Database) {
     throw new Error("OpenAI returned an invalid model catalog.");
   const ids = new Set(body.data.map(m => m.id)),
     now = Date.now();
-  for (const model of OPENAI_IMAGE_MODELS)
+  for (const model of [
+    ...OPENAI_IMAGE_MODELS,
+    ...workflowTextModels.map(m => m.id),
+  ])
     await db
       .insert(aiModelSettings)
       .values({
-        id: `openai:${model}`,
+        id: model.startsWith("gpt-image-") ? `openai:${model}` : model,
         enabled: 1,
         availability: ids.has(model) ? "available" : "unavailable",
         checkedAtMs: now,

@@ -34,6 +34,11 @@ import {
   readOptimizationStudio,
 } from "../shared/optimizationStudio";
 import { optimizationStudioSchema } from "../shared/optimizationStudioSchema";
+import { newWorkflowNode } from "../shared/creativeWorkflow";
+import { appFieldSchema } from "../shared/workflowInputs";
+import { resolveWorkflowInputs } from "./lib/workflowInputs";
+import { validateWorkflowConnections } from "./lib/workflowApps";
+import { getWorkflowConnection } from "./lib/workflowConnections";
 let engine: PGlite, org: number, owner: number;
 const cid = randomUUID(),
   range = { since: "2026-01-01", until: "2026-01-07" };
@@ -297,4 +302,55 @@ it("round trips a Google Optimization Studio graph with matching engines and a h
       .every(n => n.config.optimizer?.channel === "google_ads")
   ).toBe(true);
   expect(readOptimizationStudio(graph)?.settings.channel).toBe("google_ads");
+});
+
+it("resolves typed Google workflow account fields and enforces workspace and provider boundaries", async () => {
+  const account = newWorkflowNode("app_input", "account");
+  account.config.field = appFieldSchema.parse({
+    kind: "connection",
+    connectionChannel: "google_ads",
+    required: true,
+  });
+  account.config.fieldValue = cid;
+  const report = newWorkflowNode("google_report", "report");
+  const graph = {
+    nodes: [account, report],
+    edges: [
+      {
+        id: "destination",
+        source: account.id,
+        target: report.id,
+        port: "destination",
+      },
+    ],
+  };
+  const resolved = await resolveWorkflowInputs(f.db, org, graph);
+  expect(resolved.nodes[1].config.connectionId).toBe(cid);
+  expect(graph.nodes[1].config.connectionId).toBeUndefined();
+  await expect(
+    validateWorkflowConnections(f.db, org, resolved)
+  ).resolves.toBeUndefined();
+  await expect(
+    getWorkflowConnection(f.db, org + 999, cid, "google_ads")
+  ).rejects.toThrow(/workspace/);
+  await expect(
+    getWorkflowConnection(f.db, org, cid, "meta_ads")
+  ).rejects.toThrow();
+  await expect(
+    resolveWorkflowInputs(f.db, org, {
+      ...graph,
+      nodes: [account, newWorkflowNode("meta_ad", "report")],
+    })
+  ).rejects.toThrow(/matching channel/);
+  await f.db
+    .update(channelConnections)
+    .set({ status: "disconnected" })
+    .where(eq(channelConnections.id, cid));
+  await expect(
+    validateWorkflowConnections(f.db, org, resolved)
+  ).rejects.toThrow(/Reconnect/);
+  await f.db
+    .update(channelConnections)
+    .set({ status: "connected" })
+    .where(eq(channelConnections.id, cid));
 });

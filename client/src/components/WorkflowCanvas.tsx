@@ -14,6 +14,12 @@ import {
   workflowDraftSignature as editorSignature,
 } from "@shared/workflowPerformanceInputs";
 import { WorkflowFormEditor } from "./WorkflowFormEditor";
+import { WorkflowTextModelPicker } from "./WorkflowModelField";
+import { workflowModelFieldDefaults } from "@shared/workflowModels";
+import {
+  workflowModelKind,
+  defaultWorkflowModel,
+} from "@shared/workflowModelCatalog";
 import {
   appFieldSchema,
   inputKinds,
@@ -66,6 +72,7 @@ import { Link } from "wouter";
 import { WorkflowAppPicker } from "./WorkflowAppPicker";
 import { selectWorkflowApp } from "@shared/workflowAppCatalog";
 import { WorkflowBusinessSettings } from "./WorkflowBusinessSettings";
+import { availableWorkflowNode } from "@shared/workflowChannels";
 import { workflowSections, workflowValueText } from "@shared/workflowPlatform";
 import { toast } from "sonner";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
@@ -94,6 +101,7 @@ import {
   isGenerationNode,
   newWorkflowNode,
   workflowGraphProblem,
+  workflowRunProblem,
   workflowNodes,
   type WorkflowGraph,
   type WorkflowNode,
@@ -115,6 +123,9 @@ const icons = {
   start_trigger: Play,
   run_workflow: GitBranch,
   meta_history: BarChart3,
+  google_history: BarChart3,
+  google_report: BarChart3,
+  google_inventory: Layers,
   meta_performance: BarChart3,
   meta_copy_performance: BarChart3,
   compare_copy_styles: Target,
@@ -185,6 +196,7 @@ function WorkflowCanvasContent({
   connectedChannels?: string[];
 }) {
   const [selected, setSelected] = useState<string | null>(null),
+    [selectedEdge, setSelectedEdge] = useState<string | null>(null),
     [library, setLibrary] = useState(!graph.nodes.length),
     [nodeSearch, setNodeSearch] = useState("");
   const [paletteMode, setPaletteMode] = useState<"steps" | "fields">("steps");
@@ -214,6 +226,18 @@ function WorkflowCanvasContent({
   } | null>(null);
   const assets = trpc.assetLibrary.studioList.useQuery({ organizationId });
   const selectedNode = graph.nodes.find(n => n.id === selected);
+  const modelField = graph.nodes.find(
+    n =>
+      n.config.field?.kind === "model" &&
+      graph.edges.some(
+        e => e.source === n.id && e.target === selected && e.port === "model"
+      )
+  );
+  const selectedConnection = graph.edges.find(e => e.id === selectedEdge);
+  const selectNode = (id: string | null) => {
+    setSelectedEdge(null);
+    setSelected(id);
+  };
   const change = (next: WorkflowGraph, history = true) => {
     if (history) {
       setPast(p => [...p.slice(-39), graphRef.current]);
@@ -251,6 +275,23 @@ function WorkflowCanvasContent({
     });
     setSelected(null);
   };
+  const disconnect = (id: string) => {
+    const removed = graphRef.current.edges.find(e => e.id === id);
+    const next = {
+      ...graphRef.current,
+      edges: graphRef.current.edges.filter(e => e.id !== id),
+    };
+    change(next);
+    setSelectedEdge(null);
+    const problem = removed
+      ? workflowRunProblem(next, new Set([removed.target]))
+      : null;
+    toast.info(
+      problem
+        ? `Connection removed. ${problem}`
+        : "Connection removed. Both steps are preserved."
+    );
+  };
   const fit = () => {
     const el = viewport.current;
     if (!el || !graph.nodes.length) {
@@ -280,6 +321,12 @@ function WorkflowCanvasContent({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (
+        !(e.target instanceof Element) ||
+        !e.target.closest(".wf-canvas-shell") ||
+        e.target.closest('[role="dialog"]')
+      )
+        return;
+      if (
         (e.target as HTMLElement)?.closest(
           "input,textarea,select,[contenteditable=true]"
         )
@@ -289,19 +336,23 @@ function WorkflowCanvasContent({
         setConnecting(null);
         setLibrary(false);
         setSelected(null);
+        setSelectedEdge(null);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       }
-      if (e.key === "Delete" && selected) {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedConnection) {
+        e.preventDefault();
+        disconnect(selectedConnection.id);
+      } else if (e.key === "Delete" && selected) {
         e.preventDefault();
         remove(selected);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [graph, selected, past, future]);
+  }, [graph, selected, selectedConnection, past, future]);
   const point = (clientX: number, clientY: number) => {
     const rect = viewport.current!.getBoundingClientRect();
     return {
@@ -341,6 +392,14 @@ function WorkflowCanvasContent({
         kind: "asset",
         required: true,
       });
+    const modelTarget =
+      fieldKind === "model"
+        ? graph.nodes.find(
+            n =>
+              workflowModelKind(n.type) &&
+              !graph.edges.some(e => e.target === n.id && e.port === "model")
+          )
+        : undefined;
     if (fieldKind) {
       node.title = inputLabels[fieldKind];
       node.config.field =
@@ -351,11 +410,36 @@ function WorkflowCanvasContent({
               source: systemInputChoices(fieldKind).length
                 ? "system"
                 : "custom",
+              ...(fieldKind === "model"
+                ? modelTarget
+                  ? workflowModelFieldDefaults(modelTarget)
+                  : {
+                      modelKind: "image",
+                      allowedModelIds: [defaultWorkflowModel("image")],
+                      defaultValue: defaultWorkflowModel("image"),
+                      required: true,
+                      maxSelections: 1,
+                    }
+                : {}),
             });
       if (fieldKind === "performance_data") node.config.inputType = "data";
     }
-    change({ ...graph, nodes: [...graph.nodes, node] });
-    setSelected(node.id);
+    change({
+      ...graph,
+      nodes: [...graph.nodes, node],
+      edges: modelTarget
+        ? [
+            ...graph.edges,
+            {
+              id: crypto.randomUUID(),
+              source: node.id,
+              target: modelTarget.id,
+              port: "model",
+            },
+          ]
+        : graph.edges,
+    });
+    selectNode(node.id);
     setLibrary(false);
   };
   const startDrag = (e: ReactPointerEvent, id?: string) => {
@@ -371,7 +455,7 @@ function WorkflowCanvasContent({
       graph: graphRef.current,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (id) setSelected(id);
+    if (id) selectNode(id);
   };
   const move = (e: ReactPointerEvent) => {
     if (connecting) setCursor(point(e.clientX, e.clientY));
@@ -412,7 +496,7 @@ function WorkflowCanvasContent({
       y: node.y + 50,
     };
     change({ ...graph, nodes: [...graph.nodes, copy] });
-    setSelected(copy.id);
+    selectNode(copy.id);
   };
   return (
     <div className="wf-canvas-shell">
@@ -488,7 +572,7 @@ function WorkflowCanvasContent({
               "[data-node],button,input,textarea,select,[data-panel],.wf-edge"
             )
           ) {
-            setSelected(null);
+            selectNode(null);
             startDrag(e);
           }
         }}
@@ -537,7 +621,7 @@ function WorkflowCanvasContent({
               return (
                 <g
                   key={edge.id}
-                  className="wf-edge"
+                  className={`wf-edge${selectedEdge === edge.id ? " is-selected" : ""}`}
                   data-type={workflowNodes[source.type].output}
                 >
                   <path
@@ -552,7 +636,26 @@ function WorkflowCanvasContent({
                       outPoint(source),
                       inPoint(target, edge.port)
                     )}
-                    onClick={() => setSelected(target.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Connection from ${source.title} to ${target.title} (${edge.port})`}
+                    aria-pressed={selectedEdge === edge.id}
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      e.currentTarget.focus();
+                      setSelected(null);
+                      setSelectedEdge(edge.id);
+                      setLibrary(false);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelected(null);
+                        setSelectedEdge(edge.id);
+                        setLibrary(false);
+                      }
+                    }}
                   >
                     <title>
                       {source.title} → {target.title}
@@ -589,7 +692,7 @@ function WorkflowCanvasContent({
                 className={`wf-node ${selected === node.id ? "is-selected" : ""}`}
                 style={{ left: node.x, top: node.y }}
                 aria-label={`${node.title} step`}
-                onClick={() => setSelected(node.id)}
+                onClick={() => selectNode(node.id)}
               >
                 <header
                   className="wf-node-header"
@@ -607,7 +710,7 @@ function WorkflowCanvasContent({
                     title={`Settings for ${node.title}`}
                     aria-label={`Settings for ${node.title}`}
                     onClick={() => {
-                      setSelected(node.id);
+                      selectNode(node.id);
                       setLibrary(false);
                     }}
                   >
@@ -702,7 +805,7 @@ function WorkflowCanvasContent({
                     <button
                       className="wf-field-node-preview"
                       onClick={() => {
-                        setSelected(node.id);
+                        selectNode(node.id);
                         setLibrary(false);
                       }}
                     >
@@ -760,7 +863,7 @@ function WorkflowCanvasContent({
                     <button
                       className="wf-field-node-preview"
                       onClick={() => {
-                        setSelected(node.id);
+                        selectNode(node.id);
                         setLibrary(false);
                       }}
                     >
@@ -828,9 +931,17 @@ function WorkflowCanvasContent({
                               : "Collect workflow results"
                             : meta.output}
                   </span>
-                  {isGenerationNode(node.type) && (
-                    <NodeCredits organizationId={organizationId} node={node} />
-                  )}
+                  {isGenerationNode(node.type) &&
+                    (graph.edges.some(
+                      e => e.target === node.id && e.port === "model"
+                    ) ? (
+                      <small>App-selected model · review run for credits</small>
+                    ) : (
+                      <NodeCredits
+                        organizationId={organizationId}
+                        node={node}
+                      />
+                    ))}
                   {isGenerationNode(node.type) && (
                     <button
                       disabled={busy}
@@ -867,7 +978,7 @@ function WorkflowCanvasContent({
             className={library ? "active" : ""}
             onClick={() => {
               setLibrary(!library);
-              setSelected(null);
+              selectNode(null);
             }}
           >
             <Plus size={21} />
@@ -946,15 +1057,17 @@ function WorkflowCanvasContent({
                       <div>
                         <strong>{inputLabels[kind]}</strong>
                         <p>
-                          {[
-                            "theme",
-                            "art_style",
-                            "choice",
-                            "channel",
-                            "size",
-                          ].includes(kind)
-                            ? "System choices, curated lists or your own options"
-                            : "Defaults, user input and field settings"}
+                          {kind === "model"
+                            ? "Allowed models, one default and one choice per run"
+                            : [
+                                  "theme",
+                                  "art_style",
+                                  "choice",
+                                  "channel",
+                                  "size",
+                                ].includes(kind)
+                              ? "System choices, curated lists or your own options"
+                              : "Defaults, user input and field settings"}
                         </p>
                       </div>
                       <ChevronRight size={14} />
@@ -992,23 +1105,11 @@ function WorkflowCanvasContent({
                       .filter(
                         ([type, meta]) =>
                           meta.group === group &&
-                          !meta.hidden &&
-                          (!meta.channel ||
-                            connectedChannels.includes(meta.channel)) &&
-                          (paletteFamily === "all" ||
-                            ([
-                              "meta_performance",
-                              "meta_copy_performance",
-                            ].includes(type) &&
-                              paletteFamily === "optimize") ||
-                            (!meta.family &&
-                              [
-                                "Inputs",
-                                "Apps",
-                                "Control",
-                                "Utilities",
-                              ].includes(meta.group)) ||
-                            (meta.family ?? "create") === paletteFamily) &&
+                          availableWorkflowNode(
+                            type as WorkflowNodeType,
+                            connectedChannels,
+                            paletteFamily
+                          ) &&
                           `${meta.name} ${meta.description}`
                             .toLowerCase()
                             .includes(nodeSearch.toLowerCase())
@@ -1039,6 +1140,46 @@ function WorkflowCanvasContent({
               Connected channels add their available steps.{" "}
               <Link href="/app/settings/integrations">Manage connections</Link>
             </p>
+          </aside>
+        )}
+        {selectedConnection && !library && (
+          <aside
+            className="wf-inspector"
+            data-panel
+            aria-label="Connection settings"
+          >
+            <div className="wf-panel-title">
+              <h2>Connection</h2>
+              <button
+                aria-label="Close connection settings"
+                onClick={() => setSelectedEdge(null)}
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <div className="wf-inspector-body">
+              <p>
+                {
+                  graph.nodes.find(n => n.id === selectedConnection.source)
+                    ?.title
+                }{" "}
+                →{" "}
+                {
+                  graph.nodes.find(n => n.id === selectedConnection.target)
+                    ?.title
+                }
+              </p>
+              <p className="wf-setting-help">
+                Remove this line to disconnect the steps. Both steps stay in
+                your workflow. You can undo this change.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => disconnect(selectedConnection.id)}
+              >
+                <Trash2 size={14} /> Delete connection
+              </Button>
+            </div>
           </aside>
         )}
         {selectedNode && !library && (
@@ -1094,6 +1235,9 @@ function WorkflowCanvasContent({
                 "start_trigger",
                 "run_workflow",
                 "meta_history",
+                "google_history",
+                "google_report",
+                "google_inventory",
                 "classify_history",
                 "analyze_history",
                 "optimize_dimension",
@@ -1216,48 +1360,78 @@ function WorkflowCanvasContent({
                   </label>
                 )
               )}
+              {modelField && (
+                <p className="wf-setting-help">
+                  Model and model settings are controlled by the App form.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => selectNode(modelField.id)}
+                  >
+                    Edit {modelField.title}
+                  </button>
+                </p>
+              )}
+              {selectedNode.type === "assistant" && !modelField && (
+                <WorkflowTextModelPicker
+                  organizationId={organizationId}
+                  value={selectedNode.config.modelId}
+                  disabled={busy}
+                  onChange={modelId => config({ modelId })}
+                />
+              )}
               {["generate_image", "generate_video"].includes(
                 selectedNode.type
               ) && (
                 <>
-                  <ModelPicker
-                    organizationId={organizationId}
-                    kind={
-                      selectedNode.type === "generate_image" ? "image" : "video"
-                    }
-                    value={selectedNode.config.modelId}
-                    disabled={busy}
-                    onChange={(modelId, modelOptions) =>
-                      config({
-                        modelId,
-                        modelOptions,
-                        duration: Number(modelOptions.duration ?? 5),
-                        resolution: String(modelOptions.resolution ?? "720p"),
-                        ratio: String(modelOptions.aspect_ratio ?? "1:1"),
-                      })
-                    }
-                  />
-                  <ModelSettings
-                    organizationId={organizationId}
-                    modelId={selectedNode.config.modelId}
-                    options={selectedNode.config.modelOptions}
-                    disabled={busy}
-                    onChange={modelOptions =>
-                      config({
-                        modelOptions,
-                        duration: Number(
-                          modelOptions.duration ?? selectedNode.config.duration
-                        ),
-                        resolution: String(
-                          modelOptions.resolution ??
-                            selectedNode.config.resolution
-                        ),
-                        ratio: String(
-                          modelOptions.aspect_ratio ?? selectedNode.config.ratio
-                        ),
-                      })
-                    }
-                  />
+                  {!modelField && (
+                    <>
+                      <ModelPicker
+                        organizationId={organizationId}
+                        kind={
+                          selectedNode.type === "generate_image"
+                            ? "image"
+                            : "video"
+                        }
+                        value={selectedNode.config.modelId}
+                        disabled={busy}
+                        onChange={(modelId, modelOptions) =>
+                          config({
+                            modelId,
+                            modelOptions,
+                            duration: Number(modelOptions.duration ?? 5),
+                            resolution: String(
+                              modelOptions.resolution ?? "720p"
+                            ),
+                            ratio: String(modelOptions.aspect_ratio ?? "1:1"),
+                          })
+                        }
+                      />
+                      <ModelSettings
+                        organizationId={organizationId}
+                        modelId={selectedNode.config.modelId}
+                        options={selectedNode.config.modelOptions}
+                        disabled={busy}
+                        onChange={modelOptions =>
+                          config({
+                            modelOptions,
+                            duration: Number(
+                              modelOptions.duration ??
+                                selectedNode.config.duration
+                            ),
+                            resolution: String(
+                              modelOptions.resolution ??
+                                selectedNode.config.resolution
+                            ),
+                            ratio: String(
+                              modelOptions.aspect_ratio ??
+                                selectedNode.config.ratio
+                            ),
+                          })
+                        }
+                      />
+                    </>
+                  )}
                   {(!selectedNode.config.modelId ||
                     selectedNode.config.modelId.startsWith("openai:")) && (
                     <div className="wf-settings-row">
@@ -1466,12 +1640,7 @@ function WorkflowCanvasContent({
                         </span>
                         <button
                           aria-label={`Remove connection from ${graph.nodes.find(n => n.id === edge.source)?.title}`}
-                          onClick={() =>
-                            change({
-                              ...graph,
-                              edges: graph.edges.filter(e => e.id !== edge.id),
-                            })
-                          }
+                          onClick={() => disconnect(edge.id)}
                         >
                           <X size={14} />
                         </button>

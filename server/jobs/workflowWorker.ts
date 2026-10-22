@@ -32,6 +32,7 @@ import { withOrganizationTransaction } from "../lib/activity";
 import { generateSunburstImage } from "../lib/openaiSunburst";
 import { readGenerationSource } from "../lib/creativeImages";
 import { REQUIRED_TEXT_MODEL_ID } from "../lib/models";
+import { resolveWorkflowTextModel } from "../lib/workflowModels";
 import { categorizeGenerationError } from "../lib/generation";
 import { validateVideoReferences } from "../lib/videoJobs";
 import {
@@ -448,7 +449,10 @@ async function executeStep(
       )
     );
     const response = await invokeLLM({
-      model: REQUIRED_TEXT_MODEL_ID,
+      model:
+        node.type === "assistant"
+          ? await resolveWorkflowTextModel(db, node.config.modelId)
+          : REQUIRED_TEXT_MODEL_ID,
       maxTokens: 2400,
       messages: [
         {

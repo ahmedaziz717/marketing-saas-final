@@ -7,6 +7,43 @@ import { newWorkflowNode, type WorkflowGraph } from "@shared/creativeWorkflow";
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     catalog: { overview: { useQuery: () => ({ data: { products: [] } }) } },
+    models: {
+      catalog: {
+        useQuery: () => ({
+          data: [
+            {
+              id: "openai:gpt-image-2.5-sunburst",
+              routeId: "openai:gpt-image-2.5-sunburst",
+              name: "GPT Image 2.5 Sunburst",
+              kind: "image",
+              available: true,
+            },
+            {
+              id: "openai:gpt-image-2.5-flare",
+              routeId: "openai:gpt-image-2.5-flare",
+              name: "GPT Image 2.5 Flare",
+              kind: "image",
+              available: true,
+            },
+            {
+              id: "openai:gpt-image-1",
+              routeId: "openai:gpt-image-1",
+              name: "GPT Image 1",
+              kind: "image",
+              available: false,
+              reason: "Unavailable",
+            },
+          ],
+        }),
+      },
+      textCatalog: {
+        useQuery: () => ({
+          data: [
+            { id: "gpt-5.5", name: "GPT-5.5", kind: "text", available: true },
+          ],
+        }),
+      },
+    },
     assetLibrary: { studioList: { useQuery: () => ({ data: [] }) } },
     workflows: {
       mediaChoices: {
@@ -210,3 +247,75 @@ function clickJourney(element: Element) {
   });
   if (keep) fireEvent.click(keep);
 }
+
+it("adds Model selector in App form with one default, lets the designer allow alternatives, and exposes only those choices", () => {
+  function Harness() {
+    const [graph, setGraph] = useState<WorkflowGraph>({
+      nodes: [newWorkflowNode("generate_image", "render")],
+      edges: [],
+    });
+    const [preview, setPreview] = useState(false);
+    return (
+      <>
+        <button onClick={() => setPreview(!preview)}>Toggle preview</button>
+        <WorkflowFormEditor
+          graph={graph}
+          onChange={setGraph}
+          organizationId={1}
+          preview={preview}
+        />
+        <output data-testid="graph">{JSON.stringify(graph)}</output>
+      </>
+    );
+  }
+  render(<Harness />);
+  changeField(screen.getByLabelText("New field type"), {
+    target: { value: "model" },
+  });
+  clickJourney(screen.getByRole("button", { name: "+ Add field" }));
+  let graph = JSON.parse(screen.getByTestId("graph").textContent!);
+  expect(graph.edges[0]).toMatchObject({
+    source: graph.nodes[1].id,
+    target: "render",
+    port: "model",
+  });
+  expect(graph.nodes[1].config.field.allowedModelIds).toEqual([
+    "openai:gpt-image-2.5-sunburst",
+  ]);
+  expect(graph.nodes[1].config.field.defaultValue).toBe(
+    "openai:gpt-image-2.5-sunburst"
+  );
+  expect(screen.getByLabelText("Allow GPT Image 2.5 Sunburst")).toHaveProperty(
+    "disabled",
+    true
+  );
+  expect(screen.getByLabelText("Allow GPT Image 1")).toHaveProperty(
+    "disabled",
+    true
+  );
+  clickJourney(screen.getByLabelText("Allow GPT Image 2.5 Flare"));
+  changeField(screen.getByRole("radiogroup", { name: "Default model" }), {
+    target: { value: "openai:gpt-image-2.5-flare" },
+  });
+  graph = JSON.parse(screen.getByTestId("graph").textContent!);
+  expect(graph.nodes[1].config.field.allowedModelIds).toHaveLength(2);
+  expect(graph.nodes[1].config.field.defaultValue).toBe(
+    "openai:gpt-image-2.5-flare"
+  );
+  expect(graph.nodes[1].config.field.multiple).toBe(false);
+  clickJourney(screen.getByRole("button", { name: "Toggle preview" }));
+  expect(
+    screen
+      .getByRole("radio", { name: "GPT Image 2.5 Flare" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
+  expect(screen.queryByRole("radio", { name: /^GPT Image 1/ })).toBeNull();
+  changeField(screen.getByRole("radiogroup", { name: "Model selector" }), {
+    target: { value: "openai:gpt-image-2.5-sunburst" },
+  });
+  expect(
+    screen
+      .getByRole("radio", { name: "GPT Image 2.5 Sunburst" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
+});

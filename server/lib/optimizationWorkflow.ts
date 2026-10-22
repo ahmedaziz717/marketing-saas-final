@@ -167,6 +167,7 @@ export async function optimizationStep(
     ![
       "start_trigger",
       "meta_history",
+      "google_history",
       "classify_history",
       "analyze_history",
       "optimize_dimension",
@@ -181,7 +182,20 @@ export async function optimizationStep(
       runId: run.id,
       startedAtMs: run.createdAtMs,
     });
-  if (node.type === "meta_history") {
+  if (node.type === "meta_history" || node.type === "google_history") {
+    const provider =
+      node.type === "google_history" ? "Google Ads" : "Advertising";
+    if (node.type === "google_history") {
+      const account = await getOptimizationConnection(
+        db,
+        run.organizationId,
+        node.config.connectionId!
+      );
+      if (account.channel !== "google_ads" || account.status !== "connected")
+        throw new Error(
+          "Choose a connected Google Ads account for this history step."
+        );
+    }
     if (!step.historyJobId) {
       const job = await queueHistory(
         db,
@@ -195,7 +209,7 @@ export async function optimizationStep(
         status: "waiting",
         historyJobId: job.id,
         waitingFor: job.status === "paused" ? "paused_history" : undefined,
-        waitingReason: "Importing Meta history; checkpoints survive restarts.",
+        waitingReason: `Importing ${provider} history; checkpoints survive restarts.`,
       };
     }
     const [job] = await db
@@ -221,7 +235,7 @@ export async function optimizationStep(
         waitingFor: job.status === "paused" ? "paused_history" : undefined,
         waitingReason: `${job.status === "paused" ? "History import paused" : "History"}: ${job.checkpoint.completedTasks}/${job.tasks.length} slices.${job.status === "paused" ? " Resume it from Optimization intelligence when ready." : ""}`,
       };
-    return complete("Imported Meta history", {
+    return complete(`Imported ${provider} history`, {
       connectionId: job.connectionId,
       range: { since: job.since, until: job.until },
       warnings: job.checkpoint.warnings,

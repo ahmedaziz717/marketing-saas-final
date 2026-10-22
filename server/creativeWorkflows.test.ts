@@ -57,7 +57,10 @@ vi.mock("./lib/openaiSunburst", () => ({
     );
     return meteredCall(
       "openai",
-      "gpt-image-2.5-sunburst",
+      (args[0].modelId || "openai:gpt-image-2.5-sunburst").replace(
+        /^openai:/,
+        ""
+      ),
       "image",
       async () => ({
         value: await state.image(...args),
@@ -70,10 +73,15 @@ vi.mock("./lib/openaiSunburst", () => ({
 vi.mock("./_core/llm", () => ({
   invokeLLM: async (...args: any[]) => {
     const { meteredCall } = await import("./lib/aiMetering");
-    return meteredCall("openai", "gpt-5.5", "text", async () => ({
-      value: await state.llm(...args),
-      usage: { input_tokens: 50, output_tokens: 100 },
-    }));
+    return meteredCall(
+      "openai",
+      args[0].model || "gpt-5.5",
+      "text",
+      async () => ({
+        value: await state.llm(...args),
+        usage: { input_tokens: 50, output_tokens: 100 },
+      })
+    );
   },
   listLLMModels: async () => [],
 }));
@@ -110,6 +118,8 @@ import {
   aiUsage,
   creditLedger,
   platformAccounts,
+  providerRates,
+  aiModelSettings,
 } from "../drizzle/platformSchema";
 import { processNextWorkflowRun } from "./jobs/workflowWorker";
 import {
@@ -120,6 +130,9 @@ import {
   type WorkflowGraph,
 } from "../shared/creativeWorkflow";
 import type { TrpcContext } from "./_core/context";
+import { workflowModelFieldDefaults } from "../shared/workflowModels";
+import { appFieldSchema } from "../shared/workflowInputs";
+import { initializeModelCatalog } from "./lib/modelCatalog";
 let engine: PGlite,
   org: number,
   otherOrg: number,
@@ -1592,4 +1605,152 @@ it("persists Optimization Studio settings and source-linked experiments with rev
   ).rejects.toThrow(/not found/);
   expect(state.llm).not.toHaveBeenCalled();
   expect(state.metaApply).not.toHaveBeenCalled();
+});
+
+it("pins the designer's model allowlist in App versions and quotes and executes the selected image model", async () => {
+  await initializeModelCatalog(state.db);
+  const alternative = "openai:gpt-image-2.5-flare";
+  await state.db
+    .insert(aiModelSettings)
+    .values({
+      id: alternative,
+      availability: "available",
+      enabled: 1,
+      updatedAtMs: Date.now(),
+    })
+    .onConflictDoUpdate({
+      target: aiModelSettings.id,
+      set: { availability: "available", enabled: 1 },
+    });
+  const [rate] = await state.db
+    .select()
+    .from(providerRates)
+    .where(eq(providerRates.model, "gpt-image-2.5-flare"));
+  await state.db
+    .update(providerRates)
+    .set({ config: { ...rate.config, pricingVerifiedAt: Date.now() } })
+    .where(eq(providerRates.id, rate.id));
+  const graph = pipeline();
+  const field = newWorkflowNode("app_input", "model-choice");
+  field.title = "Image model";
+  field.config.field = appFieldSchema.parse(
+    workflowModelFieldDefaults(graph.nodes.find(n => n.id === "render")!)
+  );
+  graph.nodes.push(field);
+  graph.edges.push({
+    id: "model-edge",
+    source: field.id,
+    target: "render",
+    port: "model",
+  });
+  const saved = await owner.save({
+    organizationId: org,
+    name: "Choose an image model",
+    graph,
+  });
+  const v1 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+  });
+  const input = {
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    appVersionId: v1.id,
+    inputs: [{ id: field.id, value: alternative }],
+  };
+  await expect(owner.quote(input)).rejects.toThrow(/allowed/);
+  field.config.field.allowedModelIds!.push(alternative);
+  field.config.field.modelSettings![alternative] = { quality: "high" };
+  await owner.save({
+    organizationId: org,
+    id: saved.id,
+    revision: 1,
+    name: saved.name,
+    graph,
+  });
+  const v2 = await owner.publishApp({
+    organizationId: org,
+    id: saved.id,
+    revision: 2,
+  });
+  await expect(owner.quote(input)).rejects.toThrow(/allowed/);
+  const selected = { ...input, appVersionId: v2.id, revision: 2 };
+  const quote = await owner.quote(selected);
+  const defaultQuote = await owner.quote({ ...selected, inputs: [] });
+  expect(quote.credits).toBeGreaterThan(defaultQuote.credits);
+  const run = await owner.run({
+    ...selected,
+    requestId: randomUUID(),
+    quotedCredits: quote.credits,
+  });
+  await finish(14);
+  const complete = (
+    await owner.get({ organizationId: org, id: saved.id })
+  ).runs.find(r => r.id === run.id)!;
+  expect(complete.status).toBe("completed");
+  expect(state.image.mock.calls[0][0]).toMatchObject({
+    modelId: alternative,
+    modelOptions: { quality: "high" },
+  });
+  expect(complete.steps[field.id].outputs).toEqual([]);
+  const usage = await state.db.select().from(aiUsage);
+  expect(
+    usage.find((u: any) => u.operation === "workflow.generate_image")?.model
+  ).toBe("gpt-image-2.5-flare");
+  await state.db
+    .update(aiModelSettings)
+    .set({ enabled: 0 })
+    .where(eq(aiModelSettings.id, alternative));
+  await expect(owner.quote(selected)).rejects.toThrow(/disabled|unavailable/);
+  await state.db
+    .delete(aiModelSettings)
+    .where(eq(aiModelSettings.id, alternative));
+});
+
+it("uses the selected text model for both credit estimation and the prompt writer's provider request", async () => {
+  await initializeModelCatalog(state.db);
+  await state.db
+    .insert(aiModelSettings)
+    .values({
+      id: "gpt-5.4-mini",
+      availability: "available",
+      enabled: 1,
+      updatedAtMs: Date.now(),
+    })
+    .onConflictDoUpdate({
+      target: aiModelSettings.id,
+      set: { availability: "available", enabled: 1 },
+    });
+  const graph = pipeline();
+  const field = newWorkflowNode("app_input", "text-model");
+  const writer = graph.nodes.find(n => n.id === "writer")!;
+  field.config.field = appFieldSchema.parse(workflowModelFieldDefaults(writer));
+  field.config.field.allowedModelIds!.push("gpt-5.4-mini");
+  field.config.fieldValue = "gpt-5.4-mini";
+  graph.nodes.push(field);
+  graph.edges.push({
+    id: "text-model-edge",
+    source: field.id,
+    target: writer.id,
+    port: "model",
+  });
+  const { run, saved, quote } = await queue(graph);
+  expect(quote.credits).toBe(6); // 1 credit for Mini + 5 for the unchanged image.
+  await finish(14);
+  expect(
+    (await owner.get({ organizationId: org, id: saved.id })).runs.find(
+      r => r.id === run.id
+    )?.status
+  ).toBe("completed");
+  expect(state.llm.mock.calls[0][0].model).toBe("gpt-5.4-mini");
+  expect(
+    (await state.db.select().from(aiUsage)).find(
+      (u: any) => u.operation === "workflow.assistant"
+    )
+  ).toMatchObject({ model: "gpt-5.4-mini" });
+  await state.db
+    .delete(aiModelSettings)
+    .where(eq(aiModelSettings.id, "gpt-5.4-mini"));
 });

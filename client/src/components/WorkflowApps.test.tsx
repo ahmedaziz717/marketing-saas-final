@@ -307,9 +307,23 @@ it("keeps ordinary text, media, publication links and custom data outputs availa
   ];
   const { container } = openApp();
   clickJourney(screen.getByRole("button", { name: /^Results Progress/ }));
-  expect(screen.getByText("Generated copy")).toBeTruthy();
   expect(
-    screen.getByRole("img", { name: "Generated image" }).getAttribute("src")
+    within(screen.getByRole("region", { name: "App results" })).getByText(
+      "Generated copy"
+    )
+  ).toBeTruthy();
+  const preview = screen.getByLabelText("Selected run output preview");
+  expect(within(preview).getByText("Generated copy")).toBeTruthy();
+  fireEvent.click(within(preview).getByRole("button", { name: "Next output" }));
+  expect(
+    within(preview)
+      .getByRole("img", { name: "Generated image" })
+      .getAttribute("src")
+  ).toBe("https://example.com/image.png");
+  expect(
+    within(screen.getByRole("region", { name: "App results" }))
+      .getByRole("img", { name: "Generated image" })
+      .getAttribute("src")
   ).toBe("https://example.com/image.png");
   expect(container.querySelector("video")?.getAttribute("src")).toBe(
     "https://example.com/video.mp4"

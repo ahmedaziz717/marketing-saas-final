@@ -33,7 +33,10 @@ const value = JSON.stringify({
 });
 beforeEach(() => {
   connection.mockReset();
-  connection.mockResolvedValue({ status: "connected" });
+  connection.mockImplementation(async (_db, _org, _id, channel) => ({
+    status: "connected",
+    channel,
+  }));
 });
 it("exposes legacy optimizer requirements without changing processing or mutating the saved graph", () => {
   const original = graph(),
@@ -138,7 +141,7 @@ it("binds a destination only to the matching publication and rejects hidden, for
   );
   selected.nodes[1].type = "meta_ad";
   await expect(resolveWorkflowInputs({} as any, 12, selected)).rejects.toThrow(
-    /matching publication/
+    /matching channel/
   );
   selected.nodes[1].type = "facebook_post";
   input.config.field.visibleWhen = { fieldId: "brief", equals: "show" };

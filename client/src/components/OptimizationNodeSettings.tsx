@@ -14,8 +14,10 @@ import { DateRangeFilter } from "./DateRangeFilter";
 export function OptimizationNodeSettings({
   node,
   onChange,
+  channel,
 }: {
   node: WorkflowNode;
+  channel?: string;
   onChange: (v: Partial<WorkflowNode["config"]>) => void;
 }) {
   const trigger = node.config.trigger ?? {
@@ -214,7 +216,7 @@ export function OptimizationNodeSettings({
           />
         </>
       )}
-      {node.type === "meta_history" && (
+      {["meta_history", "google_history"].includes(node.type) && (
         <label>
           <input
             type="checkbox"
@@ -226,7 +228,7 @@ export function OptimizationNodeSettings({
       )}
       {node.type === "analyze_history" && (
         <>
-          <label>
+          <label hidden={channel === "google_ads"}>
             <input
               type="checkbox"
               checked={node.config.measurePublishedOnly ?? false}
