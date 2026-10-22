@@ -120,7 +120,7 @@ export function StudioProductFacts({
           <div>
             <small>
               {product.provenance?.source?.toUpperCase() ||
-                (product.sourceId ? "CONNECTED CATALOG" : "WEBSITE SCAN")}
+                (product.sourceId ? "CONNECTED CATALOG" : "CATALOG")}
               {product.sku ? ` · ${product.sku}` : ""}
             </small>
             <h3>{product.name}</h3>

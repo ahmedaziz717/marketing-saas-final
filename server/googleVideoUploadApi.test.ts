@@ -43,6 +43,7 @@ it("uses a resumable, unlisted upload with disclosure and returns the account-bo
     videoPrivacy: "UNLISTED",
     videoContentMetadata: { generativeContentDisclosure: "GENERATIVE_CONTENT" },
   });
+  expect(fetcher.mock.calls[1][1].method).toBe("PUT");
   expect(fetcher.mock.calls[1][1].headers["X-Goog-Upload-Command"]).toBe(
     "upload, finalize"
   );

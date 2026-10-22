@@ -84,7 +84,7 @@ export async function uploadGoogleVideo(
     );
   try {
     const response = await fetch(url, {
-      method: "POST",
+      method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/octet-stream",

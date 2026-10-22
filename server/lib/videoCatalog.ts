@@ -49,7 +49,11 @@ function choice(row: Row): VideoImageChoice {
     name: row.product.name,
     url: row.image.url,
     origin: "catalog",
-    product: productFacts(row),
+    product: {
+      ...productFacts(row),
+      sourceId: row.product.sourceId,
+      provenance: row.product.provenance,
+    },
     detail:
       row.image.altText ||
       (row.image.isPrimary ? "Primary product image" : "Product image"),

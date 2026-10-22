@@ -12,6 +12,7 @@ it("explains stale website facts and previews an API counterpart without silentl
           id: 1,
           name: "Test PC",
           sku: "pc123",
+          provenance: { source: "website" },
           specifications: { Benchmark: "200 FPS" },
           relatedSources: [
             {
@@ -31,7 +32,7 @@ it("explains stale website facts and previews an API counterpart without silentl
       onSources={vi.fn()}
     />
   );
-  expect(screen.getByText(/WEBSITE SCAN/)).toBeTruthy();
+  expect(screen.getByText(/WEBSITE/)).toBeTruthy();
   expect(screen.getByText(/API copy available/)).toBeTruthy();
   expect(
     screen
