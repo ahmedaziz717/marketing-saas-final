@@ -5,6 +5,7 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Router, useLocation, useSearch } from "wouter";
@@ -13,6 +14,8 @@ const api = vi.hoisted(() => ({
   calls: vi.fn(),
   mutate: vi.fn(),
   inventory: {} as any,
+  library: [] as any[],
+  resources: [] as any[],
 }));
 const account = {
   id: "google",
@@ -27,7 +30,7 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    assetLibrary: { list: { useQuery: () => ({ data: [] }) } },
+    assetLibrary: { list: { useQuery: () => ({ data: api.library }) } },
     googleAds: {
       connections: {
         useQuery: () => ({
@@ -42,7 +45,7 @@ vi.mock("@/lib/trpc", () => ({
           },
         },
         drafts: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
-        resources: { useQuery: () => ({ data: [] }) },
+        resources: { useQuery: () => ({ data: api.resources }) },
         save: { useMutation: () => ({ mutateAsync: api.mutate }) },
         validate: { useMutation: () => ({ mutateAsync: api.mutate }) },
         publish: { useMutation: () => ({ mutateAsync: api.mutate }) },
@@ -70,6 +73,8 @@ function setup(query = "?connectionId=google") {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  api.library = [];
+  api.resources = [];
   api.inventory = {
     campaigns: [],
     groups: [],
@@ -98,6 +103,7 @@ it.each([
     click("Open Campaign options category");
     expect(screen.getByLabelText(field)).toBeTruthy();
     section("Creative");
+    click("Open Assets & details category");
     expect(
       screen.getByLabelText(
         type === "Performance Max" ? "Asset group name" : "Ad name"
@@ -170,4 +176,158 @@ it("retains the legacy route's asset and account when redirecting to Activation 
   expect(screen.getByTestId("address").textContent).toBe(
     "/app/activate/studio?asset=asset%3A1&connectionId=google&channel=google_ads"
   );
+});
+
+function existingCampaign(
+  type = "PERFORMANCE_MAX",
+  brandGuidelinesEnabled = false
+) {
+  api.inventory = {
+    campaigns: [
+      {
+        campaign: {
+          id: "11",
+          name: "Existing campaign",
+          advertisingChannelType: type,
+          status: "ENABLED",
+          brandGuidelinesEnabled,
+        },
+        campaignBudget: { amountMicros: "25000000" },
+      },
+    ],
+    groups: [
+      type === "PERFORMANCE_MAX"
+        ? {
+            assetGroup: { id: "22", name: "Existing group", status: "ENABLED" },
+          }
+        : { adGroup: { id: "22", name: "Existing group", status: "ENABLED" } },
+    ],
+    assets: [],
+    ads: [],
+    currency: "USD",
+  };
+  api.library = [
+    {
+      key: "asset:1",
+      name: "Approved image",
+      mediaType: "image",
+      state: "approved",
+      url: "https://example.com/image.png",
+      width: 1200,
+      height: 628,
+    },
+    { key: "asset:2", name: "Draft image", mediaType: "image", state: "draft" },
+    {
+      key: "asset:3",
+      name: "Library video",
+      mediaType: "video",
+      state: "approved",
+    },
+  ];
+  api.resources = [
+    { id: "41", name: "Google image", type: "IMAGE" },
+    { id: "42", name: "Google video", type: "YOUTUBE_VIDEO" },
+  ];
+  setup();
+  click(/^Existing campaign /);
+  click(type === "PERFORMANCE_MAX" ? "Add images, videos & text" : "Add an ad");
+}
+it("adds images and videos to the selected existing asset group without changing its budget or removing assets", async () => {
+  existingCampaign();
+  expect(screen.getByRole("button", { name: "Select Images" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Select Videos" })).toBeTruthy();
+  click("Select Images");
+  expect(
+    screen.queryByRole("button", { name: "Select Draft image" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Select Library video" })
+  ).toBeNull();
+  click("Select Approved image");
+  click("Add asset");
+  click("Choose another asset type");
+  click("Select Videos");
+  expect(
+    screen.queryByRole("button", { name: "Select Google image" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Select Approved image" })
+  ).toBeNull();
+  click("Select Google video");
+  click("Add asset");
+  expect(screen.getByText(/Approved image/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+  api.mutate.mockImplementation(async input => ({
+    ...input,
+    id: "draft",
+    revision: 1,
+    state: "draft",
+  }));
+  click("Review change →");
+  click("Save draft");
+  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
+  expect(api.mutate).toHaveBeenCalledWith({
+    organizationId: 1,
+    connectionId: "google",
+    change: {
+      kind: "asset_group_assets",
+      campaignId: "11",
+      assetGroupId: "22",
+      add: [
+        {
+          field: "MARKETING_IMAGE",
+          source: { kind: "library", key: "asset:1" },
+        },
+        { field: "YOUTUBE_VIDEO", source: { kind: "existing", id: "42" } },
+      ],
+      remove: [],
+    },
+  });
+});
+it("validates YouTube entries and keeps video/text sources separate", () => {
+  existingCampaign();
+  click("Select Videos");
+  fireEvent.change(screen.getByLabelText("Asset source"), {
+    target: { value: "youtube" },
+  });
+  fireEvent.change(screen.getByLabelText("YouTube video ID"), {
+    target: { value: "invalid" },
+  });
+  click("Add asset");
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(api.mutate).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("YouTube video ID"), {
+    target: { value: "abcdefghijk" },
+  });
+  click("Add asset");
+  expect(screen.queryByRole("alert")).toBeNull();
+  click("Choose another asset type");
+  click("Select Text");
+  expect(screen.getByLabelText("Text")).toBeTruthy();
+  expect(
+    within(screen.getByLabelText("Placement")).queryByRole("option", {
+      name: "Youtube Video",
+    })
+  ).toBeNull();
+});
+it.each(["DISPLAY", "DEMAND_GEN", "SEARCH"])(
+  "only offers implemented %s formats for an existing ad group",
+  type => {
+    existingCampaign(type);
+    expect(screen.queryByRole("button", { name: "Select Videos" })).toBeNull();
+    click(type === "SEARCH" ? "Select Text" : "Select Images");
+    expect(screen.getByLabelText("Ad name")).toBeTruthy();
+    expect(api.mutate).not.toHaveBeenCalled();
+  }
+);
+it("keeps campaign-level brand assets out of the asset-group picker", () => {
+  existingCampaign("PERFORMANCE_MAX", true);
+  expect(screen.queryByRole("button", { name: "Select Logos" })).toBeNull();
+  click("Select Text");
+  expect(
+    within(screen.getByLabelText("Placement")).queryByRole("option", {
+      name: /Business/,
+    })
+  ).toBeNull();
 });

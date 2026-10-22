@@ -241,3 +241,14 @@
     flex: 1;
   }
 }
+
+.google-existing-assets {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.google-existing-assets summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}

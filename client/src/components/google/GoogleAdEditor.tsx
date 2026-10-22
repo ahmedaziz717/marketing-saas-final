@@ -1,12 +1,19 @@
+import { Image, Video, Type } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   googleAssetFieldSchema,
+  googleAssetInputSchema,
   type GoogleAssetInput,
   type GoogleAdContent,
 } from "@shared/googleCampaigns";
+import { StudioCard } from "@/components/configurator/StudioCard";
+import {
+  googleAssetFormat,
+  type GoogleCreativeFormat,
+} from "./GoogleCreativeFormat";
 import { Field, label } from "./GoogleCampaignFields";
 
 export function AssetEditor({
@@ -16,6 +23,7 @@ export function AssetEditor({
   onChange,
   brandAssets = true,
   adType,
+  format,
 }: {
   organizationId: number;
   connectionId: string;
@@ -23,15 +31,25 @@ export function AssetEditor({
   onChange: (assets: GoogleAssetInput[]) => void;
   brandAssets?: boolean;
   adType?: string;
+  format?: GoogleCreativeFormat;
 }) {
   const library = trpc.assetLibrary.list.useQuery({ organizationId });
   const remote = trpc.googleAds.campaigns.resources.useQuery(
     { organizationId, connectionId, kind: "assets" },
     { enabled: !!connectionId, staleTime: 60000 }
   );
-  const [field, setField] =
-      useState<GoogleAssetInput["field"]>("MARKETING_IMAGE"),
-    [kind, setKind] = useState<GoogleAssetInput["source"]["kind"]>("library"),
+  const [field, setField] = useState<GoogleAssetInput["field"]>(
+      format === "video"
+        ? "YOUTUBE_VIDEO"
+        : format === "text"
+          ? "HEADLINE"
+          : format === "logo"
+            ? "LOGO"
+            : "MARKETING_IMAGE"
+    ),
+    [kind, setKind] = useState<GoogleAssetInput["source"]["kind"]>(
+      format === "video" ? "existing" : format === "text" ? "text" : "library"
+    ),
     [value, setValue] = useState(
       new URLSearchParams(useSearch()).get("asset") ?? ""
     );
@@ -69,8 +87,40 @@ export function AssetEditor({
       (!adType ||
         !allowedAdFields[adType] ||
         allowedAdFields[adType].includes(f)) &&
-      (brandAssets || !["BUSINESS_NAME", "LOGO", "LANDSCAPE_LOGO"].includes(f))
+      (brandAssets ||
+        !["BUSINESS_NAME", "LOGO", "LANDSCAPE_LOGO"].includes(f)) &&
+      (!format || googleAssetFormat(f) === format)
   );
+  const activeField = fields.includes(field) ? field : fields[0];
+  const media = googleAssetFormat(activeField);
+  const sources =
+    media === "video"
+      ? [
+          ["existing", "Existing Google video"],
+          ["youtube", "YouTube video"],
+        ]
+      : media === "text"
+        ? [
+            ["text", "New text"],
+            ["existing", "Existing Google text"],
+          ]
+        : [
+            ["library", "Approved library image"],
+            ["existing", "Existing Google image"],
+          ];
+  const activeKind = (
+    sources.some(([id]) => id === kind) ? kind : sources[0][0]
+  ) as typeof kind;
+  const matchingRemote =
+    remote.data?.filter(
+      a =>
+        a.type ===
+        (media === "video"
+          ? "YOUTUBE_VIDEO"
+          : media === "text"
+            ? "TEXT"
+            : "IMAGE")
+    ) ?? [];
   const images =
     library.data?.filter(
       a => a.mediaType === "image" && a.state === "approved"
@@ -86,8 +136,12 @@ export function AssetEditor({
       <div className="google-form-grid">
         <Field title="Placement">
           <select
-            value={field}
-            onChange={e => setField(e.target.value as typeof field)}
+            value={activeField}
+            onChange={e => {
+              setField(e.target.value as typeof field);
+              setValue("");
+              setError("");
+            }}
           >
             {fields.map(f => (
               <option key={f} value={f}>
@@ -98,18 +152,13 @@ export function AssetEditor({
         </Field>
         <Field title="Asset source">
           <select
-            value={kind}
+            value={activeKind}
             onChange={e => {
               setKind(e.target.value as typeof kind);
               setValue("");
             }}
           >
-            {[
-              ["library", "Approved library image"],
-              ["existing", "Existing Google asset"],
-              ["text", "New text"],
-              ["youtube", "YouTube video"],
-            ].map(([v, t]) => (
+            {sources.map(([v, t]) => (
               <option key={v} value={v}>
                 {t}
               </option>
@@ -118,50 +167,105 @@ export function AssetEditor({
         </Field>
         <Field
           title={
-            kind === "text"
+            activeKind === "text"
               ? "Text"
-              : kind === "youtube"
+              : activeKind === "youtube"
                 ? "YouTube video ID"
                 : "Asset"
           }
         >
-          {kind === "text" || kind === "youtube" ? (
+          {activeKind === "text" || activeKind === "youtube" ? (
             <input
               value={value}
-              maxLength={kind === "text" ? 90 : 11}
+              maxLength={activeKind === "text" ? 90 : 11}
               onChange={e => setValue(e.target.value)}
             />
           ) : (
-            <select value={value} onChange={e => setValue(e.target.value)}>
-              <option value="">Choose an asset…</option>
-              {kind === "library"
-                ? images.map(a => (
-                    <option key={a.key} value={a.key}>
-                      {a.name} · {a.width ?? "?"} × {a.height ?? "?"}
-                    </option>
-                  ))
-                : remote.data?.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} · {a.type}
-                    </option>
-                  ))}
-            </select>
+            <span>Choose an asset below.</span>
           )}
         </Field>
       </div>
+      {media === "video" && (
+        <p>
+          Videos must already be on YouTube or available as Google video assets.
+          Direct library video upload is not supported here.
+        </p>
+      )}
+      {(activeKind === "library" || activeKind === "existing") && (
+        <div className="cfg-card-grid google-asset-picker">
+          {(activeKind === "library"
+            ? images.map(a => ({
+                id: a.key,
+                name: a.name,
+                url: a.url,
+                description: `${a.width ?? "?"} × ${a.height ?? "?"}`,
+              }))
+            : matchingRemote.map(a => ({ ...a, description: label(a.type) }))
+          ).map(a => (
+            <StudioCard
+              key={a.id}
+              title={a.name}
+              description={a.description}
+              image={
+                "url" in a && typeof a.url === "string" ? a.url : undefined
+              }
+              media={
+                !("url" in a && a.url) ? (
+                  <div className="activation-channel-art">
+                    {media === "video" ? (
+                      <Video size={36} aria-hidden="true" />
+                    ) : media === "text" ? (
+                      <Type size={36} aria-hidden="true" />
+                    ) : (
+                      <Image size={36} aria-hidden="true" />
+                    )}
+                  </div>
+                ) : undefined
+              }
+              contain
+              selected={value === a.id}
+              onSelect={() => {
+                setValue(a.id);
+                setError("");
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {activeKind === "existing" &&
+        !remote.isLoading &&
+        !matchingRemote.length && (
+          <p>
+            No matching Google assets are available. Choose another asset
+            source.
+          </p>
+        )}
       <Button
         variant="outline"
         disabled={!value}
         onClick={() => {
           const source =
-            kind === "text"
-              ? { kind, text: value }
-              : kind === "library"
-                ? { kind, key: value }
-                : kind === "youtube"
-                  ? { kind, videoId: value }
-                  : { kind, id: value };
-          const candidate = { field, source } as GoogleAssetInput;
+            activeKind === "text"
+              ? { kind: activeKind, text: value }
+              : activeKind === "library"
+                ? { kind: activeKind, key: value }
+                : activeKind === "youtube"
+                  ? { kind: activeKind, videoId: value }
+                  : { kind: activeKind, id: value };
+          const candidate = { field: activeField, source } as GoogleAssetInput;
+          const parsed = googleAssetInputSchema.safeParse(candidate);
+          if (!parsed.success) {
+            setError(parsed.error.issues[0].message);
+            return;
+          }
+          if (
+            (activeKind === "library" && !images.some(a => a.key === value)) ||
+            (activeKind === "existing" &&
+              !matchingRemote.some(a => a.id === value))
+          ) {
+            setError("Choose an available asset of the selected type.");
+            return;
+          }
           if (
             assets.some(a => JSON.stringify(a) === JSON.stringify(candidate))
           ) {
@@ -206,7 +310,7 @@ export function AssetEditor({
           </li>
         ))}
       </ul>
-      {kind === "library" && !images.length && (
+      {activeKind === "library" && !images.length && (
         <p>
           <Link href="/app/library">
             Approve an image in your asset library
@@ -224,8 +328,10 @@ export function AdEditor({
   ad,
   onChange,
   part,
+  format,
 }: {
   part: "creative" | "copy";
+  format?: GoogleCreativeFormat;
   organizationId: number;
   connectionId: string;
   type: string;
@@ -336,6 +442,8 @@ export function AdEditor({
         <AssetEditor
           organizationId={organizationId}
           connectionId={connectionId}
+          key={`${type}:${format}`}
+          format={format}
           adType={type}
           assets={ad.assets}
           onChange={assets => patch({ assets })}

@@ -1886,7 +1886,25 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.body.textContent?.includes("Core products"),
           "Existing asset groups are available"
         );
-        await click("Manage group assets");
+        await click("Add images, videos & text");
+        check(
+          !!document.querySelector('[aria-label="Select Images"]') &&
+            !!document.querySelector('[aria-label="Select Videos"]'),
+          "Existing PMax offers image and video type tiles"
+        );
+        await click("Select Videos");
+        check(
+          document.body.textContent?.includes(
+            "Direct library video upload is not supported"
+          ),
+          "Video source is explained"
+        );
+        check(
+          !document.querySelector('[aria-label="Select Responsive display"]'),
+          "Video selection excludes image assets"
+        );
+        await click("Choose another asset type");
+        await click("Select Images");
         check(
           document.body.textContent?.includes("Shop the collection"),
           "Existing Google assets can be selected for replacement"
