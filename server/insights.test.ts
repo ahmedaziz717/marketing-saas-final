@@ -1061,6 +1061,7 @@ describe("Google Ads reports through the existing Insights pipeline", () => {
     expect(state.ads).not.toHaveBeenCalled();
     expect(state.social).not.toHaveBeenCalled();
     expect(state.google).toHaveBeenCalledTimes(2);
+    expect(state.google.mock.calls.every(call => call[4] === false)).toBe(true);
     expect(state.google.mock.calls[0].slice(1, 3)).toEqual([org, googleId]);
     const [stored] = await state.db
       .select()

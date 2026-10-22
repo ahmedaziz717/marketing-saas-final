@@ -9,6 +9,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { appSchema, organizations, users } from "./schema";
+import type { GoogleChange } from "../shared/googleCampaigns";
 import type {
   Channel,
   ConnectionChannel,
@@ -150,3 +151,52 @@ export const channelPlans = appSchema
   .enableRLS();
 export type ChannelConnection = typeof channelConnections.$inferSelect;
 export type Publication = typeof publications.$inferSelect;
+
+export const googleCampaignDrafts = appSchema
+  .table(
+    "google_campaign_drafts",
+    {
+      id: uuid("id").primaryKey(),
+      organizationId: integer("organizationId")
+        .notNull()
+        .references(() => organizations.id),
+      connectionId: uuid("connectionId")
+        .notNull()
+        .references(() => channelConnections.id),
+      change: jsonb("change").$type<GoogleChange>().notNull(),
+      state: varchar("state", { length: 24 })
+        .$type<
+          | "draft"
+          | "validated"
+          | "publishing"
+          | "published"
+          | "failed"
+          | "uncertain"
+        >()
+        .notNull()
+        .default("draft"),
+      revision: integer("revision").notNull().default(1),
+      reviewHash: varchar("reviewHash", { length: 64 }),
+      validatedAtMs: bigint("validatedAtMs", { mode: "number" }),
+      approvedByUserId: integer("approvedByUserId").references(() => users.id),
+      result: jsonb("result").$type<{
+        resources: string[];
+        requestId?: string;
+      }>(),
+      error: text("error"),
+      createdByUserId: integer("createdByUserId")
+        .notNull()
+        .references(() => users.id),
+      createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+      updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+    },
+    t => ({
+      workspace: index("google_draft_workspace").on(
+        t.organizationId,
+        t.connectionId,
+        t.updatedAtMs
+      ),
+    })
+  )
+  .enableRLS();
+export type GoogleCampaignDraft = typeof googleCampaignDrafts.$inferSelect;

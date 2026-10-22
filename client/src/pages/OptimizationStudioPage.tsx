@@ -51,7 +51,6 @@ import { availableWorkflowResults } from "@shared/workflowResults";
 import { workflowRunStatusLabel } from "@shared/workflowRunActivity";
 import "@/styles/configurator.css";
 import "@/styles/insights.css";
-import { GoogleAdsStudioEntry } from "@/components/GoogleAdsStudioEntry";
 import "@/styles/optimizationStudio.css";
 
 const sections = [
@@ -114,6 +113,7 @@ function Studio({
   initialPage?: string;
 }) {
   const [, navigate] = useLocation();
+  const initialParams = new URLSearchParams(useSearch());
   const root = useStudioNavigation();
   const [page, setPage] = useState(
     initialPage && pages.some(p => p.id === initialPage)
@@ -121,9 +121,16 @@ function Studio({
       : "purpose"
   );
   const [name, setName] = useState("My optimization plan");
-  const [settings, setSettings] = useState<OptimizationSettings>(
-    defaultOptimizationSettings
-  );
+  const [settings, setSettings] = useState<OptimizationSettings>(() => ({
+    ...defaultOptimizationSettings(),
+    ...(initialParams.get("channel") === "google_ads"
+      ? {
+          channel: "google_ads" as const,
+          connectionId: initialParams.get("connectionId") ?? "",
+          refreshHistory: true,
+        }
+      : {}),
+  }));
   const [studio, setStudio] = useState<OptimizationStudio>(() =>
     optimizationStudioSchema.parse({ version: 1 })
   );
@@ -153,7 +160,15 @@ function Studio({
       refetchInterval: 5000,
     }
   );
-  const connections = trpc.channels.connections.useQuery({ organizationId });
+  const metaConnections = trpc.channels.connections.useQuery({
+    organizationId,
+  });
+  const googleConnections = trpc.googleAds.connections.useQuery(
+    { organizationId },
+    { enabled: settings.channel === "google_ads" }
+  );
+  const connections =
+    settings.channel === "google_ads" ? googleConnections : metaConnections;
   const save = trpc.workflows.save.useMutation(),
     quote = trpc.workflows.quote.useMutation(),
     run = trpc.workflows.run.useMutation(),
@@ -272,7 +287,7 @@ function Studio({
           !availability.data?.enabled)
       )
         throw new Error(
-          "Add your goal and choose a connected Meta ad account before running analysis."
+          "Add your goal and choose a connected advertising account before running analysis."
         );
       const graph = optimizationStudioGraph(settings, studio);
       const item = await save.mutateAsync({
@@ -562,17 +577,34 @@ function Studio({
                   <div>
                     <h2>Choose the evidence</h2>
                     <p>
-                      Analyze imported Meta ad results from January 2026 onward.
+                      Analyze imported Google or Meta results from January 2026
+                      onward.
                     </p>
                   </div>
                 </div>
-                <div className="cfg-card-grid mb-6"><GoogleAdsStudioEntry context="optimization" /></div>
+                <label className="insight-label">
+                  Advertising channel
+                  <VisualSelect
+                    aria-label="Optimization channel"
+                    value={settings.channel ?? "meta_ads"}
+                    onChange={e =>
+                      update({
+                        channel: e.target.value as "meta_ads" | "google_ads",
+                        connectionId: "",
+                        refreshHistory: true,
+                      })
+                    }
+                  >
+                    <option value="meta_ads">Meta Ads</option>
+                    <option value="google_ads">Google Ads</option>
+                  </VisualSelect>
+                </label>
                 <div className="space-y-6">
                   <label className="insight-label">
-                    Meta ad account
+                    Advertising account
                     <WorkflowConnectionInput
-                      title="Meta ad account"
-                      channel="meta_ads"
+                      title="Advertising account"
+                      channel={settings.channel ?? "meta_ads"}
                       organizationId={organizationId}
                       value={settings.connectionId}
                       onChange={connectionId => update({ connectionId })}
@@ -597,7 +629,7 @@ function Studio({
                       }
                     />
                     <span>
-                      Refresh Meta history before this analysis
+                      Refresh account history before this analysis
                       <small>
                         Runs a read-only import first. An initial import can
                         take longer; progress appears with the run.
@@ -650,8 +682,8 @@ function Studio({
                     </>
                   ) : (
                     <p>
-                      Enable “Refresh Meta history” in Account & dates to import
-                      evidence on the next run.
+                      Enable “Refresh account history” in Account & dates to
+                      import evidence on the next run.
                     </p>
                   )}
                   <Link href="/app/optimize/intelligence">
@@ -985,7 +1017,7 @@ export default function OptimizationStudioPage() {
       {workspace.organizationId &&
         (allowed ? (
           <Studio
-            key={`${workspace.organizationId}:${id ?? "new"}`}
+            key={`${workspace.organizationId}:${id ?? "new"}:${params.get("channel") ?? "meta_ads"}`}
             organizationId={workspace.organizationId}
             role={workspace.membership!.role}
             workflowId={id}

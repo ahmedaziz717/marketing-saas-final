@@ -112,9 +112,9 @@ it("abstains for incomplete or unsupported evidence and never authorizes spendin
     },
   };
   expect(optimizeEvidence(input).decision).toBe("insufficient_evidence");
-  expect(optimizeEvidence({ ...input, channel: "google_ads" }).decision).toBe(
-    "unsupported_channel"
-  );
+  expect(
+    optimizeEvidence({ ...input, channel: "microsoft_ads" }).decision
+  ).toBe("unsupported_channel");
   const result = optimizeEvidence({
     ...input,
     evidence: {

@@ -21,6 +21,7 @@ import BrandWorkspacePage from "./pages/BrandWorkspacePage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
 import ActivationStudioPage from "./pages/ActivationStudioPage";
+import GoogleCampaignStudioPage from "./pages/GoogleCampaignStudioPage";
 import CreativeConfiguratorPage from "./pages/CreativeConfiguratorPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -80,6 +81,7 @@ function Router() {
         <StageAppsPage />
       </Route>
       <Route path="/app/activate/studio" component={ActivationStudioPage} />
+      <Route path="/app/activate/google" component={GoogleCampaignStudioPage} />
       <Route path="/app/creatives/studio">
         <CreativeConfiguratorPage />
       </Route>

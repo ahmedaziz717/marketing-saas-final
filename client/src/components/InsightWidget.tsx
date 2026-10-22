@@ -8,6 +8,7 @@ import {
   Pencil,
   RefreshCw,
   X,
+  Copy,
 } from "lucide-react";
 import {
   insightChartMetric,
@@ -19,6 +20,8 @@ import {
 } from "@shared/insights";
 import { InsightChart, InsightMetricCard } from "./InsightReport";
 import { widgetStyle } from "./InsightWidgetEditor";
+import { InsightDateControls, type InsightDates } from "./InsightDateControls";
+import { InsightVisualization } from "./InsightVisualization";
 
 type Entry = inferRouterOutputs<AppRouter>["insights"]["dashboardData"][number];
 export function InsightWidget({
@@ -35,6 +38,9 @@ export function InsightWidget({
   onRefresh,
   onDrag,
   onDrop,
+  onDates,
+  onDateMode,
+  onDuplicate,
 }: {
   widget: DashboardWidget;
   entry?: Entry;
@@ -49,6 +55,9 @@ export function InsightWidget({
   onRefresh: () => void;
   onDrag: () => void;
   onDrop: () => void;
+  onDates?: (patch: Partial<InsightDates>) => void;
+  onDateMode?: (mode: "dashboard" | "custom") => void;
+  onDuplicate?: () => void;
 }) {
   const report = entry?.report,
     latest = entry?.latest,
@@ -60,7 +69,14 @@ export function InsightWidget({
   const value = account?.metrics.find(m => m.key === w.metric);
   const running = !!latest && ["queued", "running"].includes(latest.status);
   const components = w.components ?? ["summary"];
-  const stale = !!run && !!report && run.revision !== report.revision;
+  const legacyCampaignScope =
+    !!run &&
+    run.config.includeInactiveCampaigns === undefined &&
+    account?.channel !== "facebook";
+  const stale =
+    !!run &&
+    !!report &&
+    (run.revision !== report.revision || legacyCampaignScope);
   const frame = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState(8);
@@ -140,6 +156,15 @@ export function InsightWidget({
           </p>
         </div>
         <div className="insight-widget-actions">
+          {editing && onDuplicate && (
+            <button
+              aria-label={`Duplicate ${title}`}
+              title="Duplicate widget"
+              onClick={onDuplicate}
+            >
+              <Copy size={15} />
+            </button>
+          )}
           <button
             aria-label={`Edit ${title}`}
             title="Edit widget"
@@ -162,6 +187,31 @@ export function InsightWidget({
           )}
         </div>
       </header>
+      {report && onDates && (
+        <div className="px-3 py-2">
+          <label className="text-xs">
+            Date source{" "}
+            <select
+              aria-label={`Date source for ${title}`}
+              value={w.dateMode ?? "custom"}
+              disabled={refreshing || editing}
+              onChange={e =>
+                onDateMode?.(e.target.value as "dashboard" | "custom")
+              }
+            >
+              <option value="dashboard">Follow dashboard</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </label>
+          <InsightDateControls
+            key={report.revision}
+            label="Chart timeframe"
+            config={report.config}
+            disabled={refreshing || editing}
+            onChange={onDates}
+          />
+        </div>
+      )}
       <div
         className="insight-widget-content"
         tabIndex={0}
@@ -289,7 +339,13 @@ export function InsightWidget({
               compare={run.config.compare}
             />
           ) : (
-            <InsightChart account={account} metric={w.metric} />
+            <InsightVisualization
+              account={account}
+              accounts={run.result!.accounts}
+              widget={w}
+              range={run.result!.range}
+              previousRange={run.result!.previousRange}
+            />
           )}
         </div>
       </div>
@@ -335,6 +391,12 @@ export function InsightWidget({
                 {running
                   ? "Showing the previous result while your updated settings refresh."
                   : "Showing the previous result. Refresh to apply your updated settings."}
+              </p>
+            )}
+            {legacyCampaignScope && (
+              <p>
+                This saved result includes inactive campaigns. Refresh to apply
+                the active-campaign default.
               </p>
             )}
             {latest?.error && <p role="alert">{latest.error}</p>}

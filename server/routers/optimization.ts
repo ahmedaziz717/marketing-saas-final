@@ -86,7 +86,12 @@ export const optimizationRouter = router({
       return { enabled: optimizationEnabled(input.organizationId) };
     }),
   sync: protectedProcedure
-    .input(account.extend({ incremental: z.boolean().default(false), range: historyRangeSchema.optional() }))
+    .input(
+      account.extend({
+        incremental: z.boolean().default(false),
+        range: historyRangeSchema.optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await authorize(ctx.user.id, input.organizationId, true);
       return queueHistory(
@@ -162,7 +167,7 @@ export const optimizationRouter = router({
   override: protectedProcedure
     .input(
       account.extend({
-        adId: z.string().regex(/^\d+$/),
+        adId: z.string().regex(/^(?:\d+|g_(?:ad_\d+_\d+|asset_group_\d+))$/),
         assertion: assertionSchema,
       })
     )

@@ -63,7 +63,7 @@ export async function readStorePage(
     serviceDetails: null,
   };
   if (provider === "shopify") {
-    const query = `query Catalog($after:String){ products(first:20,after:$after){pageInfo{hasNextPage endCursor}nodes{id title description handle productType onlineStoreUrl featuredImage{url} priceRangeV2{minVariantPrice{amount currencyCode}} variants(first:250){nodes{id title sku price image{url}} pageInfo{hasNextPage endCursor}}}}}`;
+    const query = `query Catalog($after:String){ products(first:20,after:$after){pageInfo{hasNextPage endCursor}nodes{id title description handle productType onlineStoreUrl featuredImage{url} images(first:30){nodes{url}} priceRangeV2{minVariantPrice{amount currencyCode}} variants(first:250){nodes{id title sku price image{url}} pageInfo{hasNextPage endCursor}}}}}`;
     const { data } = await safeStoreRequest(
       `${base}/admin/api/2026-07/graphql.json`,
       {
@@ -111,6 +111,15 @@ export async function readStorePage(
         price: p.priceRangeV2.minVariantPrice.amount,
         currency: p.priceRangeV2.minVariantPrice.currencyCode,
         imageUrl: p.featuredImage?.url ?? "",
+        imageUrls: Array.from(
+          new Set<string>(
+            [
+              p.featuredImage?.url,
+              ...(p.images?.nodes ?? []).map((i: any) => i.url),
+              ...variants.map((v: any) => v.image?.url),
+            ].filter(Boolean)
+          )
+        ).slice(0, 30),
         variants: variants.map((v: any) => ({
           id: v.id,
           name: v.title,
@@ -159,6 +168,14 @@ export async function readStorePage(
           p.images?.find((i: any) => i.is_thumbnail)?.url_standard ||
           p.images?.[0]?.url_standard ||
           "",
+        imageUrls: Array.from(
+          new Set<string>(
+            [
+              ...(p.images ?? []).map((i: any) => i.url_standard),
+              ...(p.variants ?? []).map((v: any) => v.image_url),
+            ].filter(Boolean)
+          )
+        ).slice(0, 30),
         variants: (p.variants ?? []).map((v: any) => ({
           id: String(v.id),
           name: v.option_values?.map((o: any) => o.label).join(" / ") || p.name,
@@ -226,6 +243,15 @@ export async function readStorePage(
         (p.attributes || []).map((a: any) => [a.name, a.options.join(", ")])
       ),
       imageUrl: p.images?.[0]?.src || "",
+      imageUrls: Array.from(
+        new Set<string>(
+          [
+            ...(p.images ?? []).map((i: any) => i.src),
+            ...variants.map(v => v.imageUrl),
+          ].filter(Boolean)
+        )
+      ).slice(0, 30),
+      specificationOrder: (p.attributes ?? []).map((a: any) => a.name),
       variants,
     });
   }

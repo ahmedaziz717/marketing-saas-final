@@ -23,7 +23,15 @@ export function WorkflowBusinessSettings({
     node.type === "meta_activate" ? "paused" : "active"
   );
   const [scheduleError, setScheduleError] = useState("");
-  const connections = trpc.channels.connections.useQuery({ organizationId });
+  const advertisingHistory = [
+    "meta_history",
+    "classify_history",
+    "analyze_history",
+  ].includes(node.type);
+  const connections = trpc.channels.connections.useQuery({
+    organizationId,
+    includeGoogle: advertisingHistory,
+  });
   const objects = trpc.channels.adObjects.useQuery(
     {
       organizationId,
@@ -38,7 +46,11 @@ export function WorkflowBusinessSettings({
   );
   const choices =
     connections.data?.items.filter(
-      c => c.status === "connected" && c.channel === meta.channel
+      c =>
+        c.status === "connected" &&
+        (advertisingHistory
+          ? ["meta_ads", "google_ads"].includes(c.channel)
+          : c.channel === meta.channel)
     ) ?? [];
   const timezone =
     config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -48,9 +60,11 @@ export function WorkflowBusinessSettings({
       {meta.channel && (
         <>
           <ChoiceField>
-            {meta.channel === "facebook"
-              ? "Connected Facebook Page"
-              : "Connected Meta ad account"}
+            {advertisingHistory
+              ? "Connected advertising account"
+              : meta.channel === "facebook"
+                ? "Connected Facebook Page"
+                : "Connected Meta ad account"}
             <VisualSelect
               value={config.connectionId ?? ""}
               onChange={e =>

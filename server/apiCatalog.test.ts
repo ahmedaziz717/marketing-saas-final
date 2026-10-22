@@ -357,7 +357,10 @@ it.each(["https://images.example/clx", "https://images.example/clx/"])(
           code: "a",
           name: "PC",
           metadata: {
-            images: { chassisFeatured: "components/case/featured.png" },
+            images: {
+              main: "products/product/featured.png",
+              chassisFeatured: "components/case/featured.png",
+            },
           },
         },
       ],
@@ -365,7 +368,7 @@ it.each(["https://images.example/clx", "https://images.example/clx/"])(
       { ...config(), imageBaseUrl }
     );
     expect(result.items[0].imageUrl).toBe(
-      "https://images.example/clx/components/case/featured.png"
+      "https://images.example/clx/products/product/featured.png"
     );
     expect(apiCatalogConfigSchema.parse({ imageBaseUrl }).imageBaseUrl).toBe(
       "https://images.example/clx/"

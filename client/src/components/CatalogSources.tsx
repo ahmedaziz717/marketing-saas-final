@@ -1,4 +1,5 @@
 import { ApiCatalogConnect } from "./ApiCatalogConnect";
+import { CatalogImageRepair } from "./CatalogImageRepair";
 import { OfferingDiscovery } from "./OfferingDiscovery";
 import { PartnerLogo } from "./PartnerLogo";
 import { useState } from "react";
@@ -211,10 +212,7 @@ export function CatalogSources({
                     : 0
                 }
               />
-              <Link
-                href="/app/catalog/import"
-                className="text-sm text-primary"
-              >
+              <Link href="/app/catalog/import" className="text-sm text-primary">
                 View scan and progress
               </Link>
             </div>
@@ -271,6 +269,15 @@ export function CatalogSources({
               />
             )}
             <p className="mt-2 text-xs text-muted-foreground">
+              Stored image files: {source.storedFiles ?? 0} across{" "}
+              {source.productsWithStoredImages ?? 0} products · Source images
+              available: {source.media?.available ?? 0} · Partial:{" "}
+              {source.media?.partial ?? 0} · Missing:{" "}
+              {source.media?.missing ?? 0} · Failed:{" "}
+              {source.media?.unavailable ?? 0} · Pending:{" "}
+              {source.media?.pending ?? 0}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
               {source.autoSync
                 ? "Automatic sync every 6 hours"
                 : "Automatic sync off"}
@@ -281,6 +288,20 @@ export function CatalogSources({
               </p>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="outline" asChild>
+                <Link href={`/app/catalog?sourceId=${source.id}`}>
+                  View imported products
+                </Link>
+              </Button>
+              {source.provider === "api" &&
+                source.status !== "disconnected" && (
+                  <CatalogImageRepair
+                    organizationId={organizationId}
+                    sourceId={source.id}
+                    disabled={["queued", "syncing"].includes(source.status)}
+                    onQueued={refresh}
+                  />
+                )}
               {source.status !== "disconnected" && (
                 <>
                   {["queued", "syncing"].includes(source.status) ? (
@@ -354,9 +375,15 @@ export function CatalogSources({
           </div>
         ))}
       <div className="grid gap-4 md:grid-cols-3">
-        {"API endpoint".toLowerCase().includes(search.toLowerCase()) && <ApiCatalogConnect organizationId={organizationId} onConnected={refresh} />}
-        {STORE_PROVIDERS.filter(p =>
-          p !== "api" && names[p].toLowerCase().includes(search.toLowerCase())
+        {"API endpoint".toLowerCase().includes(search.toLowerCase()) && (
+          <ApiCatalogConnect
+            organizationId={organizationId}
+            onConnected={refresh}
+          />
+        )}
+        {STORE_PROVIDERS.filter(
+          p =>
+            p !== "api" && names[p].toLowerCase().includes(search.toLowerCase())
         ).map(p => (
           <div key={p} className="surface p-6">
             <PartnerLogo slug={p} name={names[p]} />

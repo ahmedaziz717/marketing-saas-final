@@ -104,7 +104,7 @@ export const channelsRouter = router({
       return readAccountImage(c.channel, c.accountId, connectionToken(c));
     }),
   connections: protectedProcedure
-    .input(scopeSchema)
+    .input(scopeSchema.extend({ includeGoogle: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       const db = await libraryDatabase();
@@ -114,7 +114,12 @@ export const channelsRouter = router({
         .where(
           and(
             eq(channelConnections.organizationId, input.organizationId),
-            inArray(channelConnections.channel, ["facebook", "meta_ads"])
+            inArray(
+              channelConnections.channel,
+              input.includeGoogle
+                ? ["facebook", "meta_ads", "google_ads"]
+                : ["facebook", "meta_ads"]
+            )
           )
         )
         .orderBy(channelConnections.channel, channelConnections.name);
@@ -133,8 +138,10 @@ export const channelsRouter = router({
       return {
         items: rows
           .filter(
-            (c): c is typeof c & { channel: "facebook" | "meta_ads" } =>
-              c.channel === "facebook" || c.channel === "meta_ads"
+            c =>
+              c.channel === "facebook" ||
+              c.channel === "meta_ads" ||
+              (input.includeGoogle && c.channel === "google_ads")
           )
           .map(safeConnection),
         oauthConfigured: oauthConfigured(),
@@ -531,7 +538,12 @@ export const channelsRouter = router({
       return applyMetaChange(db, c, ctx.user.id, input.ticket, input.change);
     }),
   report: protectedProcedure
-    .input(destination.extend({ range: rangeSchema }))
+    .input(
+      destination.extend({
+        range: rangeSchema,
+        includeInactiveCampaigns: z.boolean().default(false),
+      })
+    )
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId);
       const c = await getConnection(
@@ -549,7 +561,11 @@ export const channelsRouter = router({
           : {
               channel: "meta_ads" as const,
               refreshedAtMs: Date.now(),
-              data: await adsReport(c, input.range),
+              data: await adsReport(
+                c,
+                input.range,
+                input.includeInactiveCampaigns
+              ),
             };
       } catch (e) {
         throw upstream(e);
@@ -1018,7 +1034,8 @@ export const publishingRouter = router({
             });
         }
         const subheadlines: string[] = [];
-        const creativeSnapshots: import("../../shared/creativeIntelligence").CreativeIntelligence[] = [];
+        const creativeSnapshots: import("../../shared/creativeIntelligence").CreativeIntelligence[] =
+          [];
         const copyAssetKeys = Array.from(
           new Set(
             [
@@ -1256,7 +1273,11 @@ export const publishingRouter = router({
             action: `publication.${input.decision}`,
             entityType: "publication",
             entityId: item.id,
-            payload: { note: input.note, approvalHash: d?.hash ?? null, creativeSnapshots: d?.creativeSnapshots ?? [] },
+            payload: {
+              note: input.note,
+              approvalHash: d?.hash ?? null,
+              creativeSnapshots: d?.creativeSnapshots ?? [],
+            },
           },
           tx
         );

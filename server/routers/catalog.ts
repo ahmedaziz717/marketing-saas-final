@@ -38,6 +38,7 @@ const catalogFilters = z.object({
   kind: z.enum(["all", "products", "services"]).default("all"),
   status: z.enum(["all", "pending", "approved", "rejected"]).default("all"),
   category: z.string().max(240).default("all"),
+  sourceId: z.number().int().positive().optional(),
 });
 
 function catalogWhere(
@@ -48,6 +49,7 @@ function catalogWhere(
   const search = `%${filter.search.replace(/[\\%_]/g, "\\$&")}%`;
   return and(
     eq(products.organizationId, organizationId),
+    filter.sourceId ? eq(products.sourceId, filter.sourceId) : undefined,
     filter.kind === "services"
       ? eq(products.recordType, "service")
       : filter.kind === "products"
@@ -293,7 +295,12 @@ export const catalogRouter = router({
           ...input.product,
           dedupeKey,
           provenance: editedProductProvenance(
-            existing.provenance,
+            {
+              ...existing.provenance,
+              "specifications.order.user": JSON.stringify(
+                Object.keys(input.product.specifications)
+              ),
+            },
             ctx.user.id,
             now,
             Object.keys(input.product).filter(

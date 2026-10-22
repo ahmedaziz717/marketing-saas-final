@@ -213,6 +213,8 @@ try {
       "google-selection",
       "google-empty",
       "google-manage",
+      "google-campaigns",
+      "google-campaign-new",
       "studio-ad-copy",
       "campaign-plans",
       "asset-library",
@@ -249,6 +251,8 @@ try {
       "catalog-api-import",
       "google-selection",
       "google-manage",
+      "google-campaigns",
+      "google-campaign-new",
     ].flatMap(page => [
       { width: 1366, height: 768, role: "owner", page },
       { width: 375, height: 600, role: "owner", page },

@@ -420,6 +420,47 @@ function ApiCatalogForm({
               Advanced settings · optional mapping overrides
             </summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  "imageBaseUrl",
+                  "imagesPath",
+                  "specificationOrderPath",
+                ] as const
+              ).map(key => (
+                <label key={key} className="text-sm">
+                  {key === "imageBaseUrl"
+                    ? "Image directory"
+                    : key === "imagesPath"
+                      ? "Product gallery field"
+                      : "Specification display-order field"}
+                  <Input
+                    value={config[key] ?? ""}
+                    onChange={e => {
+                      const value = e.target.value || undefined;
+                      setConfig({ ...config, [key]: value });
+                      setManualMapping({ ...manualMapping, [key]: value });
+                    }}
+                  />
+                </label>
+              ))}
+              <label className="text-sm">
+                Image path rules
+                <VisualSelect
+                  value={config.imagePathMode ?? "url"}
+                  onChange={e => {
+                    const imagePathMode = e.target.value as "url" | "directory";
+                    setConfig({ ...config, imagePathMode });
+                    setManualMapping({ ...manualMapping, imagePathMode });
+                  }}
+                >
+                  <option value="url">
+                    Standard URLs (/ means website root)
+                  </option>
+                  <option value="directory">
+                    Relative to image directory, including /
+                  </option>
+                </VisualSelect>
+              </label>
               {(["itemsPath", "nextPath"] as const).map(key => (
                 <label key={key} className="text-sm">
                   {key === "itemsPath"
@@ -758,6 +799,7 @@ function ApiCatalogForm({
                 provider: "api",
                 storeUrl: endpoint.trim(),
                 api: config,
+                previewRevision: preview.data?.mappingRevision,
               });
               await onConnected();
             } catch (e) {

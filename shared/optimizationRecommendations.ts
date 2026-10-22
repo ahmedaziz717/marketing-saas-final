@@ -7,7 +7,7 @@ import { evidenceCaveats } from "./optimization";
 /** Channel adapters are explicit; adding a provider never makes unsupported data look live. */
 export const optimizerAdapters = {
   meta_ads: { supported: true },
-  google_ads: { supported: false },
+  google_ads: { supported: true },
   microsoft_ads: { supported: false },
   facebook: { supported: false },
 } as const;

@@ -1,3 +1,5 @@
+import { readGoogleReportDetails } from "./googleReportDetails";
+import type { GoogleDetailLevel } from "../../shared/googleReportDetails";
 import { rangeSchema, type DateRange } from "../../shared/channels";
 import type { InsightMetric } from "../../shared/insights";
 import type { ChannelConnection } from "../../drizzle/channelSchema";
@@ -74,21 +76,24 @@ export function googleAdValues(
 export async function readGoogleAdsReport(
   connection: ChannelConnection,
   accessToken: string,
-  range: DateRange
+  range: DateRange,
+  includeInactiveCampaigns = false,
+  detailLevel: GoogleDetailLevel = "campaign"
 ) {
   const dates = rangeSchema.parse(range);
-  const where = `segments.date BETWEEN '${dates.since}' AND '${dates.until}'`;
+  const where = `segments.date BETWEEN '${dates.since}' AND '${dates.until}'${includeInactiveCampaigns ? "" : " AND campaign.status = 'ENABLED'"}`;
+  const aggregateResource = includeInactiveCampaigns ? "customer" : "campaign";
   const metrics =
     "metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value";
   const purchaseMetrics =
     "segments.conversion_action_category, metrics.conversions, metrics.conversions_value";
   const purchaseWhere = `${where} AND segments.conversion_action_category = 'PURCHASE'`;
   const queries = [
-    `SELECT ${metrics} FROM customer WHERE ${where}`,
-    `SELECT segments.date, ${metrics} FROM customer WHERE ${where} ORDER BY segments.date`,
+    `SELECT ${metrics} FROM ${aggregateResource} WHERE ${where}`,
+    `SELECT segments.date, ${metrics} FROM ${aggregateResource} WHERE ${where} ORDER BY segments.date`,
     `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ${metrics} FROM campaign WHERE ${where} ORDER BY metrics.cost_micros DESC`,
-    `SELECT ${purchaseMetrics} FROM customer WHERE ${purchaseWhere}`,
-    `SELECT segments.date, ${purchaseMetrics} FROM customer WHERE ${purchaseWhere} ORDER BY segments.date`,
+    `SELECT ${purchaseMetrics} FROM ${aggregateResource} WHERE ${purchaseWhere}`,
+    `SELECT segments.date, ${purchaseMetrics} FROM ${aggregateResource} WHERE ${purchaseWhere} ORDER BY segments.date`,
     `SELECT campaign.id, ${purchaseMetrics} FROM campaign WHERE ${purchaseWhere}`,
   ];
   const results = await Promise.allSettled(
@@ -141,7 +146,29 @@ export async function readGoogleAdsReport(
       )
     )
   ).sort();
+  let breakdown:
+    | Awaited<ReturnType<typeof readGoogleReportDetails>>
+    | undefined;
+  if (detailLevel !== "campaign") {
+    try {
+      breakdown = await readGoogleReportDetails(
+        connection,
+        accessToken,
+        dates,
+        detailLevel,
+        includeInactiveCampaigns
+      );
+    } catch (error) {
+      if (error instanceof GoogleAdsError && error.reason === "expired")
+        throw error;
+      breakdown = { label: "Selected Google breakdown unavailable", rows: [] };
+      warnings.push(
+        "The selected Google breakdown could not be loaded. Account totals remain available."
+      );
+    }
+  }
   return {
+    breakdown,
     summary: googleAdValues(summary, purchases),
     currency: connection.details.currency || null,
     timezone: connection.details.timezone || null,
@@ -172,7 +199,9 @@ export function googleAdsReport(
   db: LibraryDatabase,
   organizationId: number,
   id: string,
-  range: DateRange
+  range: DateRange,
+  includeInactiveCampaigns = false,
+  detailLevel: GoogleDetailLevel = "campaign"
 ) {
   if (!googleOAuthConfigured()) throw new GoogleAdsError("reporting");
   return withGoogleAdsAccess(
@@ -180,6 +209,12 @@ export function googleAdsReport(
     organizationId,
     id,
     (connection, accessToken) =>
-      readGoogleAdsReport(connection, accessToken, range)
+      readGoogleAdsReport(
+        connection,
+        accessToken,
+        range,
+        includeInactiveCampaigns,
+        detailLevel
+      )
   );
 }

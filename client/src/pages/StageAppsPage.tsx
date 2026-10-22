@@ -20,6 +20,12 @@ import "@/styles/workflows.css";
 const tools = {
   activate: [
     {
+      name: "Google Ads",
+      description: "Create campaigns, add ads and manage asset groups.",
+      href: "/app/activate/google",
+      icon: Megaphone,
+    },
+    {
       name: "Meta Ads",
       description:
         "Manage campaigns, ad sets, and ads for your connected accounts.",
@@ -45,7 +51,7 @@ const tools = {
     {
       name: "Optimization intelligence",
       description:
-        "Explore historical Meta evidence, classifications, and suggested tests.",
+        "Explore historical Google and Meta evidence, classifications, and suggested tests.",
       href: "/app/optimize/intelligence",
       icon: BarChart3,
     },

@@ -3,6 +3,8 @@ import { catalogDraftEntrySchema } from "../../shared/catalog";
 import {
   apiCatalogConfigSchema,
   catalogImageDirectory,
+  apiCatalogMappingSchema,
+  resolveCatalogImage,
   type ApiCatalogConfig,
 } from "../../shared/apiCatalog";
 import { safeStoreRequest } from "./websiteCrawler";
@@ -79,8 +81,6 @@ const aliases = {
     "thumbnail",
     "image_link",
     "metadata.images.main",
-    "metadata.images.chassisFeatured",
-    "metadata.images.bareboneFeatured",
   ],
   price: ["price.amount", "price", "sale_price", "Price"],
   currency: ["currency", "price.currency", "currency_code"],
@@ -103,6 +103,45 @@ export type ApiCatalogIssue = {
   message: string;
   blocking: boolean;
 };
+export function apiMappingRevision(endpoint: string, config: ApiCatalogConfig) {
+  const stable = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(stable)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.entries(v)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([k, value]) => [k, stable(value)])
+          )
+        : v;
+  return createHash("sha256")
+    .update(
+      JSON.stringify(
+        stable({
+          endpoint: apiCatalogAddress(endpoint),
+          mapping: apiCatalogMappingSchema.parse({
+            ...config,
+            imagePathMode: config.imagePathMode ?? "url",
+            imagesPath: config.imagesPath ?? "",
+            specificationOrderPath: config.specificationOrderPath ?? "",
+          }),
+        })
+      )
+    )
+    .digest("hex");
+}
+export function catalogImageReferences(value: unknown): string[] {
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (Array.isArray(value))
+    return value.flatMap(catalogImageReferences).slice(0, 30);
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return catalogImageReferences(
+      row.url ?? row.src ?? row.imageUrl ?? row.image_url ?? ""
+    );
+  }
+  return [];
+}
 /** Templates are substitutions only. Values cannot change the host or inject URL syntax. */
 export function catalogUrlFromTemplate(template: string, row: unknown) {
   let missing = false;
@@ -383,21 +422,41 @@ export function parseApiCatalog(
       : config.imageUrlTemplate
         ? catalogUrlFromTemplate(config.imageUrlTemplate, row)
         : read("imageUrl");
+    const rawImages = Array.from(
+      new Set([
+        ...catalogImageReferences(rawImage),
+        ...catalogImageReferences(
+          !config.skipImages && config.imagesPath
+            ? jsonField(row, config.imagesPath)
+            : null
+        ),
+      ])
+    ).slice(0, 30);
     const relativeImage =
       typeof rawImage === "string" &&
       !!rawImage &&
       !/^https?:\/\//i.test(rawImage);
-    const imageUrl =
-      relativeImage &&
-      !config.imageBaseUrl &&
-      /^api\./i.test(new URL(endpoint).hostname)
-        ? ""
-        : link(
-            rawImage,
-            config.imageBaseUrl
-              ? catalogImageDirectory(config.imageBaseUrl)
-              : endpoint
-          );
+    const imageUrls = rawImages.flatMap(value => {
+      if (
+        !/^https?:\/\//i.test(value) &&
+        !config.imageBaseUrl &&
+        /^api\./i.test(new URL(endpoint).hostname)
+      )
+        return [];
+      return [
+        resolveCatalogImage(
+          value,
+          config.imageBaseUrl
+            ? catalogImageDirectory(config.imageBaseUrl)
+            : endpoint,
+          config.imagePathMode
+        ),
+      ];
+    });
+    const imageUrl = imageUrls[0] ?? "";
+    const sourceOrder = config.specificationOrderPath
+      ? jsonField(row, config.specificationOrderPath)
+      : undefined;
     const currency = text(read("currency"), 16) || config.defaultCurrency || "";
     if (!imageUrl && !config.skipImages)
       issues.push({
@@ -424,6 +483,12 @@ export function parseApiCatalog(
       sku,
       productUrl,
       imageUrl,
+      imageUrls,
+      specificationOrder:
+        Array.isArray(sourceOrder) &&
+        sourceOrder.every(v => typeof v === "string")
+          ? sourceOrder
+          : undefined,
       price: text(read("price"), 80),
       currency,
       category: text(read("category"), 240),

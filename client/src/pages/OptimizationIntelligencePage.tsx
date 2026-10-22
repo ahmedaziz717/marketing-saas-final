@@ -58,7 +58,7 @@ function Intelligence() {
     { enabled: !!organizationId }
   );
   const connections = trpc.channels.connections.useQuery(
-    { organizationId: organizationId! },
+    { organizationId: organizationId!, includeGoogle: true },
     { enabled: !!organizationId }
   );
   const args = { organizationId: organizationId!, connectionId };
@@ -75,7 +75,7 @@ function Intelligence() {
   const sync = trpc.optimization.sync.useMutation({
     onSuccess: () => {
       progress.refetch();
-      toast.success("Read-only Meta sync queued");
+      toast.success("Read-only advertising sync queued");
     },
     onError: e => toast.error(e.message),
   });
@@ -132,7 +132,7 @@ function Intelligence() {
         <>
           <section className="rounded-xl border bg-card p-4 space-y-4">
             <ChoiceField className="block text-sm">
-              Connected Meta ad account
+              Connected advertising account
               <VisualSelect
                 className={channelInput + " mt-1 w-full"}
                 value={connectionId}
@@ -144,7 +144,9 @@ function Intelligence() {
                 <option value="">Choose an account</option>
                 {connections.data?.items
                   .filter(
-                    c => c.channel === "meta_ads" && c.status === "connected"
+                    c =>
+                      ["meta_ads", "google_ads"].includes(c.channel) &&
+                      c.status === "connected"
                   )
                   .map(c => (
                     <option value={c.id} key={c.id}>
@@ -155,12 +157,26 @@ function Intelligence() {
             </ChoiceField>
             {connectionId && (
               <>
-                <DateRangeFilter label="History to import" ariaPrefix="History to import" value={query.range} onChange={range => range && setQuery({ ...query, range })} />
-                <p className="text-sm text-muted-foreground">Choose any available historical period, including campaigns from before EvokeLoop. Provider retention limits may apply.</p>
+                <DateRangeFilter
+                  label="History to import"
+                  ariaPrefix="History to import"
+                  value={query.range}
+                  onChange={range => range && setQuery({ ...query, range })}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Choose any available historical period, including campaigns
+                  from before EvokeLoop. Provider retention limits may apply.
+                </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     disabled={!canEdit || sync.isPending}
-                    onClick={() => sync.mutate({ ...args, incremental: false, range: query.range })}
+                    onClick={() =>
+                      sync.mutate({
+                        ...args,
+                        incremental: false,
+                        range: query.range,
+                      })
+                    }
                   >
                     Import selected history
                   </Button>
@@ -216,7 +232,7 @@ function Intelligence() {
                     {progress.data.status === "queued" &&
                       progress.data.nextAtMs > Date.now() + 3000 && (
                         <p className="text-muted-foreground">
-                          Meta sync is pacing requests. Next attempt after{" "}
+                          History sync is pacing requests. Next attempt after{" "}
                           {new Date(
                             progress.data.nextAtMs
                           ).toLocaleTimeString()}
@@ -298,7 +314,58 @@ function Intelligence() {
                     </VisualSelect>
                   </ChoiceField>
                 </div>
-                <details className="rounded-lg border p-3 text-sm"><summary className="font-medium">How historical evidence influences learning</summary><p className="my-3">Learning weight combines relevance, label confidence, data completeness, version reliability and recency. Older campaigns are eligible under the same rules. Spend, conversions and ROAS remain unchanged.</p><label>Recency half-life<VisualSelect aria-label="Learning recency half-life" value={query.learning?.halfLifeDays ?? 365} onChange={e => setQuery({ ...query, learning: { halfLifeDays: Number(e.target.value), context: query.learning?.context ?? [] } })}><option value={90}>90 days</option><option value={365}>1 year</option><option value={730}>2 years</option><option value={3650}>10 years</option></VisualSelect></label><p className="mt-2">Half-life is measured from the report end date. Matching your active dimension filters can also set the learning context.</p><Button variant="outline" className="mt-2" onClick={() => setQuery({ ...query, learning: { halfLifeDays: query.learning?.halfLifeDays ?? 365, context: query.filters } })}>Use filters as learning context</Button></details>
+                <details className="rounded-lg border p-3 text-sm">
+                  <summary className="font-medium">
+                    How historical evidence influences learning
+                  </summary>
+                  <p className="my-3">
+                    Learning weight combines relevance, label confidence, data
+                    completeness, version reliability and recency. Older
+                    campaigns are eligible under the same rules. Spend,
+                    conversions and ROAS remain unchanged.
+                  </p>
+                  <label>
+                    Recency half-life
+                    <VisualSelect
+                      aria-label="Learning recency half-life"
+                      value={query.learning?.halfLifeDays ?? 365}
+                      onChange={e =>
+                        setQuery({
+                          ...query,
+                          learning: {
+                            halfLifeDays: Number(e.target.value),
+                            context: query.learning?.context ?? [],
+                          },
+                        })
+                      }
+                    >
+                      <option value={90}>90 days</option>
+                      <option value={365}>1 year</option>
+                      <option value={730}>2 years</option>
+                      <option value={3650}>10 years</option>
+                    </VisualSelect>
+                  </label>
+                  <p className="mt-2">
+                    Half-life is measured from the report end date. Matching
+                    your active dimension filters can also set the learning
+                    context.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() =>
+                      setQuery({
+                        ...query,
+                        learning: {
+                          halfLifeDays: query.learning?.halfLifeDays ?? 365,
+                          context: query.filters,
+                        },
+                      })
+                    }
+                  >
+                    Use filters as learning context
+                  </Button>
+                </details>
                 <fieldset>
                   <legend className="text-sm font-medium">
                     Group by dimensions (up to four)
@@ -532,7 +599,23 @@ function Intelligence() {
                                 </td>
                               ))}
                               <td className="p-2">{g.evidenceStrength}</td>
-                              <td className="p-2"><details><summary>{number((g.learning?.averageWeight ?? 0) * 100)}%</summary>{Object.entries(g.learning?.factors ?? {}).map(([k,v]) => <p key={k}>{title(k)}: {number(Number(v)*100)}%</p>)}</details></td>
+                              <td className="p-2">
+                                <details>
+                                  <summary>
+                                    {number(
+                                      (g.learning?.averageWeight ?? 0) * 100
+                                    )}
+                                    %
+                                  </summary>
+                                  {Object.entries(
+                                    g.learning?.factors ?? {}
+                                  ).map(([k, v]) => (
+                                    <p key={k}>
+                                      {title(k)}: {number(Number(v) * 100)}%
+                                    </p>
+                                  ))}
+                                </details>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -544,7 +627,10 @@ function Intelligence() {
                       </p>
                     )}
                   </section>
-                  <OptimizationEvidenceAction evidence={data} dimensions={query.dimensions} />
+                  <OptimizationEvidenceAction
+                    evidence={data}
+                    dimensions={query.dimensions}
+                  />
                   <section className="rounded-xl border bg-card p-4 space-y-3">
                     <h2 className="text-xl font-semibold">
                       Source ads and classifications
@@ -587,7 +673,9 @@ function Intelligence() {
                                   <summary>
                                     {title(d)}:{" "}
                                     {v?.labels.map(l => l.label).join(", ") ||
-                                      (v?.status === "not_applicable" ? "Not applicable" : "Unknown")}
+                                      (v?.status === "not_applicable"
+                                        ? "Not applicable"
+                                        : "Unknown")}
                                   </summary>
                                   <p className="text-xs mt-2">
                                     {v
@@ -604,8 +692,24 @@ function Intelligence() {
                                       {l.evidence}
                                     </p>
                                   ))}
-                                  {v?.assetKey && <Link className="block mt-2 text-xs text-primary underline" href={libraryAssetLink(v.assetKey, "approved")}>Source asset · version {v.assetVersion?.slice(0, 10)}</Link>}
-                                  {v?.basis === "requested" && <p className="text-xs text-amber-700">Requested direction; excluded from observed performance cohorts.</p>}
+                                  {v?.assetKey && (
+                                    <Link
+                                      className="block mt-2 text-xs text-primary underline"
+                                      href={libraryAssetLink(
+                                        v.assetKey,
+                                        "approved"
+                                      )}
+                                    >
+                                      Source asset · version{" "}
+                                      {v.assetVersion?.slice(0, 10)}
+                                    </Link>
+                                  )}
+                                  {v?.basis === "requested" && (
+                                    <p className="text-xs text-amber-700">
+                                      Requested direction; excluded from
+                                      observed performance cohorts.
+                                    </p>
+                                  )}
                                   {v?.unknownReason && (
                                     <p className="text-sm">{v.unknownReason}</p>
                                   )}
@@ -617,7 +721,11 @@ function Intelligence() {
                               <h3 className="font-medium">
                                 Reviewed classification
                               </h3>
-                              <p className="text-xs">This review applies to {query.range.since} through {query.range.until}. Confirm the attribute was present during that period.</p>
+                              <p className="text-xs">
+                                This review applies to {query.range.since}{" "}
+                                through {query.range.until}. Confirm the
+                                attribute was present during that period.
+                              </p>
                               <VisualSelect
                                 aria-label="Override dimension"
                                 className={channelInput + " w-full"}

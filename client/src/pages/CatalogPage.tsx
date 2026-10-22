@@ -92,6 +92,9 @@ function CatalogContent() {
   const [category, setCategory] = useState("all");
   const [offset, setOffset] = useState(0);
   const filters = {
+    sourceId: /^[1-9]\d*$/.test(searchParams.get("sourceId") ?? "")
+      ? Number(searchParams.get("sourceId"))
+      : undefined,
     search,
     status: status as "all" | "pending" | "approved" | "rejected",
     category,
@@ -115,7 +118,7 @@ function CatalogContent() {
     setSelected([]);
     setAllMatching(false);
     setOffset(0);
-  }, [tab, organizationId]);
+  }, [tab, organizationId, filters.sourceId]);
   const [editing, setEditing] = useState<Editable | null>(null);
   const refresh = async () =>
     Promise.all([

@@ -7,6 +7,7 @@ import {
 import { presetRange } from "../../shared/reportDates";
 import { performanceInputSchema } from "../../shared/workflowInputs";
 import { getConnection } from "./channelConnections";
+import { getOptimizationConnection } from "./optimizationConnections";
 import { optimizerLibrary } from "../../shared/optimizerLibrary";
 import { and, eq } from "drizzle-orm";
 import { optimizationSyncs } from "../../drizzle/optimizationSchema";
@@ -243,7 +244,7 @@ export async function optimizationStep(
         waitingReason: `${batch.progress.completed.toLocaleString("en-US")} of ${batch.progress.total.toLocaleString("en-US")} imported ads classified. Reviewed edits are preserved.`,
       };
     return {
-      ...complete("Classified Meta history", {
+      ...complete("Classified advertising history", {
         connectionId: node.config.connectionId,
         taxonomyVersion: TAXONOMY_VERSION,
         completedAtMs: Date.now(),
@@ -263,18 +264,16 @@ export async function optimizationStep(
       }
     );
     if (node.config.datePreset && node.config.datePreset !== "custom") {
-      const c = await getConnection(
+      const c = await getOptimizationConnection(
         db,
         run.organizationId,
-        node.config.connectionId!,
-        "meta_ads"
+        node.config.connectionId!
       );
       query.range = presetRange(
         node.config.datePreset,
         Date.now(),
         c.details.timezone ?? "UTC"
       );
-
     }
     if (node.config.measurePublishedOnly) {
       const references = input.filter(v => v.type === "publication");
@@ -328,6 +327,17 @@ export async function optimizationStep(
     node.config.optimizer ?? { kind: "headline" }
   );
   const source = evidence.data;
+  if (typeof source.connectionId === "string") {
+    const account = await getOptimizationConnection(
+      db,
+      run.organizationId,
+      source.connectionId
+    );
+    if (account.channel !== config.channel)
+      throw new Error(
+        "The optimizer channel does not match the evidence account. Choose the matching channel before running."
+      );
+  }
   if (source.source === "live_meta_scheduling") {
     if (config.kind !== "weekday_time")
       throw new Error(

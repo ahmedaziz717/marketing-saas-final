@@ -19,6 +19,8 @@ import {
 import { trpc } from "@/lib/trpc";
 import {
   insightMetrics,
+  supportsInsightMetric,
+  defaultInsightConfig,
   scheduleDescription,
   independentWidgetConfig,
   recommendedWidgetLayout,
@@ -27,6 +29,7 @@ import {
   type InsightMetric,
 } from "@shared/insights";
 import { InsightWidget } from "./InsightWidget";
+import { InsightDateControls, type InsightDates } from "./InsightDateControls";
 import {
   InsightWidgetEditor,
   ReportComponentPicker,
@@ -68,6 +71,9 @@ export function InsightsDashboard({
     Record<string, { config: InsightConfig; revision?: number }>
   >({});
   const [dragging, setDragging] = useState<string | null>(null);
+  const [rangeDefaults, setRangeDefaults] = useState<InsightDates>(() =>
+    defaultInsightConfig()
+  );
   const utils = trpc.useUtils();
   const save = trpc.insights.saveDashboard.useMutation();
   const remove = trpc.insights.deleteDashboard.useMutation();
@@ -107,10 +113,61 @@ export function InsightsDashboard({
   const chosenAccount =
     accounts.find(c => c.id === accountChoice) ?? accounts[0];
   const metrics =
-    chosenReport?.config.metrics.filter(
-      m => insightMetrics[m].channel === chosenAccount?.channel
+    chosenReport?.config.metrics.filter(m =>
+      supportsInsightMetric(m, chosenAccount?.channel)
     ) ?? [];
   const chosenMetric = metrics.includes(metric) ? metric : metrics[0];
+  const following = widgets.find(w => w.dateMode === "dashboard");
+  const dashboardDates =
+    data.data?.find(d => d.report.id === following?.reportId)?.report.config ??
+    rangeDefaults;
+  const changeDates = async (
+    patch: Partial<InsightDates>,
+    widgetId?: string,
+    mode: "dashboard" | "custom" = "custom"
+  ) => {
+    const ids = widgetId
+      ? [widgetId]
+      : widgets.filter(w => w.dateMode === "dashboard").map(w => w.id);
+    const dates = { ...dashboardDates, ...patch };
+    if (!widgetId) setRangeDefaults(dates);
+    if (!ids.length) {
+      toast.info(
+        "Set a widget’s date source to Follow dashboard to use this range."
+      );
+      return;
+    }
+    try {
+      const edits = ids.map(widgetId => {
+        const widget = widgets.find(w => w.id === widgetId)!;
+        const report = data.data?.find(
+          d => d.report.id === widget.reportId
+        )?.report;
+        if (!report) throw new Error("Wait for widget settings to load.");
+        const config = independentWidgetConfig({ ...report.config, ...patch });
+        return { widgetId, config, revision: report.revision };
+      });
+      await save.mutateAsync({
+        organizationId,
+        id: current?.id,
+        revision: current?.revision,
+        layout: {
+          name,
+          surface,
+          widgets: widgets.map(w =>
+            w.id === widgetId ? { ...w, dateMode: mode } : w
+          ),
+        },
+        widgetEdits: edits,
+      });
+      await Promise.all([
+        utils.insights.dashboards.invalidate({ organizationId, surface }),
+        utils.insights.dashboardData.invalidate(),
+      ]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update dates.");
+    }
+  };
   const persist = async () => {
     try {
       const row = await save.mutateAsync({
@@ -209,6 +266,14 @@ export function InsightsDashboard({
               : "Performance dashboard"}
           </h2>
           <p>Your own widgets, with independent dates, content, and style.</p>
+          {!!widgets.length && (
+            <InsightDateControls
+              label="Dashboard timeframe"
+              config={dashboardDates}
+              disabled={editing || save.isPending || data.isLoading}
+              onChange={patch => void changeDates(patch)}
+            />
+          )}
         </div>
         <div className="insight-actions">
           {!editing && !!layouts.data?.length && (
@@ -379,8 +444,50 @@ export function InsightsDashboard({
                 editing={editing}
                 first={index === 0}
                 last={index === widgets.length - 1}
-                refreshing={refresh.isPending}
+                refreshing={refresh.isPending || save.isPending}
+                onDates={patch => void changeDates(patch, w.id)}
+                onDateMode={mode =>
+                  void changeDates(
+                    mode === "dashboard"
+                      ? {
+                          period: dashboardDates.period,
+                          rollingDays: dashboardDates.rollingDays,
+                          customRange: dashboardDates.customRange,
+                          compare: dashboardDates.compare,
+                          includeToday: dashboardDates.includeToday,
+                        }
+                      : {},
+                    w.id,
+                    mode
+                  )
+                }
                 onEdit={() => setActiveWidget(w.id)}
+                onDuplicate={() => {
+                  if (widgets.length >= 30) {
+                    toast.error("A dashboard supports up to 30 widgets.");
+                    return;
+                  }
+                  const newId = crypto.randomUUID();
+                  const original =
+                    widgetEdits[w.id]?.config ??
+                    data.data?.find(d => d.report.id === w.reportId)?.report
+                      .config;
+                  if (!original) {
+                    toast.error(
+                      "Wait for this widget to load before duplicating it."
+                    );
+                    return;
+                  }
+                  setWidgets(previous => [
+                    ...previous.slice(0, index + 1),
+                    { ...w, id: newId },
+                    ...previous.slice(index + 1),
+                  ]);
+                  setWidgetEdits(previous => ({
+                    ...previous,
+                    [newId]: { config: independentWidgetConfig(original) },
+                  }));
+                }}
                 onMove={direction => move(index, index + direction)}
                 onRemove={() => {
                   setWidgets(list => list.filter(x => x.id !== w.id));
@@ -470,6 +577,84 @@ export function InsightsDashboard({
                   <option value="trend">Trend chart</option>
                 </VisualSelect>
               </ChoiceField>
+              {chosenReport && (
+                <Button
+                  variant="outline"
+                  disabled={widgets.length > 22 || !accounts.length}
+                  onClick={() => {
+                    const additions: DashboardWidget[] = [];
+                    const edits = { ...widgetEdits };
+                    for (const a of accounts.slice(0, 2)) {
+                      const supported = (
+                        [
+                          "spend",
+                          "purchaseValue",
+                          "roas",
+                          "purchases",
+                          "views",
+                          "engagements",
+                        ] as InsightMetric[]
+                      ).filter(m => supportsInsightMetric(m, a.channel));
+                      const setup = independentWidgetConfig({
+                        ...chosenReport.config,
+                        period: dashboardDates.period,
+                        rollingDays: dashboardDates.rollingDays,
+                        customRange: dashboardDates.customRange,
+                        compare: dashboardDates.compare,
+                        includeToday: dashboardDates.includeToday,
+                        metrics: supported,
+                        chartMetric: supported[0],
+                        connectionIds: [a.id],
+                      });
+                      for (const m of supported.slice(0, 2)) {
+                        const id = crypto.randomUUID();
+                        additions.push({
+                          id,
+                          reportId: chosenReport.id,
+                          connectionId: a.id,
+                          kind: "kpi",
+                          metric: m,
+                          size: "small",
+                          height: "compact",
+                          dateMode: "dashboard",
+                        });
+                        edits[id] = { config: setup };
+                      }
+                      for (const visualization of [
+                        "combo",
+                        "ranking",
+                      ] as const) {
+                        const id = crypto.randomUUID();
+                        additions.push({
+                          id,
+                          reportId: chosenReport.id,
+                          connectionId: a.id,
+                          kind: "trend",
+                          metric: supported[0],
+                          visualization:
+                            a.channel === "facebook" &&
+                            visualization === "combo"
+                              ? "line"
+                              : visualization,
+                          size: "half",
+                          height: "standard",
+                          dateMode: "dashboard",
+                        });
+                        edits[id] = { config: setup };
+                      }
+                    }
+                    setWidgets(previous => [...previous, ...additions]);
+                    setWidgetEdits(edits);
+                    setAdding(false);
+                  }}
+                >
+                  Add starter charts for{" "}
+                  {accounts
+                    .slice(0, 2)
+                    .map(a => a.name)
+                    .join(" + ")}
+                </Button>
+              )}
               {kind === "report" && (
                 <>
                   <ReportComponentPicker
@@ -576,6 +761,15 @@ export function InsightsDashboard({
             layoutEditing={editing}
             onClose={() => setActiveWidget(null)}
             onSave={async (updated, config) => {
+              if (updated.dateMode === "dashboard")
+                config = {
+                  ...config,
+                  period: dashboardDates.period,
+                  rollingDays: dashboardDates.rollingDays,
+                  customRange: dashboardDates.customRange,
+                  compare: dashboardDates.compare,
+                  includeToday: dashboardDates.includeToday,
+                };
               const next = widgets.map(w =>
                 w.id === updated.id ? updated : w
               );

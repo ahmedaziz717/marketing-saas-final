@@ -32,6 +32,12 @@ vi.mock("@/lib/trpc", () => ({
                 status: "connected",
               },
               {
+                id: "google",
+                name: "Authorized Google",
+                channel: "google_ads",
+                status: "connected",
+              },
+              {
                 id: "social",
                 name: "Social Page",
                 channel: "facebook",
@@ -108,14 +114,15 @@ it("keeps rollout and read-only roles gated and lists only connected ad accounts
   state.enabled = false;
   const view = render(<Page />);
   expect(screen.getByText(/not in the optimization rollout/)).toBeTruthy();
-  expect(screen.queryByLabelText("Connected Meta ad account")).toBeNull();
+  expect(screen.queryByLabelText("Connected advertising account")).toBeNull();
   state.enabled = true;
   state.role = "viewer";
   view.rerender(<Page />);
   expect(screen.queryByRole("radio", { name: "Social Page" })).toBeNull();
-  changeField(screen.getByLabelText("Connected Meta ad account"), {
-    target: { value: "meta" },
+  changeField(screen.getByLabelText("Connected advertising account"), {
+    target: { value: "google" },
   });
+  expect(state.request.connectionId).toBe("google");
   expect(
     (
       screen.getByRole("button", {
@@ -133,7 +140,7 @@ it("keeps rollout and read-only roles gated and lists only connected ad accounts
 });
 it("keeps unavailable metrics explicit, combines filters, exports the selected query and clears incompatible grains", () => {
   render(<Page />);
-  changeField(screen.getByLabelText("Connected Meta ad account"), {
+  changeField(screen.getByLabelText("Connected advertising account"), {
     target: { value: "meta" },
   });
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);

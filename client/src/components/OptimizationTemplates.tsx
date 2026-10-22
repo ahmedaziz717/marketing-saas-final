@@ -12,7 +12,7 @@ export function OptimizationTemplates({
   const [connectionId, setConnection] = useState("");
   const enabled = trpc.optimization.availability.useQuery({ organizationId });
   const connections = trpc.channels.connections.useQuery(
-    { organizationId },
+    { organizationId, includeGoogle: true },
     { enabled: !!enabled.data?.enabled }
   );
   const utils = trpc.useUtils();
@@ -37,14 +37,18 @@ export function OptimizationTemplates({
       <div className="flex flex-wrap gap-3">
         <VisualSelect
           density="compact"
-          aria-label="Template Meta account"
+          aria-label="Template advertising account"
           className={channelInput}
           value={connectionId}
           onChange={e => setConnection(e.target.value)}
         >
-          <option value="">Choose a connected Meta ad account</option>
+          <option value="">Choose a connected advertising account</option>
           {connections.data?.items
-            .filter(c => c.channel === "meta_ads" && c.status === "connected")
+            .filter(
+              c =>
+                ["meta_ads", "google_ads"].includes(c.channel) &&
+                c.status === "connected"
+            )
             .map(c => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -57,7 +61,10 @@ export function OptimizationTemplates({
             install.mutate({
               organizationId,
               connectionId,
-              includeClx: !!selected && /clx/i.test(selected.name),
+              includeClx:
+                !!selected &&
+                selected.channel === "meta_ads" &&
+                /clx/i.test(selected.name),
             })
           }
         >
@@ -67,7 +74,9 @@ export function OptimizationTemplates({
       <p className="text-xs text-muted-foreground">
         Installation does not run workflows, generate assets, publish ads or
         change budgets.
-        {selected && /clx/i.test(selected.name)
+        {selected &&
+        selected.channel === "meta_ads" &&
+        /clx/i.test(selected.name)
           ? " Includes the CLX Gaming Ad Refresh workflow with separate production and publication approvals."
           : ""}
       </p>

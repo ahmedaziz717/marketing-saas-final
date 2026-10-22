@@ -37,7 +37,7 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(48);
+    ).toHaveLength(49);
     expect(
       (await engine.query("SELECT id, public FROM storage.buckets")).rows
     ).toEqual([{ id: "frame-assets", public: false }]);

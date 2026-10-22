@@ -998,7 +998,10 @@ export function PublicationComposer({
                           )}
                           {connectedAccounts.map(c => (
                             <option key={c.id} value={c.id}>
-                              {c.name} · {channelNames[c.channel]}
+                              {c.name} ·{" "}
+                              {c.channel === "google_ads"
+                                ? "Google Ads"
+                                : channelNames[c.channel]}
                               {c.details.capabilities.includes("publish")
                                 ? ""
                                 : " (read only)"}

@@ -1,8 +1,8 @@
-import { safeFetchImage } from "../lib/websiteCrawler";
+import { fetchCatalogImage } from "../lib/catalogImages";
 import { readApiProductDetails } from "../lib/apiProductDetails";
 import { discoverOfferings } from "../lib/marketingDrafts";
-import { brandKits, products } from "../../drizzle/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { brandKits, products, productImages } from "../../drizzle/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { catalogSources } from "../../drizzle/schema";
@@ -17,7 +17,7 @@ import {
 } from "../lib/secureToken";
 import { readStorePage, storeAddress } from "../lib/storeCatalog";
 import { importCatalogEntry } from "../lib/catalogImport";
-import { appendActivity } from "../lib/activity";
+import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import {
   previewStudioPage,
   previewStudioProductPage,
@@ -34,6 +34,7 @@ import {
   parseApiCatalog,
   apiCatalogRows,
   inferProductLinkRule,
+  apiMappingRevision,
 } from "../lib/apiCatalog";
 import { suggestApiMapping } from "../lib/apiInstructions";
 const org = z.object({ organizationId: z.number().int().positive() });
@@ -45,6 +46,104 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
+  imageSettings: protectedProcedure
+    .input(idInput)
+    .query(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      const [source] = await db
+        .select()
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.id, input.sourceId),
+            eq(catalogSources.organizationId, input.organizationId)
+          )
+        );
+      if (!source || source.provider !== "api" || !source.credentials)
+        throw new TRPCError({ code: "NOT_FOUND" });
+      const config = apiCatalogConfigSchema.parse(
+        JSON.parse(decryptToken(source.credentials)).api
+      );
+      return {
+        imageBaseUrl: config.imageBaseUrl ?? "",
+        imagePathMode: config.imagePathMode ?? "url",
+        imagesPath: config.imagesPath ?? "",
+        updatedAtMs: source.updatedAtMs,
+      };
+    }),
+  repairImages: protectedProcedure
+    .input(
+      idInput.extend({
+        expectedUpdatedAtMs: z.number(),
+        imageBaseUrl: apiCatalogMappingSchema.shape.imageBaseUrl,
+        imagePathMode: z.enum(["url", "directory"]),
+        imagesPath: apiCatalogMappingSchema.shape.imagesPath,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        const [source] = await tx
+          .select()
+          .from(catalogSources)
+          .where(
+            and(
+              eq(catalogSources.id, input.sourceId),
+              eq(catalogSources.organizationId, input.organizationId)
+            )
+          )
+          .for("update");
+        if (!source || source.provider !== "api" || !source.credentials)
+          throw new TRPCError({ code: "NOT_FOUND" });
+        if (
+          source.updatedAtMs !== input.expectedUpdatedAtMs ||
+          ["syncing", "queued"].includes(source.status)
+        )
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "This source changed or is syncing. Refresh its settings first.",
+          });
+        const credentials = JSON.parse(decryptToken(source.credentials));
+        credentials.api = apiCatalogConfigSchema.parse({
+          ...credentials.api,
+          imageBaseUrl: input.imageBaseUrl,
+          imagePathMode: input.imagePathMode,
+          imagesPath: input.imagesPath,
+        });
+        credentials.imageRepairOnly = true;
+        await tx
+          .update(catalogSources)
+          .set({
+            credentials: encryptToken(JSON.stringify(credentials)),
+            cursor: null,
+            processed: 0,
+            total: null,
+            error: null,
+            status: "queued",
+            createdByUserId: ctx.user.id,
+            updatedAtMs: Date.now(),
+          })
+          .where(eq(catalogSources.id, source.id));
+        await appendActivity(
+          {
+            organizationId: input.organizationId,
+            actorUserId: ctx.user.id,
+            action: "catalog.image_repair_queued",
+            entityType: "catalog_source",
+            entityId: source.id,
+            payload: {
+              mappingRevision: apiMappingRevision(
+                source.storeUrl,
+                credentials.api
+              ),
+            },
+          },
+          tx
+        );
+        return { queued: true };
+      });
+    }),
   productDetails: protectedProcedure
     .input(org.extend({ productId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
@@ -171,7 +270,7 @@ export const catalogSourcesRouter = router({
       const checked = await Promise.allSettled(
         result.items.slice(0, 3).map(async item => {
           if (!item.imageUrl) return;
-          await safeFetchImage(item.imageUrl);
+          await fetchCatalogImage(item.imageUrl);
         })
       );
       checked.forEach((check, index) => {
@@ -187,6 +286,7 @@ export const catalogSourcesRouter = router({
       });
       return {
         mapping: apiCatalogMappingSchema.parse(resolved),
+        mappingRevision: apiMappingRevision(endpoint, resolved),
         exampleWarning,
         count: result.items.length,
         total: result.total,
@@ -296,7 +396,43 @@ export const catalogSourcesRouter = router({
       .from(catalogSources)
       .where(eq(catalogSources.organizationId, input.organizationId))
       .orderBy(desc(catalogSources.updatedAtMs));
-    return rows;
+    const media = await db
+      .select({
+        sourceId: products.sourceId,
+        status: sql<string>`coalesce(${products.provenance}->>'media.status', ${products.provenance}->>'api.imageStatus', 'pending')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(products)
+      .where(eq(products.organizationId, input.organizationId))
+      .groupBy(
+        products.sourceId,
+        sql`coalesce(${products.provenance}->>'media.status', ${products.provenance}->>'api.imageStatus', 'pending')`
+      );
+    const files = await db
+      .select({
+        sourceId: products.sourceId,
+        stored: sql<number>`count(*)::int`,
+        products: sql<number>`count(distinct ${products.id})::int`,
+      })
+      .from(productImages)
+      .innerJoin(
+        products,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.organizationId, products.organizationId)
+        )
+      )
+      .where(eq(products.organizationId, input.organizationId))
+      .groupBy(products.sourceId);
+    return rows.map(row => ({
+      ...row,
+      storedFiles: files.find(f => f.sourceId === row.id)?.stored ?? 0,
+      productsWithStoredImages:
+        files.find(f => f.sourceId === row.id)?.products ?? 0,
+      media: Object.fromEntries(
+        media.filter(m => m.sourceId === row.id).map(m => [m.status, m.count])
+      ),
+    }));
   }),
   connect: protectedProcedure
     .input(
@@ -307,6 +443,10 @@ export const catalogSourcesRouter = router({
           token: z.string().max(4000).default(""),
           secret: z.string().max(4000).optional(),
           api: apiCatalogConfigSchema.optional(),
+          previewRevision: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
         })
         .refine(
           input =>
@@ -317,6 +457,32 @@ export const catalogSourcesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await owner(ctx.user.id, input.organizationId);
       const address = storeAddress(input.provider, input.storeUrl);
+      const [activeSource] = await db
+        .select({ status: catalogSources.status })
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.organizationId, input.organizationId),
+            eq(catalogSources.provider, input.provider),
+            eq(catalogSources.storeUrl, address)
+          )
+        );
+      if (activeSource && ["queued", "syncing"].includes(activeSource.status))
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Pause the current catalog sync before replacing its settings.",
+        });
+      if (
+        input.provider === "api" &&
+        input.previewRevision &&
+        apiMappingRevision(address, input.api!) !== input.previewRevision
+      )
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Catalog settings changed after preview. Preview again before importing.",
+        });
       if (input.provider !== "api") catalogEncryptionKey();
       await readStorePage(
         input.provider,
@@ -428,6 +594,17 @@ export const catalogSourcesRouter = router({
                 : input.action === "automatic_on"
                   ? { autoSync: 1, nextSyncAt: Date.now() + 21600000 }
                   : { autoSync: 0 };
+      if (
+        input.action === "sync" &&
+        source.provider === "api" &&
+        source.credentials
+      ) {
+        const credentials = JSON.parse(decryptToken(source.credentials));
+        delete credentials.imageRepairOnly;
+        Object.assign(update, {
+          credentials: encryptToken(JSON.stringify(credentials)),
+        });
+      }
       await db
         .update(catalogSources)
         .set({ ...update, updatedAtMs: Date.now() })

@@ -14,12 +14,17 @@ export function WorkflowConnectionInput({
   organizationId: number;
   value: string;
   onChange: (value: string) => void;
-  channel?: "facebook" | "meta_ads";
+  channel?: "facebook" | "meta_ads" | "google_ads";
   disabled?: boolean;
   title: string;
   summary?: boolean;
 }) {
-  const query = trpc.channels.connections.useQuery({ organizationId });
+  const meta = trpc.channels.connections.useQuery({ organizationId });
+  const google = trpc.googleAds.connections.useQuery(
+    { organizationId },
+    { enabled: channel === "google_ads" }
+  );
+  const query = channel === "google_ads" ? google : meta;
   const items =
     query.data?.items.filter(
       c => c.channel === channel && c.status === "connected"
@@ -37,11 +42,27 @@ export function WorkflowConnectionInput({
     <div className="space-y-2">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <PartnerLogo
-          slug={channel === "facebook" ? "facebook" : "meta"}
-          name={channel === "facebook" ? "Facebook" : "Meta"}
+          slug={
+            channel === "google_ads"
+              ? "googleads"
+              : channel === "facebook"
+                ? "facebook"
+                : "meta"
+          }
+          name={
+            channel === "google_ads"
+              ? "Google Ads"
+              : channel === "facebook"
+                ? "Facebook"
+                : "Meta"
+          }
           size={28}
         />
-        {channel === "facebook" ? "Facebook Pages" : "Meta accounts"}
+        {channel === "google_ads"
+          ? "Google Ads accounts"
+          : channel === "facebook"
+            ? "Facebook Pages"
+            : "Meta accounts"}
       </span>
       <VisualSelect
         visual="account"
@@ -54,7 +75,7 @@ export function WorkflowConnectionInput({
         <option value="">
           {query.isLoading
             ? "Loading destinations…"
-            : `Choose a ${channel === "facebook" ? "Facebook Page" : "Meta ad account"}`}
+            : `Choose a ${channel === "google_ads" ? "Google Ads account" : channel === "facebook" ? "Facebook Page" : "Meta ad account"}`}
         </option>
         {value && !items.some(c => c.id === value) && (
           <option value={value}>

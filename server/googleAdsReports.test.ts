@@ -85,7 +85,12 @@ afterEach(() => {
 });
 
 it("reads paginated campaigns including PMax and preserves money, fractional conversions and purchase-only ROAS", async () => {
-  const report = await readGoogleAdsReport(connection, "test-access", range);
+  const report = await readGoogleAdsReport(
+    connection,
+    "test-access",
+    range,
+    true
+  );
   expect(report.summary).toMatchObject({
     spend: 123.5,
     impressions: 10000,
@@ -142,7 +147,12 @@ it("preserves primary totals and marks failed purchase data unavailable without 
         )
       : original(url, init)
   );
-  const report = await readGoogleAdsReport(connection, "test-access", range);
+  const report = await readGoogleAdsReport(
+    connection,
+    "test-access",
+    range,
+    true
+  );
   expect(report.summary.spend).toBe(123.5);
   expect(report.summary.purchases).toBeNull();
   expect(report.summary.roas).toBeNull();

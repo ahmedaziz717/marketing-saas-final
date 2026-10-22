@@ -19,6 +19,8 @@ export type StudioProduct = {
   category?: string | null;
   recordType?: string;
   specifications?: Record<string, string>;
+  specificationOrder?: string[];
+  provenance?: Record<string, string>;
   features?: string[];
   availability?: string | null;
   price?: string | null;
