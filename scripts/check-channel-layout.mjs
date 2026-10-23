@@ -193,6 +193,7 @@ try {
       ]),
       "creative-overview",
       "creative-editor",
+      "creative-confirmation",
       "creative-scene",
       "creative-type",
       "creative-people",
@@ -475,7 +476,9 @@ try {
       report.aboveFold = layout;
       if (
         !layout?.sections ||
-        layout.sections.height < 104 ||
+        // Compact navigation retains details and comfortably exceeds a 44px target.
+        layout.sections.height < 64 ||
+        layout.sections.height > 104 ||
         (item.width > 1000 && !layout.sectionDetailsVisible) ||
         ([
           "creative-editor",

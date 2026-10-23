@@ -143,7 +143,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
               aria-label="EvokeLoop workspace"
               className="workspace-wordmark"
             >
-              <EvokeLoopLogo reversed={resolvedTheme === "dark"} />
+              <EvokeLoopLogo symbol />
             </Link>
           )}
           <Tooltip>

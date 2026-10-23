@@ -5,7 +5,7 @@ import { studioArtwork } from "./studioArtwork";
 export function ChoiceArt({
   name,
   type = "image",
-  palette = ["#181727", "#8b7cfa", "#d6fa72"],
+  palette = ["#102b36", "#007f82", "#b3eee5"],
 }: {
   name: string;
   type?: string;
@@ -28,6 +28,54 @@ export function ChoiceArt({
   const ratio = type.startsWith("format:") ? Number(type.slice(7)) : null;
   const width = ratio ? Math.min(170, 130 * ratio) : 170;
   const height = ratio ? width / ratio : 130;
+  if (ratio)
+    return (
+      <svg
+        viewBox="0 0 400 220"
+        role="img"
+        aria-label={name + " illustration"}
+        className="cfg-art cfg-format-diagram"
+      >
+        <defs>
+          <pattern
+            id={uid}
+            width="20"
+            height="20"
+            patternUnits="userSpaceOnUse"
+          >
+            <circle cx="1" cy="1" r="1" fill="currentColor" opacity=".12" />
+          </pattern>
+        </defs>
+        <rect width="400" height="220" fill={"url(#" + uid + ")"} />
+        <rect
+          x={200 - width / 2}
+          y={110 - height / 2}
+          width={width}
+          height={height}
+          rx="4"
+          fill="currentColor"
+          fillOpacity=".06"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <rect
+          x={208 - width / 2}
+          y={118 - height / 2}
+          width={Math.max(4, width - 16)}
+          height={Math.max(4, height - 16)}
+          rx="2"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity=".25"
+          strokeDasharray="4 5"
+        />
+        <path
+          d="M190 110h20m-10-10v20"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </svg>
+    );
   return (
     <svg
       viewBox="0 0 400 220"

@@ -997,8 +997,26 @@
   color: var(--cfg-muted);
 }
 .cfg-modal {
+  padding: 28px;
+  gap: 20px;
   max-height: 85dvh;
   overflow: auto;
+}
+.cfg-modal [data-slot="dialog-title"] {
+  padding-right: 28px;
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.cfg-modal .cfg-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+@media (max-width: 600px) {
+  .cfg-modal {
+    padding: 24px 20px;
+  }
 }
 .cfg-card-tools {
   display: flex;

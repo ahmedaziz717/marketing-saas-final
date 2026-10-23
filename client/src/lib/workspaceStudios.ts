@@ -1,13 +1,12 @@
-import { BarChart3, Send, Sparkles, WandSparkles } from "lucide-react";
+import { BarChart3, Send, Images, Infinity } from "lucide-react";
 
 export const workspaceStudios = {
   create: {
     name: "Creative Studio",
     stage: "Create",
     href: "/app/creatives/studio",
-    icon: Sparkles,
-    description:
-      "Create images and videos with your brand, products, and creative direction.",
+    icon: Images,
+    description: "Turn ideas into images and videos.",
     planned: false,
   },
   activate: {
@@ -15,8 +14,7 @@ export const workspaceStudios = {
     stage: "Activate",
     href: "/app/activate/studio",
     icon: Send,
-    description:
-      "Bring copy and assets together, then review and activate your posts and ads.",
+    description: "Review and launch across channels.",
     planned: false,
   },
   measure: {
@@ -24,17 +22,15 @@ export const workspaceStudios = {
     stage: "Measure",
     href: "/app/analytics/studio",
     icon: BarChart3,
-    description:
-      "Build reports, schedule delivery, and choose what matters for your dashboards.",
+    description: "See what’s working. Share the insight.",
     planned: false,
   },
   optimize: {
     name: "Optimization Studio",
     stage: "Optimize",
     href: "/app/optimize/studio",
-    icon: WandSparkles,
-    description:
-      "Analyze performance, review recommendations, and plan your next controlled experiments.",
+    icon: Infinity,
+    description: "Find your next improvement.",
     planned: false,
   },
 };
