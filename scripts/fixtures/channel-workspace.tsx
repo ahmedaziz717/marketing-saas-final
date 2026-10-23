@@ -1134,6 +1134,7 @@ const routeForPage: Record<string, string> = {
   "studio-channels": "/app/activate/studio",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
+  "creative-confirmation": "/app/creatives/studio",
   "creative-scene": "/app/creatives/studio",
   "creative-type": "/app/creatives/studio",
   "creative-people": "/app/creatives/studio",
@@ -2178,6 +2179,44 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         );
       }
       layout();
+    }
+    if (which === "creative-confirmation") {
+      const generate = () =>
+        document.querySelector<HTMLButtonElement>(".cfg-bottom .cfg-primary");
+      for (
+        let attempt = 0;
+        attempt < 30 && (!generate() || generate()!.disabled);
+        attempt++
+      )
+        await pause();
+      await pressStudioControl(generate() ?? undefined, "Generate images");
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+      check(!!dialog, "Generation requires a confirmation dialog");
+      const style = getComputedStyle(dialog!);
+      check(
+        parseFloat(style.paddingLeft) >= 20 &&
+          parseFloat(style.paddingTop) >= 20,
+        "Confirmation content has breathing room inside the portal"
+      );
+      const box = dialog!.getBoundingClientRect();
+      check(
+        box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight,
+        "Confirmation fits the viewport"
+      );
+      await click("Close");
+      check(
+        !document.querySelector('[role="dialog"]'),
+        "Confirmation can be dismissed"
+      );
+      await pressStudioControl(generate() ?? undefined, "Generate images");
+      check(
+        !!document.querySelector('[role="dialog"]'),
+        "Confirmation can reopen without generating"
+      );
+      check(
+        !mutations.some(name => /generate/i.test(name)),
+        "Opening confirmation never generates"
+      );
     }
     if (which === "creative-type") {
       await studioSection("Type & Source", false);
