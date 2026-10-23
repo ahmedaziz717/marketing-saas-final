@@ -90,12 +90,12 @@ export default function OnboardingPage() {
         </div>
       </div>
       <div className="surface grid overflow-hidden xl:grid-cols-[.62fr_1.38fr]">
-        <aside className="bg-[#201c25] p-8 text-white md:p-10">
-          <Sparkles className="h-5 w-5 text-violet-300" />
+        <aside className="bg-secondary p-8 text-secondary-foreground md:p-10">
+          <Sparkles className="h-5 w-5 text-primary" />
           <h2 className="mt-5 text-3xl font-semibold leading-tight">
             Start with the company’s public truth.
           </h2>
-          <p className="mt-5 text-sm leading-6 text-white/55">
+          <p className="mt-5 text-sm leading-6 text-muted-foreground">
             EvokeLoop turns the website into an editable brand kit and reviewed
             offerings before creative work begins.
           </p>
@@ -103,11 +103,11 @@ export default function OnboardingPage() {
             {labels.map((label, index) => (
               <div key={label} className="flex gap-3">
                 <span
-                  className={`grid h-5 w-5 place-items-center rounded-full text-[10px] ${step > index ? "bg-emerald-400 text-emerald-950" : "bg-white/10 text-white/60"}`}
+                  className={`grid h-5 w-5 place-items-center rounded-full text-[10px] ${step > index ? "bg-emerald-400 text-emerald-950" : "bg-muted text-muted-foreground"}`}
                 >
                   {index + 1}
                 </span>
-                <span className="text-white/70">{label}</span>
+                <span className="text-muted-foreground">{label}</span>
               </div>
             ))}
           </div>

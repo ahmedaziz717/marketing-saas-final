@@ -20,6 +20,7 @@ import {
 } from "@shared/assetWorkflow";
 import { canSubmitAsset } from "@shared/assetLibrary";
 import type { LibraryAsset } from "@shared/assetLibrary";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StudioGeneration } from "./StudioGeneration";
 import { StudioImagePreview } from "./StudioImagePreview";
 
@@ -83,7 +84,11 @@ export function StudioPreview({
     videoSetup?: VideoSetup | null;
   }) => void;
 }) {
+  const [previewTab, setPreviewTab] = useState("preview");
   const [selected, setSelected] = useState<Trial | null>(null);
+  useEffect(() => {
+    if (selected) setPreviewTab("review");
+  }, [selected?.key]);
   const [previewingHistory, setPreviewingHistory] = useState(false);
   useEffect(() => {
     setPreviewingHistory(false);
@@ -362,230 +367,285 @@ export function StudioPreview({
         ) : (
           children
         )}
-        <details className="cfg-preview-history">
-          <summary>Recent creations & history</summary>
-          {(trials.length > 0 || selected) && (
-            <>
-              <div className="cfg-trials-heading">
-                <strong>
-                  {kind === "image" && briefId && !all
-                    ? "Versions of this creative"
-                    : "Recent creations"}
-                </strong>
-                {kind === "image" && briefId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAll(!all);
-                      setSelected(null);
-                    }}
-                  >
-                    {all ? "This creative" : "All recent"}
-                  </button>
-                )}
-                {kind === "image" && (
-                  <button
-                    type="button"
-                    aria-label="Refresh previous versions"
-                    disabled={history.isFetching}
-                    onClick={() => history.refetch()}
-                  >
-                    <RefreshCw size={14} />
-                  </button>
-                )}
-              </div>
-              <div
-                className="cfg-trials"
-                aria-label="Previous generated versions"
-              >
-                <button
-                  type="button"
-                  aria-pressed={!selected}
-                  className="cfg-trial cfg-trial-current"
-                  onClick={() => {
-                    setSelected(null);
-                    setPreviewingHistory(false);
-                  }}
-                >
-                  <ImagePlus size={22} />
-                  <span>Current setup</span>
-                </button>
-                {trials.map(item => (
-                  <button
-                    type="button"
-                    key={item.key}
-                    className="cfg-trial"
-                    aria-label={"Preview " + item.title}
-                    aria-pressed={selected?.key === item.key}
-                    onClick={() => {
-                      setSelected(item);
-                      setPreviewingHistory(true);
-                    }}
-                    title={
-                      item.title +
-                      " · " +
-                      new Date(item.createdAtMs).toLocaleString()
-                    }
-                  >
-                    {kind === "image" ? (
-                      <img src={item.url} alt="" loading="lazy" />
-                    ) : (
-                      <span className="cfg-trial-video">
-                        <video
-                          src={item.url + "#t=0.1"}
-                          muted
-                          preload="metadata"
-                        />
-                        <Film size={16} />
-                      </span>
-                    )}
-                    <span>{item.title}</span>
-                    <small>
-                      {new Date(item.createdAtMs).toLocaleDateString()}
-                    </small>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {history.error && kind === "image" ? (
-            <p className="cfg-help">
-              Previous images could not load.{" "}
-              <button type="button" onClick={() => void history.refetch()}>
-                Try again
-              </button>
-            </p>
-          ) : (
-            !trials.length &&
-            !jobId && (
-              <p className="cfg-help">
-                {history.isLoading && kind === "image"
-                  ? "Loading previous images…"
-                  : "Your generated versions will appear here."}
-              </p>
-            )
-          )}
-          <div className="cfg-history-footer">
-            {jobId && previewingHistory && (
-              <button type="button" onClick={() => setPreviewingHistory(false)}>
-                View generation in progress
-              </button>
-            )}
-            {kind === "image" && briefId && !all && !trials.length && (
-              <button type="button" onClick={() => setAll(true)}>
-                Browse previous creations
-              </button>
-            )}
-            <Link href="/app/creatives/drafts" className="cfg-history-link">
-              View all creative work →
-            </Link>
-          </div>
-        </details>
       </div>
       <div className="cfg-build">
         {summary}
-        {selected && !showGeneration && (
-          <div className="cfg-result-details">
-            <strong>{selected.title}</strong>
-            <small>
-              Generated {new Date(selected.createdAtMs).toLocaleString()} ·{" "}
-              {selectedAsset
-                ? workflowLabel(selectedAsset.state)
-                : "Saved draft"}
-            </small>
-            {kind === "image" && selectedAsset?.hasProductOverlay && (
-              <ProductOverlayEditor
-                organizationId={organizationId}
-                variantId={Number(selected.key.split(":")[1])}
-                onSaved={async () => {
-                  await Promise.all([
-                    history.refetch(),
-                    utils.assetLibrary.studioList.invalidate(),
-                  ]);
-                }}
-              />
-            )}
-            {kind === "image" && selectedAsset && ["owner", "admin", "creator"].includes(role) && <ImageEnhanceAction asset={selectedAsset} organizationId={organizationId} onSaved={onSettled} />}
-            <section
-              className="cfg-asset-readiness"
-              aria-label="Creative readiness"
-            >
-              <strong>
-                {selectedAsset?.state === "approved"
-                  ? "Ready for Activation Studio"
-                  : "Review this creative before activation"}
-              </strong>
-              <ul>
-                <li>
-                  Check the product, logo, typography and spelling in the
-                  finished asset.
-                </li>
-                <li>
-                  {selectedAsset?.state === "approved"
-                    ? "Asset approved. Choose a destination, finalize the copy and schedule delivery next."
-                    : selectedAsset?.state === "needs_review"
-                      ? "Waiting for a reviewer to approve this asset."
-                      : "Approve the asset or submit it for review when its content is ready."}
-                </li>
-              </ul>
-            </section>
-            <div className="cfg-result-actions">
-              <button
-                type="button"
-                className="cfg-primary"
-                disabled={
-                  working ||
-                  !selectedAsset ||
-                  selectedAsset.state === "approved" ||
-                  (!canApprove && !canSubmitAsset(selectedAsset.state))
-                }
-                onClick={() => void approveSelected()}
-              >
-                {selectedAsset?.state === "approved"
-                  ? "Approved"
-                  : working
-                    ? "Saving…"
-                    : canApprove
-                      ? "Approve"
-                      : "Submit for approval"}
-              </button>
-              <Link
-                className="cfg-secondary"
-                href={`/app/activate/studio?asset=${encodeURIComponent(selected.key)}`}
-              >
-                Activate / Publish
-              </Link>
-            </div>
+        <Tabs
+          value={previewTab}
+          onValueChange={setPreviewTab}
+          className="studio-preview-tabs"
+        >
+          <TabsList aria-label="Creative preview views">
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+            <TabsTrigger value="review">Review</TabsTrigger>
+            <TabsTrigger value="results">Results</TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="preview"
+            forceMount
+            hidden={previewTab !== "preview"}
+          >
             <p className="cfg-help">
-              {selectedAsset?.state === "approved"
-                ? "Approved in Asset Library. Approval does not publish your creative."
-                : "Saved automatically in Asset Library → Drafts. Approval is optional until you are ready."}{" "}
-              Continue in Activation Studio when ready.
+              {selected
+                ? selected.title
+                : "Your current setup is shown alongside. Generate when you are ready to review a finished creative."}
             </p>
-            {actionError && <p role="alert">{actionError}</p>}
-            <div className="cfg-result-secondary">
-              <Link
-                href={
-                  selectedAsset && selectedAsset.state !== "draft"
-                    ? libraryAssetLink(selected.key, selectedAsset.state)
-                    : `/app/library?view=drafts&asset=${encodeURIComponent(selected.key)}`
-                }
-              >
-                View in Asset Library
-              </Link>
-              <button
-                type="button"
-                disabled={!selected.imageSetup && !selected.videoSetup}
-                onClick={() => {
-                  reuse(selected);
-                  setSelected(null);
-                }}
-              >
-                Use these settings as a new draft
-              </button>
+          </TabsContent>
+          <TabsContent
+            value="results"
+            forceMount
+            hidden={previewTab !== "results"}
+          >
+            <div className="cfg-preview-history">
+              <h3 className="text-sm font-semibold">
+                Recent creations & history
+              </h3>
+              {(trials.length > 0 || selected) && (
+                <>
+                  <div className="cfg-trials-heading">
+                    <strong>
+                      {kind === "image" && briefId && !all
+                        ? "Versions of this creative"
+                        : "Recent creations"}
+                    </strong>
+                    {kind === "image" && briefId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAll(!all);
+                          setSelected(null);
+                        }}
+                      >
+                        {all ? "This creative" : "All recent"}
+                      </button>
+                    )}
+                    {kind === "image" && (
+                      <button
+                        type="button"
+                        aria-label="Refresh previous versions"
+                        disabled={history.isFetching}
+                        onClick={() => history.refetch()}
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    className="cfg-trials"
+                    aria-label="Previous generated versions"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={!selected}
+                      className="cfg-trial cfg-trial-current"
+                      onClick={() => {
+                        setSelected(null);
+                        setPreviewingHistory(false);
+                      }}
+                    >
+                      <ImagePlus size={22} />
+                      <span>Current setup</span>
+                    </button>
+                    {trials.map(item => (
+                      <button
+                        type="button"
+                        key={item.key}
+                        className="cfg-trial"
+                        aria-label={"Preview " + item.title}
+                        aria-pressed={selected?.key === item.key}
+                        onClick={() => {
+                          setSelected(item);
+                          setPreviewingHistory(true);
+                          setPreviewTab("review");
+                        }}
+                        title={
+                          item.title +
+                          " · " +
+                          new Date(item.createdAtMs).toLocaleString()
+                        }
+                      >
+                        {kind === "image" ? (
+                          <img src={item.url} alt="" loading="lazy" />
+                        ) : (
+                          <span className="cfg-trial-video">
+                            <video
+                              src={item.url + "#t=0.1"}
+                              muted
+                              preload="metadata"
+                            />
+                            <Film size={16} />
+                          </span>
+                        )}
+                        <span>{item.title}</span>
+                        <small>
+                          {new Date(item.createdAtMs).toLocaleDateString()}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {history.error && kind === "image" ? (
+                <p className="cfg-help">
+                  Previous images could not load.{" "}
+                  <button type="button" onClick={() => void history.refetch()}>
+                    Try again
+                  </button>
+                </p>
+              ) : (
+                !trials.length &&
+                !jobId && (
+                  <p className="cfg-help">
+                    {history.isLoading && kind === "image"
+                      ? "Loading previous images…"
+                      : "Your generated versions will appear here."}
+                  </p>
+                )
+              )}
+              <div className="cfg-history-footer">
+                {jobId && previewingHistory && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewingHistory(false)}
+                  >
+                    View generation in progress
+                  </button>
+                )}
+                {kind === "image" && briefId && !all && !trials.length && (
+                  <button type="button" onClick={() => setAll(true)}>
+                    Browse previous creations
+                  </button>
+                )}
+                <Link href="/app/creatives/drafts" className="cfg-history-link">
+                  View all creative work →
+                </Link>
+              </div>
             </div>
-          </div>
-        )}
+          </TabsContent>
+          <TabsContent
+            value="review"
+            forceMount
+            hidden={previewTab !== "review"}
+          >
+            {(!selected || showGeneration) && (
+              <p className="cfg-help">
+                {showGeneration
+                  ? "Generation is in progress. Review controls will appear when your creative is ready."
+                  : "Select a finished creative in Results to review or submit it for approval."}
+              </p>
+            )}
+            {selected && !showGeneration && (
+              <div className="cfg-result-details">
+                <strong>{selected.title}</strong>
+                <small>
+                  Generated {new Date(selected.createdAtMs).toLocaleString()} ·{" "}
+                  {selectedAsset
+                    ? workflowLabel(selectedAsset.state)
+                    : "Saved draft"}
+                </small>
+                {kind === "image" && selectedAsset?.hasProductOverlay && (
+                  <ProductOverlayEditor
+                    organizationId={organizationId}
+                    variantId={Number(selected.key.split(":")[1])}
+                    onSaved={async () => {
+                      await Promise.all([
+                        history.refetch(),
+                        utils.assetLibrary.studioList.invalidate(),
+                      ]);
+                    }}
+                  />
+                )}
+                {kind === "image" &&
+                  selectedAsset &&
+                  ["owner", "admin", "creator"].includes(role) && (
+                    <ImageEnhanceAction
+                      asset={selectedAsset}
+                      organizationId={organizationId}
+                      onSaved={onSettled}
+                    />
+                  )}
+                <section
+                  className="cfg-asset-readiness"
+                  aria-label="Creative readiness"
+                >
+                  <strong>
+                    {selectedAsset?.state === "approved"
+                      ? "Ready for Activation Studio"
+                      : "Review this creative before activation"}
+                  </strong>
+                  <ul>
+                    <li>
+                      Check the product, logo, typography and spelling in the
+                      finished asset.
+                    </li>
+                    <li>
+                      {selectedAsset?.state === "approved"
+                        ? "Asset approved. Choose a destination, finalize the copy and schedule delivery next."
+                        : selectedAsset?.state === "needs_review"
+                          ? "Waiting for a reviewer to approve this asset."
+                          : "Approve the asset or submit it for review when its content is ready."}
+                    </li>
+                  </ul>
+                </section>
+                <div className="cfg-result-actions">
+                  <button
+                    type="button"
+                    className="cfg-primary"
+                    disabled={
+                      working ||
+                      !selectedAsset ||
+                      selectedAsset.state === "approved" ||
+                      (!canApprove && !canSubmitAsset(selectedAsset.state))
+                    }
+                    onClick={() => void approveSelected()}
+                  >
+                    {selectedAsset?.state === "approved"
+                      ? "Approved"
+                      : working
+                        ? "Saving…"
+                        : canApprove
+                          ? "Approve"
+                          : "Submit for approval"}
+                  </button>
+                  <Link
+                    className="cfg-secondary"
+                    href={`/app/activate/studio?asset=${encodeURIComponent(selected.key)}`}
+                  >
+                    Activate / Publish
+                  </Link>
+                </div>
+                <p className="cfg-help">
+                  {selectedAsset?.state === "approved"
+                    ? "Approved in Asset Library. Approval does not publish your creative."
+                    : "Saved automatically in Asset Library → Drafts. Approval is optional until you are ready."}{" "}
+                  Continue in Activation Studio when ready.
+                </p>
+                {actionError && <p role="alert">{actionError}</p>}
+                <div className="cfg-result-secondary">
+                  <Link
+                    href={
+                      selectedAsset && selectedAsset.state !== "draft"
+                        ? libraryAssetLink(selected.key, selectedAsset.state)
+                        : `/app/library?view=drafts&asset=${encodeURIComponent(selected.key)}`
+                    }
+                  >
+                    View in Asset Library
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={!selected.imageSetup && !selected.videoSetup}
+                    onClick={() => {
+                      reuse(selected);
+                      setSelected(null);
+                    }}
+                  >
+                    Use these settings as a new draft
+                  </button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

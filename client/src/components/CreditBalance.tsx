@@ -27,7 +27,7 @@ export function CreditBalance({ organizationId }: { organizationId: number }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-700 dark:text-violet-200"
+        className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary dark:text-primary"
         aria-label="View AI credit balance"
       >
         <Coins size={15} />
@@ -42,7 +42,7 @@ export function CreditBalance({ organizationId }: { organizationId: number }) {
           </DialogDescription>
           {state ? (
             <>
-              <div className="rounded-2xl bg-violet-500/10 p-5">
+              <div className="rounded-2xl bg-primary/10 p-5">
                 <p className="text-sm text-muted-foreground">
                   Available this month
                 </p>

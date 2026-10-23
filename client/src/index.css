@@ -1,10 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../public/website/brand.css";
+@import "./styles/designTokens.css";
 @custom-variant dark (&:is(.dark *));
 @theme inline {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -37,64 +40,6 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
-  --radius: 0.75rem;
-  --background: #f1f7f7;
-  --foreground: #0a1c26;
-  --card: #ffffff;
-  --card-foreground: #0a1c26;
-  --popover: #ffffff;
-  --popover-foreground: #0a1c26;
-  --primary: #007f76;
-  --primary-foreground: #ffffff;
-  --secondary: #e7f1f1;
-  --secondary-foreground: #0a1c26;
-  --muted: #edf4f4;
-  --muted-foreground: #526b76;
-  --accent: #c7f5ee;
-  --accent-foreground: #0a1c26;
-  --destructive: #b93736;
-  --border: #d8e4e5;
-  --input: #cbdadd;
-  --ring: #007f76;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0a1c26;
-  --sidebar-primary: #007f76;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #edf7f5;
-  --sidebar-accent-foreground: #007f76;
-  --sidebar-border: #d8e4e5;
-  --sidebar-ring: #007f76;
-  --chart-1: #007f76;
-  --chart-2: #0a1c26;
-  --chart-3: #00b5a7;
-  --chart-4: #526b76;
-  --chart-5: #8faeb3;
-}
-.dark {
-  --background: #0a1c26;
-  --foreground: #f1f7f7;
-  --card: #122d38;
-  --card-foreground: #f1f7f7;
-  --popover: #122d38;
-  --popover-foreground: #f1f7f7;
-  --primary: #c7f5ee;
-  --primary-foreground: #0a1c26;
-  --secondary: #1a3944;
-  --secondary-foreground: #f1f7f7;
-  --muted: #17343e;
-  --muted-foreground: #b3cdd3;
-  --accent: #234852;
-  --accent-foreground: #c7f5ee;
-  --border: #31505b;
-  --input: #45636f;
-  --ring: #00b5a7;
-  --sidebar: #0a1c26;
-  --sidebar-foreground: #f1f7f7;
-  --sidebar-accent: #173f45;
-  --sidebar-accent-foreground: #c7f5ee;
-  --sidebar-border: #31505b;
-}
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -104,7 +49,8 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    font-family:
+      "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
     background-image: none;
   }
   button,
@@ -137,7 +83,8 @@
 }
 @layer utilities {
   .font-editorial {
-    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    font-family:
+      "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
     font-weight: 750;
     letter-spacing: -0.04em;
   }
@@ -833,73 +780,7 @@
 }
 
 /* Workspace appearance applies at the root so portalled dialogs and menus agree. */
-:root[data-workspace-theme] {
-  --background: #f7f8fa;
-  --foreground: #202532;
-  --card: #ffffff;
-  --card-foreground: #202532;
-  --popover: #ffffff;
-  --popover-foreground: #202532;
-  --primary: #6652bf;
-  --primary-foreground: #ffffff;
-  --secondary: #edf0f5;
-  --secondary-foreground: #303849;
-  --muted: #f0f2f6;
-  --muted-foreground: #667085;
-  --accent: #ece9f8;
-  --accent-foreground: #6652bf;
-  --border: #e3e6ed;
-  --input: #d2d7e2;
-  --ring: #8064d6;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #525c6e;
-  --sidebar-primary: #6652bf;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0edf9;
-  --sidebar-accent-foreground: #6652bf;
-  --sidebar-border: #e3e6ed;
-  --sidebar-ring: #8064d6;
-  --workflow-foreground: #ffffff;
-  --chart-1: #7255ca;
-  --chart-2: #3376cf;
-  --chart-3: #098b84;
-  --chart-4: #b87717;
-  --chart-5: #ca548b;
-}
-:root[data-workspace-theme="dark"] {
-  --background: #101218;
-  --foreground: #edf0f7;
-  --card: #191c25;
-  --card-foreground: #edf0f7;
-  --popover: #1d212c;
-  --popover-foreground: #edf0f7;
-  --primary: #b6a2f7;
-  --primary-foreground: #151322;
-  --secondary: #252a37;
-  --secondary-foreground: #e4e8f1;
-  --muted: #232733;
-  --muted-foreground: #a4aec2;
-  --accent: #302946;
-  --accent-foreground: #c7b3ff;
-  --destructive: #ff9999;
-  --border: #303644;
-  --input: #424a5c;
-  --ring: #b6a2f7;
-  --sidebar: #14171e;
-  --sidebar-foreground: #aab3c5;
-  --sidebar-primary: #b6a2f7;
-  --sidebar-primary-foreground: #151322;
-  --sidebar-accent: #302946;
-  --sidebar-accent-foreground: #c7b3ff;
-  --sidebar-border: #2a303c;
-  --sidebar-ring: #b6a2f7;
-  --workflow-foreground: #12151f;
-  --chart-1: #b6a2f7;
-  --chart-2: #8cb4ff;
-  --chart-3: #67d6c6;
-  --chart-4: #efc179;
-  --chart-5: #f496c2;
-}
+
 [data-workflow="Create"] {
   --workflow-color: #7353c2;
   --workflow-soft: #eee9f9;
@@ -925,7 +806,7 @@
 }
 .dark [data-workflow="Create"] {
   --workflow-color: #bda3ff;
-  --workflow-soft: #302641;
+  --workflow-soft: var(--accent);
 }
 .dark [data-workflow="Activate"] {
   --workflow-color: #8caeff;
@@ -947,11 +828,6 @@
   --workflow-soft: #293141;
 }
 [data-workflow] {
-  --primary: var(--workflow-color);
-  --primary-foreground: var(--workflow-foreground, #fff);
-  --ring: var(--workflow-color);
-  --accent: var(--workflow-soft);
-  --accent-foreground: var(--workflow-color);
   --sidebar-accent: var(--workflow-soft);
   --sidebar-accent-foreground: var(--workflow-color);
 }
@@ -1822,18 +1698,74 @@
   .studio-app-art {
     height: 112px;
   }
-  .workspace-studios-grid { gap: 14px; }
+  .workspace-studios-grid {
+    gap: 14px;
+  }
   .workspace-studio-card,
-  .workspace-studio-planned { padding: 20px; }
-  .workspace-studio-card h2 { font-size: 20px; }
-  .workspace-studio-planned-actions { flex-direction: column; }
-  .workspace-studio-planned-actions a { white-space: normal; height: auto; min-height: 38px; text-align: center; }
+  .workspace-studio-planned {
+    padding: 20px;
+  }
+  .workspace-studio-card h2 {
+    font-size: 20px;
+  }
+  .workspace-studio-planned-actions {
+    flex-direction: column;
+  }
+  .workspace-studio-planned-actions a {
+    white-space: normal;
+    height: auto;
+    min-height: 38px;
+    text-align: center;
+  }
 }
 
 /* Persistent shortcuts for the two visual Studios. */
-.studio-shortcuts { display:flex; gap:8px; flex-wrap:wrap; padding:10px 28px; border-bottom:1px solid var(--border); background:var(--card); }
-.studio-shortcut { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:8px 14px; border:1px solid var(--border); border-radius:12px; color:var(--muted-foreground); font-size:12px; font-weight:600; transition:background .15s,color .15s; }
-.studio-shortcut:hover,.studio-shortcut[aria-current="page"] { color:#6d50d8; background:#ede8fb; border-color:#c5b8ee; }
-.dark .studio-shortcut-create:hover,.dark .studio-shortcut-create[aria-current="page"] { color:#c1b1ff; background:#302841; border-color:#544672; }
-.studio-shortcut:focus-visible { outline:3px solid var(--ring); outline-offset:3px; }
-@media(max-width:640px) { .studio-shortcuts { padding:10px 16px; }.studio-shortcut { flex:1; padding:8px; font-size:11px; } }
+.studio-shortcuts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+.studio-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.studio-shortcut:hover,
+.studio-shortcut[aria-current="page"] {
+  color: var(--primary);
+  background: var(--accent);
+  border-color: var(--border);
+}
+.dark .studio-shortcut-create:hover,
+.dark .studio-shortcut-create[aria-current="page"] {
+  color: var(--primary);
+  background: var(--accent);
+  border-color: var(--border);
+}
+.studio-shortcut:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .studio-shortcuts {
+    padding: 10px 16px;
+  }
+  .studio-shortcut {
+    flex: 1;
+    padding: 8px;
+    font-size: 11px;
+  }
+}

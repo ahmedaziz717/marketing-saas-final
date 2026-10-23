@@ -1,65 +1,4 @@
-/* The workspace uses one visual system. Status colors and chart series remain semantic. */
-.evoke-shell[data-workflow],
-.evoke-shell [data-workflow],
-body:has(.evoke-shell)
-  :is(
-    [data-slot="dialog-content"],
-    [data-slot="alert-dialog-content"],
-    [data-slot="sheet-content"],
-    [data-slot="drawer-content"]
-  ) {
-  --workflow-color: #6d50d8;
-  --workflow-soft: #eeebf8;
-  --primary: #6d50d8;
-  --primary-foreground: #fff;
-  --ring: #6d50d8;
-  --accent: #eeebf8;
-  --accent-foreground: #5139aa;
-  --background: #f4f3f8;
-  --foreground: #222132;
-  --card: #fff;
-  --card-foreground: #222132;
-  --muted: #eeedf5;
-  --muted-foreground: #69687b;
-  --border: #dedde8;
-  --input: #dedde8;
-  --sidebar: #fcfbfe;
-  --sidebar-foreground: #4d4860;
-  --sidebar-border: #e4e0ed;
-  --sidebar-accent: #eeebf8;
-  --sidebar-accent-foreground: #6d50d8;
-}
-.dark .evoke-shell[data-workflow],
-.dark .evoke-shell [data-workflow],
-.dark
-  body:has(.evoke-shell)
-  :is(
-    [data-slot="dialog-content"],
-    [data-slot="alert-dialog-content"],
-    [data-slot="sheet-content"],
-    [data-slot="drawer-content"]
-  ) {
-  --workflow-color: #b29afa;
-  --workflow-soft: #302641;
-  --primary: #9878ef;
-  --primary-foreground: #fff;
-  --ring: #b29afa;
-  --accent: #302641;
-  --accent-foreground: #cbb7ff;
-  --background: #171620;
-  --foreground: #f4f1fc;
-  --card: #211f2d;
-  --card-foreground: #f4f1fc;
-  --muted: #2d273d;
-  --muted-foreground: #b8b2cb;
-  --border: #3c354f;
-  --input: #3c354f;
-  --sidebar: #1c1926;
-  --sidebar-foreground: #d1c9e3;
-  --sidebar-border: #3c354f;
-  --sidebar-accent: #302641;
-  --sidebar-accent-foreground: #b29afa;
-}
+/* Shared application surfaces use the root Editorial Precision tokens. */
 .evoke-shell #workspace-content {
   min-width: 0;
 }
@@ -299,5 +238,5 @@ body:has(.evoke-shell)
     [data-slot="drawer-content"]
   )
   [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 88%, #222132);
+  background: color-mix(in srgb, var(--primary) 88%, var(--foreground));
 }

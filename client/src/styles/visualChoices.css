@@ -1,21 +1,14 @@
 .choice-select {
-  --choice-accent: #6d50d8;
-  --choice-line: #dedde8;
-  --choice-surface: #fff;
-  --choice-ink: #292638;
-  --choice-muted: #706b80;
+  --choice-accent: var(--primary);
+  --choice-line: var(--border);
+  --choice-surface: var(--card);
+  --choice-ink: var(--foreground);
+  --choice-muted: var(--muted-foreground);
   display: block;
   min-width: 0;
   width: 100%;
   color: var(--choice-ink);
   text-align: left;
-}
-.dark .choice-select {
-  --choice-accent: #b49afa;
-  --choice-line: #453c59;
-  --choice-surface: #252030;
-  --choice-ink: #f3effa;
-  --choice-muted: #c2b8d1;
 }
 .choice-select > select[hidden] {
   display: none !important;
@@ -89,7 +82,7 @@
 }
 .choice-select .choice-tile:hover:not(:disabled) {
   border-color: var(--choice-accent);
-  box-shadow: 0 3px 10px #6d50d81a;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 .choice-select .choice-tile[aria-checked="true"] {
   border-color: var(--choice-accent);
@@ -118,7 +111,7 @@
   height: 58px;
   flex-shrink: 0;
   overflow: hidden;
-  background: #f1edf9;
+  background: var(--muted);
 }
 .choice-select .choice-visual-image {
   width: 100%;
@@ -230,11 +223,12 @@
   border: 1px solid var(--choice-line);
   border-radius: 50%;
   background: var(--choice-surface);
-  color: white;
+  color: var(--muted-foreground);
 }
 .choice-select .choice-tile[aria-checked="true"] .choice-tile-check {
   background: var(--choice-accent);
   border-color: var(--choice-accent);
+  color: var(--primary-foreground);
 }
 .choice-select .choice-search {
   display: flex;
@@ -376,7 +370,7 @@
   flex: 1;
   gap: 8px;
   padding: 0 10px 12px;
-  border: 1px solid #dedde8;
+  border: 1px solid var(--border);
   border-radius: 11px;
   overflow: hidden;
   background: var(--card);
@@ -385,11 +379,11 @@
   cursor: pointer;
 }
 .choice-radio-card:has(:checked) {
-  border-color: #6d50d8;
-  box-shadow: inset 0 0 0 1px #6d50d8;
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 .choice-radio-card:focus-within {
-  outline: 3px solid #6d50d8;
+  outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
 .choice-radio-art {
@@ -403,7 +397,7 @@
   right: 8px;
   width: 16px;
   height: 16px;
-  accent-color: #6d50d8;
+  accent-color: var(--primary);
 }
 
 .choice-field {
@@ -448,8 +442,8 @@
   height: 64px;
   max-width: 100%;
   border-radius: 14px;
-  background: #eee8fb;
-  color: #6848b6;
+  background: var(--accent);
+  color: var(--accent-foreground);
   font-size: 22px;
   font-weight: 650;
   overflow: hidden;

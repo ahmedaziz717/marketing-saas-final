@@ -202,7 +202,7 @@
   align-items: center;
   gap: 5px;
   font-size: 12px;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
 }
 .wf-studio-summary dl > div {
   margin-top: 12px;

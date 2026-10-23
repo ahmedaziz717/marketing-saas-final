@@ -251,7 +251,7 @@ export function ModelPricingAdmin() {
               }
             />
           </label>
-          <div className="rounded-xl bg-violet-500/10 p-3 text-sm">
+          <div className="rounded-xl bg-primary/10 p-3 text-sm">
             <p>Example: $0.20 provider cost</p>
             <strong>
               {money(0.2 * (1 + currentPolicy.markupPercent / 100))} retail ·{" "}
@@ -808,7 +808,7 @@ export function ModelPricingAdmin() {
                       Credit equivalent
                     </p>
                   </td>
-                  <td className="p-3 tabular-nums bg-violet-500/5">
+                  <td className="p-3 tabular-nums bg-primary/5">
                     <p className="text-base font-semibold">
                       {prices ? money(prices.retailUsd) : "—"}
                     </p>
@@ -816,7 +816,7 @@ export function ModelPricingAdmin() {
                       After {markup}% markup
                     </p>
                   </td>
-                  <td className="p-3 tabular-nums bg-violet-500/5">
+                  <td className="p-3 tabular-nums bg-primary/5">
                     <p className="text-base font-semibold">
                       {prices ? creditNumber(prices.retailCredits) : "—"}
                     </p>

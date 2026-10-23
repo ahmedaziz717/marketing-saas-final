@@ -6,8 +6,8 @@
   --cfg-muted: var(--muted-foreground);
   --cfg-line: var(--border);
   --cfg-soft: var(--muted);
-  --cfg-violet: var(--primary);
-  --cfg-lime: #d5ee84;
+  --cfg-accent: var(--primary);
+  --cfg-lime: var(--accent);
 }
 .studio-choice-picker {
   min-width: 0;
@@ -78,7 +78,7 @@
 }
 .studio-choice-selection button {
   flex-shrink: 0;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
 }
 .studio-choice-picker .studio-choice-grid {
   grid-template-columns: var(--studio-card-columns);
@@ -103,14 +103,14 @@
 .studio-choice-picker .cfg-card-copy h3 svg {
   margin-top: 2px;
   flex-shrink: 0;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
 }
 .studio-choice-symbol {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   background: linear-gradient(135deg, var(--cfg-soft), var(--cfg-panel));
 }
 .studio-choice-empty {
@@ -122,10 +122,10 @@
 }
 .studio-choice-empty button {
   margin-top: 8px;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
 }
 .studio-choice-picker button:focus-visible {
-  outline: 3px solid var(--cfg-violet);
+  outline: 3px solid var(--cfg-accent);
   outline-offset: -3px;
 }
 .studio-choice-picker button:disabled {

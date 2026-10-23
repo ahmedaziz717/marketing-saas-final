@@ -571,20 +571,38 @@ it("defaults to reference-image models for an image source and keeps a deliberat
   open();
   section(/AI Model Choose your engine/);
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
-  expect(screen.getByRole("radio", { name: "All inputs" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen
+      .getByRole("radio", { name: "All inputs" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
   section(/Type & Source Start with an idea/);
-  clickJourney(screen.getByRole("button", { name: "Open Subject & sources category" }));
+  clickJourney(
+    screen.getByRole("button", { name: "Open Subject & sources category" })
+  );
   clickJourney(screen.getByRole("button", { name: "Select Studio lamp" }));
   section(/AI Model Choose your engine/);
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
-  expect(screen.getByRole("radio", { name: "Reference images" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen
+      .getByRole("radio", { name: "Reference images" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
   clickJourney(screen.getByRole("radio", { name: "All inputs" }));
   section(/Story & Sound Tell your story/);
   section(/AI Model Choose your engine/);
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
-  expect(screen.getByRole("radio", { name: "All inputs" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen
+      .getByRole("radio", { name: "All inputs" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
   clickJourney(screen.getByRole("button", { name: "Reset model filters" }));
-  expect(screen.getByRole("radio", { name: "Reference images" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen
+      .getByRole("radio", { name: "Reference images" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
 });
 it("shows the shared brand logos in video and saves the choice without changing image branding", async () => {
   api.assets = [
@@ -1082,6 +1100,10 @@ it("previews a generated version without changing settings or generating, and re
   open();
   const name = screen.getByRole("textbox", { name: "Creative name" });
   changeField(name, { target: { value: "Keep my current draft" } });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Results" }), {
+    button: 0,
+    ctrlKey: false,
+  });
   clickJourney(
     screen.getByRole("button", { name: "Preview Previous lamp square" })
   );
@@ -1093,6 +1115,20 @@ it("previews a generated version without changing settings or generating, and re
   expect((name as HTMLInputElement).value).toBe("Keep my current draft");
   expect(api.save).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("tab", { name: "Review" }).getAttribute("aria-selected")
+  ).toBe("true");
+  // Reopening the same result must return to Review even though its key is unchanged.
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Results" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  clickJourney(
+    screen.getByRole("button", { name: "Preview Previous lamp square" })
+  );
+  expect(
+    screen.getByRole("tab", { name: "Review" }).getAttribute("aria-selected")
+  ).toBe("true");
   clickJourney(
     screen.getByRole("button", { name: "Use these settings as a new draft" })
   );

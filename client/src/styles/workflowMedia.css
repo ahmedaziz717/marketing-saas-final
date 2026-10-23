@@ -2,7 +2,7 @@
   --wm-line: var(--cfg-line, var(--border));
   --wm-panel: var(--cfg-panel, var(--card));
   --wm-muted: var(--cfg-muted, var(--muted-foreground));
-  --wm-accent: var(--cfg-violet, var(--primary));
+  --wm-accent: var(--cfg-accent, var(--primary));
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -75,8 +75,8 @@
   aspect-ratio: 4/3;
   display: grid;
   place-items: center;
-  background: #fff;
-  color: #667085;
+  background: var(--card);
+  color: var(--muted-foreground);
 }
 .wf-media-art img {
   width: 100%;
@@ -99,7 +99,7 @@
 }
 .is-selected .wf-media-check {
   background: var(--wm-accent);
-  color: #fff;
+  color: var(--primary-foreground);
   border: 0;
 }
 .wf-media-select strong,
@@ -121,8 +121,8 @@
   top: 8px;
   padding: 7px;
   border-radius: 7px;
-  background: #fff;
-  color: #303448;
+  background: var(--card);
+  color: var(--foreground);
   box-shadow: 0 1px 5px #0002;
 }
 .wf-media-chosen {

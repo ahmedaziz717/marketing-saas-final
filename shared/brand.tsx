@@ -16,17 +16,30 @@ export function EvokeLoopLogo({
   className?: string;
 }) {
   return (
-    <img
-      className={(symbol ? "evoke-symbol " : "evoke-wordmark ") + className}
-      src={
-        symbol
-          ? "/website/evokeloop-symbol.svg"
-          : `/website/evokeloop-wordmark${reversed ? "-reversed" : ""}.svg`
+    <span
+      className={
+        (symbol ? "evoke-symbol " : "evoke-wordmark ") +
+        "editorial-logo " +
+        className
       }
-      alt="EvokeLoop"
-      width={symbol ? 137 : 487}
-      height={symbol ? 137 : 115}
-    />
+      role="img"
+      aria-label="EvokeLoop"
+      data-reversed={reversed}
+    >
+      {symbol ? (
+        <svg viewBox="0 0 48 40" fill="none" aria-hidden="true">
+          <path
+            d="M24 20C20 10 17 7 12 7C6 7 3 13 3 20s3 13 9 13c5 0 8-3 12-13C28 10 31 7 36 7c6 0 9 6 9 13s-3 13-9 13c-5 0-8-3-12-13Z"
+            stroke="currentColor"
+            strokeWidth="4.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <span>EvokeLoop</span>
+      )}
+    </span>
   );
 }
 const stages = [

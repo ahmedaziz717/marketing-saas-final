@@ -999,15 +999,15 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                   />
                 </div>
               ) : (
-                <div className="flex min-h-72 flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 px-6 py-12 text-center text-white sm:min-h-80">
+                <div className="flex min-h-72 flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-12 text-center text-white sm:min-h-80">
                   <span className="mb-5 rounded-2xl border border-white/15 bg-white/5 p-5">
                     {active ? (
                       <Loader2
                         size={32}
-                        className="animate-spin text-violet-200"
+                        className="animate-spin text-primary"
                       />
                     ) : (
-                      <Clapperboard size={32} className="text-violet-200" />
+                      <Clapperboard size={32} className="text-primary" />
                     )}
                   </span>
                   <h4 className="text-lg font-medium">
