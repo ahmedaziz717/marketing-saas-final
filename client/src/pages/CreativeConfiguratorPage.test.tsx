@@ -1118,6 +1118,17 @@ it("previews a generated version without changing settings or generating, and re
   expect(
     screen.getByRole("tab", { name: "Review" }).getAttribute("aria-selected")
   ).toBe("true");
+  // Reopening the same result must return to Review even though its key is unchanged.
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Results" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  clickJourney(
+    screen.getByRole("button", { name: "Preview Previous lamp square" })
+  );
+  expect(
+    screen.getByRole("tab", { name: "Review" }).getAttribute("aria-selected")
+  ).toBe("true");
   clickJourney(
     screen.getByRole("button", { name: "Use these settings as a new draft" })
   );

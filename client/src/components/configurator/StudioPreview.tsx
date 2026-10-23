@@ -456,6 +456,7 @@ export function StudioPreview({
                         onClick={() => {
                           setSelected(item);
                           setPreviewingHistory(true);
+                          setPreviewTab("review");
                         }}
                         title={
                           item.title +
