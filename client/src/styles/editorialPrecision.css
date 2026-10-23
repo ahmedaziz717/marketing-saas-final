@@ -340,7 +340,7 @@
     padding: 12px;
   }
   .cfg-root:has(.studio-journey) {
-    --journey-preview-height: clamp(220px, 28vw, 320px);
+    --journey-preview-height: clamp(220px, 28vh, 300px);
   }
   .cfg-root .journey-editor .cfg-card-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));

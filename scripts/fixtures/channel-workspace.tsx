@@ -1202,6 +1202,10 @@ const routeForPage: Record<string, string> = {
     "/app/settings/integrations?googleSelection=11111111-1111-4111-8111-111111111111",
   "google-manage": "/app/settings/integrations",
 };
+// The local preview can exercise native browser back/forward; offline CI remains isolated.
+const nativeHistory = (window as any).__fixtureBrowserHistory === true;
+if (nativeHistory && location.pathname === "/")
+  history.replaceState(null, "", routeForPage[which] ?? "/app");
 const fixtureRouter = memoryLocation({
   path: routeForPage[which] ?? "/app/advertising/meta",
 });
@@ -1612,8 +1616,8 @@ createRoot(document.getElementById("root")!).render(
       >
         <TooltipProvider>
           <Router
-            hook={fixtureRouter.hook}
-            searchHook={fixtureRouter.searchHook}
+            hook={nativeHistory ? undefined : fixtureRouter.hook}
+            searchHook={nativeHistory ? undefined : fixtureRouter.searchHook}
           >
             <RoutedPage />
           </Router>
@@ -3736,6 +3740,19 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(
         document.body.textContent?.includes("3 images"),
         "Promotion has one image per size"
+      );
+      layout();
+    }
+    if (which.startsWith("admin-")) {
+      check(
+        !!document.querySelector('[aria-label="Platform administration"]'),
+        "Admin section renders with synthetic platform admin identity"
+      );
+      check(
+        !document.body.textContent?.includes(
+          "Platform administrator access required"
+        ),
+        "Admin fixture does not stop at an access gate"
       );
       layout();
     }

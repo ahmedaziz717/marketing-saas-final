@@ -91,7 +91,7 @@ export function publicDocument(
           <meta property="og:description" content={description} />
           <meta property="og:url" content={canonical} />
           <meta name="twitter:card" content="summary" />
-          <link rel="icon" href="/website/favicon.svg" type="image/svg+xml" />
+          <link rel="icon" href="/website/editorial-loop.svg" type="image/svg+xml" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link
             rel="preconnect"

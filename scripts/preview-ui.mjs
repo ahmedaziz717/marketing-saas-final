@@ -46,11 +46,13 @@ createServer(async (req, res) => {
     res.end(css);
     return;
   }
-  if (url.pathname.startsWith("/website/")) {
+  if (
+    ["/website/", "/studio-art/"].some(prefix =>
+      url.pathname.startsWith(prefix)
+    )
+  ) {
     const file = path.resolve(root, "client/public", "." + url.pathname);
-    if (
-      !file.startsWith(path.resolve(root, "client/public/website") + path.sep)
-    ) {
+    if (!file.startsWith(path.resolve(root, "client/public") + path.sep)) {
       res.writeHead(403);
       res.end();
       return;
@@ -60,9 +62,11 @@ createServer(async (req, res) => {
         "Content-Type",
         file.endsWith(".svg")
           ? "image/svg+xml"
-          : file.endsWith(".woff2")
-            ? "font/woff2"
-            : "application/octet-stream"
+          : file.endsWith(".webp")
+            ? "image/webp"
+            : file.endsWith(".woff2")
+              ? "font/woff2"
+              : "application/octet-stream"
       );
       res.end(await readFile(file));
     } catch {
@@ -73,7 +77,7 @@ createServer(async (req, res) => {
   }
   res.setHeader("Content-Type", "text/html");
   res.end(
-    '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>EvokeLoop UI fixture</title><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>'
+    '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>EvokeLoop UI fixture</title><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script>window.__fixtureBrowserHistory = true;</script><script src="/fixture.js"></script></body></html>'
   );
 }).listen(4179, "127.0.0.1", () =>
   console.log("Synthetic UI preview: http://127.0.0.1:4179/?page=product-home")

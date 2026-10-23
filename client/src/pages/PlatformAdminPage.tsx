@@ -1,3 +1,4 @@
+import { EvokeLoopLogo } from "@shared/brand";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
@@ -1617,11 +1618,7 @@ export function AccountInvitePage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <section className="surface w-full max-w-lg p-8">
-        <img
-          src="/website/evokeloop-wordmark.svg"
-          alt="EvokeLoop"
-          className="mb-8 h-10 w-auto"
-        />
+        <EvokeLoopLogo className="mb-8" />
         <h1 className="text-3xl font-semibold">Activate your account</h1>
         {details ? (
           <>
