@@ -1549,7 +1549,8 @@ export const creativeBuilderRouter = router({
           messages: buildCreativeCopyMessages(
             copySetup,
             resolved.brand,
-            resolved.products
+            resolved.products,
+            await creativePromptDefaults(input.organizationId, copySetup)
           ),
           maxTokens: 6000,
           reasoning: { effort: "low" },

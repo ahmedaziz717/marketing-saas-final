@@ -15,8 +15,13 @@ import type { BuilderBrandKit, ResolvedBuilderInputs } from "./creativeBuilder";
 export function buildCreativeCopyMessages(
   setup: CreativeSetup,
   brand: BuilderBrandKit,
-  products: ResolvedBuilderInputs["products"]
+  products: ResolvedBuilderInputs["products"],
+  defaults: Record<string, string> = {}
 ): Message[] {
+  const themePrompt =
+    setup.themePrompt ||
+    defaults[`creative.theme.${setup.theme}`] ||
+    getCreativeTheme(setup.theme).direction;
   const promotion =
     setup.promotionMode === "platform" ? setup.promotion : undefined;
   return [
@@ -37,7 +42,7 @@ export function buildCreativeCopyMessages(
               products: products.map(({ image, ...product }) => product),
             },
         subjectRules: promotionContext(setup),
-        campaign: creativeMessaging(setup.theme, setup.themePrompt),
+        campaign: creativeMessaging(setup.theme, themePrompt),
         brandBackground: {
           businessProfile: brand.businessProfile,
           name: brand.name,
@@ -48,12 +53,21 @@ export function buildCreativeCopyMessages(
         styleOnly: {
           theme: {
             ...getCreativeTheme(setup.theme),
-            prompt:
-              setup.themePrompt || getCreativeTheme(setup.theme).direction,
+            prompt: themePrompt,
           },
           basePrompt: setup.basePrompt,
-          mood: getCreativeMood(setup.mood),
-          artStyle: getCreativeArtStyle(setup.artStyle),
+          mood: {
+            ...getCreativeMood(setup.mood),
+            direction:
+              defaults[`creative.mood.${setup.mood}`] ??
+              getCreativeMood(setup.mood).direction,
+          },
+          artStyle: {
+            ...getCreativeArtStyle(setup.artStyle),
+            direction:
+              defaults[`creative.style.${setup.artStyle}`] ??
+              getCreativeArtStyle(setup.artStyle).direction,
+          },
           shot: setup.shot,
           placement: setup.placement,
           extraDirection: setup.extraDirection,
