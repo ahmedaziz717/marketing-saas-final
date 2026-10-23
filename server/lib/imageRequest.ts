@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertImagePromptBudget } from "./imagePromptBudget";
 import { storagePut, storageClient, assetBucket } from "../storage";
 import {
   modelRequestBody,
@@ -17,6 +18,7 @@ export async function prepareImageRequest(
     storagePrefix: string;
   }
 ) {
+  assertImagePromptBudget(input.prompt, model);
   const images: string[] = [];
   for (const source of input.originalImages ?? []) {
     const bytes = Buffer.from(source.b64Json, "base64");

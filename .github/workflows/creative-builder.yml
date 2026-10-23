@@ -37,6 +37,16 @@ jobs:
       - run: node scripts/smoke-build.mjs
       - name: Check appearance persistence in Chrome
         run: node scripts/check-theme-persistence.mjs
+      - name: Check Studio draft navigation and reset in Chrome
+        run: node scripts/check-studio-persistence.mjs
+      - name: Save Studio persistence screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-persistence
+          path: artifacts/studio-persistence/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Check dialog layout and approval controls in Chrome
         run: node scripts/check-dialog-layout.mjs
       - name: Check channel pages and publishing workflow in Chrome

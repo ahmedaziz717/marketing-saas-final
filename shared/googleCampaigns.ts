@@ -37,8 +37,12 @@ const landingUrl = z
   .url()
   .max(2048)
   .refine(v => {
-    const u = new URL(v);
-    return u.protocol === "https:" && !u.username && !u.password;
+    try {
+      const u = new URL(v);
+      return u.protocol === "https:" && !u.username && !u.password;
+    } catch {
+      return false;
+    }
   }, "Use an HTTPS landing page.");
 export const googleAssetFieldSchema = z.enum([
   "HEADLINE",

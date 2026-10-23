@@ -141,6 +141,13 @@
       "when": 1792628701986,
       "tag": "0019_google_campaign_review",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792794187393,
+      "tag": "0020_prompt_registry",
+      "breakpoints": true
     }
   ]
 }

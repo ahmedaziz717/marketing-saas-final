@@ -8,7 +8,7 @@ import {
   fieldValueProblem,
   isChoiceField,
 } from "../../shared/workflowInputs";
-import { marketingJson } from "../lib/marketingDrafts";
+import { marketingJsonWith } from "../lib/marketingDrafts";
 import {
   workflowModelFieldProblem,
   workflowModelCompatibility,
@@ -208,7 +208,7 @@ export const workflowsRouter = router({
             }
           : null,
       };
-      return marketingJson(
+      return marketingJsonWith("workflow.choices")(
         input.mode === "choices"
           ? `Generate exactly ${input.count} distinct creative choices. Return {options:[{id,label,direction}]}. Each direction must be useful generation instructions, not just a name. IDs must be distinct.`
           : `Write exactly ${input.count} distinct alternatives for the requested copy field. Return {options:[{id,label,direction}]}. Put the complete proposed copy in direction, with a short label. Preserve verified facts. Proposals are for review; do not claim performance improvements without evidence.`,

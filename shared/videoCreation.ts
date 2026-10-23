@@ -281,7 +281,10 @@ export function videoEndpoint(setup: VideoSetup) {
 }
 
 /** Older saved jobs keep their exact prompt unless creative direction was selected. */
-export function videoPrompt(setup: VideoSetup) {
+export function videoPrompt(
+  setup: VideoSetup,
+  defaults: Record<string, string> = {}
+) {
   const promotion = setup.promotion
     ? promotionContext({
         promotionMode: "platform",
@@ -305,9 +308,9 @@ export function videoPrompt(setup: VideoSetup) {
     setup.prompt,
     branding,
     identity,
-    `Creative theme — ${theme.name}: ${direction.themePrompt || theme.direction}`,
-    `Mood — ${getCreativeMood(direction.mood).name}: ${getCreativeMood(direction.mood).direction}`,
-    `Art style — ${getCreativeArtStyle(direction.artStyle).name}: ${getCreativeArtStyle(direction.artStyle).direction}`,
+    `Creative theme - ${theme.name}: ${direction.themePrompt || defaults[`creative.theme.${direction.theme}`] || theme.direction}`,
+    `Mood - ${getCreativeMood(direction.mood).name}: ${defaults[`creative.mood.${direction.mood}`] || getCreativeMood(direction.mood).direction}`,
+    `Art style - ${getCreativeArtStyle(direction.artStyle).name}: ${defaults[`creative.style.${direction.artStyle}`] || getCreativeArtStyle(direction.artStyle).direction}`,
     direction.setting === "product"
       ? "Setting: focus on the product, service, or brand concept; no people."
       : direction.setting === "lifestyle"
@@ -317,6 +320,7 @@ export function videoPrompt(setup: VideoSetup) {
       ? "Compose the subject naturally for the selected video format."
       : `Keep the main subject toward the ${direction.placement} of the frame.`,
     direction.extraDirection,
+    defaults["video.direction"],
     "Adapt this visual direction into coherent motion. Preserve reference subjects, product geometry and materials. Theme names and examples are visual inspiration, not factual offers. Do not invent discounts, claims, prices, logos, or on-screen copy. Add speech or text only when explicitly requested in the video description.",
   ]
     .filter(Boolean)
@@ -328,9 +332,10 @@ export function videoRequestBody(
   setup: VideoSetup,
   images: string[],
   source?: string,
-  catalogContext?: string
+  catalogContext?: string,
+  defaults: Record<string, string> = {}
 ) {
-  const prompt = [videoPrompt(setup), catalogContext]
+  const prompt = [videoPrompt(setup, defaults), catalogContext]
     .filter(Boolean)
     .join("\n\n");
   if (setup.modelId) {

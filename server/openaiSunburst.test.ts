@@ -70,6 +70,19 @@ describe("direct GPT Image 2.5 Sunburst client", () => {
     expect(body.images[0].image_url).toBe("data:image/png;base64,cG5n");
   });
 
+  it("rejects an oversized final prompt before any provider or storage call", async () => {
+    await expect(
+      generateSunburstImage({
+        rateSnapshot: defaultModelRate(generationModel(DEFAULT_IMAGE_MODEL)!),
+        prompt: "x".repeat(32_001),
+        outputSize: { width: 1080, height: 1080, background: "#ffffff" },
+        storagePrefix: "org-7/creatives/test",
+      })
+    ).rejects.toThrow(/prompt limit/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocked.put).not.toHaveBeenCalled();
+  });
+
   it("uses bounded custom Sunburst canvases and fails closed without the credential", async () => {
     expect(sunburstCanvasSize(1080, 1920)).toBe("864x1536");
     expect(sunburstCanvasSize(1200, 628)).toBe("1536x800");

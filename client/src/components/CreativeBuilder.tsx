@@ -1,4 +1,7 @@
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
+import { PromptDefaultControls } from "@/components/PromptDefaultControls";
+import { usePromptDefaults } from "@/hooks/usePromptDefaults";
+import { newCreativeDefaults } from "@shared/promptRegistry";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
@@ -62,6 +65,7 @@ type Props = { onGenerated: () => void; initialPlanId?: number };
 
 export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   const { organizationId, membership } = useWorkspace();
+  const promptDefaults = usePromptDefaults(organizationId ?? 0);
   const utils = trpc.useUtils();
   const options = trpc.creativeBuilder.options.useQuery(
     { organizationId: organizationId! },
@@ -183,6 +187,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   useEffect(() => {
     if (
       !options.data ||
+      !promptDefaults.data ||
       !organizationId ||
       initialized.current === organizationId
     )
@@ -194,6 +199,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
       const next = defaultCreativeSetup(
         options.data?.brand?.businessProfile?.model
       );
+      Object.assign(next, newCreativeDefaults(next, promptDefaults.data));
       next.campaignPlanId = initialPlanId;
       setupRef.current = next;
       setSetup(next);
@@ -202,7 +208,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
       setUndoCopy(null);
       setFocusedId(null);
     }
-  }, [options.data, organizationId]);
+  }, [options.data, organizationId, promptDefaults.data]);
 
   const appliedPlan = useRef<number | null>(null);
   useEffect(() => {
@@ -423,6 +429,10 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
               const next = defaultCreativeSetup(
                 options.data?.brand?.businessProfile?.model
               );
+              Object.assign(
+                next,
+                newCreativeDefaults(next, promptDefaults.data ?? [])
+              );
               setupRef.current = next;
               setSetup(next);
               setSaved(null);
@@ -487,6 +497,10 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
               onSelect={theme => {
                 const next = applyCreativeTheme(setupRef.current, theme.id);
                 if (next === setupRef.current) return;
+                next.themePrompt =
+                  promptDefaults.data?.find(
+                    p => p.id === `creative.theme.${theme.id}`
+                  )?.value ?? next.themePrompt;
                 setUndoCopy(null);
                 change(next);
               }}
@@ -536,6 +550,11 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                       change({ ...setup, basePrompt: event.target.value })
                     }
                   />
+                  <PromptDefaultControls
+                    promptId="creative.base"
+                    value={setup.basePrompt}
+                    onChange={basePrompt => change({ ...setup, basePrompt })}
+                  />
                 </div>
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -577,6 +596,14 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                     onChange={event =>
                       change({ ...setup, themePrompt: event.target.value })
                     }
+                  />
+                  <PromptDefaultControls
+                    promptId={`creative.theme.${setup.theme}`}
+                    value={
+                      setup.themePrompt ??
+                      getCreativeTheme(setup.theme).direction
+                    }
+                    onChange={themePrompt => change({ ...setup, themePrompt })}
                   />
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">

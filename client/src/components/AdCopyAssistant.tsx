@@ -103,6 +103,7 @@ export function AdCopyAssistant({
   );
   return (
     <div className="rounded-xl border p-4 space-y-3">
+      <PromptDefaultsLink promptId="copy.asset" />
       {!studio && (
         <>
           <h3 className="font-semibold">Generate copy from your setup</h3>
@@ -154,3 +155,4 @@ export function AdCopyAssistant({
     </div>
   );
 }
+import { PromptDefaultsLink } from "./PromptDefaultsLink";

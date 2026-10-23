@@ -28,6 +28,13 @@ export const aiScope = new AsyncLocalStorage<{
   actorUserId: number;
   operation: string;
   quotedCredits?: number;
+  resolvedPromptDefaults?: Promise<
+    import("../../shared/promptRegistry").ResolvedPrompt[]
+  >;
+  promptVersions?: Record<
+    string,
+    { revision: number; baselineVersion: number; source: string }
+  >;
 }>();
 export async function creditState(
   db: any,
@@ -142,6 +149,9 @@ export async function meteredCall<T>(
       period,
       createdAtMs,
       rateSnapshot: rate ?? null,
+      usage: scope?.promptVersions
+        ? { promptVersions: { ...scope.promptVersions } }
+        : null,
     });
   };
   if (scope) await withOrganizationTransaction(db, scope.organizationId, start);
@@ -153,7 +163,12 @@ export async function meteredCall<T>(
       record: async metadata => {
         await db
           .update(aiUsage)
-          .set({ usage: metadata })
+          .set({
+            usage: {
+              ...metadata,
+              promptVersions: { ...scope?.promptVersions },
+            },
+          })
           .where(eq(aiUsage.id, id));
       },
     });
@@ -214,6 +229,7 @@ export async function meteredCall<T>(
         status: "succeeded",
         usage: {
           ...usage,
+          promptVersions: { ...scope?.promptVersions },
           reservedCredits: credits,
           pricingStatus: cost == null ? "awaiting_cost" : "calculated",
           retailMicros: finalCredits * (rate.creditValueMicros ?? 10000),

@@ -3,6 +3,16 @@ import {
   type LearningOrigin,
 } from "@shared/learningHandoff";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
+import { PromptDefaultControls } from "@/components/PromptDefaultControls";
+import { PromptDefaultsLink } from "@/components/PromptDefaultsLink";
+import { usePromptDefaults } from "@/hooks/usePromptDefaults";
+import { newCreativeDefaults } from "@shared/promptRegistry";
+import {
+  studioDraftKey,
+  readStudioDraft,
+  writeStudioDraft,
+  removeStudioDraft,
+} from "@/lib/studioDrafts";
 import { StudioCategories } from "@/components/configurator/StudioCategories";
 import { StudioFonts } from "@/components/configurator/StudioFonts";
 import { StudioFilterTabs } from "@/components/configurator/StudioFilterTabs";
@@ -103,6 +113,7 @@ import {
 import {
   configuratorSections,
   newConfiguration,
+  readConfiguration,
   imageReferenceCount,
   modelCompatibility,
   videoWithModel,
@@ -161,7 +172,11 @@ export default function CreativeConfiguratorPage({
           ":" +
           organizationId +
           ":" +
-          (params.get("learning") ?? "")
+          (params.get("learning") ?? "") +
+          ":" +
+          (requestedVideoId ?? "") +
+          ":" +
+          (params.get("plan") ?? "")
         }
         learningId={params.get("learning")}
         initialKind={initialKind}
@@ -189,10 +204,32 @@ function Configurator({
 }) {
   const studioRoot = useStudioNavigation();
   const { organizationId, membership } = useWorkspace();
+  const promptDefaults = usePromptDefaults(organizationId ?? 0);
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const scope = { organizationId: organizationId! };
   const scopeKey = "creative:" + user?.id + ":" + organizationId;
+  const draftEntity = requestedVideoId
+    ? `video:${requestedVideoId}`
+    : initialPlanId
+      ? `plan:${initialPlanId}`
+      : learningId
+        ? `learning:${learningId}`
+        : "new";
+  const draftKey = studioDraftKey(
+    user?.id,
+    organizationId,
+    "creative",
+    draftEntity
+  );
+  const restoredDraft = useRef(readStudioDraft(draftKey, readConfiguration));
+  const restoredRevision = useRef(
+    readStudioDraft(draftKey ? `${draftKey}:revision` : null, raw => {
+      const value = JSON.parse(raw);
+      return Number.isSafeInteger(value) ? value : null;
+    })
+  );
+  const [resetToken, setResetToken] = useState(0);
   const [learning] = useState<LearningOrigin | null>(() => {
     if (!learningId || !organizationId || !/^[a-f0-9-]{36}$/.test(learningId))
       return null;
@@ -212,7 +249,8 @@ function Configurator({
     }
   });
   const [config, setConfig] = useState<ConfiguratorState>(() => {
-    const restored = newConfiguration();
+    const restored =
+      (!requestedVideoId && restoredDraft.current) || newConfiguration();
     if (initialKind || requestedVideoId || initialUgc)
       restored.kind = requestedVideoId || initialUgc ? "video" : initialKind!;
     if (initialPlanId)
@@ -226,7 +264,7 @@ function Configurator({
           setting: "people",
         },
       };
-    if (learning) {
+    if (learning && !restoredDraft.current) {
       restored.image = {
         ...restored.image,
         name: "Historical evidence test",
@@ -248,6 +286,24 @@ function Configurator({
   });
   const [section, setSection] = useState("type"),
     [category, setCategory] = useState("type");
+  const defaultsApplied = useRef(false);
+  const initialConfig = useRef(config);
+  useEffect(() => {
+    if (defaultsApplied.current || !promptDefaults.data) return;
+    defaultsApplied.current = true;
+    // A late response must not overwrite edits or a restored configuration.
+    setConfig(current =>
+      current === initialConfig.current &&
+      !restoredDraft.current &&
+      !learning &&
+      !initialPlanId
+        ? {
+            ...current,
+            image: newCreativeDefaults(current.image, promptDefaults.data!),
+          }
+        : current
+    );
+  }, [promptDefaults.data, learning, initialPlanId]);
   const [tab, setTab] = useState("all"),
     [search, setSearch] = useState(""),
     [maker, setMaker] = useState("all");
@@ -330,8 +386,17 @@ function Configurator({
     setConfig(previous => ({
       ...previous,
       kind: "video",
-      video: restored,
+      video:
+        restoredDraft.current && restoredRevision.current === job.revision
+          ? restoredDraft.current.video
+          : restored,
     }));
+    if (restoredDraft.current && restoredRevision.current !== job.revision) {
+      setError(
+        "This saved video changed since your local edits. The current saved version was opened."
+      );
+      removeStudioDraft(draftKey ? `${draftKey}:url:video` : null);
+    }
     rememberSaved("video", restored);
     setPendingVideoJob(requestedVideoId);
     setSavedVideo(
@@ -339,6 +404,15 @@ function Configurator({
     );
     setOpenedVideoId(requestedVideoId);
   }, [requestedVideoId, videoOpened, videoDetail.data]);
+  useEffect(() => {
+    if (!videoOpened) return;
+    writeStudioDraft(draftKey, config);
+    if (requestedVideoId)
+      writeStudioDraft(
+        draftKey ? `${draftKey}:revision` : null,
+        savedVideo?.revision ?? videoDetail.data?.revision
+      );
+  }, [draftKey, config, videoOpened, requestedVideoId, savedVideo?.revision]);
   const readiness = trpc.video.options.useQuery(scope, {
     enabled: !!organizationId && canCreate,
   });
@@ -701,6 +775,10 @@ function Configurator({
       requestedVideoId &&
       (detachVideo || next.kind !== configRef.current.kind)
     ) {
+      writeStudioDraft(
+        studioDraftKey(user?.id, organizationId, "creative"),
+        next
+      );
       // Detach the saved-video link without leaving this in-memory session.
       setPendingVideoJob(null);
       navigate("/app/creatives/studio", { replace: true });
@@ -1194,6 +1272,8 @@ function Configurator({
             </div>
           )}
           <StudioSources
+            key={`${config.kind}:${resetToken}`}
+            draftKey={draftKey ? `${draftKey}:url:${config.kind}` : null}
             organizationId={organizationId!}
             role={membership?.role ?? "creator"}
             kind={config.kind}
@@ -1414,7 +1494,10 @@ function Configurator({
             onSelect={id =>
               updateDirection({
                 theme: id,
-                themePrompt: getCreativeTheme(id).direction,
+                themePrompt:
+                  promptDefaults.data?.find(
+                    p => p.id === `creative.theme.${id}`
+                  )?.value ?? getCreativeTheme(id).direction,
               })
             }
           />
@@ -1593,6 +1676,11 @@ function Configurator({
               maxLength={4000}
               onChange={e => updateDirection({ themePrompt: e.target.value })}
             />
+            <PromptDefaultControls
+              promptId={`creative.theme.${direction.theme}`}
+              value={direction.themePrompt ?? theme.direction}
+              onChange={themePrompt => updateDirection({ themePrompt })}
+            />
           </Field>
           <Field
             title="Additional creative direction"
@@ -1615,6 +1703,11 @@ function Configurator({
                   value={image.basePrompt}
                   maxLength={8000}
                   onChange={e => updateImage({ basePrompt: e.target.value })}
+                />
+                <PromptDefaultControls
+                  promptId="creative.base"
+                  value={image.basePrompt}
+                  onChange={basePrompt => updateImage({ basePrompt })}
                 />
               </Field>
             </details>
@@ -2141,6 +2234,40 @@ function Configurator({
               Drafts
             </span>
           </button>
+          <button
+            disabled={busy || !videoOpened}
+            title="Reset only the current studio setup"
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Reset the current ${config.kind} setup on this device? Unsaved choices will be cleared. Saved drafts and workspace prompt defaults are unchanged.`
+                )
+              )
+                return;
+              const fresh = newConfiguration();
+              fresh.image = newCreativeDefaults(
+                fresh.image,
+                promptDefaults.data ?? []
+              );
+              removeStudioDraft(
+                draftKey ? `${draftKey}:url:${config.kind}` : null
+              );
+              removeStudioDraft(
+                draftKey ? `${draftKey}:url:${config.kind}:tab` : null
+              );
+              update({ ...config, [config.kind]: fresh[config.kind] });
+              setResetToken(value => value + 1);
+              if (config.kind === "image") setSavedImage(null);
+              else setSavedVideo(null);
+            }}
+          >
+            Reset setup
+          </button>
+          <PromptDefaultsLink
+            promptId={
+              config.kind === "video" ? "video.direction" : "creative.image"
+            }
+          />
           <button disabled={busy || !videoOpened} onClick={saveDraft}>
             <Save size={15} /> Save draft
           </button>

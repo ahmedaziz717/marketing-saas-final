@@ -21,6 +21,13 @@ import { Link, useSearch } from "wouter";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  studioDraftKey,
+  readStudioDraft,
+  writeStudioDraft,
+  removeStudioDraft,
+} from "@/lib/studioDrafts";
 import { trpc } from "@/lib/trpc";
 import { StudioCard } from "@/components/configurator/StudioCard";
 import {
@@ -47,15 +54,39 @@ import "@/styles/activationStudio.css";
 function ActivationStudio() {
   const studioRoot = useStudioNavigation();
   const { organizationId, membership } = useWorkspace();
+  const { user } = useAuth();
+  const navigationKey = studioDraftKey(
+    user?.id,
+    organizationId,
+    "activation-navigation"
+  );
+  const [lastChannel] = useState(() =>
+    readStudioDraft(navigationKey, raw => {
+      try {
+        const value = JSON.parse(raw);
+        return ["facebook", "meta_ads", "google_ads"].includes(value)
+          ? value
+          : null;
+      } catch {
+        return null;
+      }
+    })
+  );
   const params = new URLSearchParams(useSearch());
   const initialChannel = ["facebook", "meta_ads"].includes(
     params.get("channel") ?? ""
   )
     ? (params.get("channel") as Channel)
     : null;
-  const [channel, setChannel] = useState<Channel | null>(initialChannel);
+  const [channel, setChannel] = useState<Channel | null>(
+    initialChannel ??
+      (lastChannel === "facebook" || lastChannel === "meta_ads"
+        ? lastChannel
+        : null)
+  );
   const [googleSelected, setGoogleSelected] = useState(
-    params.get("channel") === "google_ads"
+    params.get("channel") === "google_ads" ||
+      (!params.get("channel") && lastChannel === "google_ads")
   );
   const [googleVisited, setGoogleVisited] = useState(googleSelected);
   const [assetKey, setAssetKey] = useState(params.get("asset") ?? "");
@@ -67,7 +98,7 @@ function ActivationStudio() {
   const [changeChannel, setChangeChannel] = useState(false);
   const [editVisit, setEditVisit] = useState(0);
   const [showChannels, setShowChannels] = useState(
-    !publicationId && !initialChannel && !googleSelected
+    !publicationId && !channel && !googleSelected
   );
   const [studioEntry, setStudioEntry] = useState<ActivationEntry>({
     section: (["setup", "creative", "copy", "delivery", "preview"].includes(
@@ -87,11 +118,15 @@ function ActivationStudio() {
     visit: 0,
   });
   const [visitedChannels, setVisitedChannels] = useState<Channel[]>(
-    initialChannel && !publicationId ? [initialChannel] : []
+    channel && !publicationId ? [channel] : []
   );
   const [savedDrafts, setSavedDrafts] = useState<
     Partial<Record<Channel, Publication>>
   >({});
+  useEffect(() => {
+    if (!params.get("publication"))
+      writeStudioDraft(navigationKey, googleSelected ? "google_ads" : channel);
+  }, [navigationKey, googleSelected, channel]);
   const scope = { organizationId: organizationId! };
   const connections = trpc.channels.connections.useQuery(
     { ...scope, includeGoogle: true },
@@ -174,6 +209,34 @@ function ActivationStudio() {
     scrollStudioChoices(studioRoot.current);
   }
   function reset() {
+    if (googleSelected)
+      removeStudioDraft(
+        studioDraftKey(
+          user?.id,
+          organizationId,
+          "activation:google",
+          `new:${params.get("connectionId") ?? ""}:${params.get("asset") ?? ""}`
+        )
+      );
+    else if (channel) {
+      removeStudioDraft(
+        studioDraftKey(
+          user?.id,
+          organizationId,
+          `activation:${channel}`,
+          `new:${Number(params.get("plan")) || ""}:${assetKey || ""}`
+        )
+      );
+      if (publicationId)
+        removeStudioDraft(
+          studioDraftKey(
+            user?.id,
+            organizationId,
+            `activation:${channel}`,
+            publicationId
+          )
+        );
+    }
     setGoogleSelected(false);
     setGoogleVisited(false);
     setChangeChannel(false);
@@ -540,11 +603,12 @@ function ActivationStudio() {
   );
 }
 export default function ActivationStudioPage() {
+  const { user } = useAuth();
   const search = useSearch();
   const { organizationId } = useWorkspace();
   return (
     <WorkspaceGate>
-      <ActivationStudio key={`${organizationId}:${search}`} />
+      <ActivationStudio key={`${user?.id}:${organizationId}:${search}`} />
     </WorkspaceGate>
   );
 }

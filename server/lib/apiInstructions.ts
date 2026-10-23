@@ -105,6 +105,7 @@ export async function suggestApiMapping(
   }
   const model = requireLatestGptTextModel((await listLLMModels()).data);
   const result = await invokeLLM({
+    promptTemplateId: "catalog.api",
     model,
     maxTokens: 5000,
     response_format: { type: "json_object" },

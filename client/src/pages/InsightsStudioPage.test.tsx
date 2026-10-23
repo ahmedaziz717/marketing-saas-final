@@ -1,3 +1,6 @@
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 10 } }),
+}));
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import {
@@ -76,6 +79,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 import InsightsStudioPage from "./InsightsStudioPage";
 beforeEach(() => {
+  localStorage.clear();
   state.options.canEdit = true;
   state.report = null;
   state.save.mockReset().mockImplementation(async x => ({

@@ -1,3 +1,6 @@
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 10 } }),
+}));
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import {
@@ -179,6 +182,7 @@ function legacy(content: Record<string, unknown> = {}) {
   } as Publication;
 }
 beforeEach(() => {
+  localStorage.clear();
   localStorage.clear();
   vi.clearAllMocks();
   api.plan = undefined;

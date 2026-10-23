@@ -1,3 +1,14 @@
+vi.mock("@/hooks/usePromptDefaults", async () => {
+  const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
+  const data = PROMPT_REGISTRY.map(p => ({
+    ...p,
+    value: p.baseline,
+    revision: 0,
+    source: "system",
+    updatedAtMs: null,
+  }));
+  return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
+});
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import {
@@ -81,6 +92,9 @@ vi.mock("@/components/LogoSourceTools", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    prompts: {
+      change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({
       creativeBuilder: { options: { invalidate: vi.fn() } },
       video: {
@@ -219,6 +233,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 import CreativeConfiguratorPage from "./CreativeConfiguratorPage";
 beforeEach(() => {
+  localStorage.clear();
   localStorage.clear();
   vi.clearAllMocks();
   api.role = "owner";
@@ -834,7 +849,7 @@ it("opens a failed request in Studio and detaches a new version from its old lin
   );
   expect(api.videoGenerate).not.toHaveBeenCalled();
 });
-it("preserves each type during the visit, then resets unsaved image and video choices on return", () => {
+it("preserves image and video choices when leaving and returning without running", () => {
   const view = open();
   changeField(screen.getByLabelText("Creative name"), {
     target: { value: "My image" },
@@ -855,11 +870,11 @@ it("preserves each type during the visit, then resets unsaved image and video ch
   open();
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
-  ).toBe("Untitled creative");
-  clickJourney(screen.getByRole("button", { name: "Select Video" }));
+  ).toBe("My film");
+  clickJourney(screen.getByRole("button", { name: "Select Image" }));
   expect(
     (screen.getByLabelText("Creative name") as HTMLInputElement).value
-  ).toBe("Untitled video");
+  ).toBe("My image");
   expect(api.save).not.toHaveBeenCalled();
   expect(api.videoSave).not.toHaveBeenCalled();
   expect(api.generate).not.toHaveBeenCalled();
@@ -887,7 +902,7 @@ it("ignores old browser choices and comparisons when starting a new studio visit
 });
 
 it.each(["image", "video"] as const)(
-  "reopens the explicitly saved %s choices without retaining later unsaved edits",
+  "restores local %s edits and lets an explicitly opened saved entity replace them",
   async kind => {
     const view = open();
     if (kind === "video")
@@ -919,7 +934,7 @@ it.each(["image", "video"] as const)(
     open();
     expect(
       (screen.getByLabelText("Creative name") as HTMLInputElement).value
-    ).toBe("Untitled creative");
+    ).toBe("Unsaved revision");
     clickJourney(screen.getByRole("button", { name: "Saved drafts" }));
     clickJourney(
       within(screen.getByRole("dialog")).getByText("Saved campaign")
@@ -1413,3 +1428,81 @@ function clickJourney(element: HTMLElement) {
   });
   if (keep) fireEvent.click(keep);
 }
+
+it.each(["image", "video"] as const)(
+  "retains all %s look, story, model and output choices on return",
+  async kind => {
+    const config = newConfiguration();
+    config.kind = kind;
+    Object.assign(config.image, {
+      name: "Image continuity",
+      mood: "warm",
+      artStyle: "editorial",
+      shot: "lifestyle",
+      placement: "left",
+      extraDirection: "Keep a quiet background",
+      formatIds: ["square_1_1"],
+      modelOptions: { quality: "high" },
+    });
+    Object.assign(config.video, {
+      title: "Video continuity",
+      prompt: "A slow reveal of the service",
+      sound: false,
+      duration: 8,
+      aspectRatio: "9:16",
+      resolution: "1080p",
+      bitrate: "high",
+      modelOptions: {
+        duration: 8,
+        aspect_ratio: "9:16",
+        resolution: "1080p",
+        generate_audio: false,
+      },
+      direction: {
+        ...config.video.direction,
+        mood: "warm",
+        artStyle: "cinematic",
+        extraDirection: "Slow camera movement",
+      },
+    });
+    const view = openSaved(config);
+    changeField(screen.getByLabelText("Creative name"), {
+      target: { value: "Retained complete setup" },
+    });
+    view.unmount();
+    open();
+    clickJourney(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() =>
+      expect(kind === "image" ? api.save : api.videoSave).toHaveBeenCalled()
+    );
+    const actual = (kind === "image" ? api.save : api.videoSave).mock
+      .calls[0][0].setup;
+    if (kind === "image")
+      expect(actual).toMatchObject({
+        mood: "warm",
+        artStyle: "editorial",
+        shot: "lifestyle",
+        placement: "left",
+        extraDirection: "Keep a quiet background",
+        formatIds: ["square_1_1"],
+        modelId: config.image.modelId,
+        modelOptions: { quality: "high" },
+      });
+    else
+      expect(actual).toMatchObject({
+        prompt: "A slow reveal of the service",
+        sound: false,
+        duration: 8,
+        aspectRatio: "9:16",
+        resolution: "1080p",
+        bitrate: "high",
+        direction: {
+          mood: "warm",
+          artStyle: "cinematic",
+          extraDirection: "Slow camera movement",
+        },
+      });
+    expect(api.generate).not.toHaveBeenCalled();
+    expect(api.videoGenerate).not.toHaveBeenCalled();
+  }
+);

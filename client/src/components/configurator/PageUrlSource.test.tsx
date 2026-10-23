@@ -31,6 +31,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   api.page = {
     title: "Homeschool style quiz",
@@ -45,11 +46,16 @@ beforeEach(() => {
   api.import.mockResolvedValue([{}]);
 });
 afterEach(cleanup);
-function setup(kind: "image" | "video" = "image", saved?: any) {
+function setup(
+  kind: "image" | "video" = "image",
+  saved?: any,
+  draftKey?: string
+) {
   const updateImage = vi.fn(),
     updateVideo = vi.fn();
-  render(
+  const view = render(
     <PageUrlSource
+      draftKey={draftKey}
       organizationId={3}
       kind={kind}
       image={{
@@ -64,8 +70,32 @@ function setup(kind: "image" | "video" = "image", saved?: any) {
       onManual={vi.fn()}
     />
   );
-  return { updateImage, updateVideo };
+  return { updateImage, updateVideo, ...view };
 }
+it("restores an unsubmitted managed-services URL and category without fetching or importing", () => {
+  const key = "evokeloop:studio-draft:v1:10:5:creative:new:url:image";
+  const first = setup("image", undefined, key);
+  fireEvent.change(screen.getByLabelText("Page URL"), {
+    target: {
+      value: "https://cybertron-it-new.replit.app/services/managed-it",
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Service/ }));
+  first.unmount();
+  const restored = setup("image", undefined, key);
+  expect((screen.getByLabelText("Page URL") as HTMLInputElement).value).toBe(
+    "https://cybertron-it-new.replit.app/services/managed-it"
+  );
+  expect(
+    screen
+      .getByRole("button", { name: /^Service/ })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(api.preview).not.toHaveBeenCalled();
+  expect(api.import).not.toHaveBeenCalled();
+  expect(restored.updateImage).not.toHaveBeenCalled();
+  expect(restored.updateVideo).not.toHaveBeenCalled();
+});
 async function readPage() {
   fireEvent.change(screen.getByLabelText("Page URL"), {
     target: { value: "https://learn.example.test/quiz/" },
