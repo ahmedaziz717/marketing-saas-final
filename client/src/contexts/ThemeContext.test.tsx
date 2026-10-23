@@ -133,10 +133,145 @@ it("syncs a changed preference across tabs", () => {
       <Controls />
     </ThemeProvider>
   );
+  expect(document.documentElement.style.colorScheme).toBe("light");
+  localStorage.setItem(APPEARANCE_KEY, "dark");
   act(() =>
     window.dispatchEvent(
-      new StorageEvent("storage", { key: APPEARANCE_KEY, newValue: "dark" })
+      new StorageEvent("storage", {
+        key: APPEARANCE_KEY,
+        newValue: "dark",
+        storageArea: localStorage,
+      })
     )
   );
   expect(document.documentElement.style.colorScheme).toBe("dark");
+});
+
+it("does not replay a queued cross-tab event over a newer explicit choice", () => {
+  render(
+    <ThemeProvider switchable>
+      <Controls />
+    </ThemeProvider>
+  );
+  fireEvent.click(screen.getByRole("button", { name: "dark" }));
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: APPEARANCE_KEY,
+        newValue: "light",
+        storageArea: localStorage,
+      })
+    )
+  );
+  expect(screen.getByRole("status").textContent).toBe("dark/dark");
+  expect(localStorage.getItem(APPEARANCE_KEY)).toBe("dark");
+});
+
+it.each([null, "invalid"])(
+  "does not reset an explicit choice for a non-preference storage event (%s)",
+  value => {
+    render(
+      <ThemeProvider switchable>
+        <Controls />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "dark" }));
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: APPEARANCE_KEY,
+          newValue: value,
+          storageArea: localStorage,
+        })
+      )
+    );
+    expect(screen.getByRole("status").textContent).toBe("dark/dark");
+  }
+);
+
+it("ignores session-storage events with the same key", () => {
+  render(
+    <ThemeProvider switchable>
+      <Controls />
+    </ThemeProvider>
+  );
+  fireEvent.click(screen.getByRole("button", { name: "dark" }));
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: APPEARANCE_KEY,
+        newValue: "light",
+        storageArea: sessionStorage,
+      })
+    )
+  );
+  expect(screen.getByRole("status").textContent).toBe("dark/dark");
+});
+
+it.each(["light", "dark", "system"] as const)(
+  "preserves %s through route changes, OS changes and remounts",
+  choice => {
+    const tree = (workspace: boolean) => (
+      <ThemeProvider switchable={workspace}>
+        <Controls />
+      </ThemeProvider>
+    );
+    const view = render(tree(true));
+    fireEvent.click(screen.getByRole("button", { name: choice }));
+    act(() => {
+      dark = true;
+      listeners.forEach(callback => callback());
+    });
+    const resolved = choice === "system" ? "dark" : choice;
+    expect(screen.getByRole("status").textContent).toBe(
+      `${choice}/${resolved}`
+    );
+    view.rerender(tree(false));
+    expect(document.documentElement.style.colorScheme).toBe("light");
+    expect(localStorage.getItem(APPEARANCE_KEY)).toBe(choice);
+    view.rerender(tree(true));
+    expect(screen.getByRole("status").textContent).toBe(
+      `${choice}/${resolved}`
+    );
+    cleanup();
+    render(tree(true));
+    expect(screen.getByRole("status").textContent).toBe(
+      `${choice}/${resolved}`
+    );
+  }
+);
+
+it("applies the latest cross-tab system selection but ignores older queued events", () => {
+  render(
+    <ThemeProvider switchable>
+      <Controls />
+    </ThemeProvider>
+  );
+  fireEvent.click(screen.getByRole("button", { name: "dark" }));
+  localStorage.setItem(APPEARANCE_KEY, "system");
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: APPEARANCE_KEY,
+        newValue: "system",
+        storageArea: localStorage,
+      })
+    )
+  );
+  expect(screen.getByRole("status").textContent).toBe("system/light");
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: APPEARANCE_KEY,
+        newValue: "dark",
+        storageArea: localStorage,
+      })
+    )
+  );
+  expect(screen.getByRole("status").textContent).toBe("system/light");
+  act(() => {
+    dark = true;
+    listeners.forEach(callback => callback());
+  });
+  expect(screen.getByRole("status").textContent).toBe("system/dark");
 });

@@ -65,12 +65,24 @@ export function ThemeProvider({
 
   useEffect(() => {
     const update = (event: StorageEvent) => {
-      if (event.key === APPEARANCE_KEY)
-        setPreference(isTheme(event.newValue) ? event.newValue : defaultTheme);
+      if (event.key !== APPEARANCE_KEY || !isTheme(event.newValue)) return;
+      try {
+        // Storage events are queued. A later choice in this or another tab may
+        // already have superseded this event; never replay that older choice.
+        // Only explicit, current local-storage preferences can change the theme.
+        if (
+          event.storageArea !== localStorage ||
+          localStorage.getItem(APPEARANCE_KEY) !== event.newValue
+        )
+          return;
+        setPreference(event.newValue);
+      } catch {
+        // Keep the in-memory choice when browser storage is unavailable.
+      }
     };
     window.addEventListener("storage", update);
     return () => window.removeEventListener("storage", update);
-  }, [defaultTheme]);
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
