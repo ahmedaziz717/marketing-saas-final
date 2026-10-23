@@ -161,12 +161,29 @@ try {
   });
   const page = (method, params) => send(method, params, sessionId);
   await page("Page.enable");
+  await page("Page.setLifecycleEventsEnabled", { enabled: true });
   await page("Runtime.enable");
+  const loaded = new Set();
   socket.addEventListener("message", event => {
     const m = JSON.parse(event.data);
+    if (
+      m.sessionId === sessionId &&
+      m.method === "Page.lifecycleEvent" &&
+      m.params.name === "DOMContentLoaded"
+    )
+      loaded.add(m.params.loaderId);
     if (m.method === "Runtime.exceptionThrown")
       console.error(JSON.stringify(m.params));
   });
+  const navigate = async url => {
+    const result = await page("Page.navigate", { url });
+    if (result.errorText) throw new Error(result.errorText);
+    for (let i = 0; i < 300; i++) {
+      if (loaded.has(result.loaderId)) return;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error("Navigation did not finish: " + url);
+  };
 
   const evaluate = async (expression, session = sessionId) => {
     const result = await send(
@@ -181,14 +198,23 @@ try {
 
   const waitFor = async expression => {
     for (let i = 0; i < 150; i++) {
-      if (await evaluate(`Boolean(${expression})`)) return;
+      try {
+        if (await evaluate(`Boolean(${expression})`)) return;
+      } catch (error) {
+        if (
+          !/Execution context was destroyed|Cannot find context/.test(
+            String(error)
+          )
+        )
+          throw error;
+      }
       await new Promise(r => setTimeout(r, 50));
     }
     throw new Error(
       "Browser assertion timed out: " +
         expression +
         "; " +
-        (await evaluate("document.body.innerText.slice(0,2000)"))
+        (await evaluate("document.body?.innerText.slice(0,2000)"))
     );
   };
   const click = async name => {
@@ -220,14 +246,14 @@ try {
         deviceScaleFactor: 1,
         mobile: false,
       });
-      await page("Page.navigate", { url: origin });
+      await navigate(origin);
       await waitFor(inputExpression("Creative name"));
       await evaluate(
         'localStorage.clear();localStorage.setItem("theme",' +
           JSON.stringify(theme) +
           ")"
       );
-      await page("Page.reload");
+      await navigate(await evaluate("location.href"));
       await waitFor(inputExpression("Creative name"));
       await fill("Creative name", "Retained " + width + " " + theme);
       await showSources();
@@ -236,8 +262,8 @@ try {
       await waitFor(
         'Object.values(localStorage).some(v=>v.includes("https://example.test/services/managed-it"))'
       );
-      await page("Page.navigate", { url: origin + "/app/analytics/studio" });
-      await waitFor('document.body.innerText.includes("Insights Studio")');
+      await navigate(origin + "/app/analytics/studio");
+      await waitFor('document.body?.innerText.includes("Insights Studio")');
       await evaluate("history.back()");
       await waitFor(
         inputExpression("Creative name") +
@@ -245,7 +271,7 @@ try {
           JSON.stringify("Retained " + width + " " + theme)
       );
       await evaluate("history.forward()");
-      await waitFor('document.body.innerText.includes("Insights Studio")');
+      await waitFor('document.body?.innerText.includes("Insights Studio")');
       await evaluate("history.back()");
       await waitFor(
         inputExpression("Creative name") +
@@ -257,7 +283,7 @@ try {
         inputExpression("Page URL") +
           '?.value==="https://example.test/services/managed-it"'
       );
-      await page("Page.reload");
+      await navigate(await evaluate("location.href"));
       await waitFor(inputExpression("Creative name"));
       await showSources();
       await waitFor(
