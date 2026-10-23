@@ -19,7 +19,7 @@
   height: 48px;
   flex-shrink: 0;
   border-radius: 14px;
-  color: var(--cfg-violet, var(--primary));
+  color: var(--cfg-accent, var(--primary));
   background: var(--cfg-soft, var(--muted));
 }
 .run-progress-heading {
@@ -75,7 +75,7 @@
 .run-progress-track > span {
   display: block;
   height: 100%;
-  background: var(--cfg-violet, var(--primary));
+  background: var(--cfg-accent, var(--primary));
   border-radius: inherit;
   transition: width 0.45s ease;
 }
@@ -115,7 +115,7 @@
   animation: run-progress-pulse 2s ease-in-out infinite;
 }
 .run-progress-live button {
-  color: var(--cfg-violet, var(--primary));
+  color: var(--cfg-accent, var(--primary));
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -161,7 +161,7 @@
 }
 .run-progress-steps li[data-current="true"] > svg,
 .run-progress-steps li[data-current="true"] em {
-  color: var(--cfg-violet, var(--primary));
+  color: var(--cfg-accent, var(--primary));
 }
 .run-progress-steps li[data-complete="true"] > svg {
   color: #3a9877;

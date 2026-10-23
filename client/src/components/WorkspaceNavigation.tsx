@@ -11,6 +11,8 @@ import {
   Settings,
   Sparkles,
   WandSparkles,
+  LayoutGrid,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -125,6 +127,30 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
       },
       { label: "Apps", path: "/app/optimize/apps" },
       { label: "Workflows", path: "/app/optimize/workflows" },
+    ],
+  },
+  {
+    icon: LayoutGrid,
+    label: "Apps",
+    path: "/app/apps",
+    children: [
+      { label: "All Apps", path: "/app/apps", exact: true },
+      { label: "Creative Apps", path: "/app/creatives", exact: true },
+      { label: "Activation Apps", path: "/app/activate/apps" },
+      { label: "Measurement Apps", path: "/app/measure/apps" },
+      { label: "Optimization Apps", path: "/app/optimize/apps" },
+    ],
+  },
+  {
+    icon: Workflow,
+    label: "Workflows",
+    path: "/app/workflows",
+    children: [
+      { label: "All Workflows", path: "/app/workflows", exact: true },
+      { label: "Creative Workflows", path: "/app/creatives/workflows" },
+      { label: "Activation Workflows", path: "/app/activate/workflows" },
+      { label: "Measurement Workflows", path: "/app/measure/workflows" },
+      { label: "Optimization Workflows", path: "/app/optimize/workflows" },
     ],
   },
   {
@@ -340,7 +366,7 @@ export function WorkspaceNavigation({
             <li
               key={item.path}
               data-workflow={item.group ?? "Home"}
-              className={`${item.label === "Library" ? "workspace-nav-divider" : ""} ${item.label === "Settings" ? "workspace-nav-utility" : ""}`}
+              className={`${item.label === "Apps" ? "workspace-nav-divider" : ""} ${item.label === "Settings" ? "workspace-nav-utility" : ""}`}
             >
               {!item.children ? (
                 <Link

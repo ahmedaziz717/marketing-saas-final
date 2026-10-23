@@ -1,3 +1,13 @@
+import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
+import OnboardingPage from "../../client/src/pages/OnboardingPage";
+import { AccountInvitePage } from "../../client/src/pages/PlatformAdminPage";
+import CatalogPage from "../../client/src/pages/CatalogPage";
+import WebsiteImportPage from "../../client/src/pages/WebsiteImportPage";
+import BrandWorkspacePage from "../../client/src/pages/BrandWorkspacePage";
+import InvitePage from "../../client/src/pages/InvitePage";
+import NotFound from "../../client/src/pages/NotFound";
+import StageAppsPage from "../../client/src/pages/StageAppsPage";
+import PlatformWebsitePage from "../../client/src/pages/PlatformWebsitePage";
 import { WorkflowCanvas } from "../../client/src/components/WorkflowCanvas";
 import { WorkflowFormEditor } from "../../client/src/components/WorkflowFormEditor";
 import { WorkflowAppStudio } from "../../client/src/components/WorkflowAppStudio";
@@ -45,6 +55,7 @@ import { observable } from "@trpc/server/observable";
 import { trpc } from "../../client/src/lib/trpc";
 import LoginPage from "../../client/src/pages/LoginPage";
 import WorkspaceApp from "../../client/src/pages/WorkspaceApp";
+import ToolsDirectoryPage from "../../client/src/pages/ToolsDirectoryPage";
 import ProductOverviewPage from "../../client/src/pages/ProductOverviewPage";
 import PlannedFeaturePage from "../../client/src/pages/PlannedFeaturePage";
 import SettingsPage from "../../client/src/pages/SettingsPage";
@@ -1073,6 +1084,46 @@ const which =
     "page"
   ) ?? "publishing";
 const routeForPage: Record<string, string> = {
+  "optimization-intelligence": "/app/optimize/intelligence",
+  onboarding: "/app/onboarding-fixture",
+  "account-invite": "/account-invite/fixture-token",
+  ...Object.fromEntries(
+    [
+      "accounts",
+      "usage",
+      "billing",
+      "tiers",
+      "models",
+      "pricing",
+      "finance",
+      "audit",
+    ].map(section => [`admin-${section}`, `/admin/${section}`])
+  ),
+  "catalog-home": "/app/catalog",
+  "catalog-import": "/app/catalog/import",
+  "brand-workspace": "/app/brand-workspace-fixture",
+  "workspace-invite": "/invite/fixture-token",
+  "not-found": "/404",
+  "admin-website": "/admin/website",
+  ...Object.fromEntries(
+    [
+      "team",
+      "integrations",
+      "activity",
+      "notifications",
+      "security",
+      "data",
+      "developer",
+    ].map(section => [`settings-${section}`, `/app/settings/${section}`])
+  ),
+  ...Object.fromEntries(
+    ["activate", "measure", "optimize"].flatMap(family => [
+      [`apps-${family}`, `/app/${family}/apps`],
+      [`workflows-${family}`, `/app/${family}/workflows`],
+    ])
+  ),
+  "apps-directory": "/app/apps",
+  "workflows-directory": "/app/workflows",
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
   "product-facts": "/app/release-fixture",
@@ -1326,6 +1377,66 @@ function WorkflowModelFormFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "onboarding")
+    return (
+      <DashboardLayout>
+        <OnboardingPage />
+      </DashboardLayout>
+    );
+  if (which === "account-invite") return <AccountInvitePage />;
+  if (path === "/app/optimize/intelligence")
+    return (
+      <DashboardLayout>
+        <OptimizationIntelligencePage />
+      </DashboardLayout>
+    );
+  if (path === "/404") return <NotFound />;
+  if (path.startsWith("/invite/")) return <InvitePage />;
+  if (path === "/admin/website") return <PlatformWebsitePage />;
+  if (which.startsWith("settings-"))
+    return (
+      <DashboardLayout>
+        <SettingsPage />
+      </DashboardLayout>
+    );
+  if (path === "/app/catalog")
+    return (
+      <DashboardLayout>
+        <CatalogPage />
+      </DashboardLayout>
+    );
+  if (path === "/app/catalog/import")
+    return (
+      <DashboardLayout>
+        <WebsiteImportPage />
+      </DashboardLayout>
+    );
+  if (path === "/app/brand-workspace-fixture")
+    return (
+      <DashboardLayout>
+        <BrandWorkspacePage />
+      </DashboardLayout>
+    );
+  for (const family of ["activate", "measure", "optimize"] as const) {
+    if (path === `/app/${family}/apps`)
+      return (
+        <DashboardLayout>
+          <StageAppsPage family={family} />
+        </DashboardLayout>
+      );
+    if (path === `/app/${family}/workflows`)
+      return (
+        <DashboardLayout>
+          <CreativeWorkflowsPage family={family} />
+        </DashboardLayout>
+      );
+  }
+  if (path === "/app/apps" || path === "/app/workflows")
+    return (
+      <DashboardLayout>
+        <ToolsDirectoryPage workflows={path === "/app/workflows"} />
+      </DashboardLayout>
+    );
   if (path === "/app/workflow-model-form-fixture")
     return (
       <DashboardLayout>
@@ -1489,7 +1600,16 @@ window.confirm = () => true;
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={client} queryClient={query}>
     <QueryClientProvider client={query}>
-      <ThemeProvider switchable defaultTheme="light">
+      <ThemeProvider
+        switchable
+        defaultTheme={
+          new URLSearchParams(
+            (window as any).__fixtureQuery ?? location.search
+          ).get("theme") === "dark"
+            ? "dark"
+            : "light"
+        }
+      >
         <TooltipProvider>
           <Router
             hook={fixtureRouter.hook}
@@ -1552,6 +1672,17 @@ async function click(name: string) {
   await pause();
 }
 function layout() {
+  for (const surface of document.querySelectorAll<HTMLElement>(
+    ".cfg-root, .create-workspace, [role=dialog]"
+  )) {
+    const style = getComputedStyle(surface);
+    check(
+      ["--primary", "--background", "--card", "--border"].every(token =>
+        style.getPropertyValue(token).trim()
+      ),
+      "Studio and portal semantic tokens resolve without cycles"
+    );
+  }
   for (const grid of document.querySelectorAll<HTMLElement>(".choice-grid")) {
     const tiles = Array.from(grid.querySelectorAll<HTMLElement>(".choice-tile"))
       .filter(tile => tile.getClientRects().length)
@@ -2005,8 +2136,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         );
         check(
           getComputedStyle(button("Retry failed delivery")!).backgroundColor ===
-            "rgb(109, 80, 216)",
-          "Recovery action uses the Studio violet theme"
+            (document.documentElement.classList.contains("dark")
+              ? "rgb(119, 217, 211)"
+              : "rgb(0, 127, 130)"),
+          "Recovery action uses the shared teal theme"
         );
         if (innerWidth > 900)
           check(
@@ -2196,7 +2329,12 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           "Section changes never open discovery dialogs"
         );
         await studioSection("Look & Feel", false);
-        await click("Review");
+        await pressStudioControl(
+          document.querySelector<HTMLButtonElement>(
+            ".journey-review-link button"
+          ) ?? undefined,
+          "Review unviewed choices"
+        );
         check(
           !!document.querySelector('[aria-label="Review unviewed choices"]'),
           "Review opens only on request"
@@ -2338,7 +2476,9 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         document.querySelector<HTMLElement>('[role="dialog"]')!;
       check(
         getComputedStyle(reviewSurface).getPropertyValue("--primary").trim() ===
-          "#6d50d8",
+          (document.documentElement.classList.contains("dark")
+            ? "#77d9d3"
+            : "#007f82"),
         "Calendar review dialog retains the workspace theme"
       );
       check(
@@ -2645,11 +2785,51 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "Visual test does not change real accounts"
       );
     }
+    if (which === "apps-directory" || which === "workflows-directory") {
+      const workflows = which === "workflows-directory";
+      const cards = [
+        ...document.querySelectorAll<HTMLAnchorElement>(
+          ".tools-directory-card"
+        ),
+      ];
+      check(cards.length === 4, "All four tool collections remain available");
+      check(
+        cards.every(
+          (card, i) =>
+            card.getAttribute("href") ===
+            (workflows
+              ? [
+                  "/app/creatives/workflows",
+                  "/app/activate/workflows",
+                  "/app/measure/workflows",
+                  "/app/optimize/workflows",
+                ]
+              : [
+                  "/app/creatives",
+                  "/app/activate/apps",
+                  "/app/measure/apps",
+                  "/app/optimize/apps",
+                ])[i]
+        ),
+        "Collections link to their existing family libraries"
+      );
+      check(
+        document
+          .querySelector('.directory-switch [aria-current="page"]')
+          ?.textContent?.trim() === (workflows ? "Workflows" : "Apps"),
+        "Apps and Workflows have distinct active navigation"
+      );
+      check(
+        mutations.length === 0,
+        "Browsing collections never executes a workflow"
+      );
+      layout();
+    }
     if (which === "product-home") {
       check(
         document
           .querySelector("h1")
-          ?.textContent?.includes("Your marketing studios") &&
+          ?.textContent?.includes("Your marketing, connected.") &&
           document.querySelectorAll(".workspace-studio-card").length === 4,
         "Studios are the main entry points on Home"
       );

@@ -1,13 +1,4 @@
-.activation-root {
-  --primary: var(--cfg-violet);
-  --primary-foreground: var(--cfg-panel);
-  --background: var(--cfg-bg);
-  --card: var(--cfg-panel);
-  --muted: var(--cfg-soft);
-  --muted-foreground: var(--cfg-muted);
-  --border: var(--cfg-line);
-  --ring: var(--cfg-violet);
-}
+/* Activation inherits the shared semantic tokens; cfg aliases flow one way. */
 .activation-section-title h2,
 .activation-saved h2 {
   font-size: 22px;
@@ -116,8 +107,8 @@
   margin-top: 10px;
 }
 .activation-direction-heading .cfg-secondary[aria-pressed="true"] {
-  color: var(--cfg-violet);
-  border-color: var(--cfg-violet);
+  color: var(--cfg-accent);
+  border-color: var(--cfg-accent);
   background: var(--cfg-soft);
 }
 @media (max-width: 600px) {
@@ -170,7 +161,7 @@
   justify-content: center;
   gap: 16px;
   background: linear-gradient(130deg, var(--cfg-soft), var(--cfg-panel));
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
 }
 .activation-choice-symbol span {
   font-size: 22px;
@@ -482,8 +473,8 @@
 .studio-copy-changed {
   margin: 14px 0;
   padding: 12px;
-  border-left: 3px solid #c084fc;
-  background: #c084fc12;
+  border-left: 3px solid var(--primary);
+  background: var(--accent);
   font-size: 13px;
 }
 .studio-copy-layout {
@@ -569,7 +560,7 @@
   gap: 18px;
   padding: 22px;
   margin: 22px 0;
-  border: 1px solid var(--cfg-violet);
+  border: 1px solid var(--cfg-accent);
   border-radius: 16px;
   background: var(--cfg-soft);
 }
@@ -589,9 +580,9 @@
   width: 58px;
   height: 58px;
   flex-shrink: 0;
-  border: 2px solid var(--cfg-violet);
+  border: 2px solid var(--cfg-accent);
   border-radius: 50%;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   animation: studio-copy-pulse 1.8s ease-in-out infinite;
 }
 .studio-generation-track {
@@ -604,7 +595,7 @@
   display: block;
   width: 35%;
   height: 100%;
-  background: var(--cfg-violet);
+  background: var(--cfg-accent);
   animation: studio-copy-travel 1.6s ease-in-out infinite;
 }
 .studio-copy-skeleton {
@@ -667,7 +658,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid var(--cfg-line);
-  border-top-color: var(--cfg-violet);
+  border-top-color: var(--cfg-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -695,7 +686,7 @@
   padding: 16px 0;
 }
 .studio-review-summary button {
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   text-decoration: underline;
   white-space: nowrap;
   font-size: 12px;
@@ -722,7 +713,7 @@
 }
 @keyframes studio-copy-pulse {
   50% {
-    box-shadow: 0 0 0 8px #8b6cf019;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 10%, transparent);
     transform: scale(0.94);
   }
 }

@@ -26,7 +26,7 @@ export function OptimizationResult({
         <h3 className="font-semibold capitalize">
           {r.kind.replaceAll("_", " ")}
         </h3>
-        <span className="rounded-full bg-violet-500/10 px-3 py-1 text-xs">
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs">
           {live
             ? r.decision === "propose_test"
               ? "Test candidate identified"
@@ -225,7 +225,9 @@ export function OptimizationResult({
           </p>
         ))}
       </div>
-      {r.decision === "propose_test" && r.generationBrief && <LearningHandoffButton result={r} />}
+      {r.decision === "propose_test" && r.generationBrief && (
+        <LearningHandoffButton result={r} />
+      )}
       <details>
         <summary className="text-sm">
           Attribution and interpretation limits

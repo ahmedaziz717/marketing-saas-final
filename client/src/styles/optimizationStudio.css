@@ -19,7 +19,7 @@
   padding: 1.25rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--cfg-violet) 7%, var(--background));
+  background: color-mix(in srgb, var(--cfg-accent) 7%, var(--background));
 }
 .optimization-explainer {
   display: flex;
@@ -44,12 +44,12 @@
   cursor: pointer;
 }
 .optimization-focus[data-selected="true"] {
-  border-color: var(--cfg-violet);
-  background: color-mix(in srgb, var(--cfg-violet) 9%, var(--background));
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 9%, var(--background));
 }
 .optimization-focus input {
   margin-top: 0.25rem;
-  accent-color: var(--cfg-violet);
+  accent-color: var(--cfg-accent);
 }
 .optimization-focus strong,
 .optimization-focus small {

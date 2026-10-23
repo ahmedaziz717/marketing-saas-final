@@ -511,7 +511,7 @@ function ApiCatalogForm({
             </p>
           </details>
           {preview.data?.issues?.length ? (
-            <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 space-y-3 dark:bg-violet-950/20">
+            <div className="rounded-xl border border-border bg-accent/50 p-4 space-y-3 dark:bg-accent/20">
               <p className="font-medium">
                 Optional details to improve this import
               </p>

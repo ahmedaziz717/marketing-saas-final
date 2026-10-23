@@ -275,3 +275,26 @@
     display: none;
   }
 }
+
+/* Font wordmark and vector symbol shared with the workspace. */
+.editorial-logo {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-navy);
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 750;
+  letter-spacing: -0.055em;
+  line-height: 1.2;
+}
+.editorial-logo[data-reversed="true"] {
+  color: var(--brand-white);
+}
+.editorial-logo.evoke-symbol {
+  color: var(--teal-ink);
+}
+.editorial-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

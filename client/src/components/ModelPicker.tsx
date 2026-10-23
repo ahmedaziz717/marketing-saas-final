@@ -70,7 +70,7 @@ export function ModelPicker({
         onClick={() => setOpen(true)}
         className="flex w-full min-w-0 items-center gap-3 rounded-xl border bg-background px-3 py-3 text-left text-sm hover:border-primary disabled:opacity-50"
       >
-        <Sparkles size={16} className="shrink-0 text-violet-500" />
+        <Sparkles size={16} className="shrink-0 text-primary" />
         <span className="min-w-0 flex-1">
           <strong className="block truncate font-medium">
             {model?.name ?? "Choose a model"}
@@ -81,7 +81,7 @@ export function ModelPicker({
           </span>
         </span>
         {choice?.direct && (
-          <span className="rounded-full bg-violet-500/10 px-2 py-1 text-[10px] font-medium text-violet-600 dark:text-violet-300">
+          <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary dark:text-primary">
             Great Value
           </span>
         )}
@@ -138,9 +138,9 @@ export function ModelPicker({
                   onChange(m.id, modelDefaults(definition));
                   setOpen(false);
                 }}
-                className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${m.id === selected ? "border-violet-500 bg-violet-500/5" : "hover:border-violet-400 hover:bg-muted/50"} disabled:opacity-50`}
+                className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${m.id === selected ? "border-primary bg-primary/5" : "hover:border-primary hover:bg-muted/50"} disabled:opacity-50`}
               >
-                <span className="mt-1 shrink-0 rounded-lg bg-violet-500/10 p-2 text-violet-500">
+                <span className="mt-1 shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
                   <Sparkles size={17} />
                 </span>
                 <span className="min-w-0 flex-1 break-words">
@@ -153,7 +153,7 @@ export function ModelPicker({
                       {m.maker}
                     </span>
                     {m.direct && (
-                      <span className="text-violet-600 dark:text-violet-300">
+                      <span className="text-primary dark:text-primary">
                         Great Value
                       </span>
                     )}
@@ -181,7 +181,7 @@ export function ModelPicker({
                   )}
                 </span>
                 {m.id === selected && (
-                  <Check size={16} className="shrink-0 text-violet-500" />
+                  <Check size={16} className="shrink-0 text-primary" />
                 )}
               </button>
             ))}

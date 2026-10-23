@@ -227,15 +227,15 @@ try {
       assert.equal(layout.scripts, 0, "No executable client JS is required");
       assert.equal(layout.links.length, 0, `Offscreen links ${url} ${width}`);
       const logo = await evaluate(
-        `(()=>{const i=document.querySelector('.site-header .evoke-wordmark');return {loaded:i.complete&&i.naturalWidth>0,width:i.getBoundingClientRect().width,height:i.getBoundingClientRect().height}})()`
+        `(()=>{const i=document.querySelector('.site-header .evoke-wordmark');return {loaded:i.getAttribute("role")==="img"&&i.getAttribute("aria-label")==="EvokeLoop"&&i.textContent.trim()==="EvokeLoop",width:i.getBoundingClientRect().width,height:i.getBoundingClientRect().height}})()`
       );
       assert.ok(
         logo.loaded && logo.width >= 172,
         "Approved wordmark must load at its minimum visible width"
       );
       assert.ok(
-        Math.abs(logo.width / logo.height - 487 / 115) < 0.02,
-        "Wordmark keeps its aspect ratio"
+        logo.height >= 30 && logo.height <= 50,
+        "Font wordmark retains a legible, compact height"
       );
       if (url === "/" || url === "/product") {
         assert.deepEqual(

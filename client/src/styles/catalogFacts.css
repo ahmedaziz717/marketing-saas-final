@@ -81,7 +81,7 @@
   width: 100%;
   text-align: left;
   padding: 15px 16px;
-  border: 1px solid var(--cfg-line, #dedde8);
+  border: 1px solid var(--cfg-line, var(--border));
   border-radius: 12px;
   background: var(--card, white);
   color: inherit;
@@ -92,11 +92,11 @@
   line-height: 1.65;
 }
 .cfg-specification-list button[aria-pressed="true"] {
-  border-color: #8062ce;
-  background: color-mix(in srgb, #8062ce 7%, var(--card, white));
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--card, white));
 }
 .cfg-specification-list button:focus-visible {
-  outline: 3px solid #8062ce;
+  outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
 .cfg-specification-list button:disabled {
@@ -121,11 +121,11 @@
 
 .cfg-asset-readiness {
   padding: 14px 16px;
-  border: 1px solid #dcd3f0;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #f6f2fc;
+  background: var(--background);
   font-size: 12px;
-  color: #433651;
+  color: var(--border);
 }
 .cfg-asset-readiness ul {
   list-style: disc;

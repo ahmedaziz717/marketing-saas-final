@@ -6,6 +6,8 @@ import {
   Link2,
   Palette,
   ShieldCheck,
+  LayoutGrid,
+  Workflow,
 } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { PageHeader } from "@/components/PageHeader";
@@ -20,8 +22,8 @@ function Dashboard() {
     <>
       <PageHeader
         eyebrow={organization?.name || "Your workspace"}
-        title="Your marketing studios"
-        description="Create, activate, and measure. Each studio guides you from setup to results."
+        title="Your marketing, connected."
+        description="A clear place to create, activate, measure, and improve."
         action={
           <Button asChild variant="outline">
             <Link href="/app/creatives/drafts">
@@ -31,6 +33,7 @@ function Dashboard() {
           </Button>
         }
       />
+      <h2 className="workspace-section-title">Your studios</h2>
       <section
         className="workspace-studios-grid"
         aria-label="Marketing studios"
@@ -65,6 +68,24 @@ function Dashboard() {
           )
         )}
       </section>
+      <nav className="workspace-tools-groups" aria-label="Apps and Workflows">
+        <Link href="/app/apps">
+          <LayoutGrid size={22} />
+          <span>
+            <strong>Apps</strong>
+            <small>Run your team's published tools</small>
+          </span>
+          <ArrowRight size={18} />
+        </Link>
+        <Link href="/app/workflows">
+          <Workflow size={22} />
+          <span>
+            <strong>Workflows</strong>
+            <small>Build and manage connected steps</small>
+          </span>
+          <ArrowRight size={18} />
+        </Link>
+      </nav>
       {organizationId && (
         <div className="workspace-home-section">
           <InsightsDashboard

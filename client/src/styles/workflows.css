@@ -1,5 +1,5 @@
 .wf-library {
-  --wf-accent: #7c5ce7;
+  --wf-accent: var(--primary);
   padding: 10px 6px 30px;
 }
 .wf-library-heading {
@@ -29,8 +29,8 @@
 }
 .wf-library-heading button,
 .wf-header-actions > button:last-child {
-  background: #7455dc;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   border-radius: 9px;
 }
 .wf-section-title {
@@ -59,7 +59,7 @@
   margin-bottom: 40px;
 }
 .wf-template {
-  --tint: #7c5ce7;
+  --tint: var(--primary);
   border: 1px solid var(--border);
   border-radius: 15px;
   text-align: left;
@@ -196,8 +196,8 @@
   margin-top: 4px;
 }
 .wf-saved-icon {
-  color: #9272ea;
-  background: #8c6bea15;
+  color: var(--primary);
+  background: var(--accent);
   padding: 12px;
   border-radius: 9px;
 }
@@ -234,7 +234,7 @@
   min-height: 0;
 }
 .wf-editor {
-  --wf-accent: #9272ea;
+  --wf-accent: var(--primary);
   flex: 1;
   min-width: 0;
   display: flex;
@@ -327,8 +327,12 @@
   touch-action: none;
 }
 .dark .wf-canvas {
-  background-color: #101113;
-  background-image: radial-gradient(circle, #37383d 0.75px, transparent 0.8px);
+  background-color: var(--background);
+  background-image: radial-gradient(
+    circle,
+    var(--border) 0.75px,
+    transparent 0.8px
+  );
 }
 .wf-plane {
   position: absolute;
@@ -389,8 +393,8 @@
   user-select: none;
 }
 .dark .wf-node {
-  background: #1b1c1f;
-  border-color: #323339;
+  background: var(--card);
+  border-color: var(--border);
   box-shadow: 0 5px 24px #0003;
 }
 .wf-node.is-selected {
@@ -718,8 +722,8 @@
   color: var(--foreground);
 }
 .wf-canvas-toolbar button:first-child {
-  background: #7c5ce7;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .wf-canvas-toolbar button:disabled {
   opacity: 0.3;
@@ -791,8 +795,8 @@
   height: 35px;
   display: grid;
   place-items: center;
-  background: #8d73d219;
-  color: #ad8df3;
+  background: var(--accent);
+  color: var(--primary);
   border-radius: 8px;
   flex-shrink: 0;
 }
@@ -874,7 +878,7 @@
 .wf-checkbox > input {
   width: 14px !important;
   height: 14px;
-  accent-color: #9272ea;
+  accent-color: var(--primary);
 }
 .wf-direction {
   border-block: 1px solid var(--border);
@@ -946,13 +950,13 @@
   max-width: 290px;
 }
 .wf-blank > svg {
-  color: #9272ea;
+  color: var(--primary);
   opacity: 0.8;
 }
 .wf-blank > button {
   margin-top: 8px;
-  background: #7455dc;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .wf-connect-hint {
   position: absolute;
@@ -1036,8 +1040,8 @@
   margin-right: 4px;
 }
 .wf-status-dot.is-running {
-  background: #a68aed;
-  box-shadow: 0 0 0 4px #9272ea15;
+  background: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 8%, transparent);
   animation: wf-pulse 2s infinite;
 }
 .wf-runbar select {
@@ -1061,11 +1065,11 @@
   gap: 12px;
   padding: 18px;
   border-radius: 12px;
-  background: #9272ea12;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
 }
 .wf-credit-total strong {
   font-size: 36px;
-  color: #a183ef;
+  color: var(--primary);
 }
 .wf-credit-total span {
   font-size: 13px;
@@ -1073,7 +1077,7 @@
 }
 @keyframes wf-pulse {
   50% {
-    box-shadow: 0 0 0 7px #9272ea05;
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--primary) 2%, transparent);
   }
 }
 @media (max-width: 1150px) {
@@ -1161,29 +1165,30 @@
 
 /* Shared workflow workspaces: section color is context, content stays neutral. */
 [data-family="create"] {
-  --wf-accent: #7455dc;
+  --wf-accent: var(--primary);
 }
 [data-family="activate"] {
-  --wf-accent: #346ac9;
+  --wf-accent: var(--chart-2);
 }
 [data-family="measure"] {
-  --wf-accent: #148071;
+  --wf-accent: var(--primary);
 }
 [data-family="optimize"] {
-  --wf-accent: #a56a13;
+  --wf-accent: var(--chart-4);
 }
 .wf-library[data-family="activate"] {
-  --wf-accent: #346ac9;
+  --wf-accent: var(--chart-2);
 }
 .wf-library[data-family="measure"] {
-  --wf-accent: #148071;
+  --wf-accent: var(--primary);
 }
 .wf-library[data-family="optimize"] {
-  --wf-accent: #a56a13;
+  --wf-accent: var(--chart-4);
 }
 .wf-library-heading > button,
 .wf-header-actions > button:last-child {
-  background: var(--wf-accent, #7455dc);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .wf-template[data-color="teal"] {
   --tint: #148071;
@@ -1212,8 +1217,12 @@
   width: 44px;
   height: 44px;
   border-radius: 11px;
-  color: var(--wf-accent, #7455dc);
-  background: color-mix(in srgb, var(--wf-accent, #7455dc) 12%, transparent);
+  color: var(--wf-accent, var(--primary));
+  background: color-mix(
+    in srgb,
+    var(--wf-accent, var(--primary)) 12%,
+    transparent
+  );
   margin-bottom: 15px;
 }
 .wf-app-card h3 {
@@ -1241,7 +1250,7 @@
 }
 .wf-app-card a:first-child {
   font-weight: 600;
-  color: var(--wf-accent, #7455dc);
+  color: var(--wf-accent, var(--primary));
 }
 .wf-version {
   position: absolute;
@@ -1281,7 +1290,7 @@
 .wf-result-link {
   display: block;
   padding: 10px;
-  color: var(--wf-accent, #7455dc);
+  color: var(--wf-accent, var(--primary));
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -1300,7 +1309,7 @@
   line-height: 1.6;
 }
 .wf-data-result span {
-  color: var(--wf-accent, #7455dc);
+  color: var(--wf-accent, var(--primary));
 }
 .wf-palette-filter {
   display: flex;
@@ -1337,7 +1346,7 @@
   gap: 20px;
   padding: 16px;
   border: 1px solid
-    color-mix(in srgb, var(--wf-accent, #7455dc) 25%, var(--border));
+    color-mix(in srgb, var(--wf-accent, var(--primary)) 25%, var(--border));
   border-radius: 12px;
   background: var(--card);
   font-size: 13px;

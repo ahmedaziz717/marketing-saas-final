@@ -91,7 +91,7 @@ export default function OnboardingPage() {
       </div>
       <div className="surface grid overflow-hidden xl:grid-cols-[.62fr_1.38fr]">
         <aside className="bg-[#201c25] p-8 text-white md:p-10">
-          <Sparkles className="h-5 w-5 text-violet-300" />
+          <Sparkles className="h-5 w-5 text-primary" />
           <h2 className="mt-5 text-3xl font-semibold leading-tight">
             Start with the company’s public truth.
           </h2>

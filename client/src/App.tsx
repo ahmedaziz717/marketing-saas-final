@@ -17,6 +17,7 @@ import { PRODUCT_FEATURES } from "@shared/frameProduct";
 import PlatformWebsitePage from "./pages/PlatformWebsitePage";
 import Home from "./pages/Home";
 import WorkspaceApp from "./pages/WorkspaceApp";
+import ToolsDirectoryPage from "./pages/ToolsDirectoryPage";
 import BrandWorkspacePage from "./pages/BrandWorkspacePage";
 import BriefsPage from "./pages/BriefsPage";
 import CreativesPage from "./pages/CreativesPage";
@@ -71,6 +72,12 @@ function Router() {
       <Route path="/admin/:section" component={PlatformAdminPage} />
       <Route path="/account-invite/:token" component={AccountInvitePage} />
       <Route path="/app" component={WorkspaceApp} />
+      <Route path="/app/apps">
+        <ToolsDirectoryPage />
+      </Route>
+      <Route path="/app/workflows">
+        <ToolsDirectoryPage workflows />
+      </Route>
       <Route path="/app/platform/website">
         <Redirect to="/admin/website" />
       </Route>

@@ -198,11 +198,11 @@ export function LifestylePersonPicker<
   const pages = Math.max(1, Math.ceil(entries.length / pageSize));
   const currentPage = Math.min(page, pages - 1);
   return (
-    <section className="mt-5 rounded-xl border border-violet-200 bg-violet-50/30 p-4 sm:p-5">
+    <section className="mt-5 rounded-xl border border-border bg-accent/30 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 font-semibold">
-            <UsersRound className="h-5 w-5 text-violet-600" />
+            <UsersRound className="h-5 w-5 text-primary" />
             Models
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -244,7 +244,7 @@ export function LifestylePersonPicker<
               {libraryFor(ref) && (
                 <button
                   type="button"
-                  className="mt-1 text-xs text-violet-700 underline disabled:opacity-50"
+                  className="mt-1 text-xs text-primary underline disabled:opacity-50"
                   disabled={save.isPending}
                   onClick={() => {
                     const model = libraryFor(ref)!;
@@ -473,11 +473,11 @@ export function LifestylePersonPicker<
                           aria-pressed={chosen}
                           disabled={disabled}
                           onClick={() => toggle(entry.ref)}
-                          className={`relative min-w-0 rounded-xl border-2 bg-background p-1.5 text-left transition disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-600 ${chosen ? "border-violet-600 bg-violet-50" : "border-transparent hover:border-violet-300"}`}
+                          className={`relative min-w-0 rounded-xl border-2 bg-background p-1.5 text-left transition disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${chosen ? "border-primary bg-accent" : "border-transparent hover:border-primary"}`}
                         >
                           {portrait(entry.ref)}
                           {chosen && (
-                            <span className="absolute right-2 top-2 rounded-full bg-violet-600 p-1 text-white">
+                            <span className="absolute right-2 top-2 rounded-full bg-primary p-1 text-primary-foreground">
                               <Check className="h-4 w-4" />
                             </span>
                           )}
@@ -663,7 +663,7 @@ export function LifestylePersonPicker<
                   key={personReferenceKey(ref)}
                   aria-label={`Remove ${name(ref)} from selection`}
                   onClick={() => toggle(ref)}
-                  className="flex shrink-0 items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-xs text-violet-900"
+                  className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-2 py-1 text-xs text-primary"
                 >
                   {name(ref)}
                   <X className="h-3 w-3" />

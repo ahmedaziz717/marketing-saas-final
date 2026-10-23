@@ -234,6 +234,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       <SidebarInset className="min-w-0">
         <header className="evoke-toolbar">
           <div className="workspace-toolbar-leading">
+            <Link
+              href="/app"
+              className="workspace-toolbar-brand"
+              aria-label="EvokeLoop home"
+            >
+              <EvokeLoopLogo reversed={resolvedTheme === "dark"} />
+            </Link>
             {isMobile && (
               <SidebarTrigger
                 aria-label="Open navigation"

@@ -1,46 +1,4 @@
-/* Shared studio language: quiet lavender surfaces, visible choices, one focused editor. */
-.cfg-root.cfg-root,
-.create-workspace {
-  --cfg-bg: #f4f3f8;
-  --cfg-surface: #fff;
-  --cfg-panel: #fff;
-  --cfg-ink: #222132;
-  --cfg-text: #222132;
-  --cfg-muted: #69687b;
-  --cfg-line: #dedde8;
-  --cfg-soft: #eeedf5;
-  --cfg-violet: #6d50d8;
-  --primary: #6d50d8;
-  --primary-foreground: #fff;
-  --ring: #6d50d8;
-  --accent: #eeedf5;
-  --accent-foreground: #222132;
-  --muted: #eeedf5;
-  --muted-foreground: #69687b;
-  --border: #dedde8;
-  background: var(--cfg-bg);
-  color: var(--cfg-text);
-}
-.dark .cfg-root.cfg-root,
-.dark .create-workspace {
-  --cfg-bg: #171620;
-  --cfg-surface: #211f2d;
-  --cfg-panel: #211f2d;
-  --cfg-ink: #f4f1fc;
-  --cfg-text: #f4f1fc;
-  --cfg-muted: #b8b2cb;
-  --cfg-line: #3c354f;
-  --cfg-soft: #2d273d;
-  --cfg-violet: #b29afa;
-  --primary: #9878ef;
-  --primary-foreground: #fff;
-  --ring: #b29afa;
-  --accent: #2d273d;
-  --accent-foreground: #f4f1fc;
-  --muted: #2d273d;
-  --muted-foreground: #b8b2cb;
-  --border: #3c354f;
-}
+/* Shared studio structure; color aliases inherit the application theme. */
 .studio-journey {
   min-width: 0;
   margin-top: 20px;
@@ -56,7 +14,7 @@
 .studio-journey button:focus-visible,
 .journey-summary button:focus-visible,
 .journey-mobile-section select:focus-visible {
-  outline: 3px solid var(--cfg-violet);
+  outline: 3px solid var(--cfg-accent);
   outline-offset: 3px;
 }
 .journey-sections {
@@ -104,9 +62,9 @@
   opacity: 0.7;
 }
 .journey-sections > button[aria-current="step"] {
-  background: color-mix(in srgb, var(--cfg-violet) 9%, var(--cfg-surface));
-  border-color: var(--cfg-violet);
-  color: var(--cfg-violet);
+  background: color-mix(in srgb, var(--cfg-accent) 9%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
   box-shadow: 0 2px 7px #33256508;
 }
 .journey-section-progress {
@@ -121,7 +79,7 @@
   background: var(--cfg-line);
 }
 .journey-section-progress i[data-viewed="true"] {
-  background: var(--cfg-violet);
+  background: var(--cfg-accent);
 }
 .journey-panel {
   border: 1px solid var(--cfg-line);
@@ -178,20 +136,20 @@
     border-color 0.15s;
 }
 .journey-category:hover:not(:disabled) {
-  border-color: var(--cfg-violet);
-  background: color-mix(in srgb, var(--cfg-violet) 4%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 4%, var(--cfg-surface));
 }
 .journey-category[aria-current="true"] {
-  border-color: var(--cfg-violet);
-  background: color-mix(in srgb, var(--cfg-violet) 8%, var(--cfg-surface));
-  box-shadow: 0 0 0 1px var(--cfg-violet);
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 8%, var(--cfg-surface));
+  box-shadow: 0 0 0 1px var(--cfg-accent);
 }
 .journey-category:disabled {
   opacity: 0.6;
   cursor: default;
 }
 .journey-category:focus-visible {
-  outline: 2px solid var(--cfg-violet);
+  outline: 2px solid var(--cfg-accent);
   outline-offset: 2px;
 }
 .journey-category-icon {
@@ -200,10 +158,10 @@
   width: 32px;
   height: 32px;
   margin-bottom: 8px;
-  border: 1px solid color-mix(in srgb, var(--cfg-violet) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cfg-accent) 12%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--cfg-violet) 7%, var(--cfg-surface));
-  color: var(--cfg-violet);
+  background: color-mix(in srgb, var(--cfg-accent) 7%, var(--cfg-surface));
+  color: var(--cfg-accent);
 }
 .journey-category:nth-child(4n + 2) .journey-category-icon {
   color: #40817b;
@@ -221,9 +179,9 @@
   border-color: color-mix(in srgb, #cc97b0 20%, transparent);
 }
 .journey-category[aria-current="true"] .journey-category-icon {
-  color: var(--cfg-violet);
-  background: color-mix(in srgb, var(--cfg-violet) 13%, var(--cfg-surface));
-  border-color: color-mix(in srgb, var(--cfg-violet) 22%, transparent);
+  color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 13%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-accent) 22%, transparent);
 }
 .journey-rail-body {
   position: relative;
@@ -313,7 +271,7 @@
   justify-content: center;
   gap: 7px;
   font-size: 12px;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   background: none;
   border: 0;
   min-height: 40px;
@@ -397,7 +355,7 @@
 .journey-summary-icon {
   display: grid;
   place-items: center;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   background: var(--cfg-soft);
 }
 .journey-summary-toggle > span:not(.journey-summary-icon) {
@@ -431,9 +389,9 @@
   border-radius: 0;
 }
 .journey-checkpoint {
-  background: #fff;
-  color: #222132;
-  border: 1px solid #dedde8;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 28px;
   gap: 16px;
@@ -443,8 +401,8 @@
   place-items: center;
   width: 45px;
   height: 45px;
-  background: #f0ebff;
-  color: #6d50d8;
+  background: var(--accent);
+  color: var(--primary);
   border-radius: 13px;
 }
 .journey-checkpoint [data-slot="dialog-title"] {
@@ -452,12 +410,12 @@
   line-height: 1.2;
 }
 .journey-checkpoint [data-slot="dialog-description"] {
-  color: #69687b;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.6;
 }
 .journey-checkpoint-list {
-  border: 1px solid #dedde8;
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: auto;
   max-height: 35vh;
@@ -471,10 +429,10 @@
   padding: 13px 15px;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid #eeedf5;
-  background: #fff;
+  border-bottom: 1px solid var(--muted);
+  background: var(--card);
   font-size: 12px;
-  color: #69687b;
+  color: var(--muted-foreground);
 }
 .journey-checkpoint-list button:last-child {
   border-bottom: 0;
@@ -485,7 +443,7 @@
   justify-content: flex-end;
   gap: 9px;
   font-size: 12px;
-  color: #222132;
+  color: var(--foreground);
   text-align: right;
 }
 .journey-primary,
@@ -502,19 +460,19 @@
   cursor: pointer;
 }
 .journey-primary {
-  background: #6d50d8;
-  color: #fff;
-  border: 1px solid #6d50d8;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--primary);
 }
 .journey-keep {
-  background: #fff;
-  color: #413b59;
-  border: 1px solid #dedde8;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
 }
 .journey-sheet-note {
   font-size: 11px;
   text-align: center;
-  color: #69687b;
+  color: var(--muted-foreground);
   line-height: 1.5;
   margin: 0;
 }
@@ -761,9 +719,9 @@
   color: var(--cfg-muted);
 }
 .cfg-actions .journey-kind button[aria-pressed="true"] {
-  color: white;
-  background: #6d50d8;
-  box-shadow: 0 2px 5px #6d50d826;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 .create-workspace {
   border-radius: 18px;
@@ -786,9 +744,9 @@
   font-size: 12px;
 }
 .create-workspace .create-tabs a[aria-current="page"] {
-  border-color: var(--cfg-violet);
-  color: var(--cfg-violet);
-  background: color-mix(in srgb, var(--cfg-violet) 8%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 8%, var(--cfg-surface));
 }
 .create-studio-hero {
   display: grid;
@@ -799,7 +757,7 @@
   border-radius: 20px;
   overflow: hidden;
   margin-bottom: 30px;
-  background: #f6f4fc;
+  background: var(--muted);
 }
 .create-studio-hero > div {
   padding: 34px;
@@ -808,7 +766,7 @@
 }
 .create-hero-eyebrow {
   display: block;
-  color: #6d50d8;
+  color: var(--primary);
   letter-spacing: 0.12em;
   font-size: 9px;
   font-weight: 650;
@@ -819,11 +777,11 @@
   line-height: 1.13;
   font-weight: 650;
   letter-spacing: -0.04em;
-  color: #222132;
+  color: var(--foreground);
 }
 .create-studio-hero p {
   font-size: 13px;
-  color: #69687b;
+  color: var(--muted-foreground);
   line-height: 1.7;
   margin: 16px 0 22px;
   max-width: 370px;
@@ -839,12 +797,12 @@
   align-items: center;
   gap: 12px;
   padding: 13px 17px;
-  background: #6d50d8;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
-  box-shadow: 0 3px 10px #6d50d824;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 .create-workspace .studio-section-heading h2 {
   color: var(--cfg-text);
@@ -868,23 +826,23 @@
   box-shadow: 0 2px 6px #30224a03;
 }
 .create-workspace .studio-app-card:hover {
-  border-color: var(--cfg-violet);
+  border-color: var(--cfg-accent);
   box-shadow: 0 5px 18px #30224a0c;
 }
 .create-workspace .studio-app-art {
   height: 100px;
-  background: linear-gradient(135deg, #f4f0ff, #e8e1f8);
-  color: #6d50d8;
+  background: linear-gradient(135deg, var(--accent), var(--card));
+  color: var(--primary);
   border-bottom: 1px solid var(--cfg-line);
 }
 .create-workspace .studio-app-symbol {
-  border: 1px solid #ddd3f6;
-  background: #ffffffc9;
-  color: #6d50d8;
-  box-shadow: 0 4px 12px #6d50d814;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 8%, transparent);
 }
 .create-workspace .studio-app-orbit {
-  border-color: #b9a4eb66;
+  border-color: var(--border);
 }
 .create-workspace .studio-app-body {
   padding: 18px;
@@ -1037,32 +995,32 @@
   }
 }
 .dark .journey-checkpoint {
-  background: #211f2d;
-  border-color: #3c354f;
-  color: #f4f1fc;
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--foreground);
 }
 .dark .journey-checkpoint-list,
 .dark .journey-checkpoint-list button,
 .dark .journey-keep {
-  background: #211f2d;
-  color: #b8b2cb;
-  border-color: #3c354f;
+  background: var(--card);
+  color: var(--muted-foreground);
+  border-color: var(--border);
 }
 .dark .journey-checkpoint-list strong {
-  color: #f4f1fc;
+  color: var(--foreground);
 }
 .dark .journey-checkpoint [data-slot="dialog-description"],
 .dark .journey-sheet-note {
-  color: #b8b2cb;
+  color: var(--muted-foreground);
 }
 .cfg-root:has(.studio-journey) .cfg-primary,
 .cfg-root:has(.studio-journey) .cfg-actions > button.cfg-primary {
-  background: #6d50d8;
-  color: #fff;
-  border: 1px solid #6d50d8;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--primary);
 }
 .cfg-root:has(.studio-journey) .cfg-primary:hover {
-  background: #5b40bd;
+  background: var(--primary);
 }
 .journey-kind button {
   display: inline-flex;
@@ -1232,7 +1190,7 @@
 }
 .journey-review-link button,
 .journey-review-close {
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   background: none;
   border: 0;
   text-decoration: underline;
@@ -1433,14 +1391,14 @@
     overflow-y: auto;
     overscroll-behavior-y: contain;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--cfg-violet) 20%, transparent)
+    scrollbar-color: color-mix(in srgb, var(--cfg-accent) 20%, transparent)
       transparent;
     padding: 3px 5px 3px 3px;
     scroll-padding-block: 34px;
     border-radius: 12px;
   }
   .journey-rail-scroll:focus-visible {
-    outline: 2px solid var(--cfg-violet);
+    outline: 2px solid var(--cfg-accent);
     outline-offset: 2px;
   }
   .journey-scroll-cue {
@@ -1487,8 +1445,8 @@
     pointer-events: auto;
   }
   .journey-scroll-cue button:is(:hover, :focus-visible) {
-    color: var(--cfg-violet);
-    border-color: var(--cfg-violet);
+    color: var(--cfg-accent);
+    border-color: var(--cfg-accent);
     opacity: 1;
   }
   .journey-heading {
@@ -1808,7 +1766,7 @@
   gap: 8px;
   min-height: 110px;
   border-radius: 10px;
-  color: var(--cfg-violet);
+  color: var(--cfg-accent);
   background: linear-gradient(135deg, var(--cfg-soft), var(--cfg-bg));
 }
 .journey-setup-art span {
@@ -1860,8 +1818,8 @@
     color: var(--cfg-muted);
   }
   .journey-mobile-steps button[aria-current="step"] {
-    color: var(--cfg-violet);
-    border-color: var(--cfg-violet);
+    color: var(--cfg-accent);
+    border-color: var(--cfg-accent);
     background: var(--cfg-soft);
   }
   .journey-mobile-steps svg {
@@ -1933,9 +1891,9 @@
   color: var(--cfg-ink);
 }
 .cfg-root .cfg-sections .cfg-section-button[aria-current="step"] {
-  background: color-mix(in srgb, var(--cfg-violet) 9%, var(--cfg-panel));
-  border-color: var(--cfg-violet);
-  color: var(--cfg-violet);
+  background: color-mix(in srgb, var(--cfg-accent) 9%, var(--cfg-panel));
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
 }
 .cfg-root .cfg-section-panel > .cfg-body {
   border: 1px solid var(--cfg-line);

@@ -1,3 +1,4 @@
+import { inlineBuiltFonts } from "./inline-built-fonts.mjs";
 import { build } from "esbuild";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
@@ -41,13 +42,14 @@ const cssFiles = (await readdir("dist/public/assets")).filter(file =>
 );
 if (!cssFiles.length)
   throw new Error("Build the application before running browser checks.");
-const css = (
+let css = (
   await Promise.all(
     cssFiles.map(file =>
       readFile(path.join("dist/public/assets", file), "utf8")
     )
   )
 ).join("\n");
+css = await inlineBuiltFonts(css);
 const originalRule =
   '[role="dialog"] button.w-full {position:fixed;left:50%;bottom:1.5rem;z-index:60;width:min(calc(100vw - 3rem),52rem);transform:translateX(-50%)}';
 const server = createServer((req, res) => {

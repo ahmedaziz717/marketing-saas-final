@@ -1814,7 +1814,7 @@ function NodeCredits({
   );
   return (
     <span
-      className="ml-auto whitespace-nowrap text-[10px] text-violet-600 dark:text-violet-300"
+      className="ml-auto whitespace-nowrap text-[10px] text-primary dark:text-primary"
       title={
         quote.error?.message ||
         "Credits are fixed for each accepted step. A changed price stops the step for a new quote."

@@ -488,7 +488,7 @@ function CatalogContent() {
         )}
       </div>
       {products.length === 0 ? (
-        <div className="surface grid min-h-[420px] place-items-center border-l-4 border-l-violet-400 text-center">
+        <div className="surface grid min-h-[420px] place-items-center border-l-4 border-l-primary text-center">
           <div>
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
               <PackageSearch className="h-6 w-6" />

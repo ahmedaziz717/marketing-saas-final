@@ -1,3 +1,4 @@
+import { inlineBuiltFonts } from "./inline-built-fonts.mjs";
 import { inlineLiveBrandImages } from "./brand-fixture-assets.mjs";
 import { build } from "esbuild";
 import { spawn } from "node:child_process";
@@ -54,13 +55,14 @@ const cssFiles = (await readdir("dist/public/assets")).filter(file =>
 );
 if (!cssFiles.length)
   throw new Error("Build the application before running browser checks.");
-const css = (
+let css = (
   await Promise.all(
     cssFiles.map(file =>
       readFile(path.join("dist/public/assets", file), "utf8")
     )
   )
 ).join("\n");
+css = await inlineBuiltFonts(css);
 const profile = await mkdtemp(path.join(tmpdir(), "frame-channel-chrome-"));
 const chrome = spawn(
   executable,
@@ -157,6 +159,38 @@ try {
   const results = [];
   const cases = [
     ...[
+      "optimization-intelligence",
+      "onboarding",
+      "account-invite",
+      ...[
+        "accounts",
+        "usage",
+        "billing",
+        "tiers",
+        "models",
+        "pricing",
+        "finance",
+        "audit",
+      ].map(section => `admin-${section}`),
+      "catalog-home",
+      "catalog-import",
+      "brand-workspace",
+      "workspace-invite",
+      "not-found",
+      "admin-website",
+      ...[
+        "team",
+        "integrations",
+        "activity",
+        "notifications",
+        "security",
+        "data",
+        "developer",
+      ].map(section => `settings-${section}`),
+      ...["activate", "measure", "optimize"].flatMap(family => [
+        `apps-${family}`,
+        `workflows-${family}`,
+      ]),
       "creative-overview",
       "creative-editor",
       "creative-scene",
@@ -194,6 +228,8 @@ try {
       "navigation",
       "navigation-ten",
       "product-home",
+      "apps-directory",
+      "workflows-directory",
       "studio-overview",
       "workflow-library",
       "workflow-density",
@@ -269,11 +305,16 @@ try {
     { width: 375, height: 750, role: "creator", page: "billing-usage" },
     { width: 375, height: 750, role: "creator", page: "publishing" },
   ];
-  for (const item of cases.filter(
-    item =>
-      !process.env.LAYOUT_PAGES ||
-      process.env.LAYOUT_PAGES.split(",").includes(item.page)
-  )) {
+  for (const item of cases
+    .flatMap(item => [
+      { ...item, theme: "light" },
+      { ...item, theme: "dark" },
+    ])
+    .filter(
+      item =>
+        !process.env.LAYOUT_PAGES ||
+        process.env.LAYOUT_PAGES.split(",").includes(item.page)
+    )) {
     await page("Emulation.setDeviceMetricsOverride", {
       width: item.width,
       height: item.height,
@@ -563,7 +604,7 @@ try {
           JSON.stringify(categoryRail.result.value);
       }
     }
-    const name = `${item.page}-${item.width}x${item.height}-${item.role}`;
+    const name = `${item.page}-${item.width}x${item.height}-${item.role}-${item.theme}`;
     const image = await page("Page.captureScreenshot", { format: "png" });
     await writeFile(
       `artifacts/channel-layout/${name}.png`,

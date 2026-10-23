@@ -103,10 +103,16 @@ describe("EvokeLoop source-of-truth brand contract", () => {
       expect($("input[type=checkbox]").length).toBe(1);
     }
   );
-  it("uses real image artwork instead of retyping the custom logo", () => {
+  it("renders the approved accessible font wordmark and scalable loop symbol", () => {
     const html = renderToStaticMarkup(createElement(EvokeLoopLogo, {}));
-    expect(html).toContain('src="/website/evokeloop-wordmark.svg"');
-    expect(html).toContain('alt="EvokeLoop"');
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="EvokeLoop"');
+    expect(html).toContain("<span>EvokeLoop</span>");
+    const symbol = renderToStaticMarkup(
+      createElement(EvokeLoopLogo, { symbol: true })
+    );
+    expect(symbol).toContain('viewBox="0 0 48 40"');
+    expect(symbol).toContain('stroke="currentColor"');
   });
   it.each(PUBLIC_PATHS)(
     "keeps %s public and branded with operator approval tracked separately",

@@ -1,0 +1,66 @@
+/* Editorial Precision. All application surfaces and portals inherit these tokens. */
+:root {
+  --font-sans:
+    "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --radius: 0.5rem;
+  --background: #f7f9f9;
+  --foreground: #10202d;
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #007f82;
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f4;
+  --secondary-foreground: var(--foreground);
+  --muted: #f0f3f4;
+  --muted-foreground: #526374;
+  --accent: #e5f5f3;
+  --accent-foreground: #006b70;
+  --destructive: #b63136;
+  --border: #dfe6e9;
+  --input: #bbc8ce;
+  --ring: #007f82;
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --workflow-color: var(--primary);
+  --workflow-soft: var(--accent);
+  --workflow-foreground: var(--primary-foreground);
+  --chart-1: #007f82;
+  --chart-2: #4474b3;
+  --chart-3: #798b9d;
+  --chart-4: #aa741b;
+  --chart-5: #925d86;
+  --surface-shadow: 0 2px 8px #10202d04;
+  --overlay: #10202d80;
+}
+.dark {
+  --background: #101a21;
+  --foreground: #edf4f5;
+  --card: #17252e;
+  --primary: #77d9d3;
+  --primary-foreground: #10252b;
+  --secondary: #22343e;
+  --muted: #20313b;
+  --muted-foreground: #b3c3ce;
+  --accent: #1b3e43;
+  --accent-foreground: #9de8e0;
+  --destructive: #ff9b9f;
+  --border: #344751;
+  --input: #546a76;
+  --ring: #77d9d3;
+  --chart-1: #77d9d3;
+  --chart-2: #8ab5ed;
+  --chart-3: #b3c3ce;
+  --chart-4: #e4ba72;
+  --chart-5: #d6a1c8;
+  --surface-shadow: 0 2px 8px #00000014;
+  --overlay: #050c14b3;
+}
