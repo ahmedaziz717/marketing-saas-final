@@ -2707,6 +2707,7 @@
 }
 .cfg-creative .cfg-heading {
   align-items: center;
+  flex-wrap: wrap;
   padding: 6px 0 10px;
   margin-bottom: 8px;
 }
@@ -2714,8 +2715,10 @@
   min-width: 0;
 }
 .cfg-creative .cfg-heading > .cfg-actions {
-  flex-wrap: nowrap;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 .cfg-creative .cfg-heading .cfg-actions > button {
   white-space: nowrap;
