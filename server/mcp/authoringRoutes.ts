@@ -355,6 +355,10 @@ export function registerAuthoringMcp(
         "accept",
         "content-type",
         "mcp-protocol-version",
+        // Modern MCP validates these against the JSON-RPC method/tool name.
+        // Forward the client's values unchanged; never synthesize missing headers.
+        "mcp-method",
+        "mcp-name",
         "mcp-session-id",
       ]) {
         const value = req.headers[name];
