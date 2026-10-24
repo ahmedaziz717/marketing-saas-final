@@ -139,7 +139,11 @@ export function WorkflowAuthoringChat({
       setRecovering(false);
     }
   }
-  async function recover(abandonPending = false, resetMissing = false) {
+  async function recover(
+    abandonPending = false,
+    resetMissing = false,
+    keepProposal = false
+  ) {
     if (pending.current || !request.current) return;
     pending.current = true;
     setRecovering(true);
@@ -155,7 +159,7 @@ export function WorkflowAuthoringChat({
         if (result.state === "completed")
           accept(result.result, request.current.message);
         else if (result.state === "abandoned" || result.state === "failed") {
-          if (target && onReloadDraft) {
+          if (!keepProposal && target && onReloadDraft) {
             const latest = await utils.workflowAuthoring.read.fetch(
               { organizationId, id: target.id },
               { staleTime: 0 }
@@ -164,10 +168,14 @@ export function WorkflowAuthoringChat({
           }
           request.current = null;
           setRecovery(null);
-          setMessages([]);
-          setProposal(null);
+          if (!keepProposal) {
+            setMessages([]);
+            setProposal(null);
+          }
           setError(
-            "Previous request closed. Correct the draft or shorten your request, then send again. Chat history was cleared to release context space."
+            keepProposal
+              ? "Refinement closed. The previous proposal is ready for review again."
+              : "Previous request closed. Correct the draft or shorten your request, then send again. Chat history was cleared to release context space."
           );
         } else {
           setRecovery(result.state);
@@ -268,6 +276,15 @@ export function WorkflowAuthoringChat({
               )}
               {["missing", "failed", "abandoned"].includes(recovery) && (
                 <>
+                  {proposal && (
+                    <Button
+                      disabled={busy || disabled}
+                      variant="outline"
+                      onClick={() => void recover(false, true, true)}
+                    >
+                      Keep previous proposal
+                    </Button>
+                  )}
                   {recovery === "missing" && (
                     <Button
                       disabled={busy}

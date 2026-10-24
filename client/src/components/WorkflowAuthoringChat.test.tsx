@@ -401,3 +401,35 @@ it("refines the displayed proposal before applying and preserves it when refinem
     )
   );
 });
+
+it("can keep and apply the previous proposal after safely closing a failed refinement", async () => {
+  api.chat
+    .mockResolvedValueOnce(proposal)
+    .mockRejectedValueOnce(new Error("Refinement failed"));
+  api.status.mockResolvedValue({ state: "failed" });
+  api.reset.mockResolvedValue({ state: "failed" });
+  api.apply.mockResolvedValue({ id: "draft", revision: 1 });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  await screen.findByText("Static preview only");
+  fireEvent.click(screen.getByText("Send different message"));
+  fireEvent.click(await screen.findByText("Keep previous proposal"));
+  await screen.findByText(/previous proposal is ready/);
+  fireEvent.click(screen.getByText("Apply reviewed proposal to draft"));
+  await waitFor(() =>
+    expect(api.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalId: proposal.proposalId,
+        reviewedHash: proposal.hash,
+      })
+    )
+  );
+  expect(api.chat).toHaveBeenCalledTimes(2);
+});
