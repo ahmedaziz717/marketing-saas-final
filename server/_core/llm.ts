@@ -74,6 +74,7 @@ export type ToolChoice =
 export type InvokeParams = {
   /** Stable application-owned business template; protected instructions remain separate. */
   promptTemplateId?: string;
+  promptTemplateOverride?: string;
   /** Internal quality work bundled in an already quoted action; never accept from request input. */
   includedInAction?: boolean;
   messages: Message[];
@@ -358,8 +359,8 @@ const fetchWithBackoff = async (
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
   if (params.promptTemplateId) {
-    const { applicationPrompt } = await import("../lib/promptRegistry");
-    const prompt = await applicationPrompt(params.promptTemplateId);
+    const { applicationPromptForRun } = await import("../lib/promptRegistry");
+    const prompt = await applicationPromptForRun(params.promptTemplateId, params.promptTemplateOverride);
     params = {
       ...params,
       messages: [

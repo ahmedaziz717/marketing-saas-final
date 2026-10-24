@@ -12,7 +12,7 @@ import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { productFactsDirection } from "../../shared/studioProductFacts";
 import type { LibraryDatabase } from "./assetLibrary";
 import { previewStudioPage } from "./studioProductPage";
-import { visualDirectionDefaults } from "./promptRegistry";
+import { applicationPromptForRun, visualDirectionDefaults } from "./promptRegistry";
 
 export async function draftVideoPrompt(
   db: LibraryDatabase,
@@ -75,7 +75,7 @@ export async function draftVideoPrompt(
         sound: setup.sound,
         creativeDirection: videoPrompt(
           { ...setup, prompt: "" },
-          await visualDirectionDefaults(organizationId, setup.direction)
+          { ...(await visualDirectionDefaults(organizationId, setup.direction)), "video.direction": (await applicationPromptForRun("video.direction", setup.defaultInstructions, organizationId)).value }
         ),
         priorDescription: setup.prompt,
         productFactRules: productFactsDirection,

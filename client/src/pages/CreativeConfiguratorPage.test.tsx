@@ -346,7 +346,7 @@ it("generates copy from the saved page snapshot and shows which page is being us
   await waitFor(() =>
     expect(api.refreshCopy).toHaveBeenCalledWith({
       organizationId: 1,
-      setup: config.image,
+      setup: { ...config.image, copyDefaultInstructions: "Write one fresh set of advertising copy for the selected subject. Use the selected campaign occasion, audience and brand voice. Keep the subject specific and use a suitable call to action." },
     })
   );
   await waitFor(() =>

@@ -355,6 +355,7 @@ export const creativeSetupSchema = z
       value => typeof value === "string" && Boolean(CREATIVE_THEMES[value]),
       { message: "Choose a supported creative theme." }
     ),
+    copyDefaultInstructions: z.string().trim().min(1).max(12000).optional(),
     basePrompt: z
       .string()
       .trim()

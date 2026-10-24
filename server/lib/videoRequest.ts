@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { applicationPrompt, visualDirectionDefaults } from "./promptRegistry";
+import { applicationPromptForRun, visualDirectionDefaults } from "./promptRegistry";
 import {
   type VideoSetup,
   type VideoReference,
@@ -64,7 +64,7 @@ export async function prepareVideoRequest(
     {
       ...(await visualDirectionDefaults(organizationId, setup.direction)),
       "video.direction": (
-        await applicationPrompt("video.direction", organizationId)
+        await applicationPromptForRun("video.direction", setup.defaultInstructions, organizationId)
       ).value,
     }
   );

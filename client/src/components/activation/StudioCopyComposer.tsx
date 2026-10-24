@@ -1,3 +1,4 @@
+import { TaskPromptField } from "../TaskPromptField";
 import { useState, useEffect, useLayoutEffect, type ReactNode } from "react";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import type { Channel, PublicationContent } from "@shared/channels";
@@ -59,6 +60,7 @@ export function StudioCopyComposer({
     choices,
     promotion: content.promotion,
     instructions: content.copyInstructions ?? "",
+    defaultInstructions: content.copyDefaultInstructions,
     cta: meta ? content.callToAction : undefined,
   });
   const changed =
@@ -73,6 +75,7 @@ export function StudioCopyComposer({
     copyDirection: content.copyDirection,
     callToAction: meta ? content.callToAction : undefined,
     direction: content.copyInstructions ?? "",
+    defaultInstructions: content.copyDefaultInstructions,
     currentOptions: [
       {
         message: content.message,
@@ -160,6 +163,7 @@ export function StudioCopyComposer({
       aria-label="Compose copy"
       aria-busy={busy}
     >
+      <TaskPromptField promptId="copy.asset" label="Copy generation instructions" value={content.copyDefaultInstructions} onChange={copyDefaultInstructions => onChange({ ...content, copyDefaultInstructions })} />
       <div className="studio-copy-context">
         <div className="studio-copy-context-heading">
           <strong>Your copy direction</strong>

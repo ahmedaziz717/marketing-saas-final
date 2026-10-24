@@ -1578,6 +1578,7 @@ export const creativeBuilderRouter = router({
         const model = requireLatestGptTextModel((await listLLMModels()).data);
         const response = await invokeLLM({
           promptTemplateId: "creative.copy",
+          promptTemplateOverride: copySetup.copyDefaultInstructions,
           model,
           messages: buildCreativeCopyMessages(
             copySetup,

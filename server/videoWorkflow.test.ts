@@ -702,6 +702,7 @@ describe("durable video generation", () => {
       organizationId: org,
       setup: {
         ...settings,
+        defaultInstructions: "Keep the camera still and preserve the product silhouette.",
         productSelections: [
           {
             productId,
@@ -728,6 +729,7 @@ describe("durable video generation", () => {
       `data:image/png;base64,${Buffer.from(`org-${org}/reference.png`).toString("base64")}`,
     ]);
     expect(parts[0].text).toContain("Creative theme");
+    expect(JSON.stringify(parts)).toContain("Keep the camera still and preserve the product silhouette.");
     expect(parts[1].text).toContain("A brass lamp.");
     expect(parts[1].text).toContain(
       '"featuredSpecifications":{"Material":"Brass"}'
@@ -806,6 +808,7 @@ describe("durable video generation", () => {
     expect(videoPrompt({ ...settings, direction: undefined })).toBe(
       settings.prompt
     );
+    expect(videoPrompt({ ...settings, direction: undefined, defaultInstructions: "Use a locked camera." }, { "video.direction": "Use a locked camera." })).toContain("Use a locked camera.");
     expect(
       publicVideoJob({ setup: { ...settings, direction: undefined } } as any)
         .setup.direction

@@ -122,6 +122,7 @@ export const videoSetupSchema = z
     title: z.string().trim().min(1).max(160),
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
+    defaultInstructions: z.string().trim().min(1).max(12000).optional(),
     learningOrigin: learningOriginSchema.optional(),
     promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(30),
@@ -300,7 +301,7 @@ export function videoPrompt(
     ? `Image ${videoImageReferenceKeys(setup).length} is the selected brand logo, not the subject or product. Use this supplied artwork as restrained branding, preserving its lettering, colors and proportions. Keep the full creative styling, scene, camera movement and subject prominence; do not turn the logo into the main scene or deform the mark. Do not invent a replacement logo.`
     : "";
   if (!setup.direction)
-    return [promotion, setup.prompt, branding, identity]
+    return [promotion, setup.prompt, branding, identity, setup.defaultInstructions !== undefined ? defaults["video.direction"] ?? setup.defaultInstructions : undefined]
       .filter(Boolean)
       .join("\n\n");
   const direction = setup.direction,

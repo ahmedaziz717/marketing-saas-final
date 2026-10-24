@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { TaskPromptField } from "@/components/TaskPromptField";
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -195,7 +197,7 @@ it("offers explicit workspace/system restore without changing a form on refresh"
   );
   expect(onChange).toHaveBeenLastCalledWith("Workspace voice");
   fireEvent.click(
-    screen.getByRole("button", { name: "Restore system default" })
+    screen.getByRole("button", { name: "Restore original default (V0)" })
   );
   expect(onChange).toHaveBeenLastCalledWith(
     PROMPT_REGISTRY.find(p => p.id === "creative.base")!.baseline
@@ -208,4 +210,21 @@ it("offers explicit workspace/system restore without changing a form on refresh"
     />
   );
   expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+it("snapshots the shared active task default, preserves edits on refresh, and restores V1 locally until explicitly saved", () => {
+  api.data = api.data.map(p => p.id === "video.direction" ? { ...p, value: "Current video default", revision: 3, restorePoints: { original: { value: "Generic video default", baselineVersion: 1 }, brand: { value: "First branded video default", revision: 1 } } } : p);
+  function Form() { const [value, setValue] = useState<string>(); return <TaskPromptField promptId="video.direction" label="Video generation instructions" value={value} onChange={setValue} />; }
+  const view = render(<Form />);
+  const input = screen.getByLabelText("Video generation instructions") as HTMLTextAreaElement;
+  expect(input.value).toBe("Current video default");
+  fireEvent.change(input, { target: { value: "My run instructions" } });
+  api.data = api.data.map(p => p.id === "video.direction" ? { ...p, value: "New workspace default", revision: 4 } : p);
+  view.rerender(<Form />);
+  expect(input.value).toBe("My run instructions");
+  fireEvent.click(screen.getByRole("button", { name: "Restore initial brand default (V1)", hidden: true }));
+  expect(input.value).toBe("First branded video default");
+  expect(api.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save as workspace default", hidden: true }));
+  expect(api.save).toHaveBeenCalledWith(expect.objectContaining({ promptId: "video.direction", action: "save", expectedRevision: 4, value: "First branded video default" }));
 });

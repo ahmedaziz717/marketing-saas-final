@@ -41,6 +41,11 @@ vi.mock("wouter", () => ({
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({ organizationId: 1, membership: { role: "owner" } }),
 }));
+vi.mock("@/hooks/usePromptDefaults", async () => {
+  const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
+  const data = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system" }));
+  return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
+});
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), info: api.toast } }));
 vi.mock("./AssetUploadDialog", () => ({ AssetUploadDialog: () => null }));
 vi.mock("./LifestylePersonPicker", () => ({
@@ -48,6 +53,7 @@ vi.mock("./LifestylePersonPicker", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    prompts: { change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
     models: {
       catalog: { useQuery: () => ({ data: [] }) },
       credits: { useQuery: () => ({ data: { textEstimate: 10 } }) },

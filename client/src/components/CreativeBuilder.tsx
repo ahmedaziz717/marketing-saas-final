@@ -1,3 +1,4 @@
+import { TaskPromptField } from "./TaskPromptField";
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { PromptDefaultControls } from "@/components/PromptDefaultControls";
 import { GenerationBrandContext } from "@/components/BrandPromptContext";
@@ -1248,6 +1249,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 ? " Copy is shared across product sets."
                 : ""}
             </p>
+            <TaskPromptField promptId="creative.copy" label="Default copy instructions" value={setup.copyDefaultInstructions} onChange={value => change({ ...setup, copyDefaultInstructions: value })} />
             <div className="mt-4 grid gap-4">
               {(["headline", "subheadline", "cta"] as const).map(key => (
                 <label key={key}>

@@ -23,3 +23,9 @@ The Cybertron configure endpoint supplies system/chassis identities, eligible up
 ## Validation
 
 Regression coverage includes original-byte selection, alpha/aspect compatibility, transient failures, duplicate relationships, stable IDs, tenant isolation, stale option eligibility, same-origin detail fetches, Brand Kit revision preservation, overlay fallback and responsive grouped selectors. Hosted CI must pass on the final integrated head. Local full-suite database-environment failures are recorded separately from regressions.
+
+## Task defaults and immutable restores
+
+The central registry retains the original generic baseline (V0) and the first brand-personalized value (V1) independently of the paginated history. Later brand refreshes and edits do not replace either anchor. Central restoration appends a new revision; no intervening history is deleted. A prompt without a first brand-personalized revision has no V1 restore point. Existing manual overrides are never silently personalized.
+
+Image base/theme instructions, image copy, video direction and asset/social copy forms resolve the same central entries. Per-run edits and restores are saved with the setup; only an explicit Save as workspace default changes shared state. Drafts are not overwritten when central defaults refresh. Runtime overrides replace only the editable task instructions, retain protected task contracts and record an override hash for provenance. Technical templates remain outside these task editors.

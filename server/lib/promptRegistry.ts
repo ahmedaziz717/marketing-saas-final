@@ -1,4 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { promptGroup } from "../../shared/promptPresentation";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { promptRevisions } from "../../drizzle/schema";
 import {
@@ -41,6 +43,14 @@ export async function resolvedPrompts(
     .from(promptRevisions)
     .where(eq(promptRevisions.organizationId, organizationId))
     .orderBy(promptRevisions.promptId, desc(promptRevisions.revision));
+  const [originals, brands] = await Promise.all([
+    db.selectDistinctOn([promptRevisions.promptId]).from(promptRevisions)
+      .where(eq(promptRevisions.organizationId, organizationId))
+      .orderBy(promptRevisions.promptId, asc(promptRevisions.revision)),
+    db.selectDistinctOn([promptRevisions.promptId]).from(promptRevisions)
+      .where(and(eq(promptRevisions.organizationId, organizationId), eq(promptRevisions.action, "personalize_brand")))
+      .orderBy(promptRevisions.promptId, asc(promptRevisions.revision)),
+  ]);
   return PROMPT_REGISTRY.map(item => {
     const current = item.editable
       ? rows.find(row => row.promptId === item.id)
@@ -51,6 +61,11 @@ export async function resolvedPrompts(
       revision: current?.revision ?? 0,
       source: current?.value != null ? "workspace" : "system",
       updatedAtMs: current?.createdAtMs ?? null,
+      restorePoints: {
+        original: { value: originals.find(row => row.promptId === item.id)?.baselineValue ?? item.baseline, baselineVersion: originals.find(row => row.promptId === item.id)?.baselineVersion ?? item.version },
+        brand: brands.find(row => row.promptId === item.id)?.value != null
+          ? { value: brands.find(row => row.promptId === item.id)!.value!, revision: brands.find(row => row.promptId === item.id)!.revision } : null,
+      },
     };
   });
 }
@@ -113,7 +128,7 @@ export async function changePrompt(input: {
   actorUserId: number;
   promptId: string;
   expectedRevision: number;
-  action: "save" | "restore_system" | "restore_revision";
+  action: "save" | "restore_system" | "restore_revision" | "restore_original" | "restore_brand_initial";
   value?: string;
   restoreRevision?: number;
   reason: string;
@@ -144,6 +159,7 @@ export async function changePrompt(input: {
           "This default changed while you were editing. Review the latest version before saving.",
       });
     let value: string | null = null;
+    let restoredFromRevision: number | null = null;
     if (input.action === "save") {
       value = input.value?.trim() ?? "";
       if (!value || value.length > definition.maxLength)
@@ -151,6 +167,14 @@ export async function changePrompt(input: {
           code: "BAD_REQUEST",
           message: `Enter a prompt between 1 and ${definition.maxLength.toLocaleString("en-US")} characters.`,
         });
+    } else if (input.action === "restore_original" || input.action === "restore_brand_initial") {
+      const [first] = await tx.select().from(promptRevisions)
+        .where(input.action === "restore_brand_initial" ? and(scope, eq(promptRevisions.action, "personalize_brand")) : scope)
+        .orderBy(asc(promptRevisions.revision)).limit(1);
+      if (input.action === "restore_brand_initial" && !first?.value)
+        throw new TRPCError({ code: "NOT_FOUND", message: "No initial brand-personalized default exists for this workspace prompt." });
+      value = input.action === "restore_original" ? (first?.baselineValue ?? definition.baseline) : first!.value;
+      restoredFromRevision = input.action === "restore_original" ? 0 : first!.revision;
     } else if (input.action === "restore_revision") {
       const [previous] = await tx
         .select()
@@ -164,6 +188,7 @@ export async function changePrompt(input: {
           code: "NOT_FOUND",
           message: "That workspace revision was not found.",
         });
+      restoredFromRevision = previous.revision;
       value =
         previous.value ??
         (previous.baselineVersion === definition.version
@@ -179,8 +204,7 @@ export async function changePrompt(input: {
       baselineVersion: definition.version,
       baselineValue: definition.baseline,
       action: input.action,
-      restoredFromRevision:
-        input.action === "restore_revision" ? input.restoreRevision : null,
+      restoredFromRevision,
       actorUserId: input.actorUserId,
       reason: input.reason,
       createdAtMs: Date.now(),
@@ -195,11 +219,23 @@ export async function changePrompt(input: {
         payload: {
           revision,
           baselineVersion: definition.version,
-          restoredFromRevision: input.restoreRevision ?? null,
+          restoredFromRevision,
         },
       },
       tx
     );
     return { revision };
   });
+}
+
+/** Per-run instructions replace only the editable task default, never protected contracts. */
+export async function applicationPromptForRun(id: string, override?: string, organizationId?: number) {
+  const prompt = await applicationPrompt(id, organizationId);
+  if (override === undefined) return prompt;
+  const value = override.trim();
+  if (!prompt.editable || promptGroup(id) === "technical" || !value || value.length > prompt.maxLength)
+    throw new Error("Invalid per-run task instructions.");
+  const scope = aiScope.getStore();
+  if (scope?.promptVersions?.[id]) scope.promptVersions[id] = { ...scope.promptVersions[id], source: "run", overrideHash: createHash("sha256").update(value).digest("hex") };
+  return { ...prompt, value };
 }

@@ -40,7 +40,7 @@ export async function generateAssetCopy(
   try {
     if (target && target.field !== "set") {
       const field = target.field;
-      const result = await marketingJsonWith("copy.asset")(
+      const result = await marketingJsonWith("copy.asset", input.defaultInstructions)(
         base +
           `Rewrite only the ${field} at the requested index for ${input.channel === "facebook" ? "an organic Facebook post" : "a Meta ad"}. Return {text:string} with exactly one new alternative. Keep the same subject and factual meaning, with a distinct angle or wording. It must differ from all current options for that field. Do not generate the other copy fields.`,
         data,
@@ -66,7 +66,7 @@ export async function generateAssetCopy(
       input.channel === "meta_ads"
         ? generatedFields.description
         : z.string().trim().max(300);
-    return await marketingJsonWith("copy.asset")(
+    return await marketingJsonWith("copy.asset", input.defaultInstructions)(
       base +
         (input.channel === "facebook"
           ? `Write exactly ${count} alternative organic Facebook post captions. Put each caption in message, with a supporting headline and optional description. Keep a conversational voice and use hashtags sparingly. `

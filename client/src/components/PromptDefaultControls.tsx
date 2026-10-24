@@ -52,10 +52,12 @@ export function PromptDefaultControls({
         type="button"
         size="sm"
         variant="ghost"
-        onClick={() => onChange(prompt.baseline)}
+        onClick={() => onChange(prompt.restorePoints?.original.value ?? prompt.baseline)}
       >
-        Restore system default
+        Restore original default (V0)
       </Button>
+      <Button type="button" size="sm" variant="ghost" disabled={!prompt.restorePoints?.brand}
+        onClick={() => { if (prompt.restorePoints?.brand) onChange(prompt.restorePoints.brand.value); }}>Restore initial brand default (V1)</Button>
       {["owner", "admin"].includes(membership?.role ?? "") && (
         <Button
           type="button"
@@ -83,7 +85,7 @@ export function PromptDefaultControls({
         Manage defaults & history
       </Link>
       <span className="text-muted-foreground">
-        Workspace revision {prompt.revision}
+        Active workspace revision {prompt.revision}{value !== prompt.value ? " - modified for this run" : " - using active default"}
       </span>
     </div>
   );

@@ -10,11 +10,13 @@ export async function marketingJson<T>(
   data: unknown,
   schema: z.ZodType<T>,
   images: string[] = [],
-  promptTemplateId = "marketing.general"
+  promptTemplateId = "marketing.general",
+  promptTemplateOverride?: string
 ): Promise<T> {
   const model = requireLatestGptTextModel((await listLLMModels()).data);
   const response = await invokeLLM({
     promptTemplateId,
+    promptTemplateOverride,
     model,
     messages: [
       {
@@ -38,13 +40,13 @@ export async function marketingJson<T>(
   const text = response.choices[0]?.message?.content;
   return schema.parse(JSON.parse(typeof text === "string" ? text : "{}"));
 }
-export function marketingJsonWith(promptTemplateId: string) {
+export function marketingJsonWith(promptTemplateId: string, promptTemplateOverride?: string) {
   return <T>(
     instruction: string,
     data: unknown,
     schema: z.ZodType<T>,
     images: string[] = []
-  ) => marketingJson(instruction, data, schema, images, promptTemplateId);
+  ) => marketingJson(instruction, data, schema, images, promptTemplateId, promptTemplateOverride);
 }
 export async function websiteEvidence(url: string) {
   const response = await safeFetchText(url);
