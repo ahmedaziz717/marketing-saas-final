@@ -146,6 +146,10 @@ describe.sequential("signed EvokeLoop inbound forwarding", () => {
     expect(
       (await post(JSON.stringify({ type: "email.sent", data: {} }))).status
     ).toBe(200);
+    expect(
+      (await post(JSON.stringify(event({ to: ["ahmed@evokeloop.com"] }))))
+        .status
+    ).toBe(200);
     expect(apiFetch).not.toHaveBeenCalled();
   });
   it("forwards a complete original message only to the configured inbox and deduplicates replay", async () => {
@@ -188,22 +192,30 @@ describe.sequential("signed EvokeLoop inbound forwarding", () => {
         expect(body.text).toContain("privacy@evokeloop.com");
     }
   );
-  it.each([
-    { to: ["meta-review@evokeloop.com"] },
-    {
-      to: ["other@evokeloop.com"],
-      received_for: ["Meta Review <META-REVIEW@EVOKELOOP.COM>"],
-    },
-  ])(
-    "forwards Meta review mail once to the configured owner inbox: %j",
-    async recipients => {
+  it.each(
+    ["meta-review", "ahmed.aziz", "contact"].flatMap(alias => [
+      {
+        address: `${alias}@evokeloop.com`,
+        recipients: { to: [`${alias}@evokeloop.com`] },
+      },
+      {
+        address: `${alias}@evokeloop.com`,
+        recipients: {
+          to: ["other@evokeloop.com"],
+          received_for: [`Recipient <${alias.toUpperCase()}@EVOKELOOP.COM>`],
+        },
+      },
+    ])
+  )(
+    "forwards approved alias mail once to the configured owner inbox: %j",
+    async ({ address, recipients }) => {
       const payload = JSON.stringify(event(recipients));
       expect((await post(payload)).status).toBe(200);
       expect((await post(payload)).status).toBe(200);
       expect(sends()).toHaveLength(1);
       const body = JSON.parse(sends()[0][1].body);
       expect(body.to).toBe("recipient@example.test");
-      expect(body.text).toContain("meta-review@evokeloop.com");
+      expect(body.text).toContain(address);
       expect(body.attachments[0].filename).toBe("forwarded_message.eml");
     }
   );
