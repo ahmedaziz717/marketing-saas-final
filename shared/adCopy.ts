@@ -48,6 +48,7 @@ export const assetCopyRequestSchema = scopeSchema
       .array(z.string().regex(/^(asset|creative):[1-9][0-9]*$/))
       .max(10),
     direction: z.string().trim().max(2000).default(""),
+    defaultInstructions: z.string().trim().min(1).max(12000).optional(),
     promotion: z
       .object({
         audience: z.string().max(2000),

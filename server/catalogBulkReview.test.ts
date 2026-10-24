@@ -29,6 +29,7 @@ beforeAll(async () => {
   await engine.exec(
     readFileSync("drizzle/postgres/0018_structured_product_facts.sql", "utf8")
   );
+  await engine.exec(readFileSync("drizzle/postgres/0022_catalog_media_groups.sql", "utf8"));
   state.db = drizzle(engine);
   const people = await state.db
     .insert(users)

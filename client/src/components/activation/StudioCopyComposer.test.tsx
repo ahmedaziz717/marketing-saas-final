@@ -14,6 +14,12 @@ import { observable } from "@trpc/server/observable";
 import { trpc } from "@/lib/trpc";
 import { contentSchema, type Channel } from "@shared/channels";
 import { StudioCopyComposer } from "./StudioCopyComposer";
+vi.mock("@/hooks/useWorkspace", () => ({ useWorkspace: () => ({ organizationId: 1, membership: { role: "owner" } }) }));
+vi.mock("@/hooks/usePromptDefaults", async () => {
+  const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
+  const data = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system" }));
+  return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
+});
 vi.mock("../ActionCredits", () => ({ ActionCredits: () => null }));
 const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -110,15 +116,17 @@ async function respond(data = options) {
   );
 }
 it("fills social caption immediately, preserves links, saves alternatives and restores them after navigation", async () => {
-  setup("facebook", { message: "Old caption https://example.com" });
+  setup("facebook", { message: "Old caption https://example.com", copyDefaultInstructions: "My saved copy task instructions" });
   await click("Regenerate copy");
   expect(requests[0].input).toMatchObject({
     channel: "facebook",
+    defaultInstructions: "My saved copy task instructions",
     direction: "Only verified claims",
     copyDirection: { messaging_style: ["playful"] },
     promotion: { offer: "Membership", audience: "Designers", goal: "Signups" },
   });
   await respond();
+  expect(current().copyDefaultInstructions).toBe("My saved copy task instructions");
   expect(current().message).toContain("Caption 1");
   expect(current().message).toContain("https://example.com");
   expect(current().headline).toBe("");

@@ -155,6 +155,13 @@
       "when": 1792845465461,
       "tag": "0021_authoring_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792852252233,
+      "tag": "0022_catalog_media_groups",
+      "breakpoints": true
     }
   ]
 }

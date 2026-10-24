@@ -1,3 +1,4 @@
+import { TaskPromptField } from "./TaskPromptField";
 import { ActionCredits } from "./ActionCredits";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -31,6 +32,7 @@ export function AdCopyAssistant({
   callToAction?: PublicationContent["callToAction"];
   onUse: (copy: Copy) => void;
 }) {
+  const [defaultInstructions, setDefaultInstructions] = useState<string>();
   const [localDirection, setDirection] = useState("");
   const direction = instructions ?? localDirection;
   const studio = generationTarget !== undefined;
@@ -44,6 +46,7 @@ export function AdCopyAssistant({
     copyDirection,
     callToAction,
     direction,
+    defaultInstructions,
   });
   const generate = useAssetCopy(
     {
@@ -54,6 +57,7 @@ export function AdCopyAssistant({
       callToAction,
       channel,
       direction,
+      defaultInstructions,
       currentOptions: source === key ? options : [],
     },
     (generated, target) => {
@@ -103,7 +107,7 @@ export function AdCopyAssistant({
   );
   return (
     <div className="rounded-xl border p-4 space-y-3">
-      <PromptDefaultsLink promptId="copy.asset" />
+      <TaskPromptField promptId="copy.asset" label="Copy generation instructions" value={defaultInstructions} onChange={setDefaultInstructions} />
       {!studio && (
         <>
           <h3 className="font-semibold">Generate copy from your setup</h3>
@@ -155,4 +159,3 @@ export function AdCopyAssistant({
     </div>
   );
 }
-import { PromptDefaultsLink } from "./PromptDefaultsLink";

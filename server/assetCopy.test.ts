@@ -168,3 +168,10 @@ it("generates from a brief without an image and includes taxonomy direction and 
       .success
   ).toBe(false);
 });
+
+it("sends per-run copy instructions while retaining the task contract", async () => {
+  response({ options });
+  await generateAssetCopy({ ...input(), defaultInstructions: "Use calm, concrete language." }, {}, []);
+  expect(llm.mock.calls[0][0]).toMatchObject({ promptTemplateId: "copy.asset", promptTemplateOverride: "Use calm, concrete language." });
+  expect(llm.mock.calls[0][0].messages[0].content).toContain("exactly 5");
+});

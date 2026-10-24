@@ -1,3 +1,4 @@
+import { catalogMediaGroupSchema } from "./catalogMedia";
 import { offeringTypes } from "./businessProfile";
 import { z } from "zod";
 export const serviceDetailsSchema = z
@@ -62,6 +63,7 @@ export const catalogEntrySchema = z.object({
   serviceDetails: serviceDetailsSchema.nullable().default(null),
   imageUrl: z.union([z.literal(""), z.string().url()]).default(""),
   imageUrls: z.array(z.string().url()).max(1000).optional(),
+  mediaGroups: z.array(catalogMediaGroupSchema).max(100).optional(),
   specificationOrder: z.array(z.string().min(1).max(120)).max(100).optional(),
 });
 // Source-owned drafts may lack a landing page. Manual imports and channel

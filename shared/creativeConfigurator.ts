@@ -196,7 +196,7 @@ export const configuratorSections = [
     subtitle: "Tell your story",
     categories: [
       { id: "message", title: "Copy & prompt" },
-      { id: "direction", title: "Creative direction" },
+      { id: "direction", title: "Brand Kit" },
       { id: "audio", title: "Audio" },
       { id: "subtitles", title: "Subtitles" },
     ],

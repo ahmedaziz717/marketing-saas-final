@@ -1,3 +1,4 @@
+import { productOverlayPreview } from "../lib/productOverlayPreview";
 import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
@@ -870,11 +871,13 @@ export const creativeBuilderRouter = router({
           top: layer.top,
           width: layer.width,
           aspect: cutout.width / cutout.height,
+          sourceWidth: cutout.width,
+          sourceHeight: cutout.height,
           preview: `data:image/png;base64,${preview.toString("base64")}`,
         });
       }
       return {
-        designUrl: metadata.designUrl,
+        designUrl: await productOverlayPreview(metadata.designStorageKey),
         width: variant.renderMetadata!.width,
         height: variant.renderMetadata!.height,
         revision: asset.revision,
@@ -920,6 +923,7 @@ export const creativeBuilderRouter = router({
         variantId: z.number().int().positive(),
         revision: z.string().regex(/^[a-f0-9]{64}$/),
         layers: z.array(productOverlayPlacementSchema).min(1).max(3),
+        allowUpscale: z.boolean().default(false),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -957,7 +961,7 @@ export const creativeBuilderRouter = router({
         await storageGetBase64(metadata.designStorageKey),
         "base64"
       );
-      const result = await renderProductOverlay(design, cutouts, input.layers);
+      const result = await renderProductOverlay(design, cutouts, input.layers, input.allowUpscale);
       const stored = await storagePut(
         `org-${input.organizationId}/creatives/${variant.jobId}/product-overlay.png`,
         result.png,
@@ -1574,6 +1578,7 @@ export const creativeBuilderRouter = router({
         const model = requireLatestGptTextModel((await listLLMModels()).data);
         const response = await invokeLLM({
           promptTemplateId: "creative.copy",
+          promptTemplateOverride: copySetup.copyDefaultInstructions,
           model,
           messages: buildCreativeCopyMessages(
             copySetup,

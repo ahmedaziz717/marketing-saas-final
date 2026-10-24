@@ -76,7 +76,7 @@ function PromptEditor({
     onError: error => toast.error(error.message),
   });
   function restore(
-    action: "restore_system" | "restore_revision",
+    action: "restore_original" | "restore_brand_initial" | "restore_revision",
     restoreRevision?: number
   ) {
     change.mutate({
@@ -87,9 +87,9 @@ function PromptEditor({
       restoreRevision,
       reason:
         reason.trim() ||
-        (action === "restore_system"
-          ? "Restore system baseline"
-          : "Restore workspace revision"),
+        (action === "restore_original"
+          ? "Restore immutable original generic default (V0)"
+          : action === "restore_brand_initial" ? "Restore immutable first brand default (V1)" : "Restore workspace revision"),
     });
   }
   return (
@@ -159,12 +159,14 @@ function PromptEditor({
             <Button
               variant="outline"
               disabled={
-                dirty || stale || change.isPending || prompt.source === "system"
+                dirty || stale || change.isPending || prompt.value === (prompt.restorePoints?.original.value ?? prompt.baseline)
               }
-              onClick={() => restore("restore_system")}
+              onClick={() => restore("restore_original")}
             >
-              Restore system default
+              Restore original default (V0)
             </Button>
+            <Button variant="outline" disabled={dirty || stale || change.isPending || !prompt.restorePoints?.brand}
+              onClick={() => restore("restore_brand_initial")}>Restore initial brand default (V1)</Button>
             <Button
               variant="ghost"
               disabled={change.isPending}
@@ -177,7 +179,7 @@ function PromptEditor({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Restoring creates a new history entry. It does not rewrite existing
+            V0 is the original generic default; V1 is the first brand-personalized default. Later edits and refreshes preserve both. Restoring creates a new history entry. It does not rewrite existing
             drafts, workflow versions or past runs.
           </p>
         </>
@@ -189,10 +191,10 @@ function PromptEditor({
       )}
       <details>
         <summary className="cursor-pointer text-sm font-medium">
-          Immutable system baseline
+          Original generic default (V0)
         </summary>
         <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-muted p-3 text-sm">
-          {prompt.baseline}
+          {prompt.restorePoints?.original.value ?? prompt.baseline}
         </pre>
       </details>
       <div>

@@ -1,3 +1,4 @@
+import { TaskPromptField } from "@/components/TaskPromptField";
 import {
   learningHandoffSchema,
   type LearningOrigin,
@@ -1582,6 +1583,9 @@ function Configurator({
               ? "This image pipeline requires a headline and CTA. Text is generated into the image; inspect spelling and placement in the result."
               : "Describe the action, sequence and camera movement. Dialogue and sound are available only on models that support them."}
           </div>
+          <TaskPromptField promptId={isImage ? "creative.copy" : "video.direction"} label={isImage ? "Copy generation instructions" : "Video generation instructions"}
+            value={isImage ? image.copyDefaultInstructions : video.defaultInstructions}
+            onChange={value => isImage ? updateImage({ copyDefaultInstructions: value }) : updateVideo({ defaultInstructions: value })} />
           {isImage ? (
             (["headline", "subheadline", "cta"] as const).map(key => (
               <Field
@@ -1687,8 +1691,8 @@ function Configurator({
             />
           </Field>
           <Field
-            title="Additional creative direction"
-            help="Composition, lighting and styling instructions. Use verified facts for claims."
+            title="Additional instructions for this creative"
+            help="Optional changes for this creative only, such as composition, lighting or styling. Your Brand Kit and theme are already applied."
           >
             <textarea
               value={direction.extraDirection}
@@ -1700,9 +1704,9 @@ function Configurator({
           </Field>
           {isImage && (
             <details>
-              <summary>Creative direction</summary>
+              <summary>Default creative instructions</summary>
               <Field
-                title="Creative instructions"
+                title="Reusable creative instructions"
                 help="Added to your Brand Kit voice and selected subject. Brand updates do not overwrite these instructions."
               >
                 <textarea

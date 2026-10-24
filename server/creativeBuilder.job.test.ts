@@ -509,9 +509,10 @@ it("does not spend credits or return an AI redraw when a queued product image is
   );
 });
 
-it.each([false, true])(
-  "finishes every size with original artwork and immutable editor base (automatic product match: %s)",
-  async matched => {
+it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolution: false }, { matched: true, lowResolution: true }])(
+  "finishes every size with original artwork and immutable editor base (automatic product match/resolution: %j)",
+  async ({ matched, lowResolution }) => {
+    const applied = matched && !lowResolution;
     const { db, args, written } = fixture();
     args.setup.preserveLogo = true;
     args.setup.preserveProduct = true;
@@ -527,9 +528,11 @@ it.each([false, true])(
       })
       .png()
       .toBuffer();
+    const product = lowResolution ? logo : await sharp({ create: { width: 1600, height: 960, channels: 4, background: "red" } })
+      .extend({ left: 4, right: 4, top: 4, bottom: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
     const storage = new Map<string, Buffer>([
       ["logo.png", logo],
-      ["lamp.png", logo],
+      ["lamp.png", product],
     ]);
     mocked.read.mockImplementation(async (key: string) =>
       storage.get(key)!.toString("base64")
@@ -591,7 +594,7 @@ it.each([false, true])(
     });
     await runBuilderJob(db, args);
     expect(written.flat()).toHaveLength(3);
-    expect(mocked.put).toHaveBeenCalledTimes(matched ? 6 : 3);
+    expect(mocked.put).toHaveBeenCalledTimes(applied ? 6 : 3);
     expect(mocked.vision).toHaveBeenCalledTimes(6);
     expect(
       mocked.vision.mock.calls.every(
@@ -600,7 +603,7 @@ it.each([false, true])(
     ).toBe(true);
     for (const variant of written.flat()) {
       expect(variant.imageStorageKey).toContain(
-        matched ? "product-finish" : "original-logo-"
+        applied ? "product-finish" : "original-logo-"
       );
       const metadata = variant.renderMetadata.logoPreservation;
       expect(metadata).toMatchObject({
@@ -610,11 +613,11 @@ it.each([false, true])(
       expect(metadata.designStorageKey).toMatch(/^design-/);
       const preservation = variant.renderMetadata.productPreservation;
       expect(preservation).toMatchObject({
-        applied: matched,
-        alignment: matched ? "automatic" : "needs_adjustment",
+        applied,
+        alignment: applied ? "automatic" : "needs_adjustment",
       });
       expect(preservation.designStorageKey).toContain("original-logo-");
-      if (matched)
+      if (applied)
         expect(preservation.designStorageKey).not.toBe(variant.imageStorageKey);
       else expect(preservation.designStorageKey).toBe(variant.imageStorageKey);
       const pixel = await sharp(storage.get(variant.imageStorageKey)!)

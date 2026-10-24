@@ -8,6 +8,7 @@ import {
   type ApiCatalogConfig,
   type ApiInstructionFile,
   apiEndpointSchema,
+  apiCatalogMappingSchema,
 } from "@shared/apiCatalog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -443,6 +444,19 @@ function ApiCatalogForm({
                   />
                 </label>
               ))}
+              <label className="flex gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={!!config.mediaGroupsFromDetails}
+                onChange={event => { const mediaGroupsFromDetails = event.target.checked; setConfig({ ...config, mediaGroupsFromDetails }); setManualMapping({ ...manualMapping, mediaGroupsFromDetails }); }} />
+                Read image groups from each product detail endpoint (one additional API request per product during sync; provider limits may apply).</label>
+              <label className="text-sm sm:col-span-2">
+                Related image groups (source mapping JSON)
+                <textarea className="mt-1 min-h-24 w-full rounded border bg-background p-2 font-mono text-xs"
+                  key={JSON.stringify(config.mediaGroupRules)} defaultValue={JSON.stringify(config.mediaGroupRules ?? [], null, 2)}
+                  onBlur={event => { try {
+                    const mediaGroupRules = apiCatalogMappingSchema.shape.mediaGroupRules.parse(JSON.parse(event.target.value || "[]"));
+                    setConfig({ ...config, mediaGroupRules }); setManualMapping({ ...manualMapping, mediaGroupRules });
+                  } catch { setError("Check the related image-group mapping. Previous valid mapping is retained."); } }} />
+                <span className="block text-xs text-muted-foreground">Map system, base-component and optional-component galleries using documented field paths. Resolution paths must describe the same view. Gallery counts are not image addresses; eligibility fields must be true. These rules apply only to this source.</span>
+              </label>
               <label className="text-sm">
                 Image path rules
                 <VisualSelect

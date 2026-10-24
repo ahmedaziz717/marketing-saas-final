@@ -208,6 +208,7 @@ export type ResolvedPrompt = PromptDefinition & {
   revision: number;
   source: "system" | "workspace";
   updatedAtMs: number | null;
+  restorePoints?: { original: { value: string; baselineVersion: number }; brand: { value: string; revision: number } | null };
 };
 
 export function newCreativeDefaults(

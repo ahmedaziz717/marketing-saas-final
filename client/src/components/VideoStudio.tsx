@@ -1,3 +1,4 @@
+import { TaskPromptField } from "./TaskPromptField";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
@@ -381,7 +382,6 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const maxImages = setup.mode === "motion" ? 8 : 9;
   return (
     <section aria-labelledby="video-studio-title" className="min-w-0">
-      <PromptDefaultsLink promptId="video.planner" />
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="video-studio-title" className="text-2xl font-semibold">
@@ -714,6 +714,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                     Add an image to have AI draft the scene and camera movement.
                   </p>
                 )}
+                <TaskPromptField promptId="video.direction" label="Video generation instructions" value={setup.defaultInstructions} onChange={defaultInstructions => update({ defaultInstructions })} />
                 <label htmlFor="video-prompt" className="text-sm font-medium">
                   Describe your video{" "}
                   {setup.mode !== "motion" && (
@@ -1209,4 +1210,3 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
     </section>
   );
 }
-import { PromptDefaultsLink } from "./PromptDefaultsLink";

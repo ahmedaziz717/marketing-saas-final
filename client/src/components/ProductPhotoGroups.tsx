@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { CatalogGallery } from "./CatalogGallery";
 import type { VideoImageChoice } from "@shared/videoCreation";
 
 export function ProductPhotoGroups({
@@ -12,7 +12,6 @@ export function ProductPhotoGroups({
   limit: number;
   onToggle: (key: string) => void;
 }) {
-  const [failed, setFailed] = useState<Record<string, string>>({});
   const groups = new Map<string, VideoImageChoice[]>();
   for (const choice of choices) {
     const key = choice.product ? `product:${choice.product.id}` : choice.key;
@@ -34,51 +33,11 @@ export function ProductPhotoGroups({
           className="min-w-0 rounded-xl border p-3"
         >
           <h3 className="text-sm font-semibold">{photos[0].name}</h3>
-          <p className="mb-2 text-xs text-muted-foreground">
-            {photos.length} {photos.length === 1 ? "photo" : "photos"} · select
-            the angles you need
-          </p>
-          <div className="flex max-w-full gap-2 overflow-x-auto pb-2">
-            {photos.map((photo, i) => {
-              const checked = selected.includes(photo.key),
-                unavailable = !photo.url || failed[photo.key] === photo.url;
-              return (
-                <button
-                  type="button"
-                  key={photo.key}
-                  aria-label={`Use photo ${i + 1} for ${photo.name}`}
-                  aria-pressed={checked}
-                  disabled={
-                    !checked && (unavailable || selected.length >= limit)
-                  }
-                  onClick={() => onToggle(photo.key)}
-                  className={`w-24 shrink-0 rounded-lg border p-1 text-xs disabled:opacity-50 ${checked ? "border-primary bg-primary/10" : "border-border"}`}
-                >
-                  {unavailable ? (
-                    <span className="grid h-20 place-items-center">
-                      Image unavailable
-                    </span>
-                  ) : (
-                    <img
-                      className="h-20 w-full object-contain"
-                      src={photo.url}
-                      alt=""
-                      loading="lazy"
-                      onError={() =>
-                        setFailed(previous => ({
-                          ...previous,
-                          [photo.key]: photo.url,
-                        }))
-                      }
-                    />
-                  )}
-                  <span>
-                    {checked ? "Selected · " : ""}Photo {i + 1}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <CatalogGallery name={photos[0].name} groups={photos[0].mediaGroups}
+            images={photos.map(photo => ({ id: Number(photo.key.split(":")[1]), url: photo.url, media: photo.media }))}
+            selectedIds={photos.filter(photo => selected.includes(photo.key)).map(photo => Number(photo.key.split(":")[1]))}
+            disabled={selected.length >= limit}
+            onSelect={id => { const photo = photos.find(p => Number(p.key.split(":")[1]) === id); if (photo) onToggle(photo.key); }} />
         </section>
       ))}
     </div>

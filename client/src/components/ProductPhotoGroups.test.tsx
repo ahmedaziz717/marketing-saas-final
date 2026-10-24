@@ -56,3 +56,10 @@ it("shows unavailable images and enforces capacity without dropping a saved sele
   expect((buttons[0] as HTMLButtonElement).disabled).toBe(false);
   expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
 });
+
+it("does not confuse an asset reference with the same numeric catalog image ID", () => {
+  render(<ProductPhotoGroups choices={[photo("product_image:1", 7, "/a.png")]} selected={["asset:1"]} limit={1} onToggle={vi.fn()} />);
+  const button = screen.getByRole("button");
+  expect(button.getAttribute("aria-pressed")).toBe("false");
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+});

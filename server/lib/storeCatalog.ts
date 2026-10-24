@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { apiCatalogAddress, readApiCatalogPage } from "./apiCatalog";
 import type { ApiCatalogConfig } from "../../shared/apiCatalog";
 import type { StoreProvider, CatalogEntry } from "../../shared/catalog";
@@ -176,6 +177,16 @@ export async function readStorePage(
             ].filter(Boolean)
           )
         ),
+        mediaGroups: [{
+          id: `product:${p.id}`, name: p.name, role: "system", eligible: true,
+          images: [...(p.images ?? [])]
+            .sort((a: any, b: any) => Number(!!b.is_thumbnail) - Number(!!a.is_thumbnail) || (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .filter((i: any) => i.url_standard || i.url_zoom)
+            .map((i: any) => ({
+              id: String(i.id ?? createHash("sha256").update(i.url_standard || i.url_zoom).digest("hex")),
+              candidates: Array.from(new Set<string>([i.url_standard, i.url_zoom].filter(Boolean))),
+            })),
+        }],
         variants: (p.variants ?? []).map((v: any) => ({
           id: String(v.id),
           name: v.option_values?.map((o: any) => o.label).join(" / ") || p.name,

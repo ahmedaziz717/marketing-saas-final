@@ -156,6 +156,7 @@ export const contentSchema = z.object({
   copyTags: copyTagsSchema.optional(),
   copyDirection: copyDirectionSchema.optional(),
   copyInstructions: z.string().max(2000).optional(),
+  copyDefaultInstructions: z.string().trim().min(1).max(12000).optional(),
   copyGenerationContext: z.string().max(64).optional(),
   // Draft suggestions are separate from textVariants sent to Meta.
   copyAlternatives: z

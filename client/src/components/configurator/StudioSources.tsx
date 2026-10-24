@@ -1,3 +1,6 @@
+import { catalogDefaultImage } from "@shared/catalogMedia";
+import { CatalogGallery } from "../CatalogGallery";
+import type { CatalogImageMedia, CatalogMediaGroupSummary } from "@shared/catalogMedia";
 import { ProductPhotoGroups } from "../ProductPhotoGroups";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
@@ -28,7 +31,8 @@ type Product = {
   name: string;
   recordType?: string;
   sku?: string | null;
-  images: Array<{ id: number; url: string }>;
+  images: Array<{ id: number; url: string; media?: CatalogImageMedia | null }>;
+  mediaGroups?: CatalogMediaGroupSummary[] | null;
 };
 export function StudioSources({
   draftKey,
@@ -395,6 +399,7 @@ export function StudioSources({
                     .includes(search.toLowerCase())
                 )
                 .map(p => {
+                  const primary = p.images.find(photo => catalogDefaultImage(photo, p.mediaGroups));
                   const selection = image.products.find(
                     i => i.productId === p.id
                   );
@@ -410,12 +415,12 @@ export function StudioSources({
                       }
                       image={
                         p.images.find(i => i.id === selection?.imageId)?.url ??
-                        p.images[0]?.url
+                        primary?.url
                       }
                       contain
                       selected={!!selection}
                       disabled={
-                        (!p.images.length && p.recordType !== "service") ||
+                        (!primary && !selection && p.recordType !== "service") ||
                         (!selection &&
                           image.products.length >=
                             (image.productMode === "together" ? 3 : 12))
@@ -429,7 +434,7 @@ export function StudioSources({
                                 ...image.products,
                                 {
                                   productId: p.id,
-                                  imageId: p.images[0]?.id ?? null,
+                                  imageId: primary?.id ?? null,
                                   featuredSpecKeys: [],
                                   includePrice: false,
                                 },
@@ -437,51 +442,11 @@ export function StudioSources({
                         })
                       }
                     >
-                      {p.images.length > 1 && (
-                        <div
-                          className="cfg-photo-angles"
-                          aria-label={`Photos for ${p.name}`}
-                        >
-                          {p.images.map((photo, i) => (
-                            <button
-                              key={photo.id}
-                              aria-label={`Use photo ${i + 1} for ${p.name}`}
-                              aria-pressed={selection?.imageId === photo.id}
-                              disabled={
-                                !selection &&
-                                image.products.length >=
-                                  (image.productMode === "together" ? 3 : 12)
-                              }
-                              onClick={() =>
-                                updateImage({
-                                  promotionMode: "offerings",
-                                  products: selection
-                                    ? image.products.map(s =>
-                                        s.productId === p.id
-                                          ? { ...s, imageId: photo.id }
-                                          : s
-                                      )
-                                    : [
-                                        ...image.products,
-                                        {
-                                          productId: p.id,
-                                          imageId: photo.id,
-                                          featuredSpecKeys: [],
-                                          includePrice: false,
-                                        },
-                                      ],
-                                })
-                              }
-                            >
-                              <img
-                                src={photo.url}
-                                alt={`Photo ${i + 1}`}
-                                loading="lazy"
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <CatalogGallery name={p.name} images={p.images} groups={p.mediaGroups} selected={selection?.imageId}
+                        disabled={!selection && image.products.length >= (image.productMode === "together" ? 3 : 12)}
+                        onSelect={imageId => updateImage({ promotionMode: "offerings", products: selection
+                          ? image.products.map(s => s.productId === p.id ? { ...s, imageId } : s)
+                          : [...image.products, { productId: p.id, imageId, featuredSpecKeys: [], includePrice: false }] })} />
                     </StudioCard>
                   );
                 })

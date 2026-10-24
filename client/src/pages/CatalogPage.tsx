@@ -1,3 +1,5 @@
+import { catalogDefaultImage } from "@shared/catalogMedia";
+import { CatalogGallery } from "@/components/CatalogGallery";
 import { ApiProductDetails } from "@/components/ApiProductDetails";
 import { CatalogFactsFields } from "@/components/CatalogFactsFields";
 import { catalogRefreshChanges } from "@shared/catalogRefresh";
@@ -531,9 +533,9 @@ function CatalogContent() {
                     }}
                   />
                   <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-muted">
-                    {product.images[0] ? (
+                    {product.images.find(photo => catalogDefaultImage(photo, product.mediaGroups)) ? (
                       <img
-                        src={product.images[0].url}
+                        src={product.images.find(photo => catalogDefaultImage(photo, product.mediaGroups))!.url}
                         alt={product.name}
                         className="h-full w-full object-contain"
                       />
@@ -564,6 +566,7 @@ function CatalogContent() {
                   </div>
                 </div>
                 <div className="catalog-card-facts px-5 pb-4">
+                  <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Image galleries ({product.images.length})</summary><div className="mt-3"><CatalogGallery name={product.name} images={product.images} groups={product.mediaGroups} /></div></details>
                   {!!reviewNotices.length && (
                     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                       <p className="font-medium">Imported for review</p>

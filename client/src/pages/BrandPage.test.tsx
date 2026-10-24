@@ -54,6 +54,7 @@ vi.mock("@/lib/trpc", async () => {
         assetLibrary: { list: { invalidate: async () => {} } },
       }),
       brand: {
+        personalizePrompts: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         extractGuidelines: { useMutation: () => ({ mutateAsync: vi.fn() }) },
         get: { useQuery: () => ({ data: api.kit }) },
         scanWebsite: {

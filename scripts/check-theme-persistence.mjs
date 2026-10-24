@@ -84,8 +84,8 @@ try {
   const endpoint = await new Promise((resolve, reject) => {
     let stderr = "";
     const timer = setTimeout(
-      () => reject(new Error("Chrome debugging endpoint did not start")),
-      15000
+      () => reject(new Error(`Chrome debugging endpoint did not start: ${stderr.slice(-1500)}`)),
+      30000
     );
     chrome.once("error", error => {
       clearTimeout(timer);

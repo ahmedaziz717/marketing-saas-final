@@ -1,3 +1,4 @@
+import { catalogImageEligible } from "../../shared/catalogMedia";
 import { selectProductFacts } from "./productFacts";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -53,6 +54,7 @@ export function resolveBuilderInputs(
     if (
       !product ||
       product.status !== "approved" ||
+      (image && !catalogImageEligible(image, product.mediaGroups)) ||
       (!image &&
         (product.recordType !== "service" || selection.imageId !== null))
     ) {
@@ -64,6 +66,7 @@ export function resolveBuilderInputs(
     }
     return {
       ...selectProductFacts(product, selection),
+      ...(image?.media?.references.length ? { visualSource: image.media.references.map(ref => product.mediaGroups?.find(group => group.id === ref.groupId)).filter(Boolean).map(group => ({ name: group!.name, role: group!.role, note: group!.role === "optional_component" ? "Selected optional component look, not proof of the exact configured SKU; do not infer configuration, price or availability changes." : "Source-provided product/component gallery." })) } : {}),
       image: image
         ? {
             id: image.id,

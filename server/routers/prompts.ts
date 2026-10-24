@@ -32,7 +32,7 @@ export const promptsRouter = router({
       scope.extend({
         promptId: z.string().max(180),
         expectedRevision: z.number().int().nonnegative(),
-        action: z.enum(["save", "restore_system", "restore_revision"]),
+        action: z.enum(["save", "restore_system", "restore_revision", "restore_original", "restore_brand_initial"]),
         value: z.string().max(12000).optional(),
         restoreRevision: z.number().int().positive().optional(),
         reason: z.string().trim().min(1).max(500),

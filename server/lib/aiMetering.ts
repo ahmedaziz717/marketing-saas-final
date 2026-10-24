@@ -33,7 +33,7 @@ export const aiScope = new AsyncLocalStorage<{
   >;
   promptVersions?: Record<
     string,
-    { revision: number; baselineVersion: number; source: string }
+    { revision: number; baselineVersion: number; source: string; overrideHash?: string }
   >;
 }>();
 export async function creditState(

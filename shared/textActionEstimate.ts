@@ -6,6 +6,7 @@ import { estimateCostMicros, type ProviderRate } from "./platformAdmin";
  */
 export const textActionBudgets = {
   standard: { input: 2000, output: 400 },
+  brand_defaults: { input: 12000, output: 1800 },
   short_response: { input: 400, output: 200 },
   video_prompt: { input: 2000, output: 400 },
   ad_copy: { input: 1800, output: 650 },
@@ -17,6 +18,9 @@ export type TextAction = keyof typeof textActionBudgets;
 
 export function textActionForOperation(operation?: string): TextAction {
   switch (operation) {
+    case "brand.update":
+    case "brand.personalizePrompts":
+      return "brand_defaults";
     case "workflowAuthoring.chat":
       return "workflow_authoring";
     case "workflow.assistant":

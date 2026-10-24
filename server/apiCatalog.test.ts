@@ -22,6 +22,20 @@ const product = {
 };
 beforeEach(() => vi.clearAllMocks());
 
+it("enriches gallery groups only from explicitly enabled same-origin detail requests", async () => {
+  const cfg = apiCatalogConfigSchema.parse({ mediaGroupsFromDetails: true, detailUrlTemplate: "https://store.example/api/products/{id}?configure=true", mediaGroupRules: [
+    { key: "case", role: "optional_component", itemsPath: "options", idPath: "id", namePath: "name", imagesPath: "images", eligiblePath: "enabled" },
+  ] });
+  mocked.request.mockResolvedValueOnce({ data: [product] }).mockResolvedValueOnce({ data: { options: [{ id: "case1", name: "Case 1", enabled: true, images: ["https://cdn.example/front.png", "https://cdn.example/back.png"] }] } });
+  const page = await readApiCatalogPage(endpoint, cfg, null);
+  expect(page.items[0].mediaGroups?.[0].images).toHaveLength(2);
+  expect(mocked.request).toHaveBeenLastCalledWith("https://store.example/api/products/pc-1?configure=true", {});
+  mocked.request.mockReset();
+  mocked.request.mockResolvedValueOnce({ data: [product] });
+  await expect(readApiCatalogPage(endpoint, { ...cfg, detailUrlTemplate: "https://other.example/{id}" }, null)).rejects.toThrow(/origin/);
+  expect(mocked.request).toHaveBeenCalledTimes(1);
+});
+
 it("keeps array attributes and feature bullets as selectable catalog facts", () => {
   const page = parseApiCatalog(
     [

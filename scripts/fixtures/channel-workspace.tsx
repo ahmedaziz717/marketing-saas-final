@@ -1,3 +1,4 @@
+import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
 import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGroups";
 import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
 import OnboardingPage from "../../client/src/pages/OnboardingPage";
@@ -812,6 +813,10 @@ function respond(path: string, input: any) {
       data: [{ id: "77", name: "Website visitors", subtype: "WEBSITE" }],
       truncated: false,
     };
+  if (path === "catalogSources.galleryPilotProducts") return [{ id: 7, name: "Selected system", externalId: "system-a" }];
+  if (path === "catalogSources.galleryPilotStatus") return null;
+  if (path === "catalogSources.previewGalleryPilot") { mutations.push(path); return { token: { ciphertext: "fixture", iv: "iv", tag: "tag" }, productName: "Selected system", distinctImages: 183, cachedImages: 0, groups: Array(21).fill({}), groupsAdded: Array(21).fill("group"), groupsReplaced: [], maximumNewImages: 183, existingImagesReferenced: [], maximumImageAttempts: 549 }; }
+  if (path === "catalogSources.queueGalleryPilot") { mutations.push(path); return { queued: true }; }
   if (path === "catalogSources.previewApi") {
     mutations.push(path);
     return {
@@ -1163,6 +1168,7 @@ const routeForPage: Record<string, string> = {
   "workflows-directory": "/app/workflows",
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
+  "catalog-pilot": "/app/catalog-pilot-fixture",
   "catalog-gallery": "/app/catalog-gallery-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
@@ -1423,10 +1429,14 @@ function WorkflowModelFormFixture() {
 function CatalogGalleryFixture() {
   const [selected, setSelected] = useState<string[]>([]);
   const choices = studioDraftAssets.map((asset, i) => ({ ...asset, key: `product_image:${i + 1}`, url: asset.url.replace("Emerald%20collection", `Emerald%20angle%20${i}`), name: i < 2 ? "Emerald collection" : "Gold collection", origin: "catalog" as const, product: { id: i < 2 ? 7 : 8 } })) as any;
+  const mediaGroups = [{ id: "base", name: "Base chassis", role: "base_component", eligible: true, expectedCount: 8, declaredImages: 0 }, { id: "white", name: "White chassis", role: "optional_component", eligible: true, declaredImages: 1 }];
+  for (const choice of choices) if (choice.product.id === 7) choice.mediaGroups = mediaGroups;
+  choices.push({ ...choices[0], key: "product_image:99", url: choices[0].url.replace("Emerald%20angle%200", "Optional%20white%20chassis"), media: { width: 1600, height: 1200, hasAlpha: true, candidates: [], selectedSourceUrl: "", unavailableCandidates: 0, references: [{ groupId: "white", imageId: "front", position: 0 }] } });
   return <div className="p-5"><h1>Product catalog</h1><ProductPhotoGroups choices={choices} selected={selected} limit={3} onToggle={key => setSelected(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key])} /></div>;
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "catalog-pilot") return <DashboardLayout><h1>Catalog gallery pilot</h1><CatalogGalleryPilot organizationId={1} sourceId={1} onQueued={async () => {}} /></DashboardLayout>;
   if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
   if (which === "onboarding")
     return (
@@ -2274,10 +2284,27 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(mutations.length === 0, "Exploration never starts generation");
       layout();
     }
+    if (which === "catalog-pilot") {
+      await click("Repair one product gallery");
+      await fillControl('[role="dialog"] select', "7");
+      await fillControl('[role="dialog"] textarea', '{"detailUrlTemplate":"https://source.example/{code}"}');
+      check(mutations.length === 0, "Preparing a pilot never starts an import");
+      await click("Preview gallery repair");
+      check(document.body.textContent?.includes("183 distinct views"), "Preview shows bounded image impact");
+      check(mutations.join(",") === "catalogSources.previewGalleryPilot", "Preview performs no queue action");
+      layout();
+      await click("Confirm this product only");
+      check(mutations.includes("catalogSources.queueGalleryPilot"), "Explicit confirmation queues only the reviewed product");
+      layout();
+    }
     if (which === "catalog-gallery") {
       await click("Use photo 2 for Emerald collection");
       check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Alternate angle selection is retained within its product");
       check(document.querySelectorAll('section[aria-label^="Photos for"]').length === 2, "One group per product rather than duplicate tiles");
+      check(document.body.textContent?.includes("source reports 8 images"), "Missing URLs show an incomplete gallery, not fabricated angles");
+      check(document.body.textContent?.includes("not the exact configured system"), "Optional component views are clearly distinguished");
+      await click("Use photo 1 for Emerald collection \u2014 White chassis");
+      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Choosing an optional view preserves earlier selection");
       layout();
     }
     if (which === "creative-people") {
@@ -2382,7 +2409,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "creative-direction") {
       await studioSection("Story & Sound", false);
-      await click("Creative direction");
+      await click("Brand Kit");
       check(
         !!document.querySelector('[aria-label="Brand context for generation"]'),
         "Brand source context is visible beside creative direction"
