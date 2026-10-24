@@ -999,7 +999,7 @@ function respond(path: string, input: any) {
   if (path === "assetLibrary.list" && which.startsWith("activation-"))
     return studioDraftAssets;
   if (path === "assetLibrary.list")
-    return ["studio-ad-copy", "studio-post-media", "studio-media"].includes(
+    return ["studio-ad-copy", "studio-post-media", "studio-media", "asset-library"].includes(
       which
     )
       ? [
@@ -3797,13 +3797,30 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "asset-library") {
       const sizes = document.querySelector<HTMLSelectElement>(
-        '[data-choice-label="Asset size"] select'
+        'select[aria-label="Asset size"]'
       )!;
       check(
         sizes.textContent?.includes("4:5 · e.g. 1080 × 1350 px"),
         "Library uses the same clear size labels as the picker"
       );
-      await chooseVisual(sizes, "portrait");
+      const filters = document.querySelector('[aria-label="Asset filters"]')!;
+      check(filters.querySelectorAll('select').length === 3 && !filters.querySelector('.choice-tile'), "Library filters are compact native controls");
+      check(filters.getBoundingClientRect().height < (innerWidth >= 1024 ? 190 : 330), "Filters leave room for assets at desktop and mobile widths");
+      await fillControl('select[aria-label="Asset size"]', "portrait");
+      check(sizes.value === "portrait", "Size selection is retained");
+      check(!document.body.textContent?.includes("Approved learning directory image"), "Portrait filter excludes a square asset");
+      const type = filters.querySelector<HTMLSelectElement>('select[aria-label="Asset type"]')!;
+      await fillControl('select[aria-label="Asset type"]', "images");
+      check(sizes.value === "portrait", "Changing type preserves the selected size");
+      await click("Clear filters");
+      check(sizes.value === "all" && type.value === "all", "Clear filters resets discovery controls");
+      check(document.body.textContent?.includes("Approved learning directory image"), "Clearing filters restores matching assets");
+      await fillControl('select[aria-label="Channel size match"]', "meta_ads");
+      await fillControl('input[aria-label="Search assets"]', "no matching asset");
+      check(!document.body.textContent?.includes("Approved learning directory image"), "Search combines with channel filtering");
+      await click("Clear filters");
+      check(document.body.textContent?.includes("Approved learning directory image"), "Clear restores search and channel choices together");
+      check(!mutations.length, "Filtering does not change assets or review status");
       layout();
     }
     if (which === "brand-kit") {
