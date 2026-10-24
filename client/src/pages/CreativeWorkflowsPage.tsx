@@ -1,4 +1,5 @@
 import { VisualSelect } from "@/components/choices/VisualSelect";
+import { WorkflowAuthoringChat } from "@/components/WorkflowAuthoringChat";
 import { withWorkflowMediaFields } from "@shared/workflowMedia";
 import { WorkflowInputControl } from "@/components/WorkflowInputControl";
 import { fieldValueProblem } from "@shared/workflowInputs";
@@ -159,6 +160,11 @@ function WorkflowLibrary({
         </Button>
       </div>
       <StageToolNavigation family={family} view="workflows" />
+      <WorkflowAuthoringChat
+        organizationId={organizationId}
+        family={family}
+        onApplied={id => onOpen(id)}
+      />
       <section aria-labelledby="wf-template-heading">
         <div className="wf-section-title">
           <h2 id="wf-template-heading">Start with a workflow</h2>
@@ -618,6 +624,21 @@ function WorkflowEditor({
         </div>
       )}
       <nav className="wf-editor-tabs" aria-label="Workflow editor views">
+        <WorkflowAuthoringChat
+          organizationId={organizationId}
+          family={family}
+          target={{ id, revision: revision.current }}
+          disabled={dirty || save.isPending || !!saveError}
+          onApplied={(_id, draft, nextRevision) => {
+            setGraph(draft.graph);
+            setName(draft.name);
+            revision.current = nextRevision;
+            setSavedString(
+              JSON.stringify({ graph: draft.graph, name: draft.name })
+            );
+            void detail.refetch();
+          }}
+        />
         {(
           [
             ["workflow", "Workflow"],
