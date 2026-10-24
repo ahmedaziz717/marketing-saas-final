@@ -22,7 +22,7 @@ beforeAll(async () => {
   organizationId = orgs[0].id; otherOrganizationId = orgs[1].id;
   const roles = ["owner", "creator", "owner", "reviewer", "publisher", "admin"] as const;
   await db.insert(organizationMemberships).values(people.map((person, i) => ({ userId: person.id, organizationId: i === 2 ? otherOrganizationId : organizationId, role: roles[i], status: "active" as const, createdAtMs: now })));
-  await db.insert(brandKits).values(orgs.map(org => ({ organizationId: org.id, name: "Library test", colors: ["#ffffff"], fonts: ["Inter"], voice: "Clear", requiredClaims: "", prohibitedContent: "", status: "active" as const, updatedByUserId: people[0].id, updatedAtMs: now })));
+  await db.insert(brandKits).values(orgs.map(org => ({ organizationId: org.id, name: `Library test ${org.id}`, colors: ["#ffffff"], fonts: ["Inter"], voice: "Clear", requiredClaims: "", prohibitedContent: "", status: "active" as const, updatedByUserId: people[0].id, updatedAtMs: now })));
   [owner, creator, outsider, reviewer, publisher, admin] = people.map(user => appRouter.createCaller({ user, req: {}, res: {} } as TrpcContext));
   image = (await sharp({ create: { width: 8, height: 8, channels: 4, background: "white" } }).png().toBuffer()).toString("base64");
   const [brief] = await db.insert(campaignBriefs).values({ organizationId, name: "Generated work", audience: "Test", offer: "Test", placements: [], formats: [], creativeDirection: "Test", assetIds: [], createdByUserId: people[1].id, createdAtMs: now, updatedAtMs: now }).returning();
@@ -87,7 +87,10 @@ describe("read-only generation brand context", () => {
     expect(context?.name).toBe(before?.name);
     expect(context?.voice).toBe(before?.voice || null);
     await expect(outsider.brand.promptContext({ organizationId })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(await outsider.brand.promptContext({ organizationId: otherOrganizationId })).toBeNull();
+    const other = await outsider.brand.promptContext({ organizationId: otherOrganizationId });
+    expect(other?.name).toBe(`Library test ${otherOrganizationId}`);
+    expect(other?.name).not.toBe(context?.name);
+    expect(other?.voice).toBe("Clear");
     expect(await owner.brand.get({ organizationId })).toEqual(before);
   });
 });
