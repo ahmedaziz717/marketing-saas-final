@@ -14,6 +14,7 @@ export type ProductOverlayMetadata = {
   designUrl: string;
   applied: boolean;
   alignment?: "automatic" | "manual" | "needs_adjustment";
+  automaticFailure?: "source_resolution" | "alignment_unavailable";
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;
@@ -49,5 +50,5 @@ export function manuallyAppliedProductOverlay(
   metadata: ProductOverlayMetadata,
   layers: ProductOverlayMetadata["layers"]
 ): ProductOverlayMetadata {
-  return { ...metadata, applied: true, alignment: "manual", layers };
+  return { ...metadata, applied: true, alignment: "manual", automaticFailure: undefined, layers };
 }

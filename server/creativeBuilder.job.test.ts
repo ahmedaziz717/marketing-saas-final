@@ -615,6 +615,7 @@ it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolutio
       expect(preservation).toMatchObject({
         applied,
         alignment: applied ? "automatic" : "needs_adjustment",
+        automaticFailure: applied ? undefined : lowResolution ? "source_resolution" : "alignment_unavailable",
       });
       expect(preservation.designStorageKey).toContain("original-logo-");
       if (applied)

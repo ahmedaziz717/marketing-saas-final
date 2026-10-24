@@ -8,6 +8,7 @@ import { buildCreativePrompt } from "./lib/creativeBuilder";
 import { CREATIVE_FONT_GROUPS } from "../shared/creativeFonts";
 import {
   renderProductOverlay,
+  ProductOverlayResolutionError,
   suggestProductPlacement,
 } from "./lib/productOverlay";
 const mocked = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -200,7 +201,7 @@ it("automatically composites a confident matching product without a separate act
     [await source(80)],
     { width: 200, height: 200 }
   );
-  await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toThrow(/higher-resolution/);
+  await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toBeInstanceOf(ProductOverlayResolutionError);
   expect(finished.layers[0]).toMatchObject({
     left: 60,
     top: 40,

@@ -17,6 +17,7 @@ import {
 } from "../lib/imageEnhancement";
 import {
   automaticProductOverlay,
+  ProductOverlayResolutionError,
   renderProductOverlay,
   suggestProductPlacement,
 } from "../lib/productOverlay";
@@ -477,6 +478,7 @@ export async function runBuilderJob(
           })
         );
         let productOverlayApplied = false;
+        let automaticFailure: "source_resolution" | "alignment_unavailable" | undefined;
         if (cutouts.length) {
           try {
             const finished = await automaticProductOverlay(
@@ -492,7 +494,10 @@ export async function runBuilderJob(
             image = { ...image, storageKey: stored.key, url: stored.url };
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
-          } catch {
+          } catch (error) {
+            automaticFailure = error instanceof ProductOverlayResolutionError
+              ? "source_resolution"
+              : "alignment_unavailable";
             // Retain the finished generated design when safe matching is uncertain;
             // never silently apply a generic second product over it.
           }
@@ -563,6 +568,7 @@ export async function runBuilderJob(
                     designStorageKey: overlayDesign.storageKey,
                     designUrl: overlayDesign.url,
                     applied: productOverlayApplied,
+                    automaticFailure,
                     alignment: productOverlayApplied
                       ? "automatic"
                       : "needs_adjustment",
@@ -882,6 +888,7 @@ export const creativeBuilderRouter = router({
         height: variant.renderMetadata!.height,
         revision: asset.revision,
         applied: metadata.applied,
+        automaticFailure: metadata.automaticFailure,
         alignment: metadata.alignment,
         layers,
       };

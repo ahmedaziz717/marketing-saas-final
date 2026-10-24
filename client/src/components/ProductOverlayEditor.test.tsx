@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   save: vi.fn(),
   align: vi.fn(),
   refetch: vi.fn(),
   sourceWidth: 600,
+  applied: true,
+  automaticFailure: undefined as "source_resolution" | undefined,
 }));
 vi.mock("./ActionCredits", () => ({ ActionCredits: () => null }));
 vi.mock("@/lib/trpc", () => ({
@@ -19,7 +21,8 @@ vi.mock("@/lib/trpc", () => ({
             designUrl: "data:image/png;base64,preview",
             width: 1000,
             height: 1000,
-            applied: true,
+            applied: calls.applied,
+            automaticFailure: calls.automaticFailure,
             revision: "revision",
             layers: [
               {
@@ -44,7 +47,42 @@ vi.mock("@/lib/trpc", () => ({
 }));
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
 afterEach(cleanup);
-beforeEach(() => { calls.sourceWidth = 600; vi.clearAllMocks(); });
+beforeEach(() => { calls.sourceWidth = 600; calls.applied = true; calls.automaticFailure = undefined; vi.clearAllMocks(); });
+
+it("explains a recorded resolution failure without starting another paid alignment", () => {
+  calls.applied = false;
+  calls.automaticFailure = "source_resolution";
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Adjust original product" }));
+  expect(screen.getByText(/saved cutout is too small/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("separates unsaved alignment from saved state and resets without spending credits", async () => {
+  calls.applied = false;
+  calls.sourceWidth = 164;
+  calls.align.mockResolvedValue({ sameAngle: true, layers: [{ left: 443, top: 211, width: 525 }] });
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Adjust original product" }));
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  expect(screen.getByText(/Saved cutout: 164/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() => expect(screen.getByText(/Alignment suggested/)).toBeTruthy());
+  expect(screen.queryByText(/This saved version has no applied/)).toBeNull();
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Save as new version" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.queryByText(/Alignment suggested/)).toBeNull();
+  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  expect((screen.getByLabelText("Compare with original design") as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByLabelText("Accept enlargement for this version") as HTMLInputElement).checked).toBe(false);
+  expect(calls.align).toHaveBeenCalledTimes(1);
+  expect(calls.save).not.toHaveBeenCalled();
+});
 
 it("requires the original background to load before alignment or saving", () => {
   render(

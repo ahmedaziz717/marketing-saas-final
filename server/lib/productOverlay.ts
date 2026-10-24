@@ -9,6 +9,8 @@ import { z } from "zod";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { requireLatestGptTextModel } from "./models";
 
+export class ProductOverlayResolutionError extends Error {}
+
 export async function suggestProductPlacement(
   design: Buffer,
   sources: ProductCutout[],
@@ -177,7 +179,7 @@ export async function renderProductOverlay(
     )
       throw new Error("Keep each product within the design canvas.");
     if (layer.width > source.width && !allowUpscale)
-      throw new Error(`Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`);
+      throw new ProductOverlayResolutionError(`Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`);
     const result = await sharp(source.png)
       .resize({ width: layer.width })
       .png()

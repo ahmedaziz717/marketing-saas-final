@@ -106,6 +106,7 @@ function OverlayControls({
   const update = (index: number, value: Partial<ProductOverlayPlacement>) => {
     setOriginal(false);
     setAllowUpscale(false);
+    setNotice("");
     setPlacements(
       layers.map((layer, i) =>
         i === index
@@ -194,9 +195,17 @@ function OverlayControls({
           </div>
         )}
         <p role="status" className="text-sm">
-          {data.applied
+          {placements
+            ? "You are previewing an unsaved placement. Save as a new version to keep it."
+            : data.applied
             ? "The original product is already placed. Adjust it only if needed."
-            : "Automatic placement is not available for this version. The complete design is preserved; preview the original layer to adjust it, or request alignment."}
+            : data.automaticFailure === "source_resolution"
+            ? "Automatic placement was stopped because the saved cutout is too small for sharp output. Another alignment request cannot add image detail. The complete design is preserved."
+            : "This saved version has no applied original-product placement. The complete design is preserved. Opening this editor does not run alignment or spend credits."}
+        </p>
+        <p className="text-sm">
+          Saved cutout: {data.layers[selected].sourceWidth} × {data.layers[selected].sourceHeight} px.
+          This version keeps its original source; catalog updates do not replace it.
         </p>
         <Button
           variant="outline"
@@ -210,11 +219,12 @@ function OverlayControls({
                 organizationId,
                 variantId,
               });
+              setAllowUpscale(false);
               setPlacements(result.layers);
               setOriginal(false);
               setNotice(
                 result.sameAngle
-                  ? "Suggested placement is ready. Check edges and text before saving."
+                  ? "Alignment suggested. Check source resolution, edges and text before saving."
                   : "The generated product uses a different camera angle. This placement is approximate; resizing cannot recover a different 3D view."
               );
             } catch (e) {
@@ -365,7 +375,14 @@ function OverlayControls({
         <Button
           variant="ghost"
           className="w-full"
-          onClick={() => setPlacements(null)}
+          onClick={() => {
+            setPlacements(null);
+            setNotice("");
+            setError("");
+            setAllowUpscale(false);
+            setOriginal(null);
+            setOpacity(100);
+          }}
         >
           Reset placement
         </Button>
