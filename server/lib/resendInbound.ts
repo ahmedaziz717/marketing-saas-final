@@ -10,6 +10,8 @@ const forwardingAddresses = new Set([
   "privacy@evokeloop.com",
   "support@evokeloop.com",
   "meta-review@evokeloop.com",
+  "ahmed.aziz@evokeloop.com",
+  "contact@evokeloop.com",
 ]);
 const leaseMs = 10 * 60_000;
 const retryWindowMs = 23 * 60 * 60_000;
