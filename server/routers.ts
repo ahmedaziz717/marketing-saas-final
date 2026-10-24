@@ -5,6 +5,7 @@ import { optimizationRouter } from "./routers/optimization";
 import { platformAdminRouter } from "./routers/platformAdmin";
 import { videoRouter } from "./routers/video";
 import { workflowsRouter } from "./routers/workflows";
+import { workflowAuthoringRouter } from "./routers/workflowAuthoring";
 import { modelsRouter } from "./routers/models";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -51,6 +52,7 @@ export const appRouter = router({
   creativeBuilder: creativeBuilderRouter,
   video: videoRouter,
   workflows: workflowsRouter,
+  workflowAuthoring: workflowAuthoringRouter,
   workflowAutomation: workflowAutomationRouter,
   insights: insightsRouter,
   optimization: optimizationRouter,

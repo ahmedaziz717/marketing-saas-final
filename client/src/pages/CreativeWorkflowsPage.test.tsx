@@ -8,6 +8,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { copyEvidenceWorkflowTemplate } from "@shared/workflowPerformanceInputs";
+vi.mock("@/components/WorkflowAuthoringChat", () => ({
+  WorkflowAuthoringChat: () => null,
+}));
 
 const api = vi.hoisted(() => ({
   detail: undefined as any,
