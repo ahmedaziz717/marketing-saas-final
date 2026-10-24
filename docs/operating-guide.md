@@ -1,5 +1,10 @@
 # Frame Operating Guide
 
+Historical operating guide for the original Frame scope. For EvokeLoop's
+forward-looking direction, see the [general architecture baseline](general-architecture.md).
+This does not change current runtime permissions, approval gates, or integration
+requirements; verify behavior against the relevant current implementation.
+
 ## Product Boundary
 
 Frame is a self-serve team workspace for producing **Meta image-ad creative** from controlled inputs. It deliberately does not include broad campaign analytics, budget optimization, email marketing, landing-page building, or autonomous media buying.
@@ -60,3 +65,15 @@ The application exposes insert and read operations only. Each organization event
 ## Verification Status
 
 The project includes unit tests for tenant isolation, role authorization, GPT-only model enforcement, generation eligibility, exact-payload publish approval, and activity-chain tamper detection. TypeScript validation, the full Vitest suite, production bundling, desktop screenshots, mobile screenshots, and runtime log review were completed before the delivery checkpoint.
+
+## Workflows and published Apps
+
+Create, Activate, Measure and Optimize each have a Workflows & Apps workspace. They use the same graph schema, editor, durable runner, account permissions and credit metering. An App is a numbered, immutable publication of a workflow, not a second implementation. Editing its workflow does not modify existing App versions or workflows that call those versions. App input nodes receive connected content; Output nodes declare results. Text/image input nodes become fields in the standalone App runner. Use an App node to pin a published version from any family.
+
+Activate supports Facebook draft/review/delivery, image ads under an existing Meta ad set (delivered paused through Publishing), and explicitly reviewed activation of an existing ad. The connected account must belong to the workspace. Drafts have deterministic per-run identifiers. Publication edits invalidate workflow delivery; approve and deliver the edited publication in Publishing or start a new run. Media must be approved as a finished asset before publication can continue. A workflow review does not replace publication approval. Ad activation uses the existing one-time signed Meta review service and a committed execution claim, never an automatic retry after an interrupted mutation.
+
+Measure supports Facebook reporting and Meta account/campaign reporting, standard date presets/custom ranges, previous-period reports, and comparisons that retain missing metrics. Optimize supports a declared metric target, minimum impressions and account-local reporting maturity, plus an AI creative-direction proposal followed by review. Incomplete evidence produces an insufficient-evidence decision. These are observed patterns and proposals, not causal lift claims or unattended campaign optimization.
+
+Wait/review/delivery state survives navigation and worker restarts. Stop prevents subsequent steps; an already submitted provider video may still complete. Runs expire after 31 days. A workspace can have three active runs. Nested Apps are limited to four levels and 160 executable nodes. Pure reporting/control runs do not consume AI credits and remain available when AI generation is paused. AI steps still require creator/admin/owner access; live delivery and ad activation require publisher/admin/owner access. Future channel integrations must add real adapters and capability definitions before becoming available nodes. Recurring Loop orchestration and other channel adapters remain separate implementation work.
+
+Deploy additive migrations 0012 and 0013 before the new worker, then deploy the web app. This prevents the old worker from seeing newly supported node types. If rolling back, retain the additive schema; stop new workflow runs before restoring a worker that does not recognize business/App nodes.

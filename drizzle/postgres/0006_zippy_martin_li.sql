@@ -1,0 +1,1 @@
+ALTER TABLE "app_private"."brand_kits" ADD COLUMN "businessProfile" json;
