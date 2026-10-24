@@ -300,6 +300,23 @@ function respond(path: string, input: any) {
       updatedAtMs: null,
     }));
   if (path === "prompts.history") return [];
+  if (path === "brand.promptContext")
+    return {
+      name: "Learn Like This Brand",
+      status: "ready",
+      summarized: true,
+      voice: JSON.stringify({
+        identity: "Practical learning resources",
+        audience: "Curious learners",
+        tone: "Encouraging and clear",
+        messagingPriorities: "Concrete examples",
+        doRules: "Respect their time",
+        dontRules: "No grand promises",
+        constraints: "Use approved facts",
+      }),
+      requiredClaims: "",
+      prohibitedContent: "",
+    };
   if (path === "models.textCatalog")
     return [
       {
@@ -350,6 +367,9 @@ function respond(path: string, input: any) {
     path === "insights.runs"
   )
     return [];
+  if (path === "creativeBuilder.studioHistory") return which === "creative-history" ? [
+    { id: 8, title: "Previous collection", url: studioDraftAssets[0].url, createdAtMs: now, status: "pending", setup: defaultCreativeSetup() }
+  ] : [];
   if (path === "creativeBuilder.quote") return { credits: 24, outputs: 1 };
   if (path === "models.credits")
     return {
@@ -949,7 +969,10 @@ function respond(path: string, input: any) {
       name: "Learn Like This Brand",
       colors: ["#15141A"],
       fonts: ["Manrope"],
-      voice: "",
+      voice:
+        which === "settings-prompts"
+          ? "Practical, encouraging guidance for curious learners. Speak clearly, respect their time, and show concrete examples instead of grand promises."
+          : "",
       requiredClaims: "",
       prohibitedContent: "",
       status: "draft",
@@ -1147,6 +1170,8 @@ const routeForPage: Record<string, string> = {
   "studio-channels": "/app/activate/studio",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
+  "creative-direction": "/app/creatives/studio",
+  "creative-history": "/app/creatives/studio",
   "creative-confirmation": "/app/creatives/studio",
   "creative-scene": "/app/creatives/studio",
   "creative-type": "/app/creatives/studio",
@@ -2330,6 +2355,28 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         behavior: "instant",
       });
       await pause();
+      layout();
+    }
+    if (which === "creative-history") {
+      if (button("All categories")?.getClientRects().length) await click("All categories");
+      const toggle = document.querySelector<HTMLButtonElement>(".journey-summary-toggle")!;
+      if (toggle.getAttribute("aria-expanded") !== "true") await pressStudioControl(toggle, "Open creative history preview");
+      await click("Preview Previous collection");
+      check(!!document.querySelector('.cfg-preview-gallery [aria-label="Previous generated versions"]'), "Thumbnails remain beneath the preview in Review");
+      check(mutations.length === 0, "Inspecting history never generates, saves or approves");
+      layout();
+    }
+    if (which === "creative-direction") {
+      await studioSection("Story & Sound", false);
+      await click("Creative direction");
+      check(
+        !!document.querySelector('[aria-label="Brand context for generation"]'),
+        "Brand source context is visible beside creative direction"
+      );
+      check(
+        mutations.length === 0,
+        "Viewing brand context never generates or saves"
+      );
       layout();
     }
     if (

@@ -125,7 +125,7 @@
   border-radius: 12px;
   background: var(--background);
   font-size: 12px;
-  color: var(--border);
+  color: var(--foreground);
 }
 .cfg-asset-readiness ul {
   list-style: disc;

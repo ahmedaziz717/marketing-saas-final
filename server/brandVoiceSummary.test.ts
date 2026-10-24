@@ -17,6 +17,7 @@ vi.mock("./lib/promptRegistry", () => ({
 }));
 import {
   generationBrand,
+  previewGenerationBrand,
   brandSummaryKey,
   BRAND_SUMMARY_FAILED,
 } from "./lib/brandVoiceSummary";
@@ -62,6 +63,58 @@ beforeEach(() => {
   });
 });
 describe("cached semantic brand voice", () => {
+  it("previews precisely the cached voice used by generation without AI or writes", async () => {
+    mocks.download.mockResolvedValue({
+      error: null,
+      data: { text: async () => JSON.stringify(summary) },
+    });
+    const preview = await previewGenerationBrand(17, brand);
+    const generated = await generationBrand(17, brand);
+    expect(preview.status).toBe("ready");
+    expect(preview.voice).toBe(generated.voice);
+    expect(mocks.download.mock.calls[0][0]).toBe(
+      mocks.download.mock.calls[1][0]
+    );
+    expect(mocks.llm).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+  it("does not replace a missing summary with an excerpt or trigger generation", async () => {
+    const preview = await previewGenerationBrand(17, brand);
+    expect(preview).toMatchObject({
+      status: "pending",
+      voice: null,
+      summarized: true,
+    });
+    expect(JSON.stringify(preview)).not.toContain(brand.voice!);
+    expect(mocks.llm).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+    await previewGenerationBrand(81, {
+      ...brand,
+      voice: brand.voice + "Changed",
+    });
+    expect(mocks.download.mock.calls[1][0]).not.toBe(
+      mocks.download.mock.calls[0][0]
+    );
+  });
+  it("previews short guides unchanged and reports cache outages without spending", async () => {
+    expect(
+      await previewGenerationBrand(17, {
+        ...brand,
+        voice: "Practical guidance",
+      })
+    ).toMatchObject({
+      status: "ready",
+      voice: "Practical guidance",
+      summarized: false,
+    });
+    mocks.download.mockResolvedValue({ error: { statusCode: "503" } });
+    expect(await previewGenerationBrand(17, brand)).toMatchObject({
+      status: "unavailable",
+      voice: null,
+    });
+    expect(mocks.llm).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
   it.each([17, 81])(
     "summarizes workspace %s without mutating its original guide",
     async organizationId => {

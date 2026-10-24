@@ -79,3 +79,15 @@ describe.sequential("Studio to Asset Library handoff", () => {
   });
   it("keeps the transactional audit chain valid", async () => { const db = await database(); const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, organizationId)); expect(verifyActivityChain(events)).toBe(true); });
 });
+
+describe("read-only generation brand context", () => {
+  it("returns only the member workspace kit and denies outsiders", async () => {
+    const before = await owner.brand.get({ organizationId });
+    const context = await owner.brand.promptContext({ organizationId });
+    expect(context?.name).toBe(before?.name);
+    expect(context?.voice).toBe(before?.voice || null);
+    await expect(outsider.brand.promptContext({ organizationId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await outsider.brand.promptContext({ organizationId: otherOrganizationId })).toBeNull();
+    expect(await owner.brand.get({ organizationId })).toEqual(before);
+  });
+});

@@ -111,7 +111,7 @@ export function AssetWorkbench({
     surface === "studio"
       ? studioViews
       : canCreate
-        ? [{ id: "drafts", label: "Drafts" }, ...libraryViews]
+        ? [{ id: "drafts", label: "Drafts · not submitted" }, ...libraryViews]
         : libraryViews;
   const requestedView = embedded ? localView : params.get("view");
   const view = views.some(item => item.id === requestedView)
@@ -338,7 +338,7 @@ export function AssetWorkbench({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {surface === "studio"
                   ? "Drafts and experiments stay here. Submit only the versions you want reviewed."
-                  : "Generated creations are saved as drafts. Approve only the versions you want to use."}
+                  : "Generated images and videos are saved in Drafts, separate from saved Studio setups. Submit a draft to move it to Needs Review; approval is a separate action."}
               </p>
             </div>
             <div className="flex gap-2">

@@ -1,5 +1,6 @@
 import { brandPdfInput, brandVoiceSchema } from "../../shared/brandGuidelines";
 import { extractBrandPdf } from "../lib/brandPdf";
+import { previewGenerationBrand } from "../lib/brandVoiceSummary";
 import sharp from "sharp";
 import {
   discoverDriveLogos,
@@ -41,6 +42,19 @@ const brandInput = z.object({
 });
 
 export const brandRouter = router({
+  promptContext: protectedProcedure
+    .input(z.object({ organizationId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      return brand ? previewGenerationBrand(input.organizationId, brand) : null;
+    }),
   extractGuidelines: protectedProcedure
     .input(brandPdfInput)
     .mutation(async ({ ctx, input }) => {

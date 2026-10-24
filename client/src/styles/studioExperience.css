@@ -1928,3 +1928,13 @@
     border-radius: 14px;
   }
 }
+
+/* Keep prompt defaults and Save draft in distinct cells on narrow Studio headers. */
+@media (min-width: 360px) and (max-width: 700px) {
+  .cfg-creative:has(.studio-journey) .cfg-heading > .cfg-actions > a {
+    grid-column: 1 / 3;
+  }
+  .cfg-creative:has(.studio-journey) .cfg-heading > .cfg-actions > button:last-child {
+    grid-column: 3 / -1;
+  }
+}

@@ -194,6 +194,8 @@ try {
       ]),
       "creative-overview",
       "creative-editor",
+      "creative-direction",
+      "creative-history",
       "creative-confirmation",
       "creative-scene",
       "creative-type",
