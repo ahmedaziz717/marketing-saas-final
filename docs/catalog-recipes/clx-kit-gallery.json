@@ -1,0 +1,19 @@
+{
+  "detailUrlTemplate": "https://api.cybertron.com/v1/products/kits/{code}?configure=true",
+  "mediaGroupsFromDetails": true,
+  "imageBaseUrl": "https://static.cybertron.com/clx/",
+  "mediaGroupRules": [{
+    "key": "kit-gallery",
+    "role": "system",
+    "itemsPath": "",
+    "idPath": "code",
+    "namePath": "name",
+    "referenceOnly": true,
+    "indexedGallery": {
+      "countPath": "metadata.gallery.size",
+      "urlTemplate": "https://static.cybertron.com/clx/kits/{code}/gallery/{index}.png",
+      "startIndex": 1,
+      "firstImageResolutionPaths": ["metadata.images.main"]
+    }
+  }]
+}

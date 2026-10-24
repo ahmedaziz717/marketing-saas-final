@@ -9,7 +9,9 @@ import { z } from "zod";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { requireLatestGptTextModel } from "./models";
 
-export class ProductOverlayResolutionError extends Error {}
+export class ProductOverlayResolutionError extends Error {
+  placements?: ProductOverlayPlacement[];
+}
 
 export async function suggestProductPlacement(
   design: Buffer,
@@ -207,5 +209,10 @@ export async function automaticProductOverlay(
     canvas,
     true
   );
-  return renderProductOverlay(design, sources, placement.layers);
+  try {
+    return await renderProductOverlay(design, sources, placement.layers);
+  } catch (error) {
+    if (error instanceof ProductOverlayResolutionError) error.placements = placement.layers;
+    throw error;
+  }
 }

@@ -202,6 +202,15 @@ it("automatically composites a confident matching product without a separate act
     { width: 200, height: 200 }
   );
   await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toBeInstanceOf(ProductOverlayResolutionError);
+  const failure = await automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 }).catch(error => error as ProductOverlayResolutionError);
+  expect(failure.placements).toEqual([{ width: 60, left: 60, top: 40 }]);
+  const callsBeforeRecovery = mocked.invoke.mock.calls.length;
+  const recovered = await renderProductOverlay(await design(), [await source(80)], failure.placements!);
+  expect(recovered.layers[0]).toMatchObject({width: 60, left: 60, top: 40});
+  expect(mocked.invoke).toHaveBeenCalledTimes(callsBeforeRecovery);
+  const corner = await sharp(recovered.png).extract({left: 0, top: 0, width: 1, height: 1}).raw().toBuffer();
+  const originalCorner = await sharp(await design()).extract({left: 0, top: 0, width: 1, height: 1}).raw().toBuffer();
+  expect(corner).toEqual(originalCorner);
   expect(finished.layers[0]).toMatchObject({
     left: 60,
     top: 40,
