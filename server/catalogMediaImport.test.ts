@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { users, organizations, productImages } from "../drizzle/schema";
 import { catalogEntrySchema } from "../shared/catalog";
+import { catalogImageEligible, catalogDefaultImage, galleryGroups } from "../shared/catalogMedia";
 const state = vi.hoisted(() => ({
   bytes: new Map<string, Buffer>(),
   writes: 0,
@@ -48,6 +49,8 @@ beforeAll(async () => {
     ["large", 600],
     ["back", 500],
     ["original", 1000],
+    ["equal", 600],
+    ["smaller", 200],
   ] as const)
     state.bytes.set(
       `https://images.test/${name}.png`,
@@ -152,4 +155,36 @@ it("imports measured resolutions, deduplicates media without losing roles, and p
       .from(productImages)
       .where(eq(productImages.organizationId, 771))
   ).toEqual([]);
+});
+
+it.each(["original", "equal", "smaller"])("splits divergent shared gallery views (%s) without changing the unaffected system image", async variant => {
+  const initial = entry(); initial.productUrl = `https://shop.test/divergent-${variant}`;
+  const product = await importCatalogEntry(db, 770, initial);
+  const load = () => db.select().from(productImages).where(eq(productImages.productId, product.id));
+  const original = (await load()).find((row: any) => row.media.references.some((ref: any) => ref.groupId === "system" && ref.imageId === "front"));
+  const changed = entry(); changed.productUrl = initial.productUrl;
+  changed.mediaGroups![1].images[0].candidates = [`https://images.test/${variant}.png`];
+  await importCatalogEntry(db, 770, changed);
+  const rows = await load();
+  const system = rows.find((row: any) => row.media.references.some((ref: any) => ref.groupId === "system" && ref.imageId === "front"));
+  const option = rows.find((row: any) => row.media.references.some((ref: any) => ref.groupId === "case"));
+  expect(system.id).toBe(original.id);
+  expect(system.storageKey).toBe(original.storageKey);
+  expect(system.sourceUrl).toBe(original.sourceUrl);
+  expect(option.id).not.toBe(system.id);
+  expect(option.sourceUrl).toBe(`https://images.test/${variant}.png`);
+  expect(system.media.references.map((ref: any) => ref.groupId)).toEqual(["system"]);
+  const count = state.writes;
+  await importCatalogEntry(db, 770, changed);
+  expect(state.writes).toBe(count);
+  const identity = (items: any[]) => items.map(row => ({ id: row.id, refs: row.media.references })).sort((a, b) => a.id - b.id);
+  expect(identity(await load())).toEqual(identity(rows));
+  await importCatalogEntry(db, 770, initial);
+  const reunited = await load();
+  expect(reunited.find((row: any) => row.id === original.id).media.references.map((ref: any) => ref.groupId)).toEqual(["system", "case"]);
+  expect(reunited.find((row: any) => row.id === option.id).media).toMatchObject({ retired: true, references: [] });
+  const retired = reunited.find((row: any) => row.id === option.id);
+  expect(catalogImageEligible(retired, product.mediaGroups)).toBe(false);
+  expect(catalogDefaultImage(retired, product.mediaGroups)).toBe(false);
+  expect(galleryGroups(reunited, product.mediaGroups).find(group => group.id === "retired")?.images.map(row => row.id)).toContain(option.id);
 });

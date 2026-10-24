@@ -190,7 +190,7 @@ export async function importCatalogEntry(
   }
   for (const url of imageUrls) if (!plans.some(plan => plan.candidates.includes(url))) plans.push({ candidates: [url], references: [] });
   if (plans.length > 1000 || plans.some(plan => plan.candidates.length > 12)) throw new Error("The product gallery exceeds the supported image/candidate limits; split the source record.");
-  const knownImages = await db.select().from(productImages).where(and(eq(productImages.organizationId, organizationId), eq(productImages.productId, product.id)));
+
   let saved = 0;
   const failures: Array<{
     position: number;
@@ -201,11 +201,26 @@ export async function importCatalogEntry(
   for (const [position, plan] of Array.from(plans.entries())) {
     let imageUrl = plan.candidates[0];
     let unavailableCandidates = 0;
+    const knownImages = await db.select().from(productImages).where(and(eq(productImages.organizationId, organizationId), eq(productImages.productId, product.id)));
+    const detachTransferredReferences = async (tx: Parameters<Parameters<Database["transaction"]>[0]>[0], targetId: number) => {
+      const rows = await tx.select().from(productImages).where(and(eq(productImages.organizationId, organizationId), eq(productImages.productId, product.id)));
+      for (const row of rows) {
+        if (row.id === targetId || !row.media) continue;
+        const references = row.media.references.filter(ref => !plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId));
+        if (references.length !== row.media.references.length) await tx.update(productImages).set({ media: { ...row.media, references, retired: references.length === 0 } }).where(eq(productImages.id, row.id));
+      }
+    };
     const present = knownImages.find(row => plan.candidates.includes(row.sourceUrl));
     if (present && !plan.references.length) { saved++; continue; }
     if (present?.media && present.media.unavailableCandidates === 0 && plan.candidates.every(url => present.media!.candidates.includes(url))) {
-      const references = [...present.media.references.filter(ref => !plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId)), ...plan.references];
-      await db.update(productImages).set({ media: { ...present.media, references } }).where(and(eq(productImages.organizationId, organizationId), eq(productImages.id, present.id)));
+      await db.transaction(async tx => {
+        await tx.select({ id: products.id }).from(products).where(and(eq(products.id, product.id), eq(products.organizationId, organizationId))).for("update");
+        const [current] = await tx.select().from(productImages).where(and(eq(productImages.organizationId, organizationId), eq(productImages.id, present.id)));
+        if (!current?.media || current.sourceUrl !== present.sourceUrl) throw new Error("Gallery changed during import; retry this record.");
+        const references = [...current.media.references.filter(ref => !plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId)), ...plan.references];
+        await tx.update(productImages).set({ media: { ...current.media, references, retired: false } }).where(eq(productImages.id, current.id));
+        await detachTransferredReferences(tx, current.id);
+      });
       saved++; continue;
     }
     let image: Awaited<ReturnType<typeof fetchCatalogImage>> | undefined;
@@ -265,12 +280,16 @@ export async function importCatalogEntry(
               eq(productImages.productId, product.id)
             )
           );
-        const previous = existing.find(v => plan.candidates.includes(v.sourceUrl) || v.media?.references.some(ref => plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId)));
+        const matched = existing.find(v => plan.candidates.includes(v.sourceUrl)) ?? existing.find(v => v.media?.references.some(ref => plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId)));
+        // A shared physical image cannot be replaced through just one diverging logical view.
+        const divergingShared = matched && !plan.candidates.includes(matched.sourceUrl) && matched.media?.references.some(ref => !plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId));
+        const previous = divergingShared ? undefined : matched;
         const references = [...(previous?.media?.references ?? []).filter(ref => !plan.references.some(next => next.groupId === ref.groupId && next.imageId === ref.imageId)), ...plan.references];
         const media = { width: image!.width, height: image!.height, hasAlpha: image!.hasAlpha,
           candidates: plan.candidates, selectedSourceUrl: imageUrl, references, unavailableCandidates };
-        if (previous?.media && previous.media.width * previous.media.height >= image!.width * image!.height) {
-          await tx.update(productImages).set({ media: { ...previous.media, references, candidates: Array.from(new Set([...previous.media.candidates, ...plan.candidates])) } }).where(eq(productImages.id, previous.id));
+        if (previous?.media && plan.candidates.includes(previous.sourceUrl) && previous.media.width * previous.media.height >= image!.width * image!.height) {
+          await tx.update(productImages).set({ media: { ...previous.media, references, retired: false, candidates: Array.from(new Set([...previous.media.candidates, ...plan.candidates])) } }).where(eq(productImages.id, previous.id));
+          await detachTransferredReferences(tx, previous.id);
           return;
         }
         const stored = await storagePut(
@@ -289,8 +308,10 @@ export async function importCatalogEntry(
           isPrimary: existing.some(v => v.isPrimary) || (plan.references.length > 0 && !plan.references.some(ref => item.mediaGroups?.some(group => group.id === ref.groupId && group.role === "system"))) ? 0 : 1,
           createdAtMs: Date.now(),
         };
-        if (previous) await tx.update(productImages).set({ ...values, isPrimary: previous.isPrimary, createdAtMs: previous.createdAtMs }).where(eq(productImages.id, previous.id));
-        else await tx.insert(productImages).values(values);
+        const [target] = previous
+          ? await tx.update(productImages).set({ ...values, isPrimary: previous.isPrimary, createdAtMs: previous.createdAtMs }).where(eq(productImages.id, previous.id)).returning({ id: productImages.id })
+          : await tx.insert(productImages).values(values).returning({ id: productImages.id });
+        await detachTransferredReferences(tx, target.id);
       });
       saved++;
     } catch {

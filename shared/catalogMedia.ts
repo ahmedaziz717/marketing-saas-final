@@ -40,6 +40,7 @@ export type CatalogImageMedia = {
   selectedSourceUrl: string;
   references: CatalogMediaReference[];
   unavailableCandidates: number;
+  retired?: boolean;
 };
 export type CatalogMediaGroupSummary = Omit<CatalogMediaGroup, "images"> & {
   declaredImages: number;
@@ -50,6 +51,7 @@ export function catalogImageEligible(
   image: { media?: CatalogImageMedia | null },
   groups?: CatalogMediaGroupSummary[] | null
 ) {
+  if (image.media?.retired) return false;
   if (!image.media?.references.length) return true;
   return image.media.references.some(ref =>
     groups?.some(group => group.id === ref.groupId && group.eligible && (!group.imageIds || group.imageIds.includes(ref.imageId)))
@@ -59,6 +61,7 @@ export function catalogDefaultImage(
   image: { media?: CatalogImageMedia | null },
   groups?: CatalogMediaGroupSummary[] | null
 ) {
+  if (image.media?.retired) return false;
   if (!image.media?.references.length) return true;
   return image.media.references.some(ref =>
     groups?.some(
@@ -88,8 +91,8 @@ export function galleryGroups<
   }));
   for (const group of result)
     for (const image of group.images) known.add(String(image.id));
-  const legacy = images.filter(image => !known.has(String(image.id)) && !image.media?.references.length);
-  const retired = images.filter(image => !known.has(String(image.id)) && !!image.media?.references.length);
+  const legacy = images.filter(image => !known.has(String(image.id)) && !image.media?.retired && !image.media?.references.length);
+  const retired = images.filter(image => !known.has(String(image.id)) && (image.media?.retired || !!image.media?.references.length));
   if (retired.length) result.push({ id: "retired", name: "Previously imported option views", role: "optional_component", eligible: false, declaredImages: retired.length, images: retired });
   if (legacy.length)
     result.unshift({
