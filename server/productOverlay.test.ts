@@ -201,15 +201,34 @@ it("automatically composites a confident matching product without a separate act
     [await source(80)],
     { width: 200, height: 200 }
   );
-  await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toBeInstanceOf(ProductOverlayResolutionError);
-  const failure = await automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 }).catch(error => error as ProductOverlayResolutionError);
+  await expect(
+    automaticProductOverlay(await design(), [await source()], {
+      width: 200,
+      height: 200,
+    })
+  ).rejects.toBeInstanceOf(ProductOverlayResolutionError);
+  const failure = await automaticProductOverlay(
+    await design(),
+    [await source()],
+    { width: 200, height: 200 }
+  ).catch(error => error as ProductOverlayResolutionError);
   expect(failure.placements).toEqual([{ width: 60, left: 60, top: 40 }]);
   const callsBeforeRecovery = mocked.invoke.mock.calls.length;
-  const recovered = await renderProductOverlay(await design(), [await source(80)], failure.placements!);
-  expect(recovered.layers[0]).toMatchObject({width: 60, left: 60, top: 40});
+  const recovered = await renderProductOverlay(
+    await design(),
+    [await source(80)],
+    failure.placements!
+  );
+  expect(recovered.layers[0]).toMatchObject({ width: 60, left: 60, top: 40 });
   expect(mocked.invoke).toHaveBeenCalledTimes(callsBeforeRecovery);
-  const corner = await sharp(recovered.png).extract({left: 0, top: 0, width: 1, height: 1}).raw().toBuffer();
-  const originalCorner = await sharp(await design()).extract({left: 0, top: 0, width: 1, height: 1}).raw().toBuffer();
+  const corner = await sharp(recovered.png)
+    .extract({ left: 0, top: 0, width: 1, height: 1 })
+    .raw()
+    .toBuffer();
+  const originalCorner = await sharp(await design())
+    .extract({ left: 0, top: 0, width: 1, height: 1 })
+    .raw()
+    .toBuffer();
   expect(corner).toEqual(originalCorner);
   expect(finished.layers[0]).toMatchObject({
     left: 60,
@@ -274,7 +293,117 @@ it("clears needs-adjustment on manual correction without changing the original v
 });
 
 it("rejects silent enlargement while allowing an explicitly accepted manual enlargement", async () => {
-  const original = await design(), cutout = await source();
-  await expect(renderProductOverlay(original, [cutout], [{ left: 0, top: 0, width: 60 }])).rejects.toThrow(/higher-resolution/);
-  expect((await renderProductOverlay(original, [cutout], [{ left: 0, top: 0, width: 60 }], true)).layers[0].width).toBe(60);
+  const original = await design(),
+    cutout = await source();
+  await expect(
+    renderProductOverlay(original, [cutout], [{ left: 0, top: 0, width: 60 }])
+  ).rejects.toThrow(/higher-resolution/);
+  expect(
+    (
+      await renderProductOverlay(
+        original,
+        [cutout],
+        [{ left: 0, top: 0, width: 60 }],
+        true
+      )
+    ).layers[0].width
+  ).toBe(60);
+});
+it("fits a same-angle high-resolution cutout to the detected footprint with permitted resampling", async () => {
+  mocked.invoke.mockResolvedValue({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            products: [
+              {
+                left: 200,
+                top: 100,
+                width: 525,
+                height: 700,
+                confidence: 0.99,
+                sameAngle: true,
+              },
+            ],
+          }),
+        },
+      },
+    ],
+  });
+  const canvas = await sharp({
+    create: { width: 1000, height: 1000, channels: 4, background: "blue" },
+  })
+    .png()
+    .toBuffer();
+  const cutout = {
+    png: await sharp({
+      create: { width: 480, height: 666, channels: 4, background: "red" },
+    })
+      .png()
+      .toBuffer(),
+    width: 480,
+    height: 666,
+    sourceKey: "700px-original",
+    sha256: "original-digest",
+  };
+  const { automaticProductOverlay } = await import("./lib/productOverlay");
+  const result = await automaticProductOverlay(canvas, [cutout], {
+    width: 1000,
+    height: 1000,
+  });
+  expect(result.layers[0]).toMatchObject({
+    left: 200,
+    top: 100,
+    width: 525,
+    height: 700,
+    sourceKey: "700px-original",
+    sha256: "original-digest",
+  });
+  expect(
+    await sharp(result.png)
+      .extract({ left: 725, top: 800, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+  ).toEqual(
+    await sharp(canvas)
+      .extract({ left: 725, top: 800, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+  );
+  expect(
+    await sharp(result.png)
+      .extract({ left: 724, top: 799, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+  ).toEqual(Buffer.from([255, 0, 0, 255]));
+});
+it("requires enlargement consent for height-only stretch and rejects clipping", async () => {
+  const cutout = await source();
+  await expect(
+    renderProductOverlay(
+      await design(),
+      [cutout],
+      [{ left: 10, top: 20, width: 40, height: 100 }]
+    )
+  ).rejects.toThrow(/higher-resolution/);
+  const result = await renderProductOverlay(
+    await design(),
+    [cutout],
+    [{ left: 10, top: 20, width: 40, height: 100 }],
+    true
+  );
+  expect(result.layers[0]).toMatchObject({
+    width: 40,
+    height: 100,
+    left: 10,
+    top: 20,
+  });
+  await expect(
+    renderProductOverlay(
+      await design(),
+      [cutout],
+      [{ left: 190, top: 20, width: 40, height: 100 }],
+      true
+    )
+  ).rejects.toThrow(/canvas/);
 });

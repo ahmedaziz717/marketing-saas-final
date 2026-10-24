@@ -114,7 +114,7 @@ export async function suggestProductPlacement(
         (box.width * canvas.width) / 1000,
         ((box.height * canvas.height) / 1000) * aspect
       );
-      const desired = {
+      const desired: ProductOverlayPlacement = {
         width: Math.round(width),
         left: Math.round(
           ((box.left + box.width / 2) * canvas.width) / 1000 - width / 2
@@ -124,14 +124,24 @@ export async function suggestProductPlacement(
             width / aspect / 2
         ),
       };
+      // Fit the measured same-view footprint rather than centering an oversized
+      // aspect-locked rectangle. Keep legacy proportional placements unchanged.
+      const targetWidth = Math.round((box.width * canvas.width) / 1000);
+      const targetHeight = Math.round((box.height * canvas.height) / 1000);
+      if (Math.abs(targetWidth / targetHeight / aspect - 1) > 0.01) {
+        desired.width = targetWidth;
+        desired.height = targetHeight;
+        desired.left = Math.round((box.left * canvas.width) / 1000);
+        desired.top = Math.round((box.top * canvas.height) / 1000);
+      }
       const constrained = constrainProductLayer(desired, aspect, canvas);
       if (
         automatic &&
         Object.keys(desired).some(
           key =>
             Math.abs(
-              desired[key as keyof typeof desired] -
-                constrained[key as keyof typeof constrained]
+              (desired[key as keyof typeof desired] ?? 0) -
+                (constrained[key as keyof typeof constrained] ?? 0)
             ) > 1
         )
       )
@@ -172,18 +182,42 @@ export async function renderProductOverlay(
       canvas
     );
     if (
-      JSON.stringify(layer) !==
+      JSON.stringify({
+        width: layer.width,
+        left: layer.left,
+        top: layer.top,
+        ...(layer.height === undefined ? {} : { height: layer.height }),
+      }) !==
       JSON.stringify({
         width: placements[i].width,
         left: placements[i].left,
         top: placements[i].top,
+        ...(placements[i].height === undefined
+          ? {}
+          : { height: placements[i].height }),
       })
     )
       throw new Error("Keep each product within the design canvas.");
-    if (layer.width > source.width && !allowUpscale)
-      throw new ProductOverlayResolutionError(`Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`);
+    if (
+      (layer.width > source.width ||
+        (layer.height ?? (layer.width * source.height) / source.width) >
+          source.height) &&
+      !allowUpscale
+    )
+      throw new ProductOverlayResolutionError(
+        `Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`
+      );
     const result = await sharp(source.png)
-      .resize({ width: layer.width })
+      .resize(
+        layer.height === undefined
+          ? { width: layer.width, kernel: sharp.kernel.lanczos3 }
+          : {
+              width: layer.width,
+              height: layer.height,
+              fit: "fill",
+              kernel: sharp.kernel.lanczos3,
+            }
+      )
       .png()
       .toBuffer({ resolveWithObject: true });
     composites.push({ input: result.data, left: layer.left, top: layer.top });
@@ -210,9 +244,20 @@ export async function automaticProductOverlay(
     true
   );
   try {
-    return await renderProductOverlay(design, sources, placement.layers);
+    // Permit resampling an original with substantial usable pixels. Do not
+    // silently stretch legacy thumbnail cutouts; recovery can explicitly accept it.
+    const originalQuality = sources.every(
+      source => Math.max(source.width, source.height) >= 600
+    );
+    return await renderProductOverlay(
+      design,
+      sources,
+      placement.layers,
+      originalQuality
+    );
   } catch (error) {
-    if (error instanceof ProductOverlayResolutionError) error.placements = placement.layers;
+    if (error instanceof ProductOverlayResolutionError)
+      error.placements = placement.layers;
     throw error;
   }
 }

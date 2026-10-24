@@ -883,6 +883,7 @@ export const creativeBuilderRouter = router({
           left: layer.left,
           top: layer.top,
           width: layer.width,
+          height: layer.height,
           aspect: cutout.width / cutout.height,
           sourceWidth: cutout.width,
           sourceHeight: cutout.height,
@@ -958,8 +959,8 @@ export const creativeBuilderRouter = router({
         await storageGetBase64(metadata.designStorageKey),
         "base64"
       );
-      // A source recovery must actually be sharp at the requested placement.
-      const result = await renderProductOverlay(design, cutouts, input.layers, input.replacements.length ? false : input.allowUpscale);
+      // Explicit enlargement consent applies to verified sharper replacements too.
+      const result = await renderProductOverlay(design, cutouts, input.layers, input.allowUpscale);
       const stored = await storagePut(
         `org-${input.organizationId}/creatives/${variant.jobId}/product-overlay.png`,
         result.png,
