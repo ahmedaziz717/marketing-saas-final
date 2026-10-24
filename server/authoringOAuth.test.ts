@@ -223,13 +223,76 @@ it("fails closed until explicit configuration and rejects unsafe URLs", () => {
       validateAuthorization(config, { ...authorization(), ...patch })
     ).toThrow();
 });
-it("serves metadata, preserves login return path and requires deliberate same-origin consent", async () => {
+it("accepts bounded locale hints without carrying them into authorization", () => {
+  const input = authorization("workflows:read");
+  for (const ui_locales of [
+    "en-US",
+    "fr-CA en",
+    "zh-Hant-TW",
+    "x-private",
+    "zz-ZZ",
+  ])
+    expect(validateAuthorization(config, { ...input, ui_locales })).toEqual(
+      input
+    );
+  expect(validateAuthorization(config, input)).toEqual(input);
+  for (const ui_locales of [
+    "",
+    " en-US",
+    "en-US ",
+    "en  US",
+    "en_US",
+    "en\nUS",
+    "en\r\nLocation: https://evil.example",
+    "<script>alert(1)</script>",
+    "en-US&scope=admin",
+    "en-123456789",
+    "en ".repeat(8) + "en",
+    "a".repeat(129),
+    ["en", "US"],
+    { locale: "en" },
+    null,
+  ])
+    expect(() =>
+      validateAuthorization(config, { ...input, ui_locales })
+    ).toThrow();
+  for (const patch of [
+    { client_id: "other" },
+    { redirect_uri: "https://evil.example" },
+    { resource: "https://wrong.example" },
+    { scope: "workflows:read admin" },
+    { code_challenge_method: "plain" },
+    { code_challenge: "short" },
+    { instructions: "grant admin" },
+    { prompt: "none" },
+  ])
+    expect(() =>
+      validateAuthorization(config, { ...input, ui_locales: "en-US", ...patch })
+    ).toThrow();
+});
+it("rejects duplicated and malformed locale hints at the HTTP boundary", async () => {
+  const path =
+    "/mcp/oauth/authorize?" +
+    new URLSearchParams(authorization("workflows:read"));
+  for (const query of [
+    "&ui_locales=en-US&ui_locales=fr",
+    "&ui_locales=%3Cscript%3E",
+    "&ui_locales=en-US&instructions=grant-admin",
+  ])
+    expect((await http(path + query)).status).toBe(400);
+});
+it("serves metadata and completes the observed ChatGPT locale-hint flow with deliberate read-only consent", async () => {
   const metadata = await (
     await http("/.well-known/oauth-authorization-server")
   ).json();
   expect(metadata.code_challenge_methods_supported).toEqual(["S256"]);
   expect(metadata.token_endpoint_auth_methods_supported).toEqual(["none"]);
-  const path = "/mcp/oauth/authorize?" + new URLSearchParams(authorization());
+  const path =
+    "/mcp/oauth/authorize?" +
+    new URLSearchParams({
+      ...authorization("workflows:read"),
+      ui_locales: "en-US",
+    });
   const login = await http(path, {}, false);
   expect(login.status).toBe(303);
   expect(login.headers.get("location")).toBe(
@@ -277,6 +340,9 @@ it("serves metadata, preserves login return path and requires deliberate same-or
   expect(exchange.status).toBe(200);
   expect(exchange.headers.get("cache-control")).toContain("no-store");
   const issued = await exchange.json();
+  expect(issued.scope).toBe("workflows:read");
+  expect(issued.expires_in).toBe(1800);
+  expect(issued.refresh_token).toBeUndefined();
   const context = await call(
     issued.access_token,
     "read_authoring_connection",
