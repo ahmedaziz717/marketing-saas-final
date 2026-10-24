@@ -1423,6 +1423,9 @@ function WorkflowModelFormFixture() {
 function CatalogGalleryFixture() {
   const [selected, setSelected] = useState<string[]>([]);
   const choices = studioDraftAssets.map((asset, i) => ({ ...asset, key: `product_image:${i + 1}`, url: asset.url.replace("Emerald%20collection", `Emerald%20angle%20${i}`), name: i < 2 ? "Emerald collection" : "Gold collection", origin: "catalog" as const, product: { id: i < 2 ? 7 : 8 } })) as any;
+  const mediaGroups = [{ id: "base", name: "Base chassis", role: "base_component", eligible: true, expectedCount: 8, declaredImages: 0 }, { id: "white", name: "White chassis", role: "optional_component", eligible: true, declaredImages: 1 }];
+  for (const choice of choices) if (choice.product.id === 7) choice.mediaGroups = mediaGroups;
+  choices.push({ ...choices[0], key: "product_image:99", url: choices[0].url.replace("Emerald%20angle%200", "Optional%20white%20chassis"), media: { width: 1600, height: 1200, hasAlpha: true, candidates: [], selectedSourceUrl: "", unavailableCandidates: 0, references: [{ groupId: "white", imageId: "front", position: 0 }] } });
   return <div className="p-5"><h1>Product catalog</h1><ProductPhotoGroups choices={choices} selected={selected} limit={3} onToggle={key => setSelected(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key])} /></div>;
 }
 function RoutedPage() {
@@ -2278,6 +2281,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       await click("Use photo 2 for Emerald collection");
       check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Alternate angle selection is retained within its product");
       check(document.querySelectorAll('section[aria-label^="Photos for"]').length === 2, "One group per product rather than duplicate tiles");
+      check(document.body.textContent?.includes("source reports 8 images"), "Missing URLs show an incomplete gallery, not fabricated angles");
+      check(document.body.textContent?.includes("not the exact configured system"), "Optional component views are clearly distinguished");
+      await click("Use photo 1 for Emerald collection \u2014 White chassis");
+      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Choosing an optional view preserves earlier selection");
       layout();
     }
     if (which === "creative-people") {
@@ -2382,7 +2389,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "creative-direction") {
       await studioSection("Story & Sound", false);
-      await click("Creative direction");
+      await click("Brand Kit");
       check(
         !!document.querySelector('[aria-label="Brand context for generation"]'),
         "Brand source context is visible beside creative direction"

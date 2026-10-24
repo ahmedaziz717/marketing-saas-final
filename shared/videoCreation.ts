@@ -101,6 +101,8 @@ export const defaultVideoDirection: VideoDirection = {
   extraDirection: "",
 };
 export type VideoImageChoice = {
+  media?: import("./catalogMedia").CatalogImageMedia | null;
+  mediaGroups?: import("./catalogMedia").CatalogMediaGroupSummary[] | null;
   key: string;
   name: string;
   url: string;

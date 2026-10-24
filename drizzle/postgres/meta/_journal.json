@@ -148,6 +148,13 @@
       "when": 1792794187393,
       "tag": "0020_prompt_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792849670201,
+      "tag": "0022_catalog_media_groups",
+      "breakpoints": true
     }
   ]
 }

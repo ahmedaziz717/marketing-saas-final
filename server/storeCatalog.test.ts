@@ -70,7 +70,7 @@ describe("Store API adapters", () => {
               name: "Lamp",
               price: 20,
               custom_url: { url: "/lamp" },
-              images: [{ url_standard: "https://cdn.test/lamp.png" }],
+              images: [{ id: 7, is_thumbnail: true, url_standard: "https://cdn.test/lamp.png", url_zoom: "https://cdn.test/lamp-original.png" }, { id: 8, url_standard: "https://cdn.test/lamp-back.png" }],
               variants: [],
             },
           ],
@@ -88,6 +88,10 @@ describe("Store API adapters", () => {
       null
     );
     expect(result).toMatchObject({ next: "2", total: 21 });
+    expect(result.items[0].mediaGroups?.[0].images).toEqual([
+      { id: "7", candidates: ["https://cdn.test/lamp.png", "https://cdn.test/lamp-original.png"] },
+      { id: "8", candidates: ["https://cdn.test/lamp-back.png"] },
+    ]);
     expect(result.items[0]).toMatchObject({
       productUrl: "https://store.test/lamp",
       imageUrl: "https://cdn.test/lamp.png",

@@ -1,3 +1,4 @@
+import { mapCatalogMediaGroups } from "./catalogMediaMapping";
 import { createHash } from "node:crypto";
 import { catalogDraftEntrySchema } from "../../shared/catalog";
 import {
@@ -511,6 +512,7 @@ export function parseApiCatalog(
       productUrl,
       imageUrl,
       imageUrls,
+      mediaGroups: config.mediaGroupsFromDetails ? undefined : mapCatalogMediaGroups(row, config, endpoint),
       specificationOrder:
         Array.isArray(sourceOrder) &&
         sourceOrder.every(v => typeof v === "string")
@@ -626,6 +628,19 @@ export async function readApiCatalogPage(
     target,
     config
   );
+  if (config.mediaGroupsFromDetails && config.mediaGroupRules?.length && !config.skipImages) {
+    if (!config.detailUrlTemplate) throw new Error("Detail gallery mapping requires a documented product detail URL template.");
+    const details = new Map<string, unknown>();
+    // One request at a time, with same-page reuse; normal import checkpoints make retries resumable.
+    for (const item of page.items) {
+      if (!item.detailUrl) throw new Error("Product gallery detail address is missing.");
+      const detail = apiCatalogAddress(item.detailUrl);
+      if (new URL(detail).origin !== new URL(base).origin) throw new Error("Gallery detail requests must remain on the configured API origin.");
+      if (!details.has(detail)) details.set(detail, await fetchApiCatalog(detail, config));
+      const payload = config.detailRootPath ? jsonField(details.get(detail), config.detailRootPath) : details.get(detail);
+      item.mediaGroups = mapCatalogMediaGroups(payload, config, detail);
+    }
+  }
   const visited = [...state.visited, target];
   if (page.next && visited.includes(page.next))
     throw new Error(
