@@ -689,3 +689,172 @@ it("mounts only a fail-closed response when MCP is disabled", () => {
     vi.unstubAllEnvs();
   }
 });
+
+it("negotiates initialize and discovery across supported client protocols", async () => {
+  const issued = await grant("workflows:read");
+  for (const protocolVersion of [
+    "2024-11-05",
+    "2025-03-26",
+    "2025-06-18",
+    "2025-11-25",
+  ]) {
+    for (const method of ["initialize", "tools/list"]) {
+      const response = await http(
+        "/mcp/authoring",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${issued.result.access_token}`,
+            ...(method === "initialize"
+              ? {}
+              : { "mcp-protocol-version": protocolVersion }),
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 20,
+            method,
+            ...(method === "initialize"
+              ? {
+                  params: {
+                    protocolVersion,
+                    capabilities: {},
+                    clientInfo: { name: "openai-mcp", version: "1.0.0" },
+                  },
+                }
+              : {}),
+          }),
+        },
+        false
+      );
+      const body = await response.text();
+      expect(response.status, `${protocolVersion} ${method}: ${body}`).toBe(
+        200
+      );
+      expect(body).toContain(
+        method === "initialize" ? protocolVersion : "read_authoring_connection"
+      );
+    }
+  }
+});
+
+it("preserves modern MCP method and tool-name headers through the Express bridge", async () => {
+  const issued = await grant("workflows:read");
+  const meta = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientInfo": {
+      name: "openai-mcp",
+      version: "1.0.0",
+    },
+    "io.modelcontextprotocol/clientCapabilities": {},
+  };
+  for (const method of ["tools/list", "tools/call"]) {
+    const response = await http(
+      "/mcp/authoring",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${issued.result.access_token}`,
+          "mcp-protocol-version": "2026-07-28",
+          "mcp-method": method,
+          ...(method === "tools/call"
+            ? { "mcp-name": "read_authoring_connection" }
+            : {}),
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 30,
+          method,
+          params: {
+            _meta: meta,
+            ...(method === "tools/call"
+              ? { name: "read_authoring_connection", arguments: {} }
+              : {}),
+          },
+        }),
+      },
+      false
+    );
+    const body = await response.text();
+    expect(response.status, body).toBe(200);
+    expect(body).toContain(
+      method === "tools/list"
+        ? "read_authoring_connection"
+        : String(organizationId)
+    );
+  }
+});
+
+it("keeps modern header validation and read-only authorization enforced", async () => {
+  const issued = await grant("workflows:read");
+  const meta = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientInfo": {
+      name: "openai-mcp",
+      version: "1.0.0",
+    },
+    "io.modelcontextprotocol/clientCapabilities": {},
+  };
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    authorization: `Bearer ${issued.result.access_token}`,
+    "mcp-protocol-version": "2026-07-28",
+    "mcp-method": "tools/call",
+    "mcp-name": "read_authoring_connection",
+  };
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 31,
+    method: "tools/call",
+    params: { _meta: meta, name: "read_authoring_connection", arguments: {} },
+  });
+  for (const invalid of [
+    { ...headers, "mcp-method": "tools/list" },
+    { ...headers, "mcp-name": "another_tool" },
+    Object.fromEntries(
+      Object.entries(headers).filter(([key]) => key !== "mcp-method")
+    ),
+    Object.fromEntries(
+      Object.entries(headers).filter(([key]) => key !== "mcp-name")
+    ),
+  ]) {
+    const response = await http(
+      "/mcp/authoring",
+      { method: "POST", headers: invalid, body },
+      false
+    );
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain('"code":-32020');
+  }
+  const unauthenticated = await http(
+    "/mcp/authoring",
+    {
+      method: "POST",
+      headers: { ...headers, authorization: "Bearer invalid" },
+      body,
+    },
+    false
+  );
+  expect(unauthenticated.status).toBe(401);
+  const discover = await http(
+    "/mcp/authoring",
+    {
+      method: "POST",
+      headers: { ...headers, "mcp-method": "server/discover", "mcp-name": "" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 32,
+        method: "server/discover",
+        params: { _meta: meta },
+      }),
+    },
+    false
+  );
+  const discoveryBody = await discover.text();
+  expect(discover.status, discoveryBody).toBe(200);
+  expect(discoveryBody).toContain("evokeloop-draft-authoring");
+});
