@@ -289,6 +289,8 @@ try {
       "insights-studio",
       "optimization-studio",
     ].map(page => ({ width: 1366, height: 768, role: "owner", page })),
+    { width: 768, height: 1024, role: "owner", page: "asset-library" },
+    { width: 320, height: 740, role: "owner", page: "asset-library" },
     { width: 1820, height: 943, role: "owner", page: "creative-scene" },
     { width: 1820, height: 943, role: "owner", page: "creative-type" },
     { width: 768, height: 1024, role: "owner", page: "creative-scene" },

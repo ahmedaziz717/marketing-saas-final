@@ -390,65 +390,111 @@ export function AssetWorkbench({
               </Button>
             ))}
           </nav>
-          <div className="mb-5 flex flex-wrap gap-3">
-            <Input
-              className="min-w-40 flex-1"
-              aria-label="Search assets"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Search names and headlines..."
-            />
-            <VisualSelect
-              aria-label="Asset type"
-              className="h-10 max-w-full rounded-xl border bg-background px-3 text-sm"
-              value={type}
-              onChange={event => setType(event.target.value as AssetView)}
-            >
-              {ASSET_VIEWS.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </VisualSelect>
-          </div>
-          <div className="mb-5 flex flex-wrap gap-3">
-            <VisualSelect
-              aria-label="Channel size match"
-              className="min-w-0 max-w-full rounded-xl border p-2"
-              value={channelFilter}
-              onChange={e => setChannelFilter(e.target.value)}
-            >
-              <option value="all">All channels</option>
-              {assetChannels.map(channel => (
-                <option key={channel.id} value={channel.id}>
-                  {channel.label}
-                </option>
-              ))}
-            </VisualSelect>
-            <VisualSelect
-              aria-label="Asset size"
-              className="min-w-0 max-w-full rounded-xl border p-2"
-              value={sizeFilter}
-              onChange={e => setSizeFilter(e.target.value)}
-            >
-              <option value="all">All sizes</option>
-              {[...assetFormats, "unknown", "other"].map(f => (
-                <option key={f} value={f}>
-                  {assetFormatFilterLabel(f)}
-                </option>
-              ))}
-            </VisualSelect>
-          </div>
-          {sizeFilter !== "all" && (
-            <p className="mb-3 text-xs text-muted-foreground sm:hidden">
-              {assetFormatFilterLabel(sizeFilter)}
-            </p>
-          )}
-          <p className="mb-5 text-xs text-muted-foreground">
-            Channel filters match image dimensions for common placements. Ad
-            format, file limits and content requirements still apply; a size
-            match does not mean a publishing connection is available.
-          </p>
+          <section
+            aria-label="Asset filters"
+            className="mb-5 rounded-xl border bg-card p-3"
+          >
+            <div className="grid min-w-0 grid-cols-2 items-end gap-3 lg:grid-cols-4">
+              <label className="col-span-2 min-w-0 space-y-1 lg:col-span-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Search
+                </span>
+                <Input
+                  className="h-10 min-w-0"
+                  aria-label="Search assets"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search names and headlines..."
+                />
+              </label>
+              <label className="min-w-0 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Type
+                </span>
+                <VisualSelect
+                  density="select"
+                  aria-label="Asset type"
+                  className="h-10 max-w-full rounded-xl border bg-background px-3 text-sm"
+                  value={type}
+                  onChange={(event) => setType(event.target.value as AssetView)}
+                >
+                  {ASSET_VIEWS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </VisualSelect>
+              </label>
+              <label className="min-w-0 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Channel fit
+                </span>
+                <VisualSelect
+                  density="select"
+                  aria-label="Channel size match"
+                  className="h-10 min-w-0 max-w-full rounded-xl border p-2"
+                  value={channelFilter}
+                  onChange={(e) => setChannelFilter(e.target.value)}
+                >
+                  <option value="all">All channels</option>
+                  {assetChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.label}
+                    </option>
+                  ))}
+                </VisualSelect>
+              </label>
+              <label className="col-span-2 min-w-0 space-y-1 lg:col-span-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Size
+                </span>
+                <VisualSelect
+                  density="select"
+                  aria-label="Asset size"
+                  className="h-10 min-w-0 max-w-full rounded-xl border p-2"
+                  value={sizeFilter}
+                  onChange={(e) => setSizeFilter(e.target.value)}
+                >
+                  <option value="all">All sizes</option>
+                  {[...assetFormats, "unknown", "other"].map((f) => (
+                    <option key={f} value={f}>
+                      {assetFormatFilterLabel(f)}
+                    </option>
+                  ))}
+                </VisualSelect>
+              </label>
+            </div>
+            <div className="mt-3 flex flex-wrap items-start justify-between gap-2 border-t pt-2">
+              <details className="min-w-0 flex-1 text-xs text-muted-foreground">
+                <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-primary">
+                  About channel fit
+                </summary>
+                <p className="mt-2 max-w-2xl leading-relaxed">
+                  Channel filters match image dimensions for common placements.
+                  Ad format, file limits and content requirements still apply; a
+                  size match does not mean a publishing connection is available.
+                </p>
+              </details>
+              {(search ||
+                type !== "all" ||
+                channelFilter !== "all" ||
+                sizeFilter !== "all") && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    setType("all");
+                    setChannelFilter("all");
+                    setSizeFilter("all");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </section>
           {query.isLoading ? (
             <p role="status" className="surface p-8">
               <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
