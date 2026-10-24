@@ -16,14 +16,14 @@ vi.mock("./_core/llm", () => ({
   listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
 }));
 
-const source = async () => ({
+const source = async (width = 40) => ({
   png: await sharp({
-    create: { width: 40, height: 80, channels: 4, background: "red" },
+    create: { width, height: width * 2, channels: 4, background: "red" },
   })
     .png()
     .toBuffer(),
-  width: 40,
-  height: 80,
+  width,
+  height: width * 2,
   sourceKey: "original.png",
   sha256: "digest",
 });
@@ -46,7 +46,8 @@ it("recomposes from the full design without changing pixels outside the product 
   const second = await renderProductOverlay(
     original,
     [cutout],
-    [{ left: 100, top: 15, width: 60 }]
+    [{ left: 100, top: 15, width: 60 }],
+    true
   );
   expect(original.equals(copy)).toBe(true);
   expect(second.layers[0]).toMatchObject({
@@ -196,9 +197,10 @@ it("automatically composites a confident matching product without a separate act
   const { automaticProductOverlay } = await import("./lib/productOverlay");
   const finished = await automaticProductOverlay(
     await design(),
-    [await source()],
+    [await source(80)],
     { width: 200, height: 200 }
   );
+  await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toThrow(/higher-resolution/);
   expect(finished.layers[0]).toMatchObject({
     left: 60,
     top: 40,
@@ -259,4 +261,10 @@ it("clears needs-adjustment on manual correction without changing the original v
     applied: false,
     alignment: "needs_adjustment",
   });
+});
+
+it("rejects silent enlargement while allowing an explicitly accepted manual enlargement", async () => {
+  const original = await design(), cutout = await source();
+  await expect(renderProductOverlay(original, [cutout], [{ left: 0, top: 0, width: 60 }])).rejects.toThrow(/higher-resolution/);
+  expect((await renderProductOverlay(original, [cutout], [{ left: 0, top: 0, width: 60 }], true)).layers[0].width).toBe(60);
 });

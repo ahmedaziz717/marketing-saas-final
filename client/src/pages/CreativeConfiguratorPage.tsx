@@ -1687,8 +1687,8 @@ function Configurator({
             />
           </Field>
           <Field
-            title="Additional creative direction"
-            help="Composition, lighting and styling instructions. Use verified facts for claims."
+            title="Additional instructions for this creative"
+            help="Optional changes for this creative only, such as composition, lighting or styling. Your Brand Kit and theme are already applied."
           >
             <textarea
               value={direction.extraDirection}
@@ -1700,9 +1700,9 @@ function Configurator({
           </Field>
           {isImage && (
             <details>
-              <summary>Creative direction</summary>
+              <summary>Default creative instructions</summary>
               <Field
-                title="Creative instructions"
+                title="Reusable creative instructions"
                 help="Added to your Brand Kit voice and selected subject. Brand updates do not overwrite these instructions."
               >
                 <textarea

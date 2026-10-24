@@ -69,7 +69,7 @@ afterEach(() => {
 });
 it("shows the current brand beside creative instructions without rewriting edits", () => {
   const view = render(<PromptsPage />);
-  expect(screen.getByText("Brand A · Brand voice")).toBeTruthy();
+  expect(screen.getByText("Brand Kit: Brand A")).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Resolved workspace default"), {
     target: { value: "My deliberate campaign direction" },
   });
@@ -78,7 +78,7 @@ it("shows the current brand beside creative instructions without rewriting edits
     voice: "Precise and technical for expert buyers.",
   };
   view.rerender(<PromptsPage />);
-  expect(screen.getByText("Brand B · Brand voice")).toBeTruthy();
+  expect(screen.getByText("Brand Kit: Brand B")).toBeTruthy();
   expect(
     screen.queryByText("Warm, practical advice for small businesses.")
   ).toBeNull();

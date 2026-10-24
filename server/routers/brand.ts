@@ -1,3 +1,4 @@
+import { personalizeBrandPrompts } from "../lib/brandPromptDefaults";
 import { brandPdfInput, brandVoiceSchema } from "../../shared/brandGuidelines";
 import { extractBrandPdf } from "../lib/brandPdf";
 import { previewGenerationBrand } from "../lib/brandVoiceSummary";
@@ -42,6 +43,12 @@ const brandInput = z.object({
 });
 
 export const brandRouter = router({
+  personalizePrompts: protectedProcedure
+    .input(z.object({ organizationId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin"]);
+      return personalizeBrandPrompts(input.organizationId, ctx.user.id);
+    }),
   promptContext: protectedProcedure
     .input(z.object({ organizationId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
@@ -271,8 +278,16 @@ export const brandRouter = router({
         entityType: "brand_kit",
         entityId: input.organizationId,
       });
+      let personalizedDefaults: { updated: number; preserved: number } | null = null;
+      let personalizationError: string | null = null;
+      if (input.activate && kit.status !== "active") {
+        try { personalizedDefaults = await personalizeBrandPrompts(input.organizationId, ctx.user.id); }
+        catch { personalizationError = "Your Brand Kit is saved and active, but its prompt defaults could not be prepared. Existing defaults are unchanged. Use Refresh brand defaults to retry."; }
+      }
       return {
         success: true,
+        personalizedDefaults,
+        personalizationError,
         importedLogos: logos.imported,
         failedLogoUrls: logos.failed,
       };

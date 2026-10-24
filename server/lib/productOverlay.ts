@@ -144,7 +144,8 @@ export async function suggestProductPlacement(
 export async function renderProductOverlay(
   design: Buffer,
   sources: ProductCutout[],
-  placements: ProductOverlayPlacement[]
+  placements: ProductOverlayPlacement[],
+  allowUpscale = false
 ) {
   const image = sharp(design, { limitInputPixels: 16_000_000 });
   const info = await image.metadata();
@@ -175,6 +176,8 @@ export async function renderProductOverlay(
       })
     )
       throw new Error("Keep each product within the design canvas.");
+    if (layer.width > source.width && !allowUpscale)
+      throw new Error(`Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`);
     const result = await sharp(source.png)
       .resize({ width: layer.width })
       .png()

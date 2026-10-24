@@ -71,7 +71,10 @@ function OverlayControls({
   );
   const save = trpc.creativeBuilder.saveProductOverlay.useMutation();
   const align = trpc.creativeBuilder.alignProductOverlay.useMutation();
+  const [allowUpscale, setAllowUpscale] = useState(false);
   const [notice, setNotice] = useState("");
+  const [designReady, setDesignReady] = useState(false);
+  const [designFailed, setDesignFailed] = useState(false);
   const [placements, setPlacements] = useState<
     ProductOverlayPlacement[] | null
   >(null);
@@ -99,8 +102,10 @@ function OverlayControls({
     data.layers.map(({ left, top, width, aspect }) =>
       constrainProductLayer({ left, top, width }, aspect, data)
     );
+  const enlarged = layers.some((layer, i) => layer.width > data.layers[i].sourceWidth);
   const update = (index: number, value: Partial<ProductOverlayPlacement>) => {
     setOriginal(false);
+    setAllowUpscale(false);
     setPlacements(
       layers.map((layer, i) =>
         i === index
@@ -140,7 +145,10 @@ function OverlayControls({
         }}
       >
         <img
+          key={query.dataUpdatedAt}
           src={data.designUrl}
+          onLoad={() => { setDesignReady(true); setDesignFailed(false); }}
+          onError={() => { setDesignReady(false); setDesignFailed(true); }}
           alt="Original complete creative design"
           className="block h-full w-full"
           draggable={false}
@@ -175,6 +183,16 @@ function OverlayControls({
           ))}
       </div>
       <div className="space-y-4">
+        {!designReady && (
+          <div role={designFailed ? "alert" : "status"} className="text-sm">
+            <p>{designFailed ? "The original design could not be displayed. Reload it before aligning or saving." : "Loading the original design preview..."}</p>
+            {designFailed && <Button variant="outline" onClick={async () => {
+              setDesignFailed(false);
+              const refreshed = await query.refetch();
+              if (refreshed.error) setDesignFailed(true);
+            }}>Reload original design</Button>}
+          </div>
+        )}
         <p role="status" className="text-sm">
           {data.applied
             ? "The original product is already placed. Adjust it only if needed."
@@ -183,7 +201,7 @@ function OverlayControls({
         <Button
           variant="outline"
           className="w-full flex-wrap gap-1"
-          disabled={align.isPending || save.isPending}
+          disabled={!designReady || align.isPending || save.isPending}
           onClick={async () => {
             setError("");
             setNotice("");
@@ -312,6 +330,10 @@ function OverlayControls({
           wherever the source is opaque. Check edges and text before saving.
           Different camera angles cannot be matched exactly with resizing.
         </p>
+        {enlarged && <div role="status" className="space-y-2 text-sm">
+          <p>The catalog original is smaller than this placement. A higher-resolution source is needed for sharp output; resizing cannot restore detail.</p>
+          <label className="flex gap-2"><input type="checkbox" checked={allowUpscale} onChange={event => setAllowUpscale(event.target.checked)} />Accept enlargement for this version</label>
+        </div>}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -319,7 +341,7 @@ function OverlayControls({
         )}
         <Button
           className="w-full"
-          disabled={save.isPending || align.isPending}
+          disabled={!designReady || (enlarged && !allowUpscale) || save.isPending || align.isPending}
           onClick={async () => {
             setError("");
             try {
@@ -328,6 +350,7 @@ function OverlayControls({
                 variantId,
                 revision: data.revision,
                 layers,
+                allowUpscale: enlarged && allowUpscale,
               });
               await onSaved(result.key);
             } catch (e) {

@@ -59,7 +59,7 @@ export function BrandPromptContext({
       className="space-y-2 rounded-xl border bg-muted/30 p-4 text-sm"
     >
       <h3 className="font-semibold">
-        {brand ? `${brand.name} · Brand voice` : "Brand voice"}
+        {brand ? `Brand Kit: ${brand.name}` : "Brand Kit"}
       </h3>
       {loading ? (
         <p>Loading your brand voice…</p>

@@ -1,3 +1,5 @@
+import { ActionCredits } from "@/components/ActionCredits";
+import { announcePromptChange } from "@/hooks/usePromptDefaults";
 import { BrandGuidelineImport } from "@/components/BrandGuidelineImport";
 import { BRAND_VOICE_MAX_LENGTH } from "@shared/brandGuidelines";
 import { BrandWebsiteScanner } from "@/components/BrandWebsiteScanner";
@@ -64,6 +66,8 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
   const update = trpc.brand.update.useMutation({
     onSuccess: async result => {
       dirty.current = false;
+      if (result.personalizedDefaults) { announcePromptChange(organizationId!); await utils.prompts.list.invalidate({ organizationId: organizationId! }); }
+      if (result.personalizationError) toast.error(result.personalizationError);
       await Promise.all([
         utils.brand.get.invalidate(),
         utils.brand.assets.invalidate(),
@@ -80,6 +84,14 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
         toast.error(
           "Brand details were saved, but some logos could not be imported. Retry saving or use Upload logo in Company & brand."
         );
+    },
+    onError: error => toast.error(error.message),
+  });
+  const personalize = trpc.brand.personalizePrompts.useMutation({
+    onSuccess: async result => {
+      await utils.prompts.list.invalidate({ organizationId: organizationId! });
+      announcePromptChange(organizationId!);
+      toast.success(`${result.updated} brand defaults prepared; ${result.preserved} manually edited or restored defaults preserved.`);
     },
     onError: error => toast.error(error.message),
   });
@@ -355,7 +367,7 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
                 </div>
               </fieldset>
               {canManage && (
-                <div className="mt-7 flex gap-3">
+                <div className="mt-7 flex flex-wrap gap-3">
                   <Button
                     variant="outline"
                     disabled={
@@ -371,11 +383,21 @@ export function BrandContent({ embedded = false }: { embedded?: boolean }) {
                       update.isPending ||
                       form.voice.length > BRAND_VOICE_MAX_LENGTH
                     }
+                    className="h-auto min-h-10 max-w-full flex-wrap whitespace-normal"
                     onClick={() => save(true)}
                   >
-                    Save & activate
+                    {kit.data?.status === "active" ? "Save & activate" : "Save, activate & prepare defaults"}
+                    {kit.data?.status !== "active" && <ActionCredits organizationId={organizationId} operation="brand.update" />}
                     <Check className="ml-2 h-4 w-4" />
                   </Button>
+                  {kit.data?.status === "active" && (
+                    <Button variant="outline" className="h-auto min-h-10 max-w-full flex-wrap whitespace-normal" disabled={update.isPending || personalize.isPending || dirty.current}
+                      onClick={() => personalize.mutate({ organizationId: organizationId! })}>
+                      {personalize.isPending ? "Preparing brand defaults..." : "Refresh brand defaults"}
+                      <ActionCredits organizationId={organizationId} operation="brand.personalizePrompts" />
+                    </Button>
+                  )}
+                  <p className="basis-full text-xs text-muted-foreground">Completing a Brand Kit prepares creative, copy and visual defaults once using AI. Later changes need an explicit refresh after saving. Manual edits and restores are preserved; original system defaults remain available. Unchanged cached instructions do not require another AI request.</p>
                 </div>
               )}
             </section>
