@@ -1,3 +1,4 @@
+import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
   findSafeLogoPlacement,
@@ -997,11 +998,10 @@ export const creativeBuilderRouter = router({
               renderMetadata: {
                 ...variant.renderMetadata!,
                 parentVariantId: variant.id,
-                productPreservation: {
-                  ...metadata,
-                  applied: true,
-                  layers: result.layers,
-                },
+                productPreservation: manuallyAppliedProductOverlay(
+                  metadata,
+                  result.layers
+                ),
               },
             })
             .returning({ id: creativeVariants.id });

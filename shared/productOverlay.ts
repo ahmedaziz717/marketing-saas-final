@@ -13,7 +13,7 @@ export type ProductOverlayMetadata = {
   designStorageKey: string;
   designUrl: string;
   applied: boolean;
-  alignment?: "automatic" | "needs_adjustment";
+  alignment?: "automatic" | "manual" | "needs_adjustment";
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;
@@ -42,4 +42,12 @@ export function constrainProductLayer(
     left: Math.max(0, Math.min(Math.round(layer.left), canvas.width - width)),
     top: Math.max(0, Math.min(Math.round(layer.top), canvas.height - height)),
   };
+}
+
+/** A saved manual correction creates new metadata without changing the source version. */
+export function manuallyAppliedProductOverlay(
+  metadata: ProductOverlayMetadata,
+  layers: ProductOverlayMetadata["layers"]
+): ProductOverlayMetadata {
+  return { ...metadata, applied: true, alignment: "manual", layers };
 }
