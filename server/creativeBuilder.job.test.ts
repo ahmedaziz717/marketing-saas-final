@@ -509,78 +509,133 @@ it("does not spend credits or return an AI redraw when a queued product image is
   );
 });
 
-it("finishes every size with original logo artwork while keeping the raw master and product editor base separate", async () => {
-  const { db, args, written } = fixture();
-  args.setup.preserveLogo = true;
-  args.setup.preserveProduct = true;
-  const logo = await sharp({
-    create: { width: 100, height: 60, channels: 4, background: "red" },
-  })
-    .extend({
-      left: 4,
-      right: 4,
-      top: 4,
-      bottom: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
+it.each([false, true])(
+  "finishes every size with original artwork and immutable editor base (automatic product match: %s)",
+  async matched => {
+    const { db, args, written } = fixture();
+    args.setup.preserveLogo = true;
+    args.setup.preserveProduct = true;
+    const logo = await sharp({
+      create: { width: 100, height: 60, channels: 4, background: "red" },
     })
-    .png()
-    .toBuffer();
-  const storage = new Map<string, Buffer>([
-    ["logo.png", logo],
-    ["lamp.png", logo],
-  ]);
-  mocked.read.mockImplementation(async (key: string) =>
-    storage.get(key)!.toString("base64")
-  );
-  mocked.generate.mockImplementation(async (request: any) => {
-    const key = `design-${request.outputSize.width}x${request.outputSize.height}.png`;
-    storage.set(
-      key,
-      await sharp({
-        create: {
-          width: request.outputSize.width,
-          height: request.outputSize.height,
-          channels: 4,
-          background: "blue",
-        },
+      .extend({
+        left: 4,
+        right: 4,
+        top: 4,
+        bottom: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
-        .png()
-        .toBuffer()
-    );
-    return { storageKey: key, url: "/" + key };
-  });
-  mocked.put.mockImplementation(async (key: string, bytes: Buffer) => {
-    storage.set(key, bytes);
-    return { key, url: "/" + key };
-  });
-  await runBuilderJob(db, args);
-  expect(written.flat()).toHaveLength(3);
-  expect(mocked.put).toHaveBeenCalledTimes(3);
-  expect(mocked.vision).toHaveBeenCalledTimes(3);
-  for (const variant of written.flat()) {
-    expect(variant.imageStorageKey).toContain("original-logo-");
-    const metadata = variant.renderMetadata.logoPreservation;
-    expect(metadata).toMatchObject({
-      method: "original_logo_v1",
-      sourceKey: "logo.png",
-    });
-    expect(metadata.designStorageKey).toMatch(/^design-/);
-    expect(variant.renderMetadata.productPreservation.designStorageKey).toBe(
-      variant.imageStorageKey
-    );
-    const pixel = await sharp(storage.get(variant.imageStorageKey)!)
-      .extract({ left: metadata.left, top: metadata.top, width: 1, height: 1 })
-      .raw()
+      .png()
       .toBuffer();
-    expect([...pixel]).toEqual([255, 0, 0, 255]);
+    const storage = new Map<string, Buffer>([
+      ["logo.png", logo],
+      ["lamp.png", logo],
+    ]);
+    mocked.read.mockImplementation(async (key: string) =>
+      storage.get(key)!.toString("base64")
+    );
+    mocked.generate.mockImplementation(async (request: any) => {
+      const key = `design-${request.outputSize.width}x${request.outputSize.height}.png`;
+      storage.set(
+        key,
+        await sharp({
+          create: {
+            width: request.outputSize.width,
+            height: request.outputSize.height,
+            channels: 4,
+            background: "blue",
+          },
+        })
+          .png()
+          .toBuffer()
+      );
+      return { storageKey: key, url: "/" + key };
+    });
+    mocked.put.mockImplementation(async (key: string, bytes: Buffer) => {
+      storage.set(key, bytes);
+      return { key, url: "/" + key };
+    });
+    const logoResponse = await mocked.vision();
+    mocked.vision.mockClear();
+    let visionCall = 0;
+    mocked.vision.mockImplementation(async () => {
+      if (++visionCall % 2 === 1 || !matched) return logoResponse;
+      const size = mocked.generate.mock.calls.at(-1)![0].outputSize;
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                products: [
+                  {
+                    left: 400,
+                    top: 400,
+                    width: 300,
+                    height: Math.round(
+                      ((300 * size.width) / size.height) * 0.6
+                    ),
+                    confidence: 0.98,
+                    sameAngle: true,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      };
+    });
+    mocked.put.mockImplementation(async (key: string, bytes: Buffer) => {
+      const unique = key + "-" + storage.size;
+      storage.set(unique, bytes);
+      return { key: unique, url: "/" + unique };
+    });
+    await runBuilderJob(db, args);
+    expect(written.flat()).toHaveLength(3);
+    expect(mocked.put).toHaveBeenCalledTimes(matched ? 6 : 3);
+    expect(mocked.vision).toHaveBeenCalledTimes(6);
+    expect(
+      mocked.vision.mock.calls.every(
+        ([request]) => request.includedInAction === true
+      )
+    ).toBe(true);
+    for (const variant of written.flat()) {
+      expect(variant.imageStorageKey).toContain(
+        matched ? "product-finish" : "original-logo-"
+      );
+      const metadata = variant.renderMetadata.logoPreservation;
+      expect(metadata).toMatchObject({
+        method: "original_logo_v1",
+        sourceKey: "logo.png",
+      });
+      expect(metadata.designStorageKey).toMatch(/^design-/);
+      const preservation = variant.renderMetadata.productPreservation;
+      expect(preservation).toMatchObject({
+        applied: matched,
+        alignment: matched ? "automatic" : "needs_adjustment",
+      });
+      expect(preservation.designStorageKey).toContain("original-logo-");
+      if (matched)
+        expect(preservation.designStorageKey).not.toBe(variant.imageStorageKey);
+      else expect(preservation.designStorageKey).toBe(variant.imageStorageKey);
+      const pixel = await sharp(storage.get(variant.imageStorageKey)!)
+        .extract({
+          left: metadata.left,
+          top: metadata.top,
+          width: 1,
+          height: 1,
+        })
+        .raw()
+        .toBuffer();
+      expect([...pixel]).toEqual([255, 0, 0, 255]);
+    }
+    expect(mocked.generate.mock.calls[1][0].originalImages[0].b64Json).toMatch(
+      /^design-/
+    );
+    expect(mocked.generate.mock.calls[0][0].prompt).toContain(
+      "ORIGINAL LOGO FINISH"
+    );
   }
-  expect(mocked.generate.mock.calls[1][0].originalImages[0].b64Json).toMatch(
-    /^design-/
-  );
-  expect(mocked.generate.mock.calls[0][0].prompt).toContain(
-    "ORIGINAL LOGO FINISH"
-  );
-});
+);
 
 it("fails invalid queued logos before any image generation", async () => {
   const { db, args, written, updates } = fixture();

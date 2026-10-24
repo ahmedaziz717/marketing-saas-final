@@ -390,3 +390,17 @@ it("retains absolute image URLs and does not duplicate root-relative paths", () 
     "https://images.example/clx/components/two.png",
   ]);
 });
+
+it("imports complete common image arrays with primary-first normalized deduplication", () => {
+  const images = Array.from({ length: 35 }, (_, i) => ({ src: `/photos/${i}.png` }));
+  const page = parseApiCatalog([{ ...product, imageUrl: "https://store.example/photos/2.png", images: [...images, { url: "javascript:bad()" }, { src: "https://store.example/photos/2.png" }] }], endpoint, config());
+  expect(page.items[0].imageUrls).toHaveLength(35);
+  expect(page.items[0].imageUrls?.[0]).toBe("https://store.example/photos/2.png");
+  expect(page.items[0].imageUrls).toContain("https://store.example/photos/34.png");
+  expect(page.issues.some(issue => issue.field === "imageUrl" && !issue.blocking)).toBe(true);
+});
+it("respects explicit galleries, single images and skipImages", () => {
+  const row = { ...product, imageUrl: "https://cdn.example/main.png", photos: ["https://cdn.example/side.png", "https://cdn.example/main.png"] };
+  expect(parseApiCatalog([row], endpoint, { ...config(), imagesPath: "photos" }).items[0].imageUrls).toEqual(["https://cdn.example/main.png", "https://cdn.example/side.png"]);
+  expect(parseApiCatalog([row], endpoint, { ...config(), skipImages: true }).items[0].imageUrls).toEqual([]);
+});

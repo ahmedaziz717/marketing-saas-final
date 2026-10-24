@@ -132,12 +132,11 @@ export function apiMappingRevision(endpoint: string, config: ApiCatalogConfig) {
 }
 export function catalogImageReferences(value: unknown): string[] {
   if (typeof value === "string") return value.trim() ? [value.trim()] : [];
-  if (Array.isArray(value))
-    return value.flatMap(catalogImageReferences).slice(0, 30);
+  if (Array.isArray(value)) return value.flatMap(catalogImageReferences);
   if (value && typeof value === "object") {
     const row = value as Record<string, unknown>;
     return catalogImageReferences(
-      row.url ?? row.src ?? row.imageUrl ?? row.image_url ?? ""
+      row.url ?? row.src ?? row.imageUrl ?? row.image_url ?? [row.main, row.primary, row.additional, row.gallery, row.items]
     );
   }
   return [];
@@ -428,31 +427,59 @@ export function parseApiCatalog(
         ...catalogImageReferences(
           !config.skipImages && config.imagesPath
             ? jsonField(row, config.imagesPath)
-            : null
+            : !config.skipImages
+              ? [
+                  jsonField(row, "images"),
+                  jsonField(row, "gallery"),
+                    jsonField(row, "metadata.images"),
+                  jsonField(row, "additional_images"),
+                  jsonField(row, "additional_image_link"),
+                ]
+              : null
         ),
       ])
-    ).slice(0, 30);
+    );
+    if (rawImages.length > 1000)
+      throw new Error(
+        `Product ${index + 1} has more than 1,000 images. Split this gallery into smaller source records; no images were silently discarded.`
+      );
     const relativeImage =
       typeof rawImage === "string" &&
       !!rawImage &&
       !/^https?:\/\//i.test(rawImage);
-    const imageUrls = rawImages.flatMap(value => {
-      if (
-        !/^https?:\/\//i.test(value) &&
-        !config.imageBaseUrl &&
-        /^api\./i.test(new URL(endpoint).hostname)
+    const imageUrls = Array.from(
+      new Set(
+        rawImages.flatMap(value => {
+          if (
+            !/^https?:\/\//i.test(value) &&
+            !config.imageBaseUrl &&
+            /^api\./i.test(new URL(endpoint).hostname)
+          )
+            return [];
+          try {
+            return [
+              resolveCatalogImage(
+                value,
+                config.imageBaseUrl
+                  ? catalogImageDirectory(config.imageBaseUrl)
+                  : endpoint,
+                config.imagePathMode
+              ),
+            ];
+          } catch {
+            issues.push({
+              index,
+              product: name,
+              field: "imageUrl",
+              blocking: false,
+              message:
+                "One product image URL is invalid or unsupported; other valid photos are retained.",
+            });
+            return [];
+          }
+        })
       )
-        return [];
-      return [
-        resolveCatalogImage(
-          value,
-          config.imageBaseUrl
-            ? catalogImageDirectory(config.imageBaseUrl)
-            : endpoint,
-          config.imagePathMode
-        ),
-      ];
-    });
+    );
     const imageUrl = imageUrls[0] ?? "";
     const sourceOrder = config.specificationOrderPath
       ? jsonField(row, config.specificationOrderPath)

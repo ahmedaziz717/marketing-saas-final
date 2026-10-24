@@ -12,7 +12,8 @@ import { requireLatestGptTextModel } from "./models";
 export async function suggestProductPlacement(
   design: Buffer,
   sources: ProductCutout[],
-  canvas: { width: number; height: number }
+  canvas: { width: number; height: number },
+  automatic = false
 ) {
   const first = await sharp(design, { limitInputPixels: 16_000_000 })
     .resize({
@@ -39,6 +40,7 @@ export async function suggestProductPlacement(
   const model = requireLatestGptTextModel((await listLLMModels()).data);
   const result = await invokeLLM({
     model,
+    includedInAction: automatic,
     maxTokens: 1800,
     response_format: { type: "json_object" },
     messages: [
@@ -78,13 +80,28 @@ export async function suggestProductPlacement(
   if (
     parsed.products.some(
       p =>
-        p.confidence < 0.65 ||
+        p.confidence < (automatic ? 0.85 : 0.65) ||
+        (automatic && !p.sameAngle) ||
         p.left + p.width > 1000 ||
         p.top + p.height > 1000
     )
   )
     throw new Error(
       "The product position is uncertain. Keep the original design and align the layer manually."
+    );
+  if (
+    automatic &&
+    parsed.products.some((box, i) => {
+      const measuredAspect =
+        (box.width * canvas.width) / (box.height * canvas.height);
+      return (
+        Math.abs(measuredAspect / (sources[i].width / sources[i].height) - 1) >
+        0.15
+      );
+    })
+  )
+    throw new Error(
+      "The product view does not match the original cutout closely enough for automatic placement."
     );
   return {
     layers: parsed.products.map((box, i) => {
@@ -93,17 +110,31 @@ export async function suggestProductPlacement(
         (box.width * canvas.width) / 1000,
         ((box.height * canvas.height) / 1000) * aspect
       );
-      return constrainProductLayer(
-        {
-          width,
-          left: ((box.left + box.width / 2) * canvas.width) / 1000 - width / 2,
-          top:
-            ((box.top + box.height / 2) * canvas.height) / 1000 -
-            width / aspect / 2,
-        },
-        aspect,
-        canvas
-      );
+      const desired = {
+        width: Math.round(width),
+        left: Math.round(
+          ((box.left + box.width / 2) * canvas.width) / 1000 - width / 2
+        ),
+        top: Math.round(
+          ((box.top + box.height / 2) * canvas.height) / 1000 -
+            width / aspect / 2
+        ),
+      };
+      const constrained = constrainProductLayer(desired, aspect, canvas);
+      if (
+        automatic &&
+        Object.keys(desired).some(
+          key =>
+            Math.abs(
+              desired[key as keyof typeof desired] -
+                constrained[key as keyof typeof constrained]
+            ) > 1
+        )
+      )
+        throw new Error(
+          "Automatic product placement would clip or shift the original product."
+        );
+      return constrained;
     }),
     sameAngle: parsed.products.every(p => p.sameAngle),
   };
@@ -157,4 +188,19 @@ export async function renderProductOverlay(
     });
   }
   return { png: await image.composite(composites).png().toBuffer(), layers };
+}
+
+/** Bundled generation finishing only. Never invoked by read-only preview. */
+export async function automaticProductOverlay(
+  design: Buffer,
+  sources: ProductCutout[],
+  canvas: { width: number; height: number }
+) {
+  const placement = await suggestProductPlacement(
+    design,
+    sources,
+    canvas,
+    true
+  );
+  return renderProductOverlay(design, sources, placement.layers);
 }

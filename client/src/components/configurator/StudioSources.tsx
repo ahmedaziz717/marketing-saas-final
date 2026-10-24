@@ -1,3 +1,4 @@
+import { ProductPhotoGroups } from "../ProductPhotoGroups";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
 import { readStudioDraft, writeStudioDraft } from "@/lib/studioDrafts";
@@ -386,103 +387,114 @@ export function StudioSources({
             </ChoiceField>
           )}
           <div className="cfg-card-grid">
-            {isImage
-              ? products
-                  .filter(p =>
-                    (p.name + (p.sku ?? ""))
-                      .toLowerCase()
-                      .includes(search.toLowerCase())
-                  )
-                  .map(p => {
-                    const selection = image.products.find(
-                      i => i.productId === p.id
-                    );
-                    return (
-                      <StudioCard
-                        key={p.id}
-                        title={p.name}
-                        description={
-                          p.sku ||
-                          (p.recordType === "service"
-                            ? "Service"
-                            : "Product catalog")
-                        }
-                        image={
-                          p.images.find(i => i.id === selection?.imageId)
-                            ?.url ?? p.images[0]?.url
-                        }
-                        contain
-                        selected={!!selection}
-                        disabled={
-                          (!p.images.length && p.recordType !== "service") ||
-                          (!selection &&
-                            image.products.length >=
-                              (image.productMode === "together" ? 3 : 12))
-                        }
-                        onSelect={() =>
-                          updateImage({
-                            promotionMode: "offerings",
-                            products: selection
-                              ? image.products.filter(i => i.productId !== p.id)
-                              : [
-                                  ...image.products,
-                                  {
-                                    productId: p.id,
-                                    imageId: p.images[0]?.id ?? null,
-                                    featuredSpecKeys: [],
-                                    includePrice: false,
-                                  },
-                                ],
-                          })
-                        }
-                      >
-                        {selection && p.images.length > 1 && (
-                          <div
-                            className="cfg-photo-angles"
-                            aria-label={`Photos for ${p.name}`}
-                          >
-                            {p.images.map((photo, i) => (
-                              <button
-                                key={photo.id}
-                                aria-label={`Use photo ${i + 1} for ${p.name}`}
-                                aria-pressed={selection.imageId === photo.id}
-                                onClick={() =>
-                                  updateImage({
-                                    products: image.products.map(s =>
-                                      s.productId === p.id
-                                        ? { ...s, imageId: photo.id }
-                                        : s
-                                    ),
-                                  })
-                                }
-                              >
-                                <img
-                                  src={photo.url}
-                                  alt={`Photo ${i + 1}`}
-                                  loading="lazy"
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </StudioCard>
-                    );
-                  })
-              : (catalog.data?.items ?? []).map(p => (
-                  <StudioCard
-                    key={p.key}
-                    title={p.name}
-                    description={p.detail}
-                    image={p.url}
-                    contain
-                    selected={sourceKeys.includes(p.key)}
-                    disabled={
-                      sourceKeys.length >= referenceLimit &&
-                      !sourceKeys.includes(p.key)
-                    }
-                    onSelect={() => toggleSource(p.key)}
-                  />
-                ))}
+            {isImage ? (
+              products
+                .filter(p =>
+                  (p.name + (p.sku ?? ""))
+                    .toLowerCase()
+                    .includes(search.toLowerCase())
+                )
+                .map(p => {
+                  const selection = image.products.find(
+                    i => i.productId === p.id
+                  );
+                  return (
+                    <StudioCard
+                      key={p.id}
+                      title={p.name}
+                      description={
+                        p.sku ||
+                        (p.recordType === "service"
+                          ? "Service"
+                          : "Product catalog")
+                      }
+                      image={
+                        p.images.find(i => i.id === selection?.imageId)?.url ??
+                        p.images[0]?.url
+                      }
+                      contain
+                      selected={!!selection}
+                      disabled={
+                        (!p.images.length && p.recordType !== "service") ||
+                        (!selection &&
+                          image.products.length >=
+                            (image.productMode === "together" ? 3 : 12))
+                      }
+                      onSelect={() =>
+                        updateImage({
+                          promotionMode: "offerings",
+                          products: selection
+                            ? image.products.filter(i => i.productId !== p.id)
+                            : [
+                                ...image.products,
+                                {
+                                  productId: p.id,
+                                  imageId: p.images[0]?.id ?? null,
+                                  featuredSpecKeys: [],
+                                  includePrice: false,
+                                },
+                              ],
+                        })
+                      }
+                    >
+                      {p.images.length > 1 && (
+                        <div
+                          className="cfg-photo-angles"
+                          aria-label={`Photos for ${p.name}`}
+                        >
+                          {p.images.map((photo, i) => (
+                            <button
+                              key={photo.id}
+                              aria-label={`Use photo ${i + 1} for ${p.name}`}
+                              aria-pressed={selection?.imageId === photo.id}
+                              disabled={
+                                !selection &&
+                                image.products.length >=
+                                  (image.productMode === "together" ? 3 : 12)
+                              }
+                              onClick={() =>
+                                updateImage({
+                                  promotionMode: "offerings",
+                                  products: selection
+                                    ? image.products.map(s =>
+                                        s.productId === p.id
+                                          ? { ...s, imageId: photo.id }
+                                          : s
+                                      )
+                                    : [
+                                        ...image.products,
+                                        {
+                                          productId: p.id,
+                                          imageId: photo.id,
+                                          featuredSpecKeys: [],
+                                          includePrice: false,
+                                        },
+                                      ],
+                                })
+                              }
+                            >
+                              <img
+                                src={photo.url}
+                                alt={`Photo ${i + 1}`}
+                                loading="lazy"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </StudioCard>
+                  );
+                })
+            ) : (
+              <div className="col-span-full">
+                <ProductPhotoGroups
+                  choices={catalog.data?.items ?? []}
+                  selected={sourceKeys}
+                  limit={referenceLimit}
+                  onToggle={toggleSource}
+                />
+              </div>
+            )}
           </div>
           {!isImage && catalog.isLoading && (
             <p role="status">Loading product photos…</p>

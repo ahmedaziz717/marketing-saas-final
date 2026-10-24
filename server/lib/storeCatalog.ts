@@ -119,7 +119,7 @@ export async function readStorePage(
               ...variants.map((v: any) => v.image?.url),
             ].filter(Boolean)
           )
-        ).slice(0, 30),
+        ),
         variants: variants.map((v: any) => ({
           id: v.id,
           name: v.title,
@@ -175,7 +175,7 @@ export async function readStorePage(
               ...(p.variants ?? []).map((v: any) => v.image_url),
             ].filter(Boolean)
           )
-        ).slice(0, 30),
+        ),
         variants: (p.variants ?? []).map((v: any) => ({
           id: String(v.id),
           name: v.option_values?.map((o: any) => o.label).join(" / ") || p.name,
@@ -250,7 +250,7 @@ export async function readStorePage(
             ...variants.map(v => v.imageUrl),
           ].filter(Boolean)
         )
-      ).slice(0, 30),
+      ),
       specificationOrder: (p.attributes ?? []).map((a: any) => a.name),
       variants,
     });
