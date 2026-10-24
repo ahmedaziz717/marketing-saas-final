@@ -5,6 +5,7 @@ import {
 } from "../../drizzle/channelSchema";
 import {
   insightMetrics,
+  TODAY_REPORT_NOTE,
   supportsInsightMetric,
   isInsightChannel,
   type InsightChannel,
@@ -364,6 +365,14 @@ export async function buildInsightResult(
     accounts,
     findings: insightFindings(accounts, config.compare),
     warnings: [
+      ...(config.period === "today"
+        ? [
+            TODAY_REPORT_NOTE,
+            ...(config.compare
+              ? ["Today is a partial day compared with the full previous day."]
+              : []),
+          ]
+        : []),
       "Accounts are reported separately. Currencies and overlapping audiences are never added together.",
       "Comparisons describe observed changes and do not establish causation. Missing values are unavailable, not zero.",
       "Reporting dates are resolved in the report timezone; each source retains its own reporting timezone and attribution rules.",

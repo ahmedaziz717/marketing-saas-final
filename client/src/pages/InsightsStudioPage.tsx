@@ -55,6 +55,7 @@ import {
   insightRange,
   nextInsightRun,
   reportPeriods,
+  TODAY_REPORT_NOTE,
   reportPreviousRange,
   scheduleDescription,
   selectableMetrics,
@@ -866,13 +867,17 @@ function Studio({
                     </small>
                   </span>
                 </label>
+                {config.period === "today" && (
+                  <small>{TODAY_REPORT_NOTE}</small>
+                )}
                 {!["custom", "yesterday", "last_month"].includes(
                   config.period
                 ) && (
                   <label className="insight-check">
                     <input
                       type="checkbox"
-                      checked={config.includeToday}
+                      checked={config.period === "today" || config.includeToday}
+                      disabled={config.period === "today"}
                       onChange={e => update({ includeToday: e.target.checked })}
                     />
                     <span>
