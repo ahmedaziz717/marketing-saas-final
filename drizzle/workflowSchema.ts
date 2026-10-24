@@ -182,3 +182,43 @@ export const workflowTriggerReceipts = appSchema
     ]
   )
   .enableRLS();
+
+// MCP authorization state is separate from workflow versions and browser sessions.
+export const authoringOAuthRequests = appSchema
+  .table("authoring_oauth_requests", {
+    idHash: varchar("idHash", { length: 64 }).primaryKey(),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id),
+    clientId: text("clientId").notNull(),
+    redirectUri: text("redirectUri").notNull(),
+    state: text("state").notNull(),
+    challenge: varchar("challenge", { length: 43 }).notNull(),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
+    codeHash: varchar("codeHash", { length: 64 }).unique(),
+    organizationId: integer("organizationId").references(
+      () => organizations.id
+    ),
+    consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
+  })
+  .enableRLS();
+export const authoringOAuthGrants = appSchema
+  .table("authoring_oauth_grants", {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id),
+    organizationId: integer("organizationId")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: text("clientId").notNull(),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+    createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
+    revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
+  })
+  .enableRLS();
