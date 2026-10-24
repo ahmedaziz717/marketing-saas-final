@@ -1,3 +1,4 @@
+import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGroups";
 import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
 import OnboardingPage from "../../client/src/pages/OnboardingPage";
 import { AccountInvitePage } from "../../client/src/pages/PlatformAdminPage";
@@ -300,6 +301,23 @@ function respond(path: string, input: any) {
       updatedAtMs: null,
     }));
   if (path === "prompts.history") return [];
+  if (path === "brand.promptContext")
+    return {
+      name: "Learn Like This Brand",
+      status: "ready",
+      summarized: true,
+      voice: JSON.stringify({
+        identity: "Practical learning resources",
+        audience: "Curious learners",
+        tone: "Encouraging and clear",
+        messagingPriorities: "Concrete examples",
+        doRules: "Respect their time",
+        dontRules: "No grand promises",
+        constraints: "Use approved facts",
+      }),
+      requiredClaims: "",
+      prohibitedContent: "",
+    };
   if (path === "models.textCatalog")
     return [
       {
@@ -350,6 +368,9 @@ function respond(path: string, input: any) {
     path === "insights.runs"
   )
     return [];
+  if (path === "creativeBuilder.studioHistory") return which === "creative-history" ? [
+    { id: 8, title: "Previous collection", url: studioDraftAssets[0].url, createdAtMs: now, status: "pending", setup: defaultCreativeSetup() }
+  ] : [];
   if (path === "creativeBuilder.quote") return { credits: 24, outputs: 1 };
   if (path === "models.credits")
     return {
@@ -949,7 +970,10 @@ function respond(path: string, input: any) {
       name: "Learn Like This Brand",
       colors: ["#15141A"],
       fonts: ["Manrope"],
-      voice: "",
+      voice:
+        which === "settings-prompts"
+          ? "Practical, encouraging guidance for curious learners. Speak clearly, respect their time, and show concrete examples instead of grand promises."
+          : "",
       requiredClaims: "",
       prohibitedContent: "",
       status: "draft",
@@ -1139,6 +1163,7 @@ const routeForPage: Record<string, string> = {
   "workflows-directory": "/app/workflows",
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
+  "catalog-gallery": "/app/catalog-gallery-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
   "workflow-density": "/app/workflow-density-fixture",
@@ -1147,6 +1172,8 @@ const routeForPage: Record<string, string> = {
   "studio-channels": "/app/activate/studio",
   "creative-overview": "/app/creatives/studio",
   "creative-editor": "/app/creatives/studio",
+  "creative-direction": "/app/creatives/studio",
+  "creative-history": "/app/creatives/studio",
   "creative-confirmation": "/app/creatives/studio",
   "creative-scene": "/app/creatives/studio",
   "creative-type": "/app/creatives/studio",
@@ -1393,8 +1420,14 @@ function WorkflowModelFormFixture() {
     </>
   );
 }
+function CatalogGalleryFixture() {
+  const [selected, setSelected] = useState<string[]>([]);
+  const choices = studioDraftAssets.map((asset, i) => ({ ...asset, key: `product_image:${i + 1}`, url: asset.url.replace("Emerald%20collection", `Emerald%20angle%20${i}`), name: i < 2 ? "Emerald collection" : "Gold collection", origin: "catalog" as const, product: { id: i < 2 ? 7 : 8 } })) as any;
+  return <div className="p-5"><h1>Product catalog</h1><ProductPhotoGroups choices={choices} selected={selected} limit={3} onToggle={key => setSelected(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key])} /></div>;
+}
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
   if (which === "onboarding")
     return (
       <DashboardLayout>
@@ -2241,6 +2274,12 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(mutations.length === 0, "Exploration never starts generation");
       layout();
     }
+    if (which === "catalog-gallery") {
+      await click("Use photo 2 for Emerald collection");
+      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Alternate angle selection is retained within its product");
+      check(document.querySelectorAll('section[aria-label^="Photos for"]').length === 2, "One group per product rather than duplicate tiles");
+      layout();
+    }
     if (which === "creative-people") {
       await studioSection("Look & Feel", false);
       await click("Scene");
@@ -2330,6 +2369,28 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         behavior: "instant",
       });
       await pause();
+      layout();
+    }
+    if (which === "creative-history") {
+      if (button("All categories")?.getClientRects().length) await click("All categories");
+      const toggle = document.querySelector<HTMLButtonElement>(".journey-summary-toggle")!;
+      if (toggle.getAttribute("aria-expanded") !== "true") await pressStudioControl(toggle, "Open creative history preview");
+      await click("Preview Previous collection");
+      check(!!document.querySelector('.cfg-preview-gallery [aria-label="Previous generated versions"]'), "Thumbnails remain beneath the preview in Review");
+      check(mutations.length === 0, "Inspecting history never generates, saves or approves");
+      layout();
+    }
+    if (which === "creative-direction") {
+      await studioSection("Story & Sound", false);
+      await click("Creative direction");
+      check(
+        !!document.querySelector('[aria-label="Brand context for generation"]'),
+        "Brand source context is visible beside creative direction"
+      );
+      check(
+        mutations.length === 0,
+        "Viewing brand context never generates or saves"
+      );
       layout();
     }
     if (

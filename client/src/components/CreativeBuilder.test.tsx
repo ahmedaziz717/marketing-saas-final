@@ -44,6 +44,7 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    brand: { promptContext: { useQuery: () => ({ data: null }) } },
     prompts: {
       change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },

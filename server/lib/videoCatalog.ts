@@ -76,6 +76,32 @@ export async function listVideoCatalogImages(
       nextOffset: null as number | null,
     };
   const search = input.search.trim().replace(/[\\%_]/g, "\\$&");
+  // Page stable products, then load their complete photo groups. A product must
+  // never be split into duplicate tiles across image-page boundaries.
+  const page = input.selectedOnly
+    ? []
+    : await db
+        .select({ id: products.id, name: products.name })
+        .from(products)
+        .innerJoin(productImages, eq(productImages.productId, products.id))
+        .where(
+          and(
+            owned(organizationId),
+            search
+              ? or(
+                  ilike(products.name, `%${search}%`),
+                  ilike(products.sku, `%${search}%`)
+                )
+              : undefined
+          )
+        )
+        .groupBy(products.id, products.name)
+        .orderBy(products.name, products.id)
+        .offset(input.offset)
+        .limit(61);
+  const productIds = page.slice(0, 60).map(p => p.id);
+  if (!input.selectedOnly && !productIds.length)
+    return { items: [] as VideoImageChoice[], nextOffset: null };
   const rows = await db
     .select(selection)
     .from(productImages)
@@ -85,12 +111,7 @@ export async function listVideoCatalogImages(
         owned(organizationId),
         input.selectedOnly
           ? inArray(productImages.id, ids)
-          : search
-            ? or(
-                ilike(products.name, `%${search}%`),
-                ilike(products.sku, `%${search}%`)
-              )
-            : undefined
+          : inArray(products.id, productIds)
       )
     )
     .orderBy(
@@ -98,13 +119,11 @@ export async function listVideoCatalogImages(
       products.id,
       desc(productImages.isPrimary),
       productImages.id
-    )
-    .offset(input.selectedOnly ? 0 : input.offset)
-    .limit(input.selectedOnly ? 30 : 61);
+    );
   return {
-    items: rows.slice(0, 60).map(choice),
+    items: rows.map(choice),
     nextOffset:
-      !input.selectedOnly && rows.length > 60 ? input.offset + 60 : null,
+      !input.selectedOnly && page.length > 60 ? input.offset + 60 : null,
   };
 }
 export async function readVideoCatalogImage(

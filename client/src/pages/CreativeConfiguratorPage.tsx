@@ -4,6 +4,7 @@ import {
 } from "@shared/learningHandoff";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { PromptDefaultControls } from "@/components/PromptDefaultControls";
+import { GenerationBrandContext } from "@/components/BrandPromptContext";
 import { PromptDefaultsLink } from "@/components/PromptDefaultsLink";
 import { usePromptDefaults } from "@/hooks/usePromptDefaults";
 import { newCreativeDefaults } from "@shared/promptRegistry";
@@ -1670,6 +1671,9 @@ function Configurator({
     if (category === "direction")
       return (
         <div className="cfg-form">
+          {isImage && (
+            <GenerationBrandContext organizationId={organizationId} />
+          )}
           <Field title="Theme direction">
             <textarea
               value={direction.themePrompt ?? theme.direction}
@@ -1696,8 +1700,11 @@ function Configurator({
           </Field>
           {isImage && (
             <details>
-              <summary>Base generation instructions</summary>
-              <Field title="Base prompt">
+              <summary>Creative direction</summary>
+              <Field
+                title="Creative instructions"
+                help="Added to your Brand Kit voice and selected subject. Brand updates do not overwrite these instructions."
+              >
                 <textarea
                   rows={7}
                   value={image.basePrompt}
@@ -2264,8 +2271,9 @@ function Configurator({
             Reset setup
           </button>
           <PromptDefaultsLink
+            label="Prompt defaults"
             promptId={
-              config.kind === "video" ? "video.direction" : "creative.image"
+              config.kind === "video" ? "video.direction" : "creative.base"
             }
           />
           <button disabled={busy || !videoOpened} onClick={saveDraft}>
@@ -2379,7 +2387,10 @@ function Configurator({
             videoLoadError={videoDetail.error?.message}
             referenceUrl={preview}
             onSettled={() => {
-              if (isImage) setPendingImageJob(null);
+              if (isImage) {
+                setPendingImageJob(null);
+                void utils.brand.promptContext.invalidate();
+              }
               void utils.assetLibrary.studioList.invalidate();
               void utils.models.credits.invalidate();
               void utils.video.list.invalidate();

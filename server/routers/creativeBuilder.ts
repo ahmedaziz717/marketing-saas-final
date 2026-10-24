@@ -1,3 +1,4 @@
+import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
   findSafeLogoPlacement,
@@ -14,6 +15,7 @@ import {
   readEnhancementSource,
 } from "../lib/imageEnhancement";
 import {
+  automaticProductOverlay,
   renderProductOverlay,
   suggestProductPlacement,
 } from "../lib/productOverlay";
@@ -461,6 +463,39 @@ export async function runBuilderJob(
           );
           image = { ...image, storageKey: stored.key, url: stored.url };
         }
+        // Keep the complete immutable design for optional later refinements.
+        const overlayDesign = { storageKey: image.storageKey, url: image.url };
+        let preparedProductLayers = productLayers.map(
+          ({ sourceKey, sha256, left, top, width, height }) => ({
+            sourceKey,
+            sha256,
+            left,
+            top,
+            width,
+            height,
+          })
+        );
+        let productOverlayApplied = false;
+        if (cutouts.length) {
+          try {
+            const finished = await automaticProductOverlay(
+              Buffer.from(await storageGetBase64(image.storageKey), "base64"),
+              cutouts,
+              format
+            );
+            const stored = await storagePut(
+              `org-${organizationId}/creatives/${jobId}/product-finish`,
+              finished.png,
+              "image/png"
+            );
+            image = { ...image, storageKey: stored.key, url: stored.url };
+            preparedProductLayers = finished.layers;
+            productOverlayApplied = true;
+          } catch {
+            // Retain the finished generated design when safe matching is uncertain;
+            // never silently apply a generic second product over it.
+          }
+        }
         generated.push({
           organizationId: organizationId,
           briefId: briefId,
@@ -524,19 +559,13 @@ export async function runBuilderJob(
               ? {
                   productPreservation: {
                     method: "editable_original_v3",
-                    designStorageKey: image.storageKey,
-                    designUrl: image.url,
-                    applied: false,
-                    layers: productLayers.map(
-                      ({ sourceKey, sha256, left, top, width, height }) => ({
-                        sourceKey,
-                        sha256,
-                        left,
-                        top,
-                        width,
-                        height,
-                      })
-                    ),
+                    designStorageKey: overlayDesign.storageKey,
+                    designUrl: overlayDesign.url,
+                    applied: productOverlayApplied,
+                    alignment: productOverlayApplied
+                      ? "automatic"
+                      : "needs_adjustment",
+                    layers: preparedProductLayers,
                   },
                 }
               : {}),
@@ -850,6 +879,7 @@ export const creativeBuilderRouter = router({
         height: variant.renderMetadata!.height,
         revision: asset.revision,
         applied: metadata.applied,
+        alignment: metadata.alignment,
         layers,
       };
     }),
@@ -968,11 +998,10 @@ export const creativeBuilderRouter = router({
               renderMetadata: {
                 ...variant.renderMetadata!,
                 parentVariantId: variant.id,
-                productPreservation: {
-                  ...metadata,
-                  applied: true,
-                  layers: result.layers,
-                },
+                productPreservation: manuallyAppliedProductOverlay(
+                  metadata,
+                  result.layers
+                ),
               },
             })
             .returning({ id: creativeVariants.id });

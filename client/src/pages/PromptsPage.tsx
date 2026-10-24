@@ -13,6 +13,8 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import type { ResolvedPrompt } from "../../../shared/promptRegistry";
+import { promptGroup, type PromptGroup } from "@shared/promptPresentation";
+import { BrandPromptContext } from "@/components/BrandPromptContext";
 
 function PromptEditor({
   prompt,
@@ -31,6 +33,14 @@ function PromptEditor({
     revision: prompt.revision,
   });
   const [reason, setReason] = useState("");
+  const brand = trpc.brand.promptContext.useQuery(
+    { organizationId },
+    {
+      enabled: prompt.id === "creative.base",
+      staleTime: 0,
+      refetchOnMount: "always",
+    }
+  );
   const utils = trpc.useUtils();
   const history = trpc.prompts.history.useQuery({
     organizationId,
@@ -99,6 +109,13 @@ function PromptEditor({
           This default changed elsewhere. Your unsaved text is preserved. Reload
           the latest value before making another change.
         </p>
+      )}
+      {prompt.id === "creative.base" && (
+        <BrandPromptContext
+          brand={brand.data}
+          loading={brand.isLoading}
+          error={!!brand.error}
+        />
       )}
       <label className="block text-sm font-medium">
         Resolved workspace default
@@ -236,8 +253,13 @@ function Prompts() {
   const { organizationId, membership } = useWorkspace();
   const query = usePromptDefaults(organizationId ?? 0);
   const search = useSearch();
+  const requested =
+    new URLSearchParams(search).get("prompt") ?? "creative.base";
   const [selected, setSelected] = useState(
-    new URLSearchParams(search).get("prompt") ?? "creative.base"
+    promptGroup(requested) === "technical" ? "creative.base" : requested
+  );
+  const [group, setGroup] = useState<PromptGroup>(
+    promptGroup(requested) === "technical" ? "creative" : promptGroup(requested)
   );
   const [filter, setFilter] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -247,8 +269,9 @@ function Prompts() {
       <div>
         <h1 className="text-2xl font-semibold">Prompt defaults</h1>
         <p className="text-muted-foreground">
-          One workspace source for application defaults. Safety rules, tenant
-          boundaries and output schemas remain protected.
+          Shape your creative direction, copy and visual styles. Your Brand Kit
+          supplies the brand voice automatically; your saved instructions stay
+          yours.
         </p>
       </div>
       {query.isLoading ? (
@@ -261,6 +284,45 @@ function Prompts() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
           <nav aria-label="Prompt catalog" className="space-y-2">
+            <label className="block text-sm font-medium">
+              Defaults to manage
+              <select
+                aria-label="Defaults to manage"
+                className="mt-2 w-full rounded-lg border bg-background p-2"
+                value={group}
+                onChange={event => {
+                  if (
+                    dirty &&
+                    !window.confirm(
+                      "Discard unsaved prompt edits and open another group?"
+                    )
+                  )
+                    return;
+                  const next = event.target.value as PromptGroup;
+                  setGroup(next);
+                  setFilter("");
+                  setSelected(
+                    query.data?.find(item => promptGroup(item.id) === next)
+                      ?.id ?? "creative.base"
+                  );
+                }}
+              >
+                <option value="creative">Creative essentials</option>
+                <option value="visual">Themes &amp; visual styles</option>
+                {["owner", "admin"].includes(membership?.role ?? "") && (
+                  <option value="technical">
+                    Advanced technical templates
+                  </option>
+                )}
+              </select>
+            </label>
+            {group === "technical" && (
+              <p className="text-xs text-muted-foreground">
+                Advanced application behavior. These templates are not your
+                brand voice or campaign brief. Protected instructions remain
+                read-only.
+              </p>
+            )}
             <Input
               aria-label="Search prompts"
               placeholder="Search prompts"
@@ -270,6 +332,7 @@ function Prompts() {
             <div className="max-h-48 lg:max-h-[65vh] space-y-1 overflow-y-auto">
               {query.data
                 ?.slice()
+                .filter(item => promptGroup(item.id) === group)
                 .sort((a, b) => Number(b.editable) - Number(a.editable))
                 .filter(item =>
                   `${item.name} ${item.area}`

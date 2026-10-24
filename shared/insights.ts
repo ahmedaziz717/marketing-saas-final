@@ -203,7 +203,10 @@ export const metricSchema = z.enum(
 export const selectableMetrics = Object.keys(insightMetrics).filter(
   k => !["reactions", "comments", "shares"].includes(k)
 ) as InsightMetric[];
+export const TODAY_REPORT_NOTE =
+  "Today uses the report timezone, from midnight to the latest available data, not a rolling 24 hours. Results are partial and may lag behind current activity.";
 export const reportPeriods = [
+  ["today", "Today"],
   ["7", "Last 7 days"],
   ["14", "Last 14 days"],
   ["30", "Last 30 days"],
@@ -396,7 +399,7 @@ export function insightRange(
   const range = presetRange(config.period, now, config.timezone);
   if (
     !config.includeToday &&
-    !["yesterday", "last_month"].includes(config.period)
+    !["today", "yesterday", "last_month"].includes(config.period)
   ) {
     range.until = moveDate(today, -1);
     if (["7", "14", "30", "90"].includes(config.period))

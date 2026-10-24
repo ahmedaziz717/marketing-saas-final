@@ -1,5 +1,6 @@
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { PromptDefaultControls } from "@/components/PromptDefaultControls";
+import { GenerationBrandContext } from "@/components/BrandPromptContext";
 import { usePromptDefaults } from "@/hooks/usePromptDefaults";
 import { newCreativeDefaults } from "@shared/promptRegistry";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
@@ -513,6 +514,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 Optional: adjust the main instructions and selected theme.
               </p>
               <div className="mt-4 grid gap-4">
+                <GenerationBrandContext organizationId={organizationId} />
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div>
