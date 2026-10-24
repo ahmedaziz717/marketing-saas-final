@@ -35,7 +35,7 @@ export function ProductPhotoGroups({
           <h3 className="text-sm font-semibold">{photos[0].name}</h3>
           <CatalogGallery name={photos[0].name} groups={photos[0].mediaGroups}
             images={photos.map(photo => ({ id: Number(photo.key.split(":")[1]), url: photo.url, media: photo.media }))}
-            selectedIds={selected.map(key => Number(key.split(":")[1]))}
+            selectedIds={photos.filter(photo => selected.includes(photo.key)).map(photo => Number(photo.key.split(":")[1]))}
             disabled={selected.length >= limit}
             onSelect={id => { const photo = photos.find(p => Number(p.key.split(":")[1]) === id); if (photo) onToggle(photo.key); }} />
         </section>
