@@ -503,7 +503,7 @@ export async function runBuilderJob(
             if (error instanceof ProductOverlayResolutionError && error.placements) {
               preparedProductLayers = error.placements.map((placement, i) => ({
                 ...placement,
-                height: Math.round(placement.width * cutouts[i].height / cutouts[i].width),
+                height: placement.height ?? Math.round(placement.width * cutouts[i].height / cutouts[i].width),
                 sourceKey: cutouts[i].sourceKey,
                 sha256: cutouts[i].sha256,
               }));
