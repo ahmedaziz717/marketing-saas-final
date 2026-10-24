@@ -76,7 +76,6 @@ export function WorkflowAuthoringChat({
     pending.current = true;
     setRecovering(true);
     setError("");
-    setProposal(null);
     try {
       if (request.current) {
         const status = await check();
@@ -109,6 +108,9 @@ export function WorkflowAuthoringChat({
           organizationId,
           family,
           target,
+          parentProposal: proposal
+            ? { id: proposal.proposalId, hash: proposal.hash }
+            : undefined,
           requestId: crypto.randomUUID(),
           message: content,
           history: messages
@@ -163,6 +165,7 @@ export function WorkflowAuthoringChat({
           request.current = null;
           setRecovery(null);
           setMessages([]);
+          setProposal(null);
           setError(
             "Previous request closed. Correct the draft or shorten your request, then send again. Chat history was cleared to release context space."
           );
@@ -292,6 +295,10 @@ export function WorkflowAuthoringChat({
             <section aria-label="Static proposal preview" className="space-y-3">
               <h3>{proposal.draft.name}</h3>
               <p>
+                Send another message to refine this proposal before applying.
+                Each refinement uses the metered text model.
+              </p>
+              <p>
                 {proposal.preview.executableSteps} expanded steps ·{" "}
                 {proposal.preview.connections} connections
               </p>
@@ -336,7 +343,7 @@ export function WorkflowAuthoringChat({
                 media or post externally.
               </p>
               <Button
-                disabled={busy || disabled}
+                disabled={busy || disabled || Boolean(recovery)}
                 onClick={async () => {
                   if (pending.current) return;
                   pending.current = true;

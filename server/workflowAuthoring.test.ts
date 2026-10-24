@@ -730,3 +730,95 @@ it.each(["stale revision", "oversized context"])(
     expect(state.llm.mock.calls.length).toBe(calls + 1);
   }
 );
+
+it("refines unapplied proposals without saving and applies the complete latest snapshot once", async () => {
+  const first = await proposed();
+  const next = await service.propose({
+    organizationId: org,
+    requestId: randomUUID(),
+    parentProposal: { id: first.proposalId, hash: first.hash },
+    proposal: {
+      summary: "Rename brief",
+      changes: [{ op: "rename", name: "Refined brief" }],
+    },
+  });
+  expect(next.draft.graph.nodes).toEqual(first.draft.graph.nodes);
+  expect(next.draft.name).toBe("Refined brief");
+  await expect(apply(first)).rejects.toMatchObject({ code: "CONFLICT" });
+  const saved = await apply(next);
+  expect((await service.read({ organizationId: org, id: saved.id })).name).toBe(
+    "Refined brief"
+  );
+  await expect(
+    service.propose({
+      organizationId: org,
+      requestId: randomUUID(),
+      parentProposal: { id: next.proposalId, hash: next.hash },
+      proposal: proposal(),
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+});
+it("binds refinement to owner, tenant, hash and original saved revision", async () => {
+  const saved = await apply(await proposed());
+  const first = await service.propose({
+    organizationId: org,
+    requestId: randomUUID(),
+    target: saved,
+    proposal: proposal(),
+  });
+  const input = {
+    organizationId: org,
+    requestId: randomUUID(),
+    target: saved,
+    parentProposal: { id: first.proposalId, hash: first.hash },
+    proposal: {
+      summary: "Rename",
+      changes: [{ op: "rename", name: "Refined" }],
+    },
+  };
+  await expect(
+    service.propose({
+      ...input,
+      parentProposal: { ...input.parentProposal, hash: "x".repeat(64) },
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(
+    service.propose({ ...input, target: undefined })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await state.db
+    .update(creativeWorkflows)
+    .set({ revision: 2 })
+    .where(eq(creativeWorkflows.id, saved.id));
+  await expect(service.propose(input)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+});
+it("meters a refinement against the persisted proposal snapshot and retries idempotently", async () => {
+  const first = await proposed();
+  state.llm.mockResolvedValueOnce({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            summary: "Rename",
+            changes: [{ op: "rename", name: "Chat refinement" }],
+          }),
+        },
+      },
+    ],
+  });
+  const input = {
+    organizationId: org,
+    requestId: randomUUID(),
+    parentProposal: { id: first.proposalId, hash: first.hash },
+    message: "Rename this proposal",
+  };
+  const calls = state.llm.mock.calls.length;
+  const next = await service.chat(input);
+  expect(next.draft.graph.nodes).toEqual(first.draft.graph.nodes);
+  expect(
+    JSON.parse(state.llm.mock.calls.at(-1)![0].messages[1].content).draft
+  ).toEqual(first.draft);
+  expect((await service.chat(input)).proposalId).toBe(next.proposalId);
+  expect(state.llm.mock.calls.length).toBe(calls + 1);
+});

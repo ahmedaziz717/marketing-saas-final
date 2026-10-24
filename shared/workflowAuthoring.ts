@@ -47,6 +47,10 @@ export const changesSchema = z
 export const proposalInput = authoringScope
   .extend({
     requestId: z.string().uuid(),
+    parentProposal: z
+      .object({ id: z.string().uuid(), hash: z.string().length(64) })
+      .strict()
+      .optional(),
     target: z
       .object({ id: z.string().uuid(), revision: z.number().int().positive() })
       .strict()

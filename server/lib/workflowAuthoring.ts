@@ -56,6 +56,8 @@ type Proposal = {
   proposalId: string;
   target?: { id: string; revision: number };
   baseHash: string;
+  parentProposalId?: string;
+  refinementDepth?: number;
   draft: AuthoringDraft;
   proposal: z.infer<typeof changesSchema>;
   hash: string;
@@ -68,7 +70,10 @@ const fail = (
 };
 
 /** All adapters enter here. Membership is rechecked under a lock for every action. */
-export function workflowAuthoring(userId: number) {
+export function workflowAuthoring(
+  userId: number,
+  authorizeConnection?: (tx: Tx, organizationId: number) => Promise<void>
+) {
   async function transaction<T>(
     organizationId: number,
     run: (tx: Tx) => Promise<T>
@@ -98,6 +103,7 @@ export function workflowAuthoring(userId: number) {
           "Your membership does not permit workflow authoring.",
           "FORBIDDEN"
         );
+      await authorizeConnection?.(tx, organizationId);
       return run(tx);
     });
   }
@@ -165,6 +171,14 @@ export function workflowAuthoring(userId: number) {
     tx: Tx,
     input: z.infer<typeof chatInput> | z.infer<typeof proposalInput>
   ) {
+    if (input.parentProposal) {
+      const parent = await refinementParent(tx, input);
+      // Check the original saved revision, never rebase over somebody else's edits.
+      const original = await base(tx, { ...input, parentProposal: undefined });
+      if (stableHash(original) !== parent.baseHash)
+        fail("Draft changed. Start from the saved draft again.", "CONFLICT");
+      return parent.draft;
+    }
     if (!input.target)
       return {
         name: "Untitled workflow",
@@ -182,6 +196,54 @@ export function workflowAuthoring(userId: number) {
       family: row.family,
       graph: row.graph,
     });
+  }
+  async function refinementParent(
+    tx: Tx,
+    input: z.infer<typeof proposalInput> | z.infer<typeof chatInput>
+  ) {
+    const ref = input.parentProposal!;
+    const row = await event(
+      tx,
+      input.organizationId,
+      ref.id,
+      "authoring.proposed"
+    );
+    if (!row) return fail("Proposal unavailable.", "NOT_FOUND");
+    const parent = row.payload!.proposal as Proposal;
+    if (
+      parent.hash !== ref.hash ||
+      stableHash(parent.target ?? null) !== stableHash(input.target ?? null) ||
+      parent.draft.family !== input.family
+    )
+      fail(
+        "The refinement must match its exact proposal and original draft target.",
+        "CONFLICT"
+      );
+    const applied = await tx
+      .select()
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.organizationId, input.organizationId),
+          eq(activityEvents.actorUserId, userId),
+          eq(activityEvents.entityId, ref.id),
+          eq(activityEvents.action, "authoring.applied")
+        )
+      )
+      .limit(1);
+    if (
+      applied.length ||
+      (await event(tx, input.organizationId, ref.id, "authoring.refined"))
+    )
+      fail(
+        "This proposal was applied or replaced. Continue from the latest proposal or saved draft.",
+        "CONFLICT"
+      );
+    if ((parent.refinementDepth ?? 0) >= 32)
+      fail(
+        "Refinement limit reached. Review and apply this proposal before continuing."
+      );
+    return parent;
   }
   async function preview(
     tx: Tx,
@@ -346,12 +408,17 @@ export function workflowAuthoring(userId: number) {
     );
     if (reserved && reserved.payload?.requestHash !== requestHash)
       fail("Request ID was already reserved for another request.", "CONFLICT");
+    const parent = input.parentProposal
+      ? await refinementParent(tx, input)
+      : undefined;
     const draft = applyAuthoringChanges(draftBase, input.proposal);
     const result = await preview(tx, input.organizationId, draft);
     const proposal: Proposal = {
       proposalId: input.requestId,
       target: input.target,
-      baseHash: stableHash(draftBase),
+      baseHash: parent?.baseHash ?? stableHash(draftBase),
+      parentProposalId: parent?.proposalId,
+      refinementDepth: parent ? (parent.refinementDepth ?? 0) + 1 : 0,
       draft,
       proposal: input.proposal,
       hash: stableHash({
@@ -359,6 +426,7 @@ export function workflowAuthoring(userId: number) {
         target: input.target,
         base: draftBase,
         proposal: input.proposal,
+        parentProposal: input.parentProposal,
       }),
     };
     await record(
@@ -368,6 +436,14 @@ export function workflowAuthoring(userId: number) {
       "authoring.proposed",
       { requestHash, proposal, preview: result }
     );
+    if (parent)
+      await record(
+        tx,
+        input.organizationId,
+        parent.proposalId,
+        "authoring.refined",
+        { proposalId: proposal.proposalId }
+      );
     return { ...proposal, preview: result };
   }
   async function existing(
@@ -570,6 +646,7 @@ export function workflowAuthoring(userId: number) {
           expandedNodes: 160,
           nesting: 4,
           modelTurns: 1,
+          refinements: 32,
         },
       }));
     },
@@ -730,6 +807,49 @@ export function workflowAuthoring(userId: number) {
         throw error;
       }
     },
+    async proposalStatus(raw: unknown) {
+      const input = proposalReference.parse(raw);
+      return transaction(input.organizationId, async tx => {
+        if (
+          !(await event(
+            tx,
+            input.organizationId,
+            input.proposalId,
+            "authoring.proposed"
+          ))
+        )
+          return fail("Proposal unavailable.", "NOT_FOUND");
+        const [applied] = await tx
+          .select()
+          .from(activityEvents)
+          .where(
+            and(
+              eq(activityEvents.organizationId, input.organizationId),
+              eq(activityEvents.actorUserId, userId),
+              eq(activityEvents.entityId, input.proposalId),
+              eq(activityEvents.action, "authoring.applied")
+            )
+          )
+          .limit(1);
+        if (applied)
+          return {
+            state: "applied" as const,
+            result: applied.payload!.result as { id: string; revision: number },
+          };
+        const replaced = await event(
+          tx,
+          input.organizationId,
+          input.proposalId,
+          "authoring.refined"
+        );
+        return replaced
+          ? {
+              state: "replaced" as const,
+              proposalId: replaced.payload!.proposalId as string,
+            }
+          : { state: "awaiting_review" as const };
+      });
+    },
     async preview(raw: unknown) {
       const input = proposalReference.parse(raw);
       return transaction(input.organizationId, async tx => {
@@ -785,6 +905,18 @@ export function workflowAuthoring(userId: number) {
           .limit(1);
         if (applied[0])
           return applied[0].payload!.result as { id: string; revision: number };
+        if (
+          await event(
+            tx,
+            input.organizationId,
+            proposal.proposalId,
+            "authoring.refined"
+          )
+        )
+          fail(
+            "This proposal has been replaced. Review the latest refinement.",
+            "CONFLICT"
+          );
         if (proposal.target) {
           const current = await base(tx, {
             organizationId: input.organizationId,

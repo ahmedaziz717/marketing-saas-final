@@ -349,3 +349,55 @@ it("reloads the saved revision on explicit reset and sends the corrected request
   await screen.findByText("Static preview only");
   expect(api.chat.mock.calls[1][0].target.revision).toBe(2);
 });
+
+it("refines the displayed proposal before applying and preserves it when refinement fails", async () => {
+  const refined = {
+    ...proposal,
+    proposalId: "refined",
+    hash: "b".repeat(64),
+    draft: { ...proposal.draft, name: "Refined brief" },
+  };
+  api.chat
+    .mockResolvedValueOnce(proposal)
+    .mockRejectedValueOnce(new Error("Invalid refinement"))
+    .mockResolvedValueOnce(refined);
+  api.status.mockResolvedValue({ state: "failed" });
+  api.apply.mockResolvedValue({ id: "draft", revision: 1 });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  await screen.findByText("Static preview only");
+  fireEvent.click(screen.getByText("Send different message"));
+  await screen.findByText("Start new metered attempt");
+  expect(screen.getByText("Brief")).toBeTruthy();
+  expect(
+    (screen.getByText("Apply reviewed proposal to draft") as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByText("Start new metered attempt"));
+  await screen.findByText("Refined brief");
+  expect(api.chat.mock.calls[1][0].parentProposal).toEqual({
+    id: proposal.proposalId,
+    hash: proposal.hash,
+  });
+  expect(api.chat.mock.calls[2][0].parentProposal).toEqual({
+    id: proposal.proposalId,
+    hash: proposal.hash,
+  });
+  expect(api.apply).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Apply reviewed proposal to draft"));
+  await waitFor(() =>
+    expect(api.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalId: "refined",
+        reviewedHash: refined.hash,
+      })
+    )
+  );
+});

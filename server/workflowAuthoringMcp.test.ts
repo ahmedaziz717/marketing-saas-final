@@ -18,6 +18,7 @@ vi.mock("./lib/workflowAuthoring", () => ({
     propose: state.propose,
     read: vi.fn(),
     preview: vi.fn(),
+    proposalStatus: vi.fn(),
     apply: vi.fn(),
   }),
 }));
@@ -126,18 +127,20 @@ it("serves SDK tool discovery over Streamable HTTP with only draft capabilities"
   expect(response.status).toBe(200);
   const body = await message(response);
   expect(body.result.tools.map((t: any) => t.name)).toEqual([
+    "read_authoring_connection",
     "discover_workflow_blocks",
     "read_workflow_draft",
     "read_pinned_workflow_app",
     "propose_workflow_changes",
     "preview_workflow_proposal",
+    "read_workflow_proposal_status",
     "apply_reviewed_workflow_draft",
   ]);
-  expect(body.result.tools[5].annotations).toMatchObject({
+  expect(body.result.tools[7].annotations).toMatchObject({
     readOnlyHint: false,
     destructiveHint: true,
   });
-  expect(body.result.tools[5]._meta.securitySchemes[0].scopes).toEqual([
+  expect(body.result.tools[7]._meta.securitySchemes[0].scopes).toEqual([
     "workflows:read",
     "workflows:draft",
   ]);
