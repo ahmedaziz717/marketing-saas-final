@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { reportPeriods, type InsightConfig } from "@shared/insights";
+import {
+  TODAY_REPORT_NOTE,
+  reportPeriods,
+  type InsightConfig,
+} from "@shared/insights";
 export type InsightDates = Pick<
   InsightConfig,
   "period" | "rollingDays" | "customRange" | "compare" | "includeToday"
@@ -51,6 +55,7 @@ export function InsightDateControls({
           ))}
         </select>
       </label>
+      {period === "today" && <small>{TODAY_REPORT_NOTE}</small>}
       {period === "custom" && (
         <>
           <label>

@@ -18,6 +18,7 @@ import {
   insightMetrics,
   supportsInsightMetric,
   reportPeriods,
+  TODAY_REPORT_NOTE,
   selectableMetrics,
   widgetColors,
   widgetPalettes,
@@ -538,10 +539,12 @@ export function InsightWidgetEditor({
                   />
                 </label>
               </div>
+              {setup.period === "today" && <small>{TODAY_REPORT_NOTE}</small>}
               <label className="insight-widget-check">
                 <input
                   type="checkbox"
-                  checked={setup.includeToday}
+                  checked={setup.period === "today" || setup.includeToday}
+                  disabled={setup.period === "today"}
                   onChange={e =>
                     updateSetup({ includeToday: e.target.checked })
                   }

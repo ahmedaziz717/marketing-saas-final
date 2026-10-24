@@ -1120,3 +1120,56 @@ describe("Google Ads reports through the existing Insights pipeline", () => {
     expect(JSON.stringify(run)).not.toContain("private upstream");
   });
 });
+
+it.each([
+  ["America/Los_Angeles", "2026-01-01T00:30:00Z", "2025-12-31"],
+  ["Asia/Tokyo", "2026-01-01T00:30:00Z", "2026-01-01"],
+  ["America/New_York", "2026-03-08T07:30:00Z", "2026-03-08"],
+  ["America/New_York", "2026-11-01T06:30:00Z", "2026-11-01"],
+])(
+  "resolves Today as one inclusive calendar day in %s at %s",
+  (zone, instant, day) => {
+    const c = {
+      ...defaultInsightConfig(zone),
+      period: "today" as const,
+      includeToday: false,
+    };
+    expect(
+      insightConfigSchema.parse({ ...c, connectionIds: [adsId] }).period
+    ).toBe("today");
+    expect(insightRange(c, Date.parse(instant))).toEqual({
+      since: day,
+      until: day,
+    });
+    expect(
+      insightRange({ ...c, includeToday: true }, Date.parse(instant))
+    ).toEqual({ since: day, until: day });
+    expect(c.includeToday).toBe(false);
+    expect(
+      insightRange({ ...c, period: "7" }, Date.parse(instant)).until
+    ).not.toBe(day);
+  }
+);
+
+it("passes Today inclusive dates to provider adapters and warns about partial comparisons", async () => {
+  const { buildInsightResult } = await import("./lib/insightsData");
+  const c = {
+    ...defaultInsightConfig("America/Los_Angeles"),
+    period: "today" as const,
+    connectionIds: [adsId, pageId, googleId],
+  };
+  const result = await buildInsightResult(
+    state.db,
+    org,
+    c,
+    Date.parse("2026-01-01T00:30:00Z")
+  );
+  const range = { since: "2025-12-31", until: "2025-12-31" };
+  expect(state.ads.mock.calls[0][1]).toEqual(range);
+  expect(state.social.mock.calls[0][1]).toEqual(range);
+  expect(state.google.mock.calls[0][3]).toEqual(range);
+  expect(result.warnings).toContain(
+    "Today is a partial day compared with the full previous day."
+  );
+  expect(result.warnings.some(w => w.includes("may lag"))).toBe(true);
+});
