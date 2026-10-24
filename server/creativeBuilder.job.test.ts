@@ -615,7 +615,13 @@ it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolutio
       expect(preservation).toMatchObject({
         applied,
         alignment: applied ? "automatic" : "needs_adjustment",
+        automaticFailure: applied ? undefined : lowResolution ? "source_resolution" : "alignment_unavailable",
       });
+      if (matched && lowResolution) {
+        // Keep the confident model match, not the generic editor fallback box.
+        expect(Math.abs(preservation.layers[0].left - variant.renderMetadata.width * 0.4)).toBeLessThanOrEqual(1);
+        expect(Math.abs(preservation.layers[0].width - variant.renderMetadata.width * 0.3)).toBeLessThanOrEqual(1);
+      }
       expect(preservation.designStorageKey).toContain("original-logo-");
       if (applied)
         expect(preservation.designStorageKey).not.toBe(variant.imageStorageKey);

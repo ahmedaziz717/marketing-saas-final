@@ -92,7 +92,8 @@ export function mapCatalogMediaGroups(
                   return encodeURIComponent(String(value));
                 }
               );
-              return { id: `index:${index}`, candidates: [candidate] };
+              const aliases = offset === 0 ? (indexed.firstImageResolutionPaths ?? []).flatMap(path => strings(field(item, path))).map(url => resolveCatalogImage(url, config.imageBaseUrl ?? endpoint, config.imagePathMode)) : [];
+              return { id: `index:${index}`, candidates: Array.from(new Set([...aliases, candidate])) };
             })
           : undefined;
       const images =

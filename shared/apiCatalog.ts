@@ -118,6 +118,9 @@ export const apiCatalogMappingSchema = z.object({
               "Indexed galleries require an {index} placeholder."
             ),
             startIndex: z.number().int().min(0).max(1).default(1),
+            // Explicit same-view aliases for the first gallery frame only.
+            // Never infer these from filenames or attach them to other angles.
+            firstImageResolutionPaths: z.array(path).max(11).optional(),
           })
           .optional(),
         imageIdPath: path.optional(),

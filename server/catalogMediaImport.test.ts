@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import recipe from "../docs/catalog-recipes/clx-chassis.json";
+import kitRecipe from "../docs/catalog-recipes/clx-kit-gallery.json";
 import galleryFixture from "./fixtures/clx-chassis-gallery.json";
 import { apiCatalogConfigSchema } from "../shared/apiCatalog";
 import { mapCatalogMediaGroups } from "./lib/catalogMediaMapping";
@@ -73,6 +74,22 @@ beforeAll(async () => {
     );
 }, 30000);
 afterAll(() => engine.close());
+it("upgrades an existing thumbnail's stable catalog identity through its explicit first-frame alias", async () => {
+  const thumbnail = "https://static.cybertron.com/clx/kits/gmhorrtu4b03bm/gmhorrtu4b03bm_gaming-pc.png";
+  state.bytes.set(thumbnail, state.bytes.get("https://images.test/small.png")!);
+  for (let i = 1; i <= 6; i++) state.bytes.set(`https://static.cybertron.com/clx/kits/gmhorrtu4b03bm/gallery/${i}.png`, state.bytes.get("https://images.test/large.png")!);
+  const entry = catalogEntrySchema.parse({name: "Kit alias fixture", productUrl: "https://shop.test/kit-alias", imageUrl: thumbnail});
+  const product = await importCatalogEntry(db, 770, entry);
+  const [before] = await db.select().from(productImages).where(eq(productImages.productId, product.id));
+  const mediaGroups = mapCatalogMediaGroups({code: "gmhorrtu4b03bm", name: entry.name, metadata: {gallery: {size: 6}, images: {main: "kits/gmhorrtu4b03bm/gmhorrtu4b03bm_gaming-pc.png"}}}, apiCatalogConfigSchema.parse(kitRecipe), "https://api.cybertron.com")!;
+  await importCatalogEntry(db, 770, {...entry, mediaGroups});
+  const images = await db.select().from(productImages).where(eq(productImages.productId, product.id));
+  expect(images).toHaveLength(6);
+  const upgraded = images.find(image => image.id === before.id)!;
+  expect(upgraded).toMatchObject({isPrimary: before.isPrimary, sourceUrl: "https://static.cybertron.com/clx/kits/gmhorrtu4b03bm/gallery/1.png", media: {width: 600, height: 600}});
+  expect(upgraded.storageKey).not.toBe(before.storageKey);
+  expect(upgraded.media?.candidates).toContain(thumbnail);
+});
 it("imports every configured gallery view and preserves role-specific selectable identities", async () => {
   const mediaGroups = mapCatalogMediaGroups(galleryFixture, apiCatalogConfigSchema.parse(recipe), "https://api.cybertron.com")!;
   const actualRoot = process.env.CATALOG_REAL_GALLERY_ROOT;

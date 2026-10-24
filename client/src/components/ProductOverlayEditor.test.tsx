@@ -1,28 +1,34 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   save: vi.fn(),
   align: vi.fn(),
   refetch: vi.fn(),
   sourceWidth: 600,
+  layerCount: 1,
+  applied: true,
+  automaticFailure: undefined as "source_resolution" | undefined,
+  sources: [] as any[],
+  query: vi.fn(),
 }));
 vi.mock("./ActionCredits", () => ({ ActionCredits: () => null }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    assetLibrary: { studioList: { useQuery: () => ({ data: calls.sources }) } },
     creativeBuilder: {
       productOverlay: {
-        useQuery: () => ({
+        useQuery: (input: unknown) => { calls.query(input); return ({
           dataUpdatedAt: 1,
           refetch: calls.refetch,
           data: {
             designUrl: "data:image/png;base64,preview",
             width: 1000,
             height: 1000,
-            applied: true,
+            applied: calls.applied,
+            automaticFailure: calls.automaticFailure,
             revision: "revision",
-            layers: [
-              {
+            layers: Array.from({length: calls.layerCount}, () => ({
                 left: 100,
                 top: 100,
                 width: 400,
@@ -30,10 +36,9 @@ vi.mock("@/lib/trpc", () => ({
                 sourceHeight: calls.sourceWidth * 2,
                 aspect: 0.5,
                 preview: "data:image/png;base64,product",
-              },
-            ],
+              })),
           },
-        }),
+        }); },
       },
       saveProductOverlay: { useMutation: () => ({ mutateAsync: calls.save }) },
       alignProductOverlay: {
@@ -44,7 +49,91 @@ vi.mock("@/lib/trpc", () => ({
 }));
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
 afterEach(cleanup);
-beforeEach(() => { calls.sourceWidth = 600; vi.clearAllMocks(); });
+beforeEach(() => { calls.sourceWidth = 600; calls.layerCount = 1; calls.applied = true; calls.automaticFailure = undefined; calls.sources = []; vi.clearAllMocks(); });
+
+it("requires fresh source selection and confirmation after switching product layers by pointer", () => {
+  calls.layerCount = 2;
+  calls.sources = [{ key: "asset:9", revision: "a".repeat(64), name: "Layer A original", origin: "uploaded", purpose: "source", sourceType: "product", state: "approved", mimeType: "image/png" }];
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", {name: "Adjust original product"}));
+  const choice = screen.getByLabelText("Higher-resolution product source") as HTMLSelectElement;
+  const confirmation = screen.getByLabelText("I verified the same product, configuration and camera view.") as HTMLInputElement;
+  const preview = screen.getByRole("button", {name: "Preview replacement"}) as HTMLButtonElement;
+  fireEvent.change(choice, {target: {value: "asset:9"}});
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  const layerA = {index: 0, key: "asset:9", revision: "a".repeat(64), sameViewConfirmed: true};
+  const layerBImage = screen.getByAltText("Original product 2");
+  Object.defineProperty(layerBImage, "setPointerCapture", {value: vi.fn()});
+  fireEvent.pointerDown(layerBImage, {pointerId: 1, clientX: 100, clientY: 100});
+  expect(choice.value).toBe("");
+  expect(confirmation.checked).toBe(false);
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({organizationId: 1, variantId: 2, replacements: [layerA]});
+  // Even the same uploaded asset must be deliberately selected and confirmed for B.
+  fireEvent.change(choice, {target: {value: "asset:9"}});
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({organizationId: 1, variantId: 2, replacements: [layerA, {...layerA, index: 1}]});
+  expect(calls.save).not.toHaveBeenCalled();
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("previews an explicitly confirmed source without alignment and saves a bound replacement", async () => {
+  calls.sources = [{ key: "asset:9", revision: "a".repeat(64), name: "Same view original", origin: "uploaded", purpose: "source", sourceType: "product", state: "approved", mimeType: "image/png" }];
+  calls.save.mockResolvedValue({key: "creative:3"});
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", {name: "Adjust original product"}));
+  fireEvent.change(screen.getByLabelText("Higher-resolution product source"), {target: {value: "asset:9"}});
+  const preview = screen.getByRole("button", {name: "Preview replacement"}) as HTMLButtonElement;
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText("I verified the same product, configuration and camera view."));
+  fireEvent.click(preview);
+  const replacement = {index: 0, key: "asset:9", revision: "a".repeat(64), sameViewConfirmed: true};
+  expect(calls.query).toHaveBeenLastCalledWith({organizationId: 1, variantId: 2, replacements: [replacement]});
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(screen.getByRole("button", {name: "Save as new version"}));
+  await waitFor(() => expect(calls.save).toHaveBeenCalledWith(expect.objectContaining({replacements: [replacement], allowUpscale: false})));
+});
+
+it("explains a recorded resolution failure without starting another paid alignment", () => {
+  calls.applied = false;
+  calls.automaticFailure = "source_resolution";
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Adjust original product" }));
+  expect(screen.getByText(/saved cutout is too small/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("separates unsaved alignment from saved state and resets without spending credits", async () => {
+  calls.applied = false;
+  calls.sourceWidth = 164;
+  calls.align.mockResolvedValue({ sameAngle: true, layers: [{ left: 443, top: 211, width: 525 }] });
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Adjust original product" }));
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  expect(screen.getByText(/Saved cutout: 164/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() => expect(screen.getByText(/Alignment suggested/)).toBeTruthy());
+  expect(screen.queryByText(/This saved version has no applied/)).toBeNull();
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Save as new version" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.queryByText(/Alignment suggested/)).toBeNull();
+  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  expect((screen.getByLabelText("Compare with original design") as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByLabelText("Accept enlargement for this version") as HTMLInputElement).checked).toBe(false);
+  expect(calls.align).toHaveBeenCalledTimes(1);
+  expect(calls.save).not.toHaveBeenCalled();
+});
 
 it("requires the original background to load before alignment or saving", () => {
   render(

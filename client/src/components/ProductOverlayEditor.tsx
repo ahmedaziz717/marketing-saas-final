@@ -13,6 +13,7 @@ import {
 import {
   constrainProductLayer,
   type ProductOverlayPlacement,
+  type ProductOverlayReplacement,
 } from "@shared/productOverlay";
 
 export function ProductOverlayEditor({
@@ -65,8 +66,12 @@ function OverlayControls({
   variantId: number;
   onSaved: (key: string) => Promise<void>;
 }) {
+  const [replacements, setReplacements] = useState<ProductOverlayReplacement[]>([]);
+  const [sourceChoice, setSourceChoice] = useState("");
+  const [sameView, setSameView] = useState(false);
+  const sourceLibrary = trpc.assetLibrary.studioList.useQuery({ organizationId });
   const query = trpc.creativeBuilder.productOverlay.useQuery(
-    { organizationId, variantId },
+    { organizationId, variantId, replacements },
     { refetchOnWindowFocus: false }
   );
   const save = trpc.creativeBuilder.saveProductOverlay.useMutation();
@@ -79,6 +84,12 @@ function OverlayControls({
     ProductOverlayPlacement[] | null
   >(null);
   const [selected, setSelected] = useState(0);
+  const selectLayer = (index: number) => {
+    if (index === selected) return;
+    setSelected(index);
+    setSourceChoice("");
+    setSameView(false);
+  };
   const [opacity, setOpacity] = useState(100);
   const [original, setOriginal] = useState<boolean | null>(null);
   const [error, setError] = useState("");
@@ -93,9 +104,9 @@ function OverlayControls({
   const data = query.data;
   if (!data)
     return (
-      <p role={query.error ? "alert" : "status"}>
+      <div><p role={query.error ? "alert" : "status"}>
         {query.error?.message || "Loading the original design and product…"}
-      </p>
+      </p>{replacements.length > 0 && <Button onClick={() => { setReplacements([]); setSourceChoice(""); setSameView(false); }}>Keep saved source</Button>}</div>
     );
   const layers =
     placements ??
@@ -103,9 +114,11 @@ function OverlayControls({
       constrainProductLayer({ left, top, width }, aspect, data)
     );
   const enlarged = layers.some((layer, i) => layer.width > data.layers[i].sourceWidth);
+  const sourceOptions = [...(data.replacementSources ?? []).filter(source => source.productId === data.layers[selected].productId), ...(sourceLibrary.data ?? []).filter(asset => asset.origin === "uploaded" && asset.purpose === "source" && asset.sourceType === "product" && asset.state === "approved" && ["image/png", "image/webp"].includes(asset.mimeType))];
   const update = (index: number, value: Partial<ProductOverlayPlacement>) => {
     setOriginal(false);
     setAllowUpscale(false);
+    setNotice("");
     setPlacements(
       layers.map((layer, i) =>
         i === index
@@ -170,7 +183,7 @@ function OverlayControls({
               onPointerDown={event => {
                 event.preventDefault();
                 event.currentTarget.setPointerCapture(event.pointerId);
-                setSelected(i);
+                selectLayer(i);
                 drag.current = {
                   x: event.clientX,
                   y: event.clientY,
@@ -194,10 +207,35 @@ function OverlayControls({
           </div>
         )}
         <p role="status" className="text-sm">
-          {data.applied
+          {placements || replacements.length
+            ? "You are previewing an unsaved placement. Save as a new version to keep it."
+            : data.applied
             ? "The original product is already placed. Adjust it only if needed."
-            : "Automatic placement is not available for this version. The complete design is preserved; preview the original layer to adjust it, or request alignment."}
+            : data.automaticFailure === "source_resolution"
+            ? "Automatic placement was stopped because the saved cutout is too small for sharp output. Another alignment request cannot add image detail. The complete design is preserved."
+            : "This saved version has no applied original-product placement. The complete design is preserved. Opening this editor does not run alignment or spend credits."}
         </p>
+        <p className="text-sm">
+          {replacements.length ? "Preview cutout" : "Saved cutout"}: {data.layers[selected].sourceWidth} × {data.layers[selected].sourceHeight} px.
+          This version keeps its original source; catalog updates do not replace it.
+        </p>
+        <details>
+          <summary className="cursor-pointer text-sm">Recover with a sharper original</summary>
+          <p className="my-2 text-sm">Choose a catalog photo of this product, or upload and approve a transparent product source in Asset Library. Verify the exact same configuration and camera view. This previews a replacement; saving creates a new version.</p>
+          {sourceLibrary.error && <p role="alert">Could not load product sources.</p>}
+          <select aria-label="Higher-resolution product source" className="w-full border rounded bg-background p-2" value={sourceChoice} onChange={event => { setSourceChoice(event.target.value); setSameView(false); }}>
+            <option value="">Choose an approved product source</option>
+            {sourceOptions.map(asset => <option key={asset.key} value={asset.key}>{asset.name}</option>)}
+          </select>
+          {sourceOptions.find(item => item.key === sourceChoice)?.url && <img alt="Replacement source to verify" src={sourceOptions.find(item => item.key === sourceChoice)!.url} className="my-2 max-h-48 object-contain" />}
+          <label className="my-2 flex gap-2 text-sm"><input type="checkbox" checked={sameView} onChange={event => setSameView(event.target.checked)} />I verified the same product, configuration and camera view.</label>
+          <Button variant="outline" disabled={!sourceChoice || !sameView || save.isPending || align.isPending} onClick={() => {
+            const asset = sourceOptions.find(item => item.key === sourceChoice);
+            if (!asset) return;
+            setReplacements(old => [...old.filter(item => item.index !== selected), { index: selected, key: asset.key, revision: asset.revision, sameViewConfirmed: true }]);
+            setAllowUpscale(false); setOriginal(false); setNotice(""); setError("");
+          }}>Preview replacement</Button>
+        </details>
         <Button
           variant="outline"
           className="w-full flex-wrap gap-1"
@@ -209,12 +247,14 @@ function OverlayControls({
               const result = await align.mutateAsync({
                 organizationId,
                 variantId,
+                replacements,
               });
+              setAllowUpscale(false);
               setPlacements(result.layers);
               setOriginal(false);
               setNotice(
                 result.sameAngle
-                  ? "Suggested placement is ready. Check edges and text before saving."
+                  ? "Alignment suggested. Check source resolution, edges and text before saving."
                   : "The generated product uses a different camera angle. This placement is approximate; resizing cannot recover a different 3D view."
               );
             } catch (e) {
@@ -242,7 +282,7 @@ function OverlayControls({
             <VisualSelect
               className="mt-1 w-full rounded border bg-background p-2"
               value={selected}
-              onChange={e => setSelected(Number(e.target.value))}
+              onChange={e => selectLayer(Number(e.target.value))}
             >
               {layers.map((_, i) => (
                 <option key={i} value={i}>
@@ -332,7 +372,7 @@ function OverlayControls({
         </p>
         {enlarged && <div role="status" className="space-y-2 text-sm">
           <p>The catalog original is smaller than this placement. A higher-resolution source is needed for sharp output; resizing cannot restore detail.</p>
-          <label className="flex gap-2"><input type="checkbox" checked={allowUpscale} onChange={event => setAllowUpscale(event.target.checked)} />Accept enlargement for this version</label>
+          {!replacements.length && <label className="flex gap-2"><input type="checkbox" checked={allowUpscale} onChange={event => setAllowUpscale(event.target.checked)} />Accept enlargement for this version</label>}
         </div>}
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -351,6 +391,7 @@ function OverlayControls({
                 revision: data.revision,
                 layers,
                 allowUpscale: enlarged && allowUpscale,
+                replacements,
               });
               await onSaved(result.key);
             } catch (e) {
@@ -365,7 +406,18 @@ function OverlayControls({
         <Button
           variant="ghost"
           className="w-full"
-          onClick={() => setPlacements(null)}
+          disabled={align.isPending || save.isPending}
+          onClick={() => {
+            setPlacements(null);
+            setReplacements([]);
+            setSourceChoice("");
+            setSameView(false);
+            setNotice("");
+            setError("");
+            setAllowUpscale(false);
+            setOriginal(null);
+            setOpacity(100);
+          }}
         >
           Reset placement
         </Button>

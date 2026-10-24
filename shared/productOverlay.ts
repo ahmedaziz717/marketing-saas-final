@@ -8,12 +8,20 @@ export const productOverlayPlacementSchema = z.object({
 export type ProductOverlayPlacement = z.infer<
   typeof productOverlayPlacementSchema
 >;
+export const productOverlayReplacementsSchema = z.array(z.object({
+  index: z.number().int().min(0).max(2),
+  key: z.string().regex(/^(asset|catalog-image):[1-9][0-9]*$/),
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+  sameViewConfirmed: z.literal(true),
+})).max(3).refine(items => new Set(items.map(item => item.index)).size === items.length, "Choose one replacement per layer.").default([]);
+export type ProductOverlayReplacement = z.infer<typeof productOverlayReplacementsSchema>[number];
 export type ProductOverlayMetadata = {
   method: "editable_original_v3";
   designStorageKey: string;
   designUrl: string;
   applied: boolean;
   alignment?: "automatic" | "manual" | "needs_adjustment";
+  automaticFailure?: "source_resolution" | "alignment_unavailable";
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;
@@ -49,5 +57,5 @@ export function manuallyAppliedProductOverlay(
   metadata: ProductOverlayMetadata,
   layers: ProductOverlayMetadata["layers"]
 ): ProductOverlayMetadata {
-  return { ...metadata, applied: true, alignment: "manual", layers };
+  return { ...metadata, applied: true, alignment: "manual", automaticFailure: undefined, layers };
 }

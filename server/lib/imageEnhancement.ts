@@ -21,11 +21,11 @@ import {
   parseAssetKey,
   type AssetKey,
 } from "../../shared/assetLibrary";
-import { readLibraryAsset, type LibraryDatabase } from "./assetLibrary";
+import { readLibraryAsset, type LibraryDatabase, type LibraryTransaction } from "./assetLibrary";
 import type { BuilderBrandKit } from "./creativeBuilder";
 
 export async function readEnhancementSource(
-  db: LibraryDatabase,
+  db: LibraryDatabase | LibraryTransaction,
   organizationId: number,
   key: string,
   revision?: string

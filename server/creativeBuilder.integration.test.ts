@@ -1,10 +1,10 @@
 import { processNextBuilderJob } from "./jobs/creativeWorker";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const provider = vi.hoisted(() => ({ calls: 0, failAt: 0, bytes: "", requests: [] as any[] }));
+const provider = vi.hoisted(() => ({ calls: 0, failAt: 0, bytes: "", requests: [] as any[], storage: new Map<string, Buffer>() }));
 vi.mock("./_core/llm", () => ({
   listLLMModels: async () => ({ data: [{ id: "gpt-5.5" }] }),
   invokeLLM: async () => ({
@@ -34,7 +34,8 @@ vi.mock("./lib/openaiSunburst", () => ({
 }));
 vi.mock("./storage", async original => ({
   ...(await original<typeof import("./storage")>()),
-  storageGetBase64: async () => provider.bytes,
+  storageGetBase64: async (key: string) => provider.storage.get(key)?.toString("base64") ?? provider.bytes,
+  storagePut: async (key: string, bytes: Buffer) => { provider.storage.set(key, bytes); return {key, url: "/media/" + key}; },
 }));
 
 import {
@@ -471,6 +472,41 @@ describe.sequential("persistent creative builder", () => {
       { timeout: 10_000, interval: 30 }
     );
   });
+});
+
+it("recovers a sharp same-product source into a separate version without providers and rejects stale or revoked access", async () => {
+  const db = await database();
+  const [template] = await db.select().from(creativeVariants).where(eq(creativeVariants.organizationId, organizationId)).limit(1);
+  const cutout = async (width: number) => sharp({create: {width, height: width * 2, channels: 4, background: "red"}}).extend({left: 2, right: 2, top: 2, bottom: 2, background: {r: 0, g: 0, b: 0, alpha: 0}}).png().toBuffer();
+  const old = await cutout(20), larger = await cutout(80);
+  const background = await sharp({create: {width: 200, height: 200, channels: 4, background: "blue"}}).png().toBuffer();
+  provider.storage.set("recovery-old", old); provider.storage.set("recovery-large", larger); provider.storage.set("recovery-design", background);
+  const {id: _id, ...base} = template;
+  const [source] = await db.insert(creativeVariants).values({...base, name: "Recovery fixture", renderMetadata: {...template.renderMetadata!, width: 200, height: 200, productIds: [productId], productPreservation: {method: "editable_original_v3", applied: false, alignment: "needs_adjustment", automaticFailure: "source_resolution", designStorageKey: "recovery-design", designUrl: "/recovery-design", layers: [{sourceKey: "recovery-old", sha256: createHash("sha256").update(old).digest("hex"), width: 60, height: 120, left: 50, top: 40}]}}}).returning();
+  const [image] = await db.insert(productImages).values({organizationId, productId, sourceUrl: "https://example.test/same-view-large.png", storageKey: "recovery-large", url: "/recovery-large", createdAtMs: Date.now()}).returning();
+  const preview = await caller.creativeBuilder.productOverlay({organizationId, variantId: source.id});
+  const candidate = preview.replacementSources.find(item => item.key === `catalog-image:${image.id}`)!;
+  const replacements = [{index: 0, key: candidate.key, revision: candidate.revision, sameViewConfirmed: true as const}];
+  const calls = provider.calls;
+  const recovery = await caller.creativeBuilder.productOverlay({organizationId, variantId: source.id, replacements});
+  expect(recovery.layers[0]).toMatchObject({sourceWidth: 80, sourceHeight: 160, width: 60, left: 50, top: 40});
+  const request = {organizationId, variantId: source.id, revision: preview.revision, replacements, layers: [{width: 60, left: 50, top: 40}]};
+  await expect(caller.creativeBuilder.saveProductOverlay({...request, revision: "f".repeat(64)})).rejects.toMatchObject({code: "CONFLICT"});
+  const saved = await caller.creativeBuilder.saveProductOverlay(request);
+  expect(saved.id).not.toBe(source.id);
+  expect(await readLibraryAsset(db, organizationId, saved.key)).toMatchObject({parentKey: `creative:${source.id}`, state: "draft"});
+  expect((await readLibraryAsset(db, organizationId, `creative:${source.id}`)).revision).toBe(preview.revision);
+  const [result] = await db.select().from(creativeVariants).where(eq(creativeVariants.id, saved.id));
+  expect(result.renderMetadata?.productPreservation?.layers[0].sourceKey).toBe("recovery-large");
+  const pixel = await sharp(provider.storage.get(result.imageStorageKey!)!).extract({left: 0, top: 0, width: 1, height: 1}).removeAlpha().raw().toBuffer();
+  expect([...pixel]).toEqual([0, 0, 255]);
+  expect(provider.calls).toBe(calls);
+  await db.update(productImages).set({storageKey: "changed-source"}).where(eq(productImages.id, image.id));
+  await expect(caller.creativeBuilder.saveProductOverlay(request)).rejects.toMatchObject({code: "CONFLICT"});
+  await expect(caller.creativeBuilder.productOverlay({organizationId: organizationId + 999999, variantId: source.id})).rejects.toThrow(/access/);
+  await db.update(organizationMemberships).set({status: "suspended"}).where(eq(organizationMemberships.organizationId, organizationId));
+  try { await expect(caller.creativeBuilder.productOverlay({organizationId, variantId: source.id})).rejects.toThrow(/access/); }
+  finally { await db.update(organizationMemberships).set({status: "active"}).where(eq(organizationMemberships.organizationId, organizationId)); }
 });
 
 it("persists person choices and rejects unapproved or cross-workspace person assets", async () => {
