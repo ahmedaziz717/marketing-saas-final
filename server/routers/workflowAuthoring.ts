@@ -10,6 +10,16 @@ import {
 import { workflowAuthoring } from "../lib/workflowAuthoring";
 
 export const workflowAuthoringRouter = router({
+  chatStatus: protectedProcedure
+    .input(chatInput)
+    .query(({ ctx, input }) =>
+      workflowAuthoring(ctx.user.id).chatStatus(input)
+    ),
+  abandonChat: protectedProcedure
+    .input(chatInput)
+    .mutation(({ ctx, input }) =>
+      workflowAuthoring(ctx.user.id).abandonChat(input)
+    ),
   discover: protectedProcedure
     .input(authoringScope)
     .query(({ ctx, input }) => workflowAuthoring(ctx.user.id).discover(input)),
@@ -30,7 +40,7 @@ export const workflowAuthoringRouter = router({
   preview: protectedProcedure
     .input(proposalReference)
     .query(({ ctx, input }) => workflowAuthoring(ctx.user.id).preview(input)),
-  apply: protectedProcedure
+  applyDraft: protectedProcedure
     .input(applyInput)
     .mutation(({ ctx, input }) => workflowAuthoring(ctx.user.id).apply(input)),
 });

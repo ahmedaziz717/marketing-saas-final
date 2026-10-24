@@ -15,6 +15,7 @@ vi.mock("./_core/llm", () => ({
   listLLMModels: state.models,
 }));
 import { workflowAuthoring } from "./lib/workflowAuthoring";
+import { workflowAuthoringRouter } from "./routers/workflowAuthoring";
 import { aiScope } from "./lib/aiMetering";
 import {
   activityEvents,
@@ -82,6 +83,17 @@ const proposal = () => {
   node.config.text = "Keep product facts";
   return { summary: "Add brief", changes: [{ op: "put_node" as const, node }] };
 };
+it("constructs the tRPC router with non-reserved method names and requires authentication", async () => {
+  expect(workflowAuthoringRouter._def.procedures.applyDraft).toBeDefined();
+  const caller = workflowAuthoringRouter.createCaller({
+    user: null,
+    req: {},
+    res: {},
+  } as any);
+  await expect(caller.discover({ organizationId: org })).rejects.toMatchObject({
+    code: "UNAUTHORIZED",
+  });
+});
 async function proposed() {
   return service.propose({
     organizationId: org,
@@ -282,9 +294,178 @@ it("never retries invalid model output under the same request ID", async () => {
     message: "Make a draft",
   };
   await expect(service.chat(input)).rejects.toThrow();
+  expect(await service.chatStatus(input)).toEqual({ state: "failed" });
   const count = state.llm.mock.calls.length;
   await expect(service.chat(input)).rejects.toMatchObject({ code: "CONFLICT" });
   expect(state.llm.mock.calls.length).toBe(count);
+  state.llm.mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify(proposal()) } }],
+  });
+  const retry = { ...input, requestId: randomUUID() };
+  await service.chat(retry);
+  expect((await service.chatStatus(retry)).state).toBe("completed");
+});
+
+it("fences late results after explicit abandonment and does not abandon completed results", async () => {
+  let resolve!: (value: unknown) => void;
+  let entered!: () => void;
+  const started = new Promise<void>(r => {
+    entered = r;
+  });
+  state.llm.mockImplementationOnce(() => {
+    entered();
+    return new Promise(r => {
+      resolve = r;
+    });
+  });
+  const input = {
+    organizationId: org,
+    requestId: randomUUID(),
+    message: "Interrupted attempt",
+  };
+  const call = service.chat(input);
+  await started;
+  expect(await service.chatStatus(input)).toEqual({ state: "pending" });
+  expect(await service.abandonChat(input)).toEqual({ state: "abandoned" });
+  resolve({ choices: [{ message: { content: JSON.stringify(proposal()) } }] });
+  await expect(call).rejects.toThrow("abandoned");
+  expect(await service.chatStatus(input)).toEqual({ state: "abandoned" });
+  const retry = { ...input, requestId: randomUUID() };
+  await service.chat(retry);
+  expect((await service.abandonChat(retry)).state).toBe("completed");
+  await expect(
+    workflowAuthoring(outsiderId).chatStatus(retry)
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+});
+
+it("supplies exact bounded multi-input App contracts and excludes archived Apps from chat and discovery", async () => {
+  const draft = await apply(await proposed()),
+    archived = await apply(await proposed());
+  const appId = randomUUID(),
+    archivedId = randomUUID();
+  const left = newWorkflowNode("app_input", "left"),
+    right = newWorkflowNode("app_input", "right");
+  left.config.inputType = "text";
+  right.config.inputType = "text";
+  const output = newWorkflowNode("output", "out");
+  output.config.outputType = "text";
+  const graph = {
+    nodes: [left, right, output],
+    edges: [
+      { id: "l", source: "left", target: "out", port: "result" },
+      { id: "r", source: "right", target: "out", port: "result" },
+    ],
+  };
+  for (const [id, workflowId] of [
+    [appId, draft.id],
+    [archivedId, archived.id],
+  ])
+    await state.db.insert(workflowAppVersions).values({
+      id,
+      organizationId: org,
+      workflowId,
+      version: 1,
+      workflowRevision: 1,
+      family: "create",
+      name: "Combine inputs",
+      graph,
+      actorUserId: userId,
+      createdAtMs: Date.now(),
+    });
+  await state.db
+    .update(creativeWorkflows)
+    .set({ archived: 1 })
+    .where(eq(creativeWorkflows.id, archived.id));
+  const catalog = (await service.discover({ organizationId: org })).appCatalog;
+  expect(catalog.apps.some(a => a.id === archivedId)).toBe(false);
+  state.llm.mockImplementationOnce(async params => {
+    const supplied = JSON.parse(params.messages[1].content).apps;
+    const app = supplied.apps.find((a: any) => a.id === appId);
+    expect(app.inputs).toMatchObject([
+      { id: "left", type: "text" },
+      { id: "right", type: "text" },
+    ]);
+    expect(app.outputs).toMatchObject([{ id: "out", type: "text" }]);
+    expect(supplied.apps.some((a: any) => a.id === archivedId)).toBe(false);
+    expect(JSON.stringify(supplied.apps).length).toBeLessThanOrEqual(32101);
+    const first = newWorkflowNode("text", "source1"),
+      second = newWorkflowNode("text", "source2"),
+      call = newWorkflowNode("run_workflow", "call");
+    call.config.appVersionId = app.id;
+    call.config.inputMapping = app.inputs.map((input: any, i: number) => ({
+      targetNodeId: input.id,
+      sourceNodeId: `source${i + 1}`,
+      type: input.type,
+    }));
+    return {
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              summary: "Compose both inputs",
+              changes: [
+                ...[first, second, call].map(node => ({
+                  op: "put_node",
+                  node,
+                })),
+                ...[1, 2].map(i => ({
+                  op: "put_edge",
+                  edge: {
+                    id: `e${i}`,
+                    source: `source${i}`,
+                    target: "call",
+                    port: "context",
+                  },
+                })),
+              ],
+            }),
+          },
+        },
+      ],
+    };
+  });
+  const p = await service.chat({
+    organizationId: org,
+    requestId: randomUUID(),
+    message: "Compose two inputs",
+  });
+  expect(
+    p.draft.graph.nodes.find(n => n.id === "call")?.config.inputMapping
+  ).toHaveLength(2);
+  expect(p.preview.executableSteps).toBe(6);
+});
+
+it("marks an oversized App contract as omitted rather than truncating its input identifiers or constraints", async () => {
+  const draft = await apply(await proposed()),
+    id = randomUUID();
+  const nodes = Array.from({ length: 4 }, (_, i) => {
+    const node = newWorkflowNode("app_input", `large${i}`);
+    node.config.field = appFieldSchema.parse({
+      kind: "text",
+      defaultValue: "x".repeat(10000),
+    });
+    return node;
+  });
+  await state.db
+    .insert(workflowAppVersions)
+    .values({
+      id,
+      organizationId: org,
+      workflowId: draft.id,
+      version: 1,
+      workflowRevision: 1,
+      family: "create",
+      name: "Large contract",
+      graph: { nodes, edges: [] },
+      actorUserId: userId,
+      createdAtMs: Date.now(),
+    });
+  const catalog = (await service.discover({ organizationId: org })).appCatalog;
+  expect(catalog.truncated).toBe(true);
+  expect(catalog.apps.some(a => a.id === id)).toBe(false);
+  expect(
+    (await service.readApp({ organizationId: org, id })).graph.nodes
+  ).toHaveLength(4);
 });
 it("keeps unrelated fields and config when applying typed changes", () => {
   const node = proposal().changes[0].node;
@@ -341,23 +522,21 @@ it("preflights depth and breadth limits before expansion", async () => {
   for (let i = 5; i >= 0; i--) {
     const child = newWorkflowNode(i === 5 ? "text" : "run_workflow", "child");
     if (i < 5) child.config.appVersionId = ids[i + 1];
-    await state.db
-      .insert(workflowAppVersions)
-      .values({
-        id: ids[i],
-        organizationId: org,
-        workflowId: draft.id,
-        version: i + 1,
-        workflowRevision: 1,
-        family: "create",
-        name: "Nested",
-        graph: {
-          nodes: [child, newWorkflowNode("output", "out")],
-          edges: [{ id: "e", source: "child", target: "out", port: "result" }],
-        },
-        actorUserId: userId,
-        createdAtMs: Date.now(),
-      });
+    await state.db.insert(workflowAppVersions).values({
+      id: ids[i],
+      organizationId: org,
+      workflowId: draft.id,
+      version: i + 1,
+      workflowRevision: 1,
+      family: "create",
+      name: "Nested",
+      graph: {
+        nodes: [child, newWorkflowNode("output", "out")],
+        edges: [{ id: "e", source: "child", target: "out", port: "result" }],
+      },
+      actorUserId: userId,
+      createdAtMs: Date.now(),
+    });
   }
   const root = newWorkflowNode("run_workflow", "root");
   root.config.appVersionId = ids[0];
@@ -396,23 +575,21 @@ it("preflights depth and breadth limits before expansion", async () => {
 it("preserves pinned App compatibility and previews without network or provider work", async () => {
   const draft = await apply(await proposed()),
     id = randomUUID();
-  await state.db
-    .insert(workflowAppVersions)
-    .values({
-      id,
-      organizationId: org,
-      workflowId: draft.id,
-      version: 1,
-      workflowRevision: 1,
-      family: "create",
-      name: "Reusable",
-      graph: {
-        nodes: [proposal().changes[0].node, newWorkflowNode("output", "out")],
-        edges: [{ id: "e", source: "brief", target: "out", port: "result" }],
-      },
-      actorUserId: userId,
-      createdAtMs: Date.now(),
-    });
+  await state.db.insert(workflowAppVersions).values({
+    id,
+    organizationId: org,
+    workflowId: draft.id,
+    version: 1,
+    workflowRevision: 1,
+    family: "create",
+    name: "Reusable",
+    graph: {
+      nodes: [proposal().changes[0].node, newWorkflowNode("output", "out")],
+      edges: [{ id: "e", source: "brief", target: "out", port: "result" }],
+    },
+    actorUserId: userId,
+    createdAtMs: Date.now(),
+  });
   const root = newWorkflowNode("run_workflow", "reuse");
   root.config.appVersionId = id;
   const network = vi

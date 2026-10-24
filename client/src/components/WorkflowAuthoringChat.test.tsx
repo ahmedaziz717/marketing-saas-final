@@ -7,12 +7,21 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-const api = vi.hoisted(() => ({ chat: vi.fn(), apply: vi.fn() }));
+const api = vi.hoisted(() => ({
+  chat: vi.fn(),
+  apply: vi.fn(),
+  status: vi.fn(),
+  abandon: vi.fn(),
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      workflowAuthoring: { chatStatus: { fetch: api.status } },
+    }),
     workflowAuthoring: {
       chat: { useMutation: () => ({ mutateAsync: api.chat }) },
-      apply: { useMutation: () => ({ mutateAsync: api.apply }) },
+      applyDraft: { useMutation: () => ({ mutateAsync: api.apply }) },
+      abandonChat: { useMutation: () => ({ mutateAsync: api.abandon }) },
     },
   },
 }));
@@ -100,4 +109,86 @@ it("disables chat while the editor has unsaved changes", () => {
   expect(
     (screen.getByText("Build with chat") as HTMLButtonElement).disabled
   ).toBe(true);
+});
+
+it("checks a terminal failure before an explicit new attempt with unchanged content", async () => {
+  api.chat
+    .mockRejectedValueOnce(new Error("Invalid model output"))
+    .mockResolvedValueOnce(proposal);
+  api.status.mockResolvedValue({ state: "failed" });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  fireEvent.click(await screen.findByText("Start new metered attempt"));
+  await screen.findByText("Static preview only");
+  expect(api.status).toHaveBeenCalledTimes(2);
+  expect(api.chat.mock.calls[0][0].message).toBe(
+    api.chat.mock.calls[1][0].message
+  );
+  expect(api.chat.mock.calls[0][0].requestId).not.toBe(
+    api.chat.mock.calls[1][0].requestId
+  );
+});
+
+it("recovers a lost successful response without a second model request", async () => {
+  api.chat.mockRejectedValueOnce(new Error("Network disconnected"));
+  api.status.mockResolvedValue({ state: "completed", result: proposal });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  await screen.findByText("Static preview only");
+  expect(api.chat).toHaveBeenCalledTimes(1);
+});
+
+it("requires explicit abandonment of an uncertain attempt before starting another", async () => {
+  api.chat.mockRejectedValueOnce(new Error("Network disconnected"));
+  api.status.mockResolvedValue({ state: "pending" });
+  api.abandon.mockResolvedValue({ state: "abandoned" });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  await screen.findByText("Abandon unresolved attempt");
+  expect(screen.queryByText("Start new metered attempt")).toBeNull();
+  expect(api.abandon).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Abandon unresolved attempt"));
+  await screen.findByText("Start new metered attempt");
+  expect(api.chat).toHaveBeenCalledTimes(1);
+  expect(api.abandon).toHaveBeenCalledTimes(1);
+});
+
+it("retries an unreceived request with the exact original idempotency key", async () => {
+  api.chat
+    .mockRejectedValueOnce(new Error("Network disconnected"))
+    .mockResolvedValueOnce(proposal);
+  api.status.mockResolvedValue({ state: "missing" });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  fireEvent.click(await screen.findByText("Retry original request"));
+  await screen.findByText("Static preview only");
+  expect(api.chat.mock.calls[0][0]).toEqual(api.chat.mock.calls[1][0]);
 });

@@ -81,7 +81,9 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
               securitySchemes: [
                 {
                   type: "oauth2",
-                  scopes: [write ? "workflows:draft" : "workflows:read"],
+                  scopes: write
+                    ? ["workflows:read", "workflows:draft"]
+                    : ["workflows:read"],
                 },
               ],
             },
@@ -102,7 +104,7 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
                 ],
                 _meta: {
                   "mcp/www_authenticate": [
-                    `Bearer error="insufficient_scope", scope="${write ? "workflows:draft" : "workflows:read"}"`,
+                    `Bearer error="insufficient_scope", scope="${write ? "workflows:read workflows:draft" : "workflows:read"}"`,
                   ],
                 },
               };

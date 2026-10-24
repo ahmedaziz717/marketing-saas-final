@@ -137,6 +137,10 @@ it("serves SDK tool discovery over Streamable HTTP with only draft capabilities"
     readOnlyHint: false,
     destructiveHint: true,
   });
+  expect(body.result.tools[5]._meta.securitySchemes[0].scopes).toEqual([
+    "workflows:read",
+    "workflows:draft",
+  ]);
   await adapter.close();
 });
 it("uses the shared service and enforces write scopes per tool", async () => {
@@ -174,7 +178,48 @@ it("uses the shared service and enforces write scopes per tool", async () => {
       },
     })
   );
-  expect((await message(denied)).result.isError).toBe(true);
+  const deniedBody = await message(denied);
+  expect(deniedBody.result.isError).toBe(true);
+  expect(deniedBody.result._meta["mcp/www_authenticate"][0]).toContain(
+    'scope="workflows:read workflows:draft"'
+  );
   expect(state.propose).not.toHaveBeenCalled();
+  await adapter.close();
+});
+
+it("accepts exactly the advertised write scopes and rejects draft-only grants", async () => {
+  const adapter = createAuthoringMcp(config);
+  const listed = await message(await adapter.fetch(request(await token())));
+  const scopes = listed.result.tools.find(
+    (t: any) => t.name === "propose_workflow_changes"
+  )._meta.securitySchemes[0].scopes;
+  state.propose.mockResolvedValue({ proposalId: "stored" });
+  const body = {
+    jsonrpc: "2.0",
+    id: 5,
+    method: "tools/call",
+    params: {
+      name: "propose_workflow_changes",
+      arguments: {
+        organizationId: 7,
+        requestId: "11111111-1111-4111-8111-111111111111",
+        proposal: {
+          summary: "Rename",
+          changes: [{ op: "rename", name: "Name" }],
+        },
+      },
+    },
+  };
+  const response = await adapter.fetch(
+    request(await token({ scope: scopes.join(" ") }), body)
+  );
+  expect((await message(response)).result.isError).not.toBe(true);
+  expect(
+    (
+      await adapter.fetch(
+        request(await token({ scope: "workflows:draft" }), body)
+      )
+    ).status
+  ).toBe(403);
   await adapter.close();
 });

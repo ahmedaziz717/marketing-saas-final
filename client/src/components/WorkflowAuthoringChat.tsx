@@ -29,48 +29,126 @@ export function WorkflowAuthoringChat({
     [messages, setMessages] = useState<Message[]>([]),
     [error, setError] = useState("");
   const chat = trpc.workflowAuthoring.chat.useMutation(),
-    apply = trpc.workflowAuthoring.apply.useMutation();
+    apply = trpc.workflowAuthoring.applyDraft.useMutation(),
+    abandon = trpc.workflowAuthoring.abandonChat.useMutation();
+  const utils = trpc.useUtils();
+  const [recovering, setRecovering] = useState(false);
+  const [recovery, setRecovery] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Awaited<
     ReturnType<typeof chat.mutateAsync>
   > | null>(null);
   const pending = useRef(false);
   const applyId = useRef(crypto.randomUUID());
-  const request = useRef<{ content: string; id: string } | null>(null);
-  const busy = chat.isPending || apply.isPending;
-  async function send(content: string) {
+  type ChatRequest = Parameters<typeof chat.mutateAsync>[0];
+  const request = useRef<ChatRequest | null>(null);
+  const busy = chat.isPending || apply.isPending || recovering;
+  function accept(
+    next: Awaited<ReturnType<typeof chat.mutateAsync>>,
+    content: string
+  ) {
+    setMessages(previous => [
+      ...previous,
+      { role: "user", content },
+      { role: "assistant", content: next.proposal.summary },
+    ]);
+    setProposal(next);
+    applyId.current = crypto.randomUUID();
+    request.current = null;
+    setRecovery(null);
+    setError("");
+  }
+  async function check() {
+    if (!request.current) return null;
+    const status = await utils.workflowAuthoring.chatStatus.fetch(
+      request.current,
+      { staleTime: 0 }
+    );
+    setRecovery(status.state);
+    if (status.state === "completed")
+      accept(status.result, request.current.message);
+    return status;
+  }
+  async function send(content: string, newAttempt = false) {
     if (pending.current) return;
     pending.current = true;
+    setRecovering(true);
     setError("");
     setProposal(null);
-    // A transport retry of the same message retains its idempotency key.
-    if (request.current?.content !== content)
-      request.current = { content, id: crypto.randomUUID() };
     try {
-      const next = await chat.mutateAsync({
-        organizationId,
-        family,
-        target,
-        requestId: request.current.id,
-        message: content,
-        history: messages
-          .filter(
-            (m): m is Message & { role: "user" | "assistant" } =>
-              m.role !== "system"
-          )
-          .slice(-12),
-      });
-      setMessages(previous => [
-        ...previous,
-        { role: "user", content },
-        { role: "assistant", content: next.proposal.summary },
-      ]);
-      setProposal(next);
-      applyId.current = crypto.randomUUID();
-      request.current = null;
+      if (request.current) {
+        const status = await check();
+        if (status?.state === "completed") return;
+        if (!status || status.state === "pending") {
+          setError(
+            "The previous outcome is unresolved. Check again or explicitly abandon it before starting another attempt."
+          );
+          return;
+        }
+        if (status.state !== "missing" && !newAttempt) {
+          setError(
+            "This attempt has ended. Start a new metered attempt to try again."
+          );
+          return;
+        }
+        if (status.state !== "missing" || request.current?.message !== content)
+          request.current = null;
+      }
+      if (!request.current)
+        request.current = {
+          organizationId,
+          family,
+          target,
+          requestId: crypto.randomUUID(),
+          message: content,
+          history: messages
+            .filter(
+              (m): m is Message & { role: "user" | "assistant" } =>
+                m.role !== "system"
+            )
+            .slice(-12),
+        };
+      const snapshot = request.current;
+      try {
+        accept(await chat.mutateAsync(snapshot), snapshot.message);
+      } catch (e) {
+        setError((e as Error).message);
+        try {
+          await check();
+        } catch {
+          setRecovery("unknown");
+        }
+      }
     } catch (e) {
       setError((e as Error).message);
+      setRecovery("unknown");
     } finally {
       pending.current = false;
+      setRecovering(false);
+    }
+  }
+  async function recover(abandonPending = false) {
+    if (pending.current || !request.current) return;
+    pending.current = true;
+    setRecovering(true);
+    try {
+      const status = await check();
+      if (abandonPending && status?.state === "pending" && request.current) {
+        const result = await abandon.mutateAsync(request.current);
+        if (result.state === "completed")
+          accept(result.result, request.current.message);
+        else {
+          setRecovery(result.state);
+          setError(
+            "The old attempt is closed. A new attempt may incur another text-model charge."
+          );
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      setRecovery("unknown");
+    } finally {
+      pending.current = false;
+      setRecovering(false);
     }
   }
   return (
@@ -105,12 +183,55 @@ export function WorkflowAuthoringChat({
           <AIChatBox
             height={260}
             messages={messages}
-            onSendMessage={send}
+            onSendMessage={content => void send(content)}
             isLoading={busy}
             emptyStateMessage="Compose existing steps, App inputs and pinned Apps."
             placeholder="Describe your workflow or the changes you need…"
           />
           {error && <p role="alert">{error}</p>}
+          {recovery && request.current && (
+            <section aria-label="Recover chat attempt">
+              <Button
+                disabled={busy}
+                variant="outline"
+                onClick={() => void recover()}
+              >
+                Check previous attempt
+              </Button>
+              {recovery === "pending" && (
+                <>
+                  <p>
+                    The provider call may still finish or have consumed credits.
+                    Abandoning prevents its late proposal from being saved; it
+                    does not cancel or refund provider work.
+                  </p>
+                  <Button
+                    disabled={busy}
+                    variant="outline"
+                    onClick={() => void recover(true)}
+                  >
+                    Abandon unresolved attempt
+                  </Button>
+                </>
+              )}
+              {["failed", "abandoned"].includes(recovery) && (
+                <Button
+                  disabled={busy}
+                  onClick={() => void send(request.current!.message, true)}
+                >
+                  Start new metered attempt
+                </Button>
+              )}
+              {recovery === "missing" && (
+                <Button
+                  disabled={busy}
+                  onClick={() => void send(request.current!.message)}
+                >
+                  Retry original request
+                </Button>
+              )}
+            </section>
+          )}
           {proposal && (
             <section aria-label="Static proposal preview" className="space-y-3">
               <h3>{proposal.draft.name}</h3>
