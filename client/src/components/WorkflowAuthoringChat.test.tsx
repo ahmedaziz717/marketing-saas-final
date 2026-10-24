@@ -27,9 +27,14 @@ vi.mock("@/lib/trpc", () => ({
 }));
 vi.mock("./AIChatBox", () => ({
   AIChatBox: ({ onSendMessage }: any) => (
-    <button onClick={() => onSendMessage("Create a reusable brief")}>
-      Send message
-    </button>
+    <>
+      <button onClick={() => onSendMessage("Create a reusable brief")}>
+        Send message
+      </button>
+      <button onClick={() => onSendMessage("Different message")}>
+        Send different message
+      </button>
+    </>
   ),
 }));
 import { WorkflowAuthoringChat } from "./WorkflowAuthoringChat";
@@ -191,4 +196,22 @@ it("retries an unreceived request with the exact original idempotency key", asyn
   fireEvent.click(await screen.findByText("Retry original request"));
   await screen.findByText("Static preview only");
   expect(api.chat.mock.calls[0][0]).toEqual(api.chat.mock.calls[1][0]);
+});
+
+it("does not allocate a new key for changed content while an earlier transport request could still arrive", async () => {
+  api.chat.mockRejectedValueOnce(new Error("Network disconnected"));
+  api.status.mockResolvedValue({ state: "missing" });
+  render(
+    <WorkflowAuthoringChat
+      organizationId={1}
+      family="create"
+      onApplied={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText("Build with chat"));
+  fireEvent.click(screen.getByText("Send message"));
+  await screen.findByText("Retry original request");
+  fireEvent.click(screen.getByText("Send different message"));
+  await screen.findByText(/earlier transport request may still arrive/);
+  expect(api.chat).toHaveBeenCalledTimes(1);
 });

@@ -90,8 +90,16 @@ export function WorkflowAuthoringChat({
           );
           return;
         }
-        if (status.state !== "missing" || request.current?.message !== content)
-          request.current = null;
+        if (
+          status.state === "missing" &&
+          request.current?.message !== content
+        ) {
+          setError(
+            "Retry the original request before sending another message; an earlier transport request may still arrive."
+          );
+          return;
+        }
+        if (status.state !== "missing") request.current = null;
       }
       if (!request.current)
         request.current = {
