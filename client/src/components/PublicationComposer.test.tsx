@@ -14,6 +14,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { contentSchema } from "@shared/channels";
+import { PROMPT_REGISTRY } from "@shared/promptRegistry";
+const promptDefaults = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system", updatedAtMs: null }));
 import type { Publication } from "./PublicationComposer";
 
 const api = vi.hoisted(() => ({
@@ -37,7 +39,9 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    prompts: { list: { useQuery: () => ({ data: promptDefaults }) }, change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
     useUtils: () => ({
+      prompts: { list: { invalidate: vi.fn() } },
       publishing: {
         list: { invalidate: vi.fn() },
         get: { invalidate: vi.fn() },
