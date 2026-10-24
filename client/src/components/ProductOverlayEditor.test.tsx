@@ -6,6 +6,7 @@ const calls = vi.hoisted(() => ({
   align: vi.fn(),
   refetch: vi.fn(),
   sourceWidth: 600,
+  layerCount: 1,
   applied: true,
   automaticFailure: undefined as "source_resolution" | undefined,
   sources: [] as any[],
@@ -27,8 +28,7 @@ vi.mock("@/lib/trpc", () => ({
             applied: calls.applied,
             automaticFailure: calls.automaticFailure,
             revision: "revision",
-            layers: [
-              {
+            layers: Array.from({length: calls.layerCount}, () => ({
                 left: 100,
                 top: 100,
                 width: 400,
@@ -36,8 +36,7 @@ vi.mock("@/lib/trpc", () => ({
                 sourceHeight: calls.sourceWidth * 2,
                 aspect: 0.5,
                 preview: "data:image/png;base64,product",
-              },
-            ],
+              })),
           },
         }); },
       },
@@ -50,7 +49,37 @@ vi.mock("@/lib/trpc", () => ({
 }));
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
 afterEach(cleanup);
-beforeEach(() => { calls.sourceWidth = 600; calls.applied = true; calls.automaticFailure = undefined; calls.sources = []; vi.clearAllMocks(); });
+beforeEach(() => { calls.sourceWidth = 600; calls.layerCount = 1; calls.applied = true; calls.automaticFailure = undefined; calls.sources = []; vi.clearAllMocks(); });
+
+it("requires fresh source selection and confirmation after switching product layers by pointer", () => {
+  calls.layerCount = 2;
+  calls.sources = [{ key: "asset:9", revision: "a".repeat(64), name: "Layer A original", origin: "uploaded", purpose: "source", sourceType: "product", state: "approved", mimeType: "image/png" }];
+  render(<ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", {name: "Adjust original product"}));
+  const choice = screen.getByLabelText("Higher-resolution product source") as HTMLSelectElement;
+  const confirmation = screen.getByLabelText("I verified the same product, configuration and camera view.") as HTMLInputElement;
+  const preview = screen.getByRole("button", {name: "Preview replacement"}) as HTMLButtonElement;
+  fireEvent.change(choice, {target: {value: "asset:9"}});
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  const layerA = {index: 0, key: "asset:9", revision: "a".repeat(64), sameViewConfirmed: true};
+  const layerBImage = screen.getByAltText("Original product 2");
+  Object.defineProperty(layerBImage, "setPointerCapture", {value: vi.fn()});
+  fireEvent.pointerDown(layerBImage, {pointerId: 1, clientX: 100, clientY: 100});
+  expect(choice.value).toBe("");
+  expect(confirmation.checked).toBe(false);
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({organizationId: 1, variantId: 2, replacements: [layerA]});
+  // Even the same uploaded asset must be deliberately selected and confirmed for B.
+  fireEvent.change(choice, {target: {value: "asset:9"}});
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({organizationId: 1, variantId: 2, replacements: [layerA, {...layerA, index: 1}]});
+  expect(calls.save).not.toHaveBeenCalled();
+  expect(calls.align).not.toHaveBeenCalled();
+});
 
 it("previews an explicitly confirmed source without alignment and saves a bound replacement", async () => {
   calls.sources = [{ key: "asset:9", revision: "a".repeat(64), name: "Same view original", origin: "uploaded", purpose: "source", sourceType: "product", state: "approved", mimeType: "image/png" }];

@@ -84,6 +84,12 @@ function OverlayControls({
     ProductOverlayPlacement[] | null
   >(null);
   const [selected, setSelected] = useState(0);
+  const selectLayer = (index: number) => {
+    if (index === selected) return;
+    setSelected(index);
+    setSourceChoice("");
+    setSameView(false);
+  };
   const [opacity, setOpacity] = useState(100);
   const [original, setOriginal] = useState<boolean | null>(null);
   const [error, setError] = useState("");
@@ -177,7 +183,7 @@ function OverlayControls({
               onPointerDown={event => {
                 event.preventDefault();
                 event.currentTarget.setPointerCapture(event.pointerId);
-                setSelected(i);
+                selectLayer(i);
                 drag.current = {
                   x: event.clientX,
                   y: event.clientY,
@@ -276,7 +282,7 @@ function OverlayControls({
             <VisualSelect
               className="mt-1 w-full rounded border bg-background p-2"
               value={selected}
-              onChange={e => { setSelected(Number(e.target.value)); setSourceChoice(""); setSameView(false); }}
+              onChange={e => selectLayer(Number(e.target.value))}
             >
               {layers.map((_, i) => (
                 <option key={i} value={i}>
