@@ -13,6 +13,7 @@ export type ProductOverlayMetadata = {
   designStorageKey: string;
   designUrl: string;
   applied: boolean;
+  alignment?: "automatic" | "needs_adjustment";
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;

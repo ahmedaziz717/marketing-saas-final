@@ -171,3 +171,20 @@ it("keeps the full styled prompt and supports Rubik without forcing font preserv
     buildCreativePrompt({ ...input, setup: { ...setup, preserveFont: true } })
   ).toContain('preserve the selected font family "Rubik"');
 });
+
+it("automatically composites a confident matching product without a separate action charge", async () => {
+  mocked.invoke.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ products: [{ left: 300, top: 200, width: 300, height: 600, confidence: 0.95, sameAngle: true }] }) } }] });
+  const { automaticProductOverlay } = await import("./lib/productOverlay");
+  const finished = await automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 });
+  expect(finished.layers[0]).toMatchObject({ left: 60, top: 40, width: 60, height: 120 });
+  expect(mocked.invoke).toHaveBeenLastCalledWith(expect.objectContaining({ includedInAction: true }));
+});
+it.each([
+  { confidence: 0.7, sameAngle: true, width: 300, height: 600 },
+  { confidence: 0.99, sameAngle: false, width: 300, height: 600 },
+  { confidence: 0.99, sameAngle: true, width: 600, height: 600 },
+])("does not silently apply an uncertain or distorted automatic overlay: %j", async box => {
+  mocked.invoke.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ products: [{ left: 100, top: 100, ...box }] }) } }] });
+  const { automaticProductOverlay } = await import("./lib/productOverlay");
+  await expect(automaticProductOverlay(await design(), [await source()], { width: 200, height: 200 })).rejects.toThrow();
+});

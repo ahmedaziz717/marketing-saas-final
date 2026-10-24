@@ -19,6 +19,7 @@ export type LibraryAsset = {
   headline?: string; subheadline?: string; primaryText?: string; format?: string; copyText?: string;
   campaignPlanId?: number;
   hasProductOverlay?: boolean;
+  productOverlayAlignment?: "automatic" | "needs_adjustment";
   promotion?: import("./creativeBuilder").CreativeSetup["promotion"];
   intelligence?: import("./creativeIntelligence").CreativeIntelligence;
   sourceType?: "logo" | "product" | "reference" | "other";

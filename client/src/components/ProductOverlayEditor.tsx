@@ -77,7 +77,7 @@ function OverlayControls({
   >(null);
   const [selected, setSelected] = useState(0);
   const [opacity, setOpacity] = useState(100);
-  const [original, setOriginal] = useState(false);
+  const [original, setOriginal] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const canvas = useRef<HTMLDivElement>(null);
   const drag = useRef<{
@@ -99,7 +99,8 @@ function OverlayControls({
     data.layers.map(({ left, top, width, aspect }) =>
       constrainProductLayer({ left, top, width }, aspect, data)
     );
-  const update = (index: number, value: Partial<ProductOverlayPlacement>) =>
+  const update = (index: number, value: Partial<ProductOverlayPlacement>) => {
+    setOriginal(false);
     setPlacements(
       layers.map((layer, i) =>
         i === index
@@ -111,6 +112,7 @@ function OverlayControls({
           : layer
       )
     );
+  };
   return (
     <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
       <div
@@ -143,7 +145,7 @@ function OverlayControls({
           className="block h-full w-full"
           draggable={false}
         />
-        {!original &&
+        {!(original ?? !data.applied) &&
           layers.map((layer, i) => (
             <img
               key={i}
@@ -173,6 +175,11 @@ function OverlayControls({
           ))}
       </div>
       <div className="space-y-4">
+        <p role="status" className="text-sm">
+          {data.applied
+            ? "The original product is already placed. Adjust it only if needed."
+            : "Automatic placement is not available for this version. The complete design is preserved; preview the original layer to adjust it, or request alignment."}
+        </p>
         <Button
           variant="outline"
           className="w-full flex-wrap gap-1"
@@ -186,6 +193,7 @@ function OverlayControls({
                 variantId,
               });
               setPlacements(result.layers);
+              setOriginal(false);
               setNotice(
                 result.sameAngle
                   ? "Suggested placement is ready. Check edges and text before saving."
@@ -294,7 +302,7 @@ function OverlayControls({
         <label className="flex gap-2 text-sm">
           <input
             type="checkbox"
-            checked={original}
+            checked={original ?? !data.applied}
             onChange={e => setOriginal(e.target.checked)}
           />
           Compare with original design

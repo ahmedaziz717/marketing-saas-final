@@ -1,3 +1,4 @@
+import { ProductPhotoGroups } from "./ProductPhotoGroups";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { useState } from "react";
 import { Check, Film, Search, Upload } from "lucide-react";
@@ -168,66 +169,81 @@ export function VideoReferencePicker({
               </button>
             </p>
           ) : choices.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {choices.map(asset => {
-                const index = selected.indexOf(asset.key),
-                  checked = index !== -1;
-                return (
-                  <button
-                    key={asset.key}
-                    type="button"
-                    aria-label={`${asset.name}${asset.detail ? ` · ${asset.detail}` : ""}`}
-                    aria-pressed={checked}
-                    disabled={
-                      !checked && selected.length >= limit && kind !== "video"
-                    }
-                    onClick={() =>
-                      onChange(
-                        kind === "video"
-                          ? [asset.key]
-                          : checked
-                            ? selected.filter(key => key !== asset.key)
-                            : [...selected, asset.key]
-                      )
-                    }
-                    className={`relative min-w-0 overflow-hidden rounded-xl border-2 text-left disabled:opacity-40 ${checked ? "border-primary bg-primary/5" : "border-transparent bg-muted/40 hover:border-primary/40"}`}
-                  >
-                    {kind === "video" ? (
-                      <div className="flex aspect-video items-center justify-center bg-slate-900 text-white">
-                        <Film size={32} />
-                      </div>
-                    ) : (
-                      <img
-                        src={asset.url}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-square w-full object-contain p-2"
-                      />
-                    )}
-                    {checked && (
-                      <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground">
-                        <Check size={13} />
-                        {index + 1}
-                      </span>
-                    )}
-                    <span
-                      className="block truncate px-3 pt-2 text-sm font-medium"
-                      title={asset.name}
+            tab === "products" ? (
+              <ProductPhotoGroups
+                choices={choices}
+                selected={selected}
+                limit={limit}
+                onToggle={key =>
+                  onChange(
+                    selected.includes(key)
+                      ? selected.filter(value => value !== key)
+                      : [...selected, key]
+                  )
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {choices.map(asset => {
+                  const index = selected.indexOf(asset.key),
+                    checked = index !== -1;
+                  return (
+                    <button
+                      key={asset.key}
+                      type="button"
+                      aria-label={`${asset.name}${asset.detail ? ` · ${asset.detail}` : ""}`}
+                      aria-pressed={checked}
+                      disabled={
+                        !checked && selected.length >= limit && kind !== "video"
+                      }
+                      onClick={() =>
+                        onChange(
+                          kind === "video"
+                            ? [asset.key]
+                            : checked
+                              ? selected.filter(key => key !== asset.key)
+                              : [...selected, asset.key]
+                        )
+                      }
+                      className={`relative min-w-0 overflow-hidden rounded-xl border-2 text-left disabled:opacity-40 ${checked ? "border-primary bg-primary/5" : "border-transparent bg-muted/40 hover:border-primary/40"}`}
                     >
-                      {asset.name}
-                    </span>
-                    <span className="block truncate px-3 pb-3 pt-1 text-xs text-muted-foreground">
-                      {asset.detail ??
-                        (asset.width && asset.height
-                          ? `${asset.width} × ${asset.height}`
-                          : asset.origin === "generated"
-                            ? "AI generated"
-                            : "Uploaded")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                      {kind === "video" ? (
+                        <div className="flex aspect-video items-center justify-center bg-slate-900 text-white">
+                          <Film size={32} />
+                        </div>
+                      ) : (
+                        <img
+                          src={asset.url}
+                          alt=""
+                          loading="lazy"
+                          className="aspect-square w-full object-contain p-2"
+                        />
+                      )}
+                      {checked && (
+                        <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground">
+                          <Check size={13} />
+                          {index + 1}
+                        </span>
+                      )}
+                      <span
+                        className="block truncate px-3 pt-2 text-sm font-medium"
+                        title={asset.name}
+                      >
+                        {asset.name}
+                      </span>
+                      <span className="block truncate px-3 pb-3 pt-1 text-xs text-muted-foreground">
+                        {asset.detail ??
+                          (asset.width && asset.height
+                            ? `${asset.width} × ${asset.height}`
+                            : asset.origin === "generated"
+                              ? "AI generated"
+                              : "Uploaded")}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )
           ) : (
             <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
               {tab === "products"
