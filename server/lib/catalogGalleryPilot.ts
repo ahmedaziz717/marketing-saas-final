@@ -109,8 +109,9 @@ export async function previewGalleryPilot(
   const payload = recipe.detailRootPath
     ? jsonField(detail, recipe.detailRootPath)
     : detail;
+  const returnedIdentity = jsonField(payload, recipe.detailIdentityPath);
   if (
-    String(jsonField(payload, recipe.detailIdentityPath)) !== product.externalId
+    !["string", "number"].includes(typeof returnedIdentity) || String(returnedIdentity) !== product.externalId
   )
     throw new Error(
       "The detail response does not match the selected product identity."
@@ -123,10 +124,11 @@ export async function previewGalleryPilot(
   });
   const plans = catalogMediaPlans(entry);
   const candidates = new Set(plans.flatMap(plan => plan.candidates));
+  const candidateAttempts = plans.reduce((sum, plan) => sum + plan.candidates.length, 0);
   if (
     !plans.length ||
     plans.length > GALLERY_PILOT_MAX_IMAGES ||
-    candidates.size > GALLERY_PILOT_MAX_CANDIDATES
+    candidateAttempts > GALLERY_PILOT_MAX_CANDIDATES
   )
     throw new Error(
       "Pilot requires 1-250 distinct image views and at most 500 candidate URLs."
@@ -173,7 +175,7 @@ export async function previewGalleryPilot(
     distinctImages: plans.length,
     candidateUrls: candidates.size,
     cachedImages: cached,
-    maximumImageAttempts: candidates.size * 3,
+    maximumImageAttempts: candidateAttempts * 3,
     detailRequests: 1,
     sourceMappingChanges: false,
     expiresAt: plan.expiresAt,
