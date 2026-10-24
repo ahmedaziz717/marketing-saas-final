@@ -46,9 +46,10 @@ export const PROMPT_REGISTRY: readonly PromptDefinition[] = [
   ...PROMPT_CONTRACTS,
   definition(
     "creative.base",
-    "Main creative prompt",
+    "Creative direction",
     "Creative Studio",
-    DEFAULT_CREATIVE_BASE_PROMPT
+    DEFAULT_CREATIVE_BASE_PROMPT,
+    "Your reusable creative instructions, added to the current Brand Kit voice and selected subject. This is not the complete generation prompt."
   ),
   ...CREATIVE_THEME_LIST.map(theme =>
     definition(

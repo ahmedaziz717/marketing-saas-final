@@ -29,6 +29,62 @@ const summarySchema = z
   .refine(value => JSON.stringify(value).length <= 6000);
 const inFlight = new Map<string, Promise<string>>();
 
+/** Read the same content-addressed summary as generation, without AI or writes. */
+export async function previewGenerationBrand(
+  organizationId: number,
+  brand: BuilderBrandKit
+) {
+  const common = {
+    name: brand.name,
+    requiredClaims: brand.requiredClaims,
+    prohibitedContent: brand.prohibitedContent,
+  };
+  if (!brand.voice?.trim())
+    return {
+      ...common,
+      status: "empty" as const,
+      voice: null,
+      summarized: false,
+    };
+  if (brand.voice.length <= 2000)
+    return {
+      ...common,
+      status: "ready" as const,
+      voice: brand.voice,
+      summarized: false,
+    };
+  try {
+    const template = await applicationPrompt("brand.summary", organizationId);
+    const key = brandSummaryKey(
+      organizationId,
+      brand,
+      `${template.version}:${template.value}`
+    );
+    const cached = await storageClient()
+      .storage.from(assetBucket())
+      .download(key);
+    if (cached.error && String(cached.error.statusCode) === "404")
+      return {
+        ...common,
+        status: "pending" as const,
+        voice: null,
+        summarized: true,
+      };
+    if (cached.error || !cached.data) throw new Error(BRAND_SUMMARY_FAILED);
+    const voice = JSON.stringify(
+      summarySchema.parse(JSON.parse(await cached.data.text()))
+    );
+    return { ...common, status: "ready" as const, voice, summarized: true };
+  } catch {
+    return {
+      ...common,
+      status: "unavailable" as const,
+      voice: null,
+      summarized: true,
+    };
+  }
+}
+
 export function brandSummaryKey(
   organizationId: number,
   brand: BuilderBrandKit,

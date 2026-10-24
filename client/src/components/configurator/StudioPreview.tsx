@@ -367,6 +367,132 @@ export function StudioPreview({
         ) : (
           children
         )}
+        {(trials.length > 0 || selected || history.error) && (
+          <div className="cfg-preview-history">
+            <h3 className="text-sm font-semibold">
+              Recent creations & history
+            </h3>
+            {(trials.length > 0 || selected) && (
+              <>
+                <div className="cfg-trials-heading">
+                  <strong>
+                    {kind === "image" && briefId && !all
+                      ? "Versions of this creative"
+                      : "Recent creations"}
+                  </strong>
+                  {kind === "image" && briefId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAll(!all);
+                      }}
+                    >
+                      {all ? "This creative" : "All recent"}
+                    </button>
+                  )}
+                  {kind === "image" && (
+                    <button
+                      type="button"
+                      aria-label="Refresh previous versions"
+                      disabled={history.isFetching}
+                      onClick={() => history.refetch()}
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  )}
+                </div>
+                <div
+                  className="cfg-trials"
+                  aria-label="Previous generated versions"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={!selected}
+                    className="cfg-trial cfg-trial-current"
+                    onClick={() => {
+                      setSelected(null);
+                      setPreviewingHistory(false);
+                    }}
+                  >
+                    <ImagePlus size={22} />
+                    <span>Current setup</span>
+                  </button>
+                  {trials.map(item => (
+                    <button
+                      type="button"
+                      key={item.key}
+                      className="cfg-trial"
+                      aria-label={"Preview " + item.title}
+                      aria-pressed={selected?.key === item.key}
+                      onClick={() => {
+                        setSelected(item);
+                        setPreviewingHistory(true);
+                        setPreviewTab("review");
+                      }}
+                      title={
+                        item.title +
+                        " · " +
+                        new Date(item.createdAtMs).toLocaleString()
+                      }
+                    >
+                      {kind === "image" ? (
+                        <img src={item.url} alt="" loading="lazy" />
+                      ) : (
+                        <span className="cfg-trial-video">
+                          <video
+                            src={item.url + "#t=0.1"}
+                            muted
+                            preload="metadata"
+                          />
+                          <Film size={16} />
+                        </span>
+                      )}
+                      <span>{item.title}</span>
+                      <small>
+                        {new Date(item.createdAtMs).toLocaleDateString()}
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {history.error && kind === "image" ? (
+              <p className="cfg-help">
+                Previous images could not load.{" "}
+                <button type="button" onClick={() => void history.refetch()}>
+                  Try again
+                </button>
+              </p>
+            ) : (
+              !trials.length &&
+              !jobId && (
+                <p className="cfg-help">
+                  {history.isLoading && kind === "image"
+                    ? "Loading previous images…"
+                    : "Your generated versions will appear here."}
+                </p>
+              )
+            )}
+            <div className="cfg-history-footer">
+              {jobId && previewingHistory && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewingHistory(false)}
+                >
+                  View generation in progress
+                </button>
+              )}
+              {kind === "image" && briefId && !all && !trials.length && (
+                <button type="button" onClick={() => setAll(true)}>
+                  Browse previous creations
+                </button>
+              )}
+              <Link href="/app/creatives/drafts" className="cfg-history-link">
+                View all creative work →
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
       <div className="cfg-build">
         {summary}
@@ -396,131 +522,20 @@ export function StudioPreview({
             forceMount
             hidden={previewTab !== "results"}
           >
-            <div className="cfg-preview-history">
-              <h3 className="text-sm font-semibold">
-                Recent creations & history
-              </h3>
-              {(trials.length > 0 || selected) && (
-                <>
-                  <div className="cfg-trials-heading">
-                    <strong>
-                      {kind === "image" && briefId && !all
-                        ? "Versions of this creative"
-                        : "Recent creations"}
-                    </strong>
-                    {kind === "image" && briefId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAll(!all);
-                          setSelected(null);
-                        }}
-                      >
-                        {all ? "This creative" : "All recent"}
-                      </button>
-                    )}
-                    {kind === "image" && (
-                      <button
-                        type="button"
-                        aria-label="Refresh previous versions"
-                        disabled={history.isFetching}
-                        onClick={() => history.refetch()}
-                      >
-                        <RefreshCw size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    className="cfg-trials"
-                    aria-label="Previous generated versions"
-                  >
-                    <button
-                      type="button"
-                      aria-pressed={!selected}
-                      className="cfg-trial cfg-trial-current"
-                      onClick={() => {
-                        setSelected(null);
-                        setPreviewingHistory(false);
-                      }}
-                    >
-                      <ImagePlus size={22} />
-                      <span>Current setup</span>
-                    </button>
-                    {trials.map(item => (
-                      <button
-                        type="button"
-                        key={item.key}
-                        className="cfg-trial"
-                        aria-label={"Preview " + item.title}
-                        aria-pressed={selected?.key === item.key}
-                        onClick={() => {
-                          setSelected(item);
-                          setPreviewingHistory(true);
-                          setPreviewTab("review");
-                        }}
-                        title={
-                          item.title +
-                          " · " +
-                          new Date(item.createdAtMs).toLocaleString()
-                        }
-                      >
-                        {kind === "image" ? (
-                          <img src={item.url} alt="" loading="lazy" />
-                        ) : (
-                          <span className="cfg-trial-video">
-                            <video
-                              src={item.url + "#t=0.1"}
-                              muted
-                              preload="metadata"
-                            />
-                            <Film size={16} />
-                          </span>
-                        )}
-                        <span>{item.title}</span>
-                        <small>
-                          {new Date(item.createdAtMs).toLocaleDateString()}
-                        </small>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {history.error && kind === "image" ? (
-                <p className="cfg-help">
-                  Previous images could not load.{" "}
-                  <button type="button" onClick={() => void history.refetch()}>
-                    Try again
-                  </button>
-                </p>
-              ) : (
-                !trials.length &&
-                !jobId && (
-                  <p className="cfg-help">
-                    {history.isLoading && kind === "image"
-                      ? "Loading previous images…"
-                      : "Your generated versions will appear here."}
-                  </p>
-                )
-              )}
-              <div className="cfg-history-footer">
-                {jobId && previewingHistory && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewingHistory(false)}
-                  >
-                    View generation in progress
-                  </button>
-                )}
-                {kind === "image" && briefId && !all && !trials.length && (
-                  <button type="button" onClick={() => setAll(true)}>
-                    Browse previous creations
-                  </button>
-                )}
-                <Link href="/app/creatives/drafts" className="cfg-history-link">
-                  View all creative work →
-                </Link>
-              </div>
-            </div>
+            <p className="cfg-help">
+              Your generated images and videos are saved as asset drafts,
+              separate from saved Studio setups. Use the thumbnails beneath the
+              preview to inspect a version, then submit it for review when
+              ready.
+            </p>
+            {kind === "image" && briefId && !all && !trials.length && (
+              <button type="button" onClick={() => setAll(true)}>
+                Browse previous creations
+              </button>
+            )}
+            <Link href="/app/library?view=drafts" className="cfg-history-link">
+              Open generated asset drafts
+            </Link>
           </TabsContent>
           <TabsContent
             value="review"
@@ -531,7 +546,7 @@ export function StudioPreview({
               <p className="cfg-help">
                 {showGeneration
                   ? "Generation is in progress. Review controls will appear when your creative is ready."
-                  : "Select a finished creative in Results to review or submit it for approval."}
+                  : "Select a thumbnail beneath the preview to review or submit a finished creative."}
               </p>
             )}
             {selected && !showGeneration && (

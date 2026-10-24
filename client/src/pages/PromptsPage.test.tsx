@@ -6,6 +6,10 @@ const api = vi.hoisted(() => ({
   role: "owner",
   data: [] as any[],
   save: vi.fn(),
+  brand: {
+    name: "Brand A",
+    voice: "Warm, practical advice for small businesses.",
+  } as any,
 }));
 vi.mock("@/hooks/useWorkspace", () => ({
   useWorkspace: () => ({ organizationId: 1, membership: { role: api.role } }),
@@ -26,6 +30,13 @@ vi.mock("wouter", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    brand: {
+      promptContext: {
+        useQuery: () => ({
+          data: { ...api.brand, status: "ready", summarized: false },
+        }),
+      },
+    },
     useUtils: () => ({
       prompts: { list: { invalidate: vi.fn(), fetch: async () => api.data } },
     }),
@@ -40,6 +51,10 @@ import { PromptDefaultControls } from "@/components/PromptDefaultControls";
 beforeEach(() => {
   vi.clearAllMocks();
   api.role = "owner";
+  api.brand = {
+    name: "Brand A",
+    voice: "Warm, practical advice for small businesses.",
+  };
   api.data = PROMPT_REGISTRY.map(p => ({
     ...p,
     value: p.baseline,
@@ -51,6 +66,50 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+it("shows the current brand beside creative instructions without rewriting edits", () => {
+  const view = render(<PromptsPage />);
+  expect(screen.getByText("Brand A · Brand voice")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Resolved workspace default"), {
+    target: { value: "My deliberate campaign direction" },
+  });
+  api.brand = {
+    name: "Brand B",
+    voice: "Precise and technical for expert buyers.",
+  };
+  view.rerender(<PromptsPage />);
+  expect(screen.getByText("Brand B · Brand voice")).toBeTruthy();
+  expect(
+    screen.queryByText("Warm, practical advice for small businesses.")
+  ).toBeNull();
+  expect(
+    (screen.getByLabelText("Resolved workspace default") as HTMLTextAreaElement)
+      .value
+  ).toBe("My deliberate campaign direction");
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("keeps technical templates and theme details out of the ordinary catalog", () => {
+  render(<PromptsPage />);
+  const technical = PROMPT_REGISTRY.find(p => p.id === "brand.summary")!;
+  expect(
+    screen.queryByRole("button", { name: new RegExp(technical.name) })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Product Spotlight theme/ })
+  ).toBeNull();
+  fireEvent.change(screen.getByLabelText("Defaults to manage"), {
+    target: { value: "technical" },
+  });
+  expect(
+    screen.getByRole("button", { name: new RegExp(technical.name) })
+  ).toBeTruthy();
+});
+it("does not expose advanced technical management to ordinary members", () => {
+  api.role = "member";
+  render(<PromptsPage />);
+  expect(
+    screen.queryByRole("option", { name: "Advanced technical templates" })
+  ).toBeNull();
 });
 it("preserves an unsaved edit when another tab updates the resolved default", () => {
   const view = render(<PromptsPage />);

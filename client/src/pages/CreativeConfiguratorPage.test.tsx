@@ -92,10 +92,12 @@ vi.mock("@/components/LogoSourceTools", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    brand: { promptContext: { useQuery: () => ({ data: null }) } },
     prompts: {
       change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     useUtils: () => ({
+      brand: { promptContext: { invalidate: vi.fn() } },
       creativeBuilder: { options: { invalidate: vi.fn() } },
       video: {
         get: { invalidate: vi.fn() },
@@ -1115,10 +1117,12 @@ it("previews a generated version without changing settings or generating, and re
   open();
   const name = screen.getByRole("textbox", { name: "Creative name" });
   changeField(name, { target: { value: "Keep my current draft" } });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Results" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  // History stays available without opening Results and remains visible in Review.
+  expect(
+    screen
+      .getByRole("button", { name: "Preview Previous lamp square" })
+      .closest("[hidden]")
+  ).toBeNull();
   clickJourney(
     screen.getByRole("button", { name: "Preview Previous lamp square" })
   );
@@ -1133,6 +1137,13 @@ it("previews a generated version without changing settings or generating, and re
   expect(
     screen.getByRole("tab", { name: "Review" }).getAttribute("aria-selected")
   ).toBe("true");
+  expect(
+    screen
+      .getByRole("button", { name: "Preview Previous lamp square" })
+      .closest("[hidden]")
+  ).toBeNull();
+  clickJourney(screen.getByRole("button", { name: "Current setup" }));
+  expect((name as HTMLInputElement).value).toBe("Keep my current draft");
   // Reopening the same result must return to Review even though its key is unchanged.
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Results" }), {
     button: 0,
@@ -1441,6 +1452,8 @@ it.each(["image", "video"] as const)(
       shot: "lifestyle",
       placement: "left",
       extraDirection: "Keep a quiet background",
+      basePrompt:
+        "My saved creative instructions must survive brand changes and navigation.",
       formatIds: ["square_1_1"],
       modelOptions: { quality: "high" },
     });
@@ -1484,6 +1497,8 @@ it.each(["image", "video"] as const)(
         shot: "lifestyle",
         placement: "left",
         extraDirection: "Keep a quiet background",
+        basePrompt:
+          "My saved creative instructions must survive brand changes and navigation.",
         formatIds: ["square_1_1"],
         modelId: config.image.modelId,
         modelOptions: { quality: "high" },
