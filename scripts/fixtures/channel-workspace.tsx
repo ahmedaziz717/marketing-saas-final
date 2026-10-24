@@ -1,3 +1,4 @@
+import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
 import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGroups";
 import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
 import OnboardingPage from "../../client/src/pages/OnboardingPage";
@@ -812,6 +813,10 @@ function respond(path: string, input: any) {
       data: [{ id: "77", name: "Website visitors", subtype: "WEBSITE" }],
       truncated: false,
     };
+  if (path === "catalogSources.galleryPilotProducts") return [{ id: 7, name: "Selected system", externalId: "system-a" }];
+  if (path === "catalogSources.galleryPilotStatus") return null;
+  if (path === "catalogSources.previewGalleryPilot") { mutations.push(path); return { token: { ciphertext: "fixture", iv: "iv", tag: "tag" }, productName: "Selected system", distinctImages: 183, cachedImages: 0, groups: Array(21).fill({}), groupsAdded: Array(21).fill("group"), groupsReplaced: [], maximumNewImages: 183, existingImagesReferenced: [], maximumImageAttempts: 549 }; }
+  if (path === "catalogSources.queueGalleryPilot") { mutations.push(path); return { queued: true }; }
   if (path === "catalogSources.previewApi") {
     mutations.push(path);
     return {
@@ -1163,6 +1168,7 @@ const routeForPage: Record<string, string> = {
   "workflows-directory": "/app/workflows",
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
+  "catalog-pilot": "/app/catalog-pilot-fixture",
   "catalog-gallery": "/app/catalog-gallery-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
@@ -1430,6 +1436,7 @@ function CatalogGalleryFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "catalog-pilot") return <DashboardLayout><h1>Catalog gallery pilot</h1><CatalogGalleryPilot organizationId={1} sourceId={1} onQueued={async () => {}} /></DashboardLayout>;
   if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
   if (which === "onboarding")
     return (
@@ -2275,6 +2282,19 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "One Generate action"
       );
       check(mutations.length === 0, "Exploration never starts generation");
+      layout();
+    }
+    if (which === "catalog-pilot") {
+      await click("Repair one product gallery");
+      await fillControl('[role="dialog"] select', "7");
+      await fillControl('[role="dialog"] textarea', '{"detailUrlTemplate":"https://source.example/{code}"}');
+      check(mutations.length === 0, "Preparing a pilot never starts an import");
+      await click("Preview gallery repair");
+      check(document.body.textContent?.includes("183 distinct views"), "Preview shows bounded image impact");
+      check(mutations.join(",") === "catalogSources.previewGalleryPilot", "Preview performs no queue action");
+      layout();
+      await click("Confirm this product only");
+      check(mutations.includes("catalogSources.queueGalleryPilot"), "Explicit confirmation queues only the reviewed product");
       layout();
     }
     if (which === "catalog-gallery") {

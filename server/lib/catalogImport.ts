@@ -1,4 +1,4 @@
-import type { CatalogMediaReference } from "../../shared/catalogMedia";
+import { catalogMediaPlans } from "./catalogMediaPlans";
 import { and, eq, or } from "drizzle-orm";
 import { products, productImages, productVariants } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -29,6 +29,7 @@ export async function importCatalogEntry(
     detailUrl?: string;
     mappingRevision?: string;
     imageRepairOnly?: boolean;
+    galleryPilot?: { productId: number; offset: number; limit: number; assertActive?: () => Promise<void> };
   },
   variants: StoreItem["variants"] = []
 ) {
@@ -49,6 +50,7 @@ export async function importCatalogEntry(
     .where(
       and(
         eq(products.organizationId, organizationId),
+        source?.galleryPilot ? eq(products.id, source.galleryPilot.productId) : undefined,
         source
           ? or(
               and(
@@ -69,6 +71,7 @@ export async function importCatalogEntry(
       )
     )
     .limit(1);
+  if (source?.galleryPilot && old?.id !== source.galleryPilot.productId) throw new Error("Gallery pilot product identity changed.");
   let truth = {
     name: item.name,
     description: item.description,
@@ -174,22 +177,7 @@ export async function importCatalogEntry(
         set: value,
       });
   }
-  const imageUrls = Array.from(
-    new Set([item.imageUrl, ...(item.imageUrls ?? [])].filter(Boolean))
-  );
-  const plans: Array<{ candidates: string[]; references: CatalogMediaReference[] }> = [];
-  for (const group of item.mediaGroups ?? []) {
-    if (!group.eligible) continue;
-    for (const [position, image] of Array.from(group.images.entries())) {
-      const candidates = Array.from(new Set(image.candidates));
-      const known = plans.find(plan => plan.candidates.some(url => candidates.includes(url)));
-      const reference = { groupId: group.id, imageId: image.id, position };
-      if (known) { known.candidates = Array.from(new Set([...known.candidates, ...candidates])); known.references.push(reference); }
-      else plans.push({ candidates, references: [reference] });
-    }
-  }
-  for (const url of imageUrls) if (!plans.some(plan => plan.candidates.includes(url))) plans.push({ candidates: [url], references: [] });
-  if (plans.length > 1000 || plans.some(plan => plan.candidates.length > 12)) throw new Error("The product gallery exceeds the supported image/candidate limits; split the source record.");
+  const plans = catalogMediaPlans(item);
 
   let saved = 0;
   const failures: Array<{
@@ -198,7 +186,10 @@ export async function importCatalogEntry(
     retryable: boolean;
   }> = [];
   let storageFailed = false;
-  for (const [position, plan] of Array.from(plans.entries())) {
+  const pilot = source?.galleryPilot;
+  const selectedPlans = Array.from(plans.entries()).slice(pilot?.offset ?? 0, pilot ? pilot.offset + pilot.limit : undefined);
+  for (const [position, plan] of selectedPlans) {
+    await pilot?.assertActive?.();
     let imageUrl = plan.candidates[0];
     let unavailableCandidates = 0;
     const knownImages = await db.select().from(productImages).where(and(eq(productImages.organizationId, organizationId), eq(productImages.productId, product.id)));
@@ -210,6 +201,7 @@ export async function importCatalogEntry(
         if (references.length !== row.media.references.length) await tx.update(productImages).set({ media: { ...row.media, references, retired: references.length === 0 } }).where(eq(productImages.id, row.id));
       }
     };
+    await pilot?.assertActive?.();
     const present = knownImages.find(row => plan.candidates.includes(row.sourceUrl));
     if (present && !plan.references.length) { saved++; continue; }
     if (present?.media && present.media.unavailableCandidates === 0 && plan.candidates.every(url => present.media!.candidates.includes(url))) {
@@ -260,6 +252,7 @@ export async function importCatalogEntry(
       continue;
     }
     try {
+      await pilot?.assertActive?.();
       await db.transaction(async tx => {
         await tx
           .select({ id: products.id })
@@ -325,11 +318,13 @@ export async function importCatalogEntry(
   }
   const imageState = !plans.length
     ? "missing"
+    : (pilot && pilot.offset + pilot.limit < plans.length) ? "partial"
     : failures.length
       ? saved
         ? "partial"
         : "unavailable"
       : "available";
+  await pilot?.assertActive?.();
   const updated = await db.transaction(async tx => {
     const [latest] = await tx
       .select()
@@ -345,7 +340,7 @@ export async function importCatalogEntry(
     const [updated] = await tx
       .update(products)
       .set({
-        ...(item.mediaGroups ? { mediaGroups: item.mediaGroups.map(({ images, ...group }) => ({ ...group, declaredImages: images.length, imageIds: images.map(image => image.id) })) } : {}),
+        ...(item.mediaGroups ? { mediaGroups: [...(pilot ? (latest.mediaGroups ?? []).filter(group => !item.mediaGroups!.some(next => next.id === group.id)) : []), ...item.mediaGroups.map(({ images, ...group }) => ({ ...group, declaredImages: images.length, imageIds: images.map(image => image.id) }))] } : {}),
         provenance: {
           ...latest.provenance,
           ...(source?.mappingRevision
@@ -354,7 +349,7 @@ export async function importCatalogEntry(
           ...(apiSource
             ? {
                 "api.imageStatus": imageState,
-                "api.imageSourceUrl": item.imageUrl,
+                ...(!pilot ? { "api.imageSourceUrl": item.imageUrl } : {}),
               }
             : {}),
           "media.status": imageState,
@@ -376,6 +371,7 @@ export async function importCatalogEntry(
       .returning();
     return updated;
   });
+  if (pilot && failures.length) throw new Error("Gallery batch incomplete; successful images were retained. Resume to retry this batch.");
   if (storageFailed)
     throw new Error(
       "Product imported, but image storage failed. Resume to retry; existing images are preserved."

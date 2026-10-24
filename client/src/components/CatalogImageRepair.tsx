@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { VisualSelect } from "./choices/VisualSelect";
+import { CatalogGalleryPilot } from "./CatalogGalleryPilot";
 
 export function CatalogImageRepair({
   organizationId,
@@ -24,6 +25,7 @@ export function CatalogImageRepair({
   const [open, setOpen] = useState(false);
   return (
     <>
+      <CatalogGalleryPilot organizationId={organizationId} sourceId={sourceId} disabled={disabled} onQueued={onQueued}/>
       <Button
         variant="outline"
         disabled={disabled}

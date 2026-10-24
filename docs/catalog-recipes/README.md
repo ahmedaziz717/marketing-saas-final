@@ -39,9 +39,30 @@ Applying this fragment and importing its media requires an explicitly approved
 source update and import. Check that no sync is already running first. Preserve
 the existing authentication, pagination and product-field mappings.
 
-The existing image-repair queue is source-wide, not a single-product pilot. Do
-not describe it as a one-product operation. Before using it, report the exact
-source, product count, expected detail requests and media/storage scope for
-approval. A smaller pilot requires a separately bounded execution path. Use the
-image-repair mode to preserve product facts and approval state; never change
-approval status merely to make imported photos visible.
+Use **Catalog > Sources > Repair one product gallery** for the initial pilot.
+Select the existing source product, paste the reviewed JSON recipe, and set the
+detail response identity field (for this recipe, `code`). Preview performs one
+same-origin detail request, validates the returned identity, and seals the exact
+snapshot for 30 minutes. It writes no catalog records and fetches no images.
+Confirmation queues that snapshot for the existing worker; no detail refetch or
+full-source listing occurs. The recipe is retained with this source-owned pilot,
+without changing the source-wide mapping or automatic sync settings.
+
+The pilot accepts at most 250 distinct views / 500 candidate URLs. Batches contain
+at most 12 views. Successful files are reused after interruption. Failed batches
+stop for explicit Resume; unavailable photos are not silently marked complete.
+The UI exposes checkpoint progress, planned groups, cached photos, existing image
+references, and a retry-inclusive fetch bound. HTTP redirects can add requests
+within the existing four-redirect limit. No approval states, product facts,
+existing primary photos, or unrelated galleries are reset.
+
+For the verified initial target: workspace CLXGaming (3), source1, product724,
+external ID `gmhorus00011mk`: 183 distinct photos, 21 logical groups, 16 batches.
+Expected successful execution is one preview detail request and 183 image fetches
+(no list request); at most 549 image fetch attempts per pass including retries.
+The original existing photo is retained. Actual source contents must be rechecked
+at preview. This production action still requires explicit approval.
+
+Do not substitute the older source-wide repair queue for this pilot. Further
+products can be reviewed separately after the first result; full-catalog request
+and storage bounds are not inferred from one sample.

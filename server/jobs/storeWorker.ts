@@ -1,3 +1,5 @@
+import { GALLERY_PILOT_BATCH } from "../../shared/catalogGalleryPilot";
+import type { GalleryPilotPlan } from "../lib/catalogGalleryPilot";
 import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { catalogSources, products } from "../../drizzle/schema";
 import { apiMappingRevision } from "../lib/apiCatalog";
@@ -68,6 +70,26 @@ export async function processNextStoreJob(db: Database) {
         source.provider === "api" ? undefined : catalogEncryptionKey()
       )
     );
+    const pilot: GalleryPilotPlan | undefined = credentials.galleryPilot;
+    if (pilot && !pilot.completed) {
+      if (pilot.organizationId !== source.organizationId || pilot.sourceId !== source.id) throw new Error("Gallery pilot scope mismatch.");
+      const offset = pilot.offset ?? 0;
+      await importCatalogEntry(db, source.organizationId, pilot.entry, {
+        id: source.id, externalId: pilot.externalId, provider: "api", imageRepairOnly: true,
+        galleryPilot: { productId: pilot.productId, offset, limit: GALLERY_PILOT_BATCH, assertActive: async () => {
+          const [active] = await db.select({ status: catalogSources.status, leaseUntil: catalogSources.leaseUntil, updatedAtMs: catalogSources.updatedAtMs }).from(catalogSources).where(eq(catalogSources.id, source.id));
+          if (active?.status !== "syncing" || active.leaseUntil !== source.leaseUntil || active.updatedAtMs !== source.updatedAtMs || Date.now() >= source.leaseUntil) throw new Error("Gallery pilot paused or lease changed; resume from the saved batch.");
+        } },
+      });
+      pilot.offset = Math.min(pilot.total, offset + GALLERY_PILOT_BATCH);
+      pilot.completed = pilot.offset === pilot.total;
+      await db.update(catalogSources).set({
+        credentials: encryptToken(JSON.stringify(credentials)),
+        status: pilot.completed ? "connected" : "syncing", error: null, updatedAtMs: Date.now(),
+        ...(pilot.completed ? { processed: pilot.previousProgress?.processed ?? source.processed, total: pilot.previousProgress?.total ?? source.total, cursor: pilot.previousProgress?.cursor ?? null } : {}),
+      }).where(and(eq(catalogSources.id, source.id), eq(catalogSources.status, "syncing"), eq(catalogSources.leaseUntil, source.leaseUntil), eq(catalogSources.updatedAtMs, source.updatedAtMs)));
+      return true;
+    }
     let pageCursor = source.cursor;
     let offset = 0;
     if (pageCursor) {

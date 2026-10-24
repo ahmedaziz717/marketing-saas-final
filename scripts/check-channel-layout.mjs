@@ -225,6 +225,7 @@ try {
       "report-layout",
       "product-facts",
       "catalog-gallery",
+      "catalog-pilot",
       "enhance-image",
       "analytics-ads",
       "analytics-social",

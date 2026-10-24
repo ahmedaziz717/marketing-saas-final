@@ -20,7 +20,7 @@ Apply additive `0022_catalog_media_groups.sql` before application code. It adds 
 
 The canonical component gallery path is now verified from the rendered CLX website. The source-scoped recipe in `docs/catalog-recipes/clx-chassis.json` uses each exact component code and its own gallery count, including printed ASM chassis. The sample system's base and 19 eligible alternatives supply 183 distinct photos. All were fetched, decoded at 700 by 700 pixels, imported into an isolated database and rendered as selectable views by the actual gallery component. These are configuration-reference photos; no larger original has been established. Generic importer logic does not infer provider paths.
 
-Existing production catalogs are unchanged. The recipe must be applied to the intended source and an image import approved before these photos appear in the user's catalog. The existing repair queue is source-wide; a single-product pilot requires a bounded execution path. No production resync, source configuration change, paid generation or production prompt edit was performed.
+Existing production catalogs are unchanged. The recipe must be applied to the intended source and an image import approved before these photos appear in the user's catalog. A supported one-product preview/confirm path now stores the reviewed recipe and snapshot with the source, without changing its automatic mapping. The existing worker imports at most 12 views per batch with resumable checkpoints; successful photos are reused. Owner/admin checks, 30-minute encrypted preview expiry and stale source/product/image rejection protect confirmation. No production resync, source configuration change, paid generation or production prompt edit was performed.
 
 ## Validation
 
