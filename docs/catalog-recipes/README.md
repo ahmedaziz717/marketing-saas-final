@@ -66,3 +66,5 @@ at preview. This production action still requires explicit approval.
 Do not substitute the older source-wide repair queue for this pilot. Further
 products can be reviewed separately after the first result; full-catalog request
 and storage bounds are not inferred from one sample.
+
+A completed pilot restores the source lifecycle and job owner. Paused/error sources are never reactivated. If automatic work is overdue when a previously connected source finishes, the source is held paused and the UI requires an explicit source resume; automatic-sync flags and schedule timestamps are retained. This prevents completion from launching an incidental full-source import.

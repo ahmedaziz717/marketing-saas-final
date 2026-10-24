@@ -75,7 +75,7 @@ export const catalogSourcesRouter = router({
           throw new TRPCError({ code: "CONFLICT", message: "Source or product changed. Preview again before repairing." });
         const credentials = JSON.parse(decryptToken(source.credentials!));
         if (credentials.galleryPilot && !credentials.galleryPilot.completed) throw new TRPCError({ code: "CONFLICT", message: "A gallery pilot is already pending." });
-        credentials.galleryPilot = { ...plan, offset: 0, previousProgress: { processed: source.processed, total: source.total, cursor: source.cursor } };
+        credentials.galleryPilot = { ...plan, offset: 0, previousLifecycle: { status: source.status, error: source.error, createdByUserId: source.createdByUserId }, previousProgress: { processed: source.processed, total: source.total, cursor: source.cursor } };
         await tx.update(catalogSources).set({ credentials: encryptToken(JSON.stringify(credentials)), status: "queued", error: null, createdByUserId: ctx.user.id, updatedAtMs: Date.now() }).where(eq(catalogSources.id, source.id));
         await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.gallery_pilot_queued", entityType: "catalog_source", entityId: source.id, payload: { productId: plan.productId, externalId: plan.externalId, images: plan.total, candidateUrls: plan.candidateCount, recipeRevision: pilotFingerprint(plan.recipe) } }, tx);
         return { queued: true, productId: plan.productId, images: plan.total };
@@ -86,7 +86,7 @@ export const catalogSourcesRouter = router({
     const [source] = await db.select().from(catalogSources).where(and(eq(catalogSources.id, input.sourceId), eq(catalogSources.organizationId, input.organizationId)));
     if (!source?.credentials || source.provider !== "api") throw new TRPCError({ code: "NOT_FOUND" });
     const plan: GalleryPilotPlan | undefined = JSON.parse(decryptToken(source.credentials)).galleryPilot;
-    return plan ? { productId: plan.productId, externalId: plan.externalId, processed: plan.offset ?? 0, total: plan.total, completed: plan.completed, status: source.status, error: source.error } : null;
+    return plan ? { productId: plan.productId, externalId: plan.externalId, processed: plan.offset ?? 0, total: plan.total, completed: plan.completed, status: source.status, error: plan.completed ? null : source.error, sourceError: plan.completed ? source.error : null, sourceScheduleHeld: !!plan.sourceScheduleHeld } : null;
   }),
   imageSettings: protectedProcedure
     .input(idInput)

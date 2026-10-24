@@ -220,6 +220,8 @@ export type GalleryPilotPlan = {
   total: number;
   candidateCount: number;
   completed: boolean;
+  sourceScheduleHeld?: boolean;
+  previousLifecycle?: { status: string; error: string | null; createdByUserId: number };
   previousProgress?: {
     processed: number;
     total: number | null;

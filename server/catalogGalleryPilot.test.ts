@@ -444,3 +444,16 @@ it("honors a pause during download without committing the image and resumes the 
   });
   expect(state.imageCalls).toHaveLength(3);
 });
+it.each(["paused", "error", "connected"])("does not start an overdue full-source sync after a pilot from %s", async originalStatus => {
+  state.detail = { code: "other", name: "Other", count: 2 }; state.fail = false;
+  const originalError = originalStatus === "error" ? "Existing source error" : null;
+  await state.db.update(catalogSources).set({ status: originalStatus, error: originalError, createdByUserId: 881, autoSync: 1, nextSyncAt: 1, lastSyncAt: 123, leaseUntil: null }).where(eq(catalogSources.id, 880));
+  const preview = await caller.previewGalleryPilot({ ...scope, productId: 881, recipe });
+  await caller.queueGalleryPilot({ ...scope, token: preview.token });
+  await processNextStoreJob(state.db);
+  const [source] = await state.db.select().from(catalogSources).where(eq(catalogSources.id, 880));
+  expect(source).toMatchObject({ status: originalStatus === "connected" ? "paused" : originalStatus, error: originalError, createdByUserId: 881, autoSync: 1, nextSyncAt: 1, lastSyncAt: 123, processed: 159, total: 159 });
+  expect(await caller.galleryPilotStatus(scope)).toMatchObject({ completed: true, sourceScheduleHeld: originalStatus === "connected" });
+  expect(await processNextStoreJob(state.db)).toBe(false);
+  expect(readStorePage).not.toHaveBeenCalled();
+});

@@ -83,10 +83,17 @@ export async function processNextStoreJob(db: Database) {
       });
       pilot.offset = Math.min(pilot.total, offset + GALLERY_PILOT_BATCH);
       pilot.completed = pilot.offset === pilot.total;
+      const originalStatus = pilot.previousLifecycle?.status ?? "connected";
+      // A product-only repair must never wake a paused/error source or launch
+      // overdue full-source work when its last image completes.
+      const scheduleHeld = pilot.completed && originalStatus === "connected" && !!source.autoSync && source.nextSyncAt != null && source.nextSyncAt <= Date.now();
+      pilot.sourceScheduleHeld = scheduleHeld;
+      const finishedStatus = scheduleHeld ? "paused" : originalStatus;
+
       await db.update(catalogSources).set({
         credentials: encryptToken(JSON.stringify(credentials)),
-        status: pilot.completed ? "connected" : "syncing", error: null, updatedAtMs: Date.now(),
-        ...(pilot.completed ? { processed: pilot.previousProgress?.processed ?? source.processed, total: pilot.previousProgress?.total ?? source.total, cursor: pilot.previousProgress?.cursor ?? null } : {}),
+        status: pilot.completed ? finishedStatus : "syncing", error: pilot.completed ? (pilot.previousLifecycle?.error ?? null) : null, updatedAtMs: Date.now(),
+        ...(pilot.completed ? { createdByUserId: pilot.previousLifecycle?.createdByUserId ?? source.createdByUserId, processed: pilot.previousProgress?.processed ?? source.processed, total: pilot.previousProgress?.total ?? source.total, cursor: pilot.previousProgress?.cursor ?? null } : {}),
       }).where(and(eq(catalogSources.id, source.id), eq(catalogSources.status, "syncing"), eq(catalogSources.leaseUntil, source.leaseUntil), eq(catalogSources.updatedAtMs, source.updatedAtMs)));
       return true;
     }

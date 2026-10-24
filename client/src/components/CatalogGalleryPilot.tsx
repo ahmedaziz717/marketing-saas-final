@@ -32,8 +32,7 @@ export function CatalogGalleryPilot({
             <DialogTitle>Repair one product gallery</DialogTitle>
             <DialogDescription>
               Preview a documented source recipe before importing photos for one
-              existing product. Other products, approvals and automatic source
-              settings stay unchanged.
+              existing product. Other products, approvals and source settings are preserved. A due automatic sync is held for explicit resume.
             </DialogDescription>
           </DialogHeader>
           {open && (
@@ -88,6 +87,7 @@ function PilotForm({
           {status.data.error ? ` — ${status.data.error}` : ""}
         </p>
       )}
+      {status.data?.completed && <p className="text-xs text-muted-foreground">Source status: {status.data.status}. {status.data.sourceScheduleHeld ? "Automatic sync became due during this pilot. The source stays paused until you explicitly resume source sync." : "The prior source lifecycle was restored."}{status.data.sourceError ? ` Previous source error: ${status.data.sourceError}` : ""}</p>}
       {pending && ["error", "paused"].includes(status.data!.status) && (
         <Button
           onClick={async () => {
