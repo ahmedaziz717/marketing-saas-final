@@ -1,6 +1,6 @@
 # Conversational workflow authoring — first increment
 
-Based on `codex/render-supabase-migration`; integrated through `450d84cee4f38b9fd7443d6fe10168f644df4901` in the isolated feature checkout.
+Based on `codex/render-supabase-migration`; integrated through `a379df4b5190e31a4d539bf5afcbc884c16ac11a` in the isolated feature checkout.
 
 ## Reviewable behavior
 
@@ -63,3 +63,42 @@ Initial scoped validation passed 72 tests, TypeScript and client/server/worker/M
 No live model call, paid generation, external workflow execution, production endpoint configuration, production OAuth grant, ChatGPT connector installation, deployment or release-branch merge was performed. Local isolated tests create synthetic authorization codes/grants only. Authenticated ChatGPT testing remains a later authorized verification step. Local HTTP tests exercise metadata, consent, code exchange, MCP tool calls and the authenticated review/apply form against an isolated database and mock sign-in.
 
 The current increment adds regression coverage for parent proposal identity, cumulative refinement, stale saved revisions, superseded applies, exact retry/metering, OAuth PKCE/client/callback/resource binding, authorization denial, concurrent code redemption, hashed token storage, grant-scoped tenants, revoked memberships/grants, CSRF, body/host boundaries, human review/apply and lost-response receipts. Full CI results belong to the exact PR head and are recorded in the PR description.
+
+## Connection handoff (official documentation rechecked 2026-10-24)
+
+Filters release `a379df4b5190e31a4d539bf5afcbc884c16ac11a` integrates cleanly. Its changes are confined to AssetWorkbench and the browser regression fixtures; no builder compatibility edits were needed.
+
+[OpenAI's custom MCP guide](https://developers.openai.com/api/docs/guides/custom-mcp-server) documents Streamable HTTP, OAuth with static credentials, CIMD and DCR. The [authentication guide](https://developers.openai.com/plugins/build/auth) documents predefined clients and explicitly supports public-client `none` and `private_key_jwt` with CIMD. This implementation accepts a **pre-registered public client with PKCE S256 and token authentication `none` only**; it does not advertise or implement CIMD, DCR, client-secret authentication or private-key assertions. The documents establish the available mechanisms, but do not prove this account's UI permits a static client ID with no secret. That exact UI combination remains an activation gate. If the UI requires a secret or only offers CIMD/DCR, stop: do not enter a dummy secret, advertise unimplemented CIMD, weaken authentication or enable the endpoint. A supported client-registration implementation would be needed before connection.
+
+### Minimal configuration
+
+The repository's Render blueprint sets `APP_ORIGIN=https://app.evokeloop.com`. Confirm the deployed value before changing settings. With that origin, the exact endpoints are:
+
+| Purpose                      | URL                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| MCP server/resource audience | `https://app.evokeloop.com/mcp/authoring`                                      |
+| Authorization server issuer  | `https://app.evokeloop.com`                                                    |
+| OAuth discovery              | `https://app.evokeloop.com/.well-known/oauth-authorization-server`             |
+| Resource discovery           | `https://app.evokeloop.com/.well-known/oauth-protected-resource/mcp/authoring` |
+| Authorization                | `https://app.evokeloop.com/mcp/oauth/authorize`                                |
+| Token exchange               | `https://app.evokeloop.com/mcp/oauth/token`                                    |
+| Manage/revoke grants         | `https://app.evokeloop.com/mcp/connections`                                    |
+
+1. Ordinary release: parent deploys the reviewed commit and migration `0021_authoring_oauth`, keeping `AUTHORING_MCP_ENABLED=false` (or absent). This creates no ChatGPT plugin, OAuth client registration, account grant or external access; the MCP endpoints return 503. In-app chat is independent.
+2. Read-only setup inspection: check the ChatGPT web custom-MCP form and workspace permissions without submitting creation/installation. Select **OAuth**, not mixed/no-auth. Verify that pre-registered client ID plus token authentication `none` is supported. Obtain the exact redirect URI shown by that configuration. If obtaining it requires creating a persistent plugin, obtain the creation approval below first; do not treat inspecting the form as permission to create it.
+3. After specific endpoint/client approval, configure `AUTHORING_MCP_CLIENT_ID=<approved public identifier>` and `AUTHORING_MCP_REDIRECT_URIS=["<exact URI shown in ChatGPT>"]`, then set `AUTHORING_MCP_ENABLED=true`. Use the same public client ID in ChatGPT. Do not create or enter a client secret. Preserve the existing app origin and proxy settings. The documented stable callback is `https://chatgpt.com/connector_platform_oauth_redirect` when issuer identification applies, but the UI's exact callback is authoritative; do not guess or wildcard it.
+4. After separate plugin/grant approval, create/install the custom MCP plugin and complete EvokeLoop sign-in and workspace consent. Start with exactly `workflows:read`; if the screen requests broader scopes, stop rather than silently accepting them. A grant exposes that selected workspace's workflow/App definitions, prompts, form values and available contracts to ChatGPT. Tokens expire after 30 minutes; plugin configuration itself persists until removed. Revocation is available on EvokeLoop.
+5. Request a separate scope-upgrade approval for `workflows:draft` when ready to create/refine proposals. Retain per-action ChatGPT confirmations; do not remember automatic write approval. Each draft apply additionally requires review and a deliberate POST on EvokeLoop. Do not execute, publish, schedule, spend generation credits or post externally during verification.
+6. Verify real discovery, PKCE/resource/callback matching, scope enforcement, one-workspace isolation, review/apply receipts, expiry and revocation before calling the connection usable. Local tests and protocol documentation do not replace this check.
+
+### Action-time confirmation wording for the parent
+
+Fill the actual client identifier, redirect URI, ChatGPT account/workspace and EvokeLoop workspace name/ID before asking. These are templates, not approvals obtained during implementation.
+
+**Endpoint/client configuration:** �May I enable EvokeLoop's authenticated MCP endpoint at `https://app.evokeloop.com/mcp/authoring` and configure public client `<client ID>` with the single redirect URI `<exact URI>`? This exposes OAuth discovery and the protected draft-authoring service; it does not grant any account access. No client secret will be created.�
+
+**Plugin installation and read grant:** �May I create and install the EvokeLoop custom MCP plugin in ChatGPT `<account/workspace>` and authorize `workflows:read` for EvokeLoop workspace `<name, ID>` for 30 minutes? ChatGPT will be able to read that workspace's workflow/App definitions, prompts, form values and contracts. The plugin configuration persists until removed; this access grant expires after 30 minutes and can be revoked. This does not authorize draft changes, execution, publishing, scheduling or paid generation.�
+
+**Draft-scope upgrade:** �May I additionally authorize `workflows:draft` for the same EvokeLoop workspace for a new 30-minute grant? ChatGPT may create and refine proposals and request draft review. Saving still requires your separate approval of each exact proposal on EvokeLoop. Keep per-action confirmations; do not enable automatic write approval. No execution, publishing, scheduling, credit spending or external posting is authorized.�
+
+**Apply an individual proposal:** �Do you approve saving proposal `<ID/hash>` to `<draft name/ID>` against revision `<revision>` with the changes shown in its EvokeLoop review page? This saves a draft only.�
