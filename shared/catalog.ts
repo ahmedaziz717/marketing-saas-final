@@ -61,7 +61,7 @@ export const catalogEntrySchema = z.object({
   availability: z.string().trim().max(120).optional(),
   serviceDetails: serviceDetailsSchema.nullable().default(null),
   imageUrl: z.union([z.literal(""), z.string().url()]).default(""),
-  imageUrls: z.array(z.string().url()).max(30).optional(),
+  imageUrls: z.array(z.string().url()).max(1000).optional(),
   specificationOrder: z.array(z.string().min(1).max(120)).max(100).optional(),
 });
 // Source-owned drafts may lack a landing page. Manual imports and channel

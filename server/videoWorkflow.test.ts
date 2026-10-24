@@ -1333,3 +1333,15 @@ it("never forwards provider credentials to an arbitrary request URL", () => {
     )
   ).toThrow("Invalid");
 });
+
+it("keeps every product photo together across the former 60-image page boundary", async () => {
+  const now = Date.now();
+  const [product] = await state.db.insert(products).values({ organizationId: org, name: "Gallery grouped", dedupeKey: "gallery-grouped", productUrl: "https://example.test/grouped", description: "Gallery test", specifications: {}, provenance: {}, status: "approved", createdAtMs: now, updatedAtMs: now }).returning();
+  const photos = await state.db.insert(productImages).values(Array.from({ length: 65 }, (_, i) => ({ organizationId: org, productId: product.id, sourceUrl: `https://example.test/grouped/${i}.png`, storageKey: `org-${org}/grouped/${i}.png`, url: `/grouped/${i}.png`, isPrimary: i === 64 ? 1 : 0, createdAtMs: now }))).returning();
+  const result = await owner.video.catalogImages({ organizationId: org, search: "Gallery grouped" });
+  expect(result.items).toHaveLength(65);
+  expect(result.nextOffset).toBeNull();
+  expect(result.items[0].key).toBe(`product_image:${photos[64].id}`);
+  expect(new Set(result.items.map(item => item.product?.id))).toEqual(new Set([product.id]));
+  await expect(outsider.video.catalogImages({ organizationId: org, search: "Gallery grouped" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+});

@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
       detail: "Front angle",
       url: "/lamp.png",
       origin: "catalog" as const,
+      product: { id: 7 },
     },
     {
       key: "product_image:12",
@@ -28,6 +29,7 @@ const api = vi.hoisted(() => ({
       detail: "Side angle",
       url: "/lamp-side.png",
       origin: "catalog" as const,
+      product: { id: 7 },
     },
   ],
 }));
@@ -111,7 +113,7 @@ afterEach(cleanup);
 function chooseProduct() {
   fireEvent.click(screen.getByRole("button", { name: "Add images" }));
   fireEvent.click(
-    screen.getByRole("button", { name: "Studio lamp · Front angle" })
+    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
   );
   fireEvent.click(screen.getByRole("button", { name: "Use selected images" }));
 }
@@ -216,23 +218,23 @@ it("enforces a combined reference limit across sources", () => {
   }
   render(<Picker />);
   fireEvent.click(
-    screen.getByRole("button", { name: "Studio lamp · Front angle" })
+    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
   );
   expect(screen.getByText("2 / 2 selected")).toBeTruthy();
   expect(
     (
       screen.getByRole("button", {
-        name: "Studio lamp · Side angle",
+        name: "Use photo 2 for Studio lamp",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
   fireEvent.click(
-    screen.getByRole("button", { name: "Studio lamp · Front angle" })
+    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
   );
   expect(
     (
       screen.getByRole("button", {
-        name: "Studio lamp · Side angle",
+        name: "Use photo 2 for Studio lamp",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(false);

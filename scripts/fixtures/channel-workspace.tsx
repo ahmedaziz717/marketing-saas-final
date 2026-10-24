@@ -1,3 +1,4 @@
+import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGroups";
 import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
 import OnboardingPage from "../../client/src/pages/OnboardingPage";
 import { AccountInvitePage } from "../../client/src/pages/PlatformAdminPage";
@@ -1139,6 +1140,7 @@ const routeForPage: Record<string, string> = {
   "workflows-directory": "/app/workflows",
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
+  "catalog-gallery": "/app/catalog-gallery-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
   "workflow-density": "/app/workflow-density-fixture",
@@ -1393,8 +1395,14 @@ function WorkflowModelFormFixture() {
     </>
   );
 }
+function CatalogGalleryFixture() {
+  const [selected, setSelected] = useState<string[]>([]);
+  const choices = studioDraftAssets.map((asset, i) => ({ ...asset, key: `product_image:${i + 1}`, url: asset.url.replace("Emerald%20collection", `Emerald%20angle%20${i}`), name: i < 2 ? "Emerald collection" : "Gold collection", origin: "catalog" as const, product: { id: i < 2 ? 7 : 8 } })) as any;
+  return <div className="p-5"><h1>Product catalog</h1><ProductPhotoGroups choices={choices} selected={selected} limit={3} onToggle={key => setSelected(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key])} /></div>;
+}
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
   if (which === "onboarding")
     return (
       <DashboardLayout>
@@ -2239,6 +2247,12 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "One Generate action"
       );
       check(mutations.length === 0, "Exploration never starts generation");
+      layout();
+    }
+    if (which === "catalog-gallery") {
+      await click("Use photo 2 for Emerald collection");
+      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Alternate angle selection is retained within its product");
+      check(document.querySelectorAll('section[aria-label^="Photos for"]').length === 2, "One group per product rather than duplicate tiles");
       layout();
     }
     if (which === "creative-people") {
