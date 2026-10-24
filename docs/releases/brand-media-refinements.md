@@ -16,9 +16,11 @@ Requests are sequential within a page, with same-page detail reuse and existing 
 
 Apply additive `0022_catalog_media_groups.sql` before application code. It adds nullable JSON columns to existing private tables, without grants, data rewrites or destructive changes. Migration 0021 belongs to the separately merged PR95 authoring release (9e6d691). This branch includes that release baseline; the media journal and snapshot were regenerated after its authoring schema. Both migrations remain in order. Run database-backed CI on this integrated head before releasing PR99.
 
-## External input still required
+## Verified gallery recipe and production boundary
 
-The Cybertron configure endpoint supplies system/chassis identities, eligible upgrades and gallery counts, but the canonical full-gallery URL resolver and highest-resolution variants are not documented in the available evidence. The generic implementation is ready for explicit URLs; complete real CLX galleries cannot be claimed or populated until the provider supplies that mapping. Verified 600-pixel images are not claimed to be originals. No production resync, source configuration change, paid generation or production prompt edit was performed.
+The canonical component gallery path is now verified from the rendered CLX website. The source-scoped recipe in `docs/catalog-recipes/clx-chassis.json` uses each exact component code and its own gallery count, including printed ASM chassis. The sample system's base and 19 eligible alternatives supply 183 distinct photos. All were fetched, decoded at 700 by 700 pixels, imported into an isolated database and rendered as selectable views by the actual gallery component. These are configuration-reference photos; no larger original has been established. Generic importer logic does not infer provider paths.
+
+Existing production catalogs are unchanged. The recipe must be applied to the intended source and an image import approved before these photos appear in the user's catalog. The existing repair queue is source-wide; a single-product pilot requires a bounded execution path. No production resync, source configuration change, paid generation or production prompt edit was performed.
 
 ## Validation
 
