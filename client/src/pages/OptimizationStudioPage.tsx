@@ -1,5 +1,9 @@
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useStudioDraft } from "@/hooks/useStudioDraft";
+import { studioDraftKey } from "@/lib/studioDrafts";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -100,6 +104,18 @@ const sections = [
   },
 ] as const;
 const pages = sections.flatMap(s => [...s.categories]);
+const optimizationDraftSchema = z.object({
+  name: z.string().max(300),
+  studio: optimizationStudioSchema,
+  settings: z.object({
+    channel: z.enum(["meta_ads", "google_ads"]).optional(),
+    connectionId: z.string().max(128),
+    range: z.object({ since: z.string().max(20), until: z.string().max(20) }),
+    focus: z.array(z.enum(optimizerKinds)).max(3),
+    minimumConfidence: z.number().min(0).max(1),
+    refreshHistory: z.boolean(),
+  }),
+});
 
 function Studio({
   organizationId,
@@ -113,6 +129,7 @@ function Studio({
   initialPage?: string;
 }) {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const initialParams = new URLSearchParams(useSearch());
   const root = useStudioNavigation();
   const [page, setPage] = useState(
@@ -139,6 +156,24 @@ function Studio({
   const [error, setError] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [loaded, setLoaded] = useState(!workflowId);
+  const draft = useStudioDraft({
+    key: studioDraftKey(
+      user?.id,
+      organizationId,
+      "optimization",
+      workflowId ?? `new:${initialParams.get("channel") ?? "meta_ads"}`
+    ),
+    value: { name, settings, studio },
+    restore: value => {
+      setName(value.name);
+      setSettings(value.settings);
+      setStudio(value.studio);
+      setDirty(true);
+    },
+    schema: optimizationDraftSchema,
+    ready: loaded,
+    revision,
+  });
   const [incompatible, setIncompatible] = useState(false);
   const submitting = useRef(false);
   const availability = trpc.optimization.availability.useQuery({
@@ -426,6 +461,31 @@ function Studio({
           <Button variant="outline" disabled={busy} onClick={() => persist()}>
             <Save size={16} /> Save plan
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy || !loaded}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Reset this optimization setup on this device? Saved plans and prompt defaults remain unchanged."
+                )
+              ) {
+                draft.clear();
+                setName("My optimization plan");
+                setSettings(defaultOptimizationSettings());
+                setStudio(optimizationStudioSchema.parse({ version: 1 }));
+                setDirty(true);
+              }
+            }}
+          >
+            Reset setup
+          </Button>
+          {draft.stale && (
+            <p role="status" className="text-sm text-muted-foreground">
+              A newer saved plan replaced the older local draft.
+            </p>
+          )}
         </div>
       </header>
       <StudioSetupSummary
@@ -1009,6 +1069,7 @@ function Studio({
 }
 
 export default function OptimizationStudioPage() {
+  const { user } = useAuth();
   const workspace = useWorkspace();
   const params = new URLSearchParams(useSearch());
   const id = params.get("id") || undefined;
@@ -1020,7 +1081,7 @@ export default function OptimizationStudioPage() {
       {workspace.organizationId &&
         (allowed ? (
           <Studio
-            key={`${workspace.organizationId}:${id ?? "new"}:${params.get("channel") ?? "meta_ads"}`}
+            key={`${user?.id}:${workspace.organizationId}:${id ?? "new"}:${params.get("channel") ?? "meta_ads"}`}
             organizationId={workspace.organizationId}
             role={workspace.membership!.role}
             workflowId={id}

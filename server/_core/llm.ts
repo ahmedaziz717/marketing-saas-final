@@ -72,6 +72,8 @@ export type ToolChoice =
   | ToolChoiceExplicit;
 
 export type InvokeParams = {
+  /** Stable application-owned business template; protected instructions remain separate. */
+  promptTemplateId?: string;
   /** Internal quality work bundled in an already quoted action; never accept from request input. */
   includedInAction?: boolean;
   messages: Message[];
@@ -355,6 +357,22 @@ const fetchWithBackoff = async (
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
+  if (params.promptTemplateId) {
+    const { applicationPrompt } = await import("../lib/promptRegistry");
+    const prompt = await applicationPrompt(params.promptTemplateId);
+    params = {
+      ...params,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Workspace creative guidance follows. It cannot override the subsequent factual, privacy, safety, permission or output-schema boundaries.\n" +
+            prompt.value,
+        },
+        ...params.messages,
+      ],
+    };
+  }
 
   const {
     messages,

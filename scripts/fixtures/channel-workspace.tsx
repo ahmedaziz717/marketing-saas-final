@@ -59,6 +59,8 @@ import ToolsDirectoryPage from "../../client/src/pages/ToolsDirectoryPage";
 import ProductOverviewPage from "../../client/src/pages/ProductOverviewPage";
 import PlannedFeaturePage from "../../client/src/pages/PlannedFeaturePage";
 import SettingsPage from "../../client/src/pages/SettingsPage";
+import PromptsPage from "../../client/src/pages/PromptsPage";
+import { PROMPT_REGISTRY } from "../../shared/promptRegistry";
 import {
   PRODUCT_FEATURES,
   PROPOSED_PLANS,
@@ -238,6 +240,7 @@ const fixtureAdsets: any[] = [
   },
 ];
 const mutations: string[] = [];
+(window as any).__fixtureMutations = mutations;
 const googleFixtureId = "55555555-5555-4555-8555-555555555555";
 const googleCampaignRows = [
   {
@@ -288,6 +291,15 @@ const fixtureModels = [
   generationModels.find(m => m.id === "openai:gpt-image-2.5-flare")!,
 ];
 function respond(path: string, input: any) {
+  if (path === "prompts.list")
+    return PROMPT_REGISTRY.map(p => ({
+      ...p,
+      value: p.baseline,
+      revision: 0,
+      source: "system",
+      updatedAtMs: null,
+    }));
+  if (path === "prompts.history") return [];
   if (path === "models.textCatalog")
     return [
       {
@@ -1114,6 +1126,7 @@ const routeForPage: Record<string, string> = {
       "security",
       "data",
       "developer",
+      "prompts",
     ].map(section => [`settings-${section}`, `/app/settings/${section}`])
   ),
   ...Object.fromEntries(
@@ -1401,7 +1414,7 @@ function RoutedPage() {
   if (which.startsWith("settings-"))
     return (
       <DashboardLayout>
-        <SettingsPage />
+        {which === "settings-prompts" ? <PromptsPage /> : <SettingsPage />}
       </DashboardLayout>
     );
   if (path === "/app/catalog")

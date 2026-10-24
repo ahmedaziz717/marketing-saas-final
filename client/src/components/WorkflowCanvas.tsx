@@ -1321,6 +1321,15 @@ function WorkflowCanvasContent({
                     <small>
                       Connected text is included before these instructions.
                     </small>
+                    <PromptDefaultsLink
+                      promptId={
+                        selectedNode.type === "assistant"
+                          ? "workflow.assistant"
+                          : selectedNode.type === "optimize_copy"
+                            ? "workflow.optimizeCopy"
+                            : "workflow.image"
+                      }
+                    />
                   </label>
                 )
               )}
@@ -1948,3 +1957,4 @@ function ResultPreview({
     </button>
   );
 }
+import { PromptDefaultsLink } from "./PromptDefaultsLink";

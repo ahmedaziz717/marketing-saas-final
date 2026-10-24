@@ -1,4 +1,5 @@
 import { prepareImageRequest } from "./imageRequest";
+import { assertImagePromptBudget } from "./imagePromptBudget";
 import { providerRequestRate, assertAcceptedPrice } from "./providerQuote";
 import { meteredCall } from "./aiMetering";
 import { storagePut } from "../storage";
@@ -55,6 +56,7 @@ export async function generateSunburstImage(options: GenerateSunburstOptions) {
   const resolvedModel = options.rateSnapshot
     ? generationModel(options.modelId ?? DEFAULT_IMAGE_MODEL)!
     : await resolveModel(await libraryDatabase(), options.modelId, "image");
+  if (resolvedModel) assertImagePromptBudget(options.prompt, resolvedModel);
   const preparedRequest =
     resolvedModel?.provider === "higgsfield"
       ? await prepareImageRequest(resolvedModel, options)

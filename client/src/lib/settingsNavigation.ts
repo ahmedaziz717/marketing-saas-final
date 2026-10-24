@@ -14,6 +14,7 @@ export const settingsSections = [
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "billing", label: "Billing & usage", icon: CreditCard },
   { id: "activity", label: "Activity & audit log", icon: History },
+  { id: "prompts", label: "Prompt defaults", icon: Code2 },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
   { id: "data", label: "Data & privacy", icon: Database },

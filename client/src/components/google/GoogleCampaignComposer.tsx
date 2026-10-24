@@ -8,12 +8,16 @@ import { AdEditor, AssetEditor } from "./GoogleAdEditor";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
 import { GoogleChangeSummary } from "./GoogleChangeSummary";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearch } from "wouter";
 import { ClipboardCheck, Images, Radio, Settings2, Type } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { z } from "zod";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useStudioDraft } from "@/hooks/useStudioDraft";
+import { studioDraftKey, draftShapeSchema } from "@/lib/studioDrafts";
 import { StudioCard } from "@/components/configurator/StudioCard";
 import {
   StudioJourney,
@@ -43,6 +47,16 @@ const emptyAd = (): GoogleAdContent => ({
   path1: "",
   path2: "",
 });
+const googleDraftSchema = z.object({
+  chosen: z.string().max(128),
+  mode: z.enum(["existing", "new", "drafts"]),
+  format: z.enum(["image", "video", "text", "logo"]),
+  includeInactive: z.boolean(),
+  campaignId: z.string().max(128),
+  change: draftShapeSchema(googleChangeSchema),
+  draftId: z.string().nullable().default(null),
+  draftRevision: z.number().nullable().default(null),
+});
 const newCampaign = (): GoogleCampaignCreate => ({
   kind: "campaign_create",
   type: "SEARCH",
@@ -68,6 +82,7 @@ export function GoogleCampaignComposer({
   channelChoices: ReactNode;
 }) {
   const { membership } = useWorkspace();
+  const { user } = useAuth();
   const params = new URLSearchParams(useSearch());
   const connections = trpc.googleAds.connections.useQuery({ organizationId });
   const available =
@@ -91,6 +106,39 @@ export function GoogleCampaignComposer({
     [draft, setDraft] = useState<GoogleCampaignDraft | null>(null),
     [error, setError] = useState(""),
     [confirmed, setConfirmed] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<z.infer<
+    typeof googleDraftSchema
+  > | null>(null);
+  const remembered = useStudioDraft({
+    key: studioDraftKey(
+      user?.id,
+      organizationId,
+      "activation:google",
+      `new:${params.get("connectionId") ?? ""}:${params.get("asset") ?? ""}`
+    ),
+    ready: !pendingRestore,
+    value: {
+      chosen,
+      mode,
+      format,
+      includeInactive,
+      campaignId,
+      change,
+      draftId: draft?.id ?? null,
+      draftRevision: draft?.revision ?? null,
+    },
+    schema: googleDraftSchema,
+    restore: value => {
+      setChosen(value.chosen);
+      setMode(value.mode);
+      setFormat(value.format);
+      setIncludeInactive(value.includeInactive);
+      setCampaignId(value.campaignId);
+      if (value.draftId) setPendingRestore(value);
+      else setChange(value.change);
+      setConfirmed(false);
+    },
+  });
   const list = trpc.googleAds.campaigns.inventory.useQuery(
     { ...scope, includeInactive },
     { enabled: !!connectionId }
@@ -102,10 +150,37 @@ export function GoogleCampaignComposer({
   const drafts = trpc.googleAds.campaigns.drafts.useQuery(scope, {
     enabled: !!connectionId,
   });
+  useEffect(() => {
+    if (!pendingRestore || !drafts.data) return;
+    const saved = drafts.data.find(row => row.id === pendingRestore.draftId);
+    if (!saved) {
+      setError(
+        "The saved Google draft is unavailable. Your local choices remain on this device; reset to start a new setup."
+      );
+      return;
+    }
+    setDraft(saved);
+    setChange(
+      saved.revision === pendingRestore.draftRevision &&
+        !["publishing", "published", "uncertain"].includes(saved.state)
+        ? pendingRestore.change
+        : saved.change
+    );
+    if (saved.revision !== pendingRestore.draftRevision)
+      setError(
+        "This saved draft changed elsewhere. Its current version was opened."
+      );
+    setConfirmed(false);
+    setPendingRestore(null);
+  }, [pendingRestore, drafts.data]);
   const save = trpc.googleAds.campaigns.save.useMutation(),
     validate = trpc.googleAds.campaigns.validate.useMutation(),
     publish = trpc.googleAds.campaigns.publish.useMutation();
-  const busy = save.isPending || validate.isPending || publish.isPending;
+  const busy =
+    save.isPending ||
+    validate.isPending ||
+    publish.isPending ||
+    !!pendingRestore;
   const current = detail.data?.campaigns.find(
     r => String(r.campaign.id) === campaignId
   );
@@ -123,6 +198,7 @@ export function GoogleCampaignComposer({
   };
   const begin = (next: GoogleChange, target = "settings") => {
     edit(next);
+    setPendingRestore(null);
     setDraft(null);
     setFormat("image");
     setSection(target);
@@ -459,6 +535,7 @@ export function GoogleCampaignComposer({
                         if (c.id !== connectionId) {
                           setChosen(c.id);
                           setCampaignId("");
+                          setPendingRestore(null);
                           setDraft(null);
                           setChange(newCampaign());
                           setConfirmed(false);
@@ -773,6 +850,7 @@ export function GoogleCampaignComposer({
                         className="google-draft"
                         key={d.id}
                         onClick={() => {
+                          setPendingRestore(null);
                           setDraft(d);
                           setChange(d.change);
                           setConfirmed(false);
@@ -1046,6 +1124,30 @@ export function GoogleCampaignComposer({
                         onClick={() => void saveDraft()}
                       >
                         Save draft
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={
+                          save.isPending ||
+                          validate.isPending ||
+                          publish.isPending
+                        }
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Reset this Google setup on this device? Saved drafts, live campaigns and prompt defaults remain unchanged."
+                            )
+                          ) {
+                            remembered.clear();
+                            setChange(newCampaign());
+                            setPendingRestore(null);
+                            setDraft(null);
+                            setConfirmed(false);
+                            setCampaignId("");
+                          }
+                        }}
+                      >
+                        Reset setup
                       </Button>
                       <Button disabled={busy} onClick={() => void checkDraft()}>
                         {validate.isPending

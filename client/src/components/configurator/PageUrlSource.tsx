@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
+import { readStudioDraft, writeStudioDraft } from "@/lib/studioDrafts";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -17,6 +19,7 @@ const pageTypes = [
 type PageType = (typeof pageTypes)[number]["id"];
 
 export function PageUrlSource({
+  draftKey,
   organizationId,
   kind,
   image,
@@ -26,6 +29,7 @@ export function PageUrlSource({
   onUploaded,
   onManual,
 }: {
+  draftKey?: string | null;
   organizationId: number;
   kind: "image" | "video";
   image: CreativeSetup;
@@ -35,6 +39,23 @@ export function PageUrlSource({
   onUploaded: () => Promise<unknown>;
   onManual: () => void;
 }) {
+  const [draft] = useState(() =>
+    readStudioDraft(draftKey ?? null, raw => {
+      try {
+        const parsed = z
+          .object({
+            url: z.string().max(4000),
+            pageType: z.enum(["product", "service", "general"]),
+            title: z.string().max(4000),
+            description: z.string().max(30000),
+          })
+          .safeParse(JSON.parse(raw));
+        return parsed.success ? parsed.data : null;
+      } catch {
+        return null;
+      }
+    })
+  );
   const saved =
     kind === "image"
       ? image.promotionMode === "platform"
@@ -42,21 +63,31 @@ export function PageUrlSource({
         : undefined
       : video.promotion;
   const [pageType, setPageType] = useState<PageType>(
-    saved?.kind === "service"
-      ? "service"
-      : saved?.sourceUrl
-        ? "general"
-        : "product"
+    draft?.pageType ??
+      (saved?.kind === "service"
+        ? "service"
+        : saved?.sourceUrl
+          ? "general"
+          : "product")
   );
-  const [url, setUrl] = useState(saved?.sourceUrl ?? "");
-  const [title, setTitle] = useState(saved?.sourceUrl ? saved.title : "");
+  const [url, setUrl] = useState(draft?.url ?? saved?.sourceUrl ?? "");
+  const [title, setTitle] = useState(
+    draft?.title ?? (saved?.sourceUrl ? saved.title : "")
+  );
   const [description, setDescription] = useState(
-    saved?.sourceUrl ? saved.description : ""
+    draft?.description ?? (saved?.sourceUrl ? saved.description : "")
   );
   const [pageContent, setPageContent] = useState(saved?.pageContent);
-  const [reviewedUrl, setReviewedUrl] = useState(saved?.sourceUrl ?? "");
-  const [applied, setApplied] = useState(!!saved?.sourceUrl);
+  const [reviewedUrl, setReviewedUrl] = useState(
+    draft?.url && draft.url !== saved?.sourceUrl ? "" : (saved?.sourceUrl ?? "")
+  );
+  const [applied, setApplied] = useState(
+    !!saved?.sourceUrl && (!draft?.url || draft.url === saved.sourceUrl)
+  );
   const [imported, setImported] = useState(false);
+  useEffect(() => {
+    writeStudioDraft(draftKey ?? null, { url, pageType, title, description });
+  }, [draftKey, url, pageType, title, description]);
   const preview = trpc.catalogSources.previewPage.useMutation();
   const importer = trpc.catalogSources.addEntries.useMutation();
   const busy = preview.isPending || importer.isPending;

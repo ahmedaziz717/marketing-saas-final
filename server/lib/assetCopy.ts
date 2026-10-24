@@ -1,3 +1,4 @@
+import { systemPromptContract } from "../../shared/promptContracts";
 import { copyDirectionBrief } from "../../shared/copyDirection";
 import { metaCallToActionLabel } from "../../shared/metaCallToAction";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import {
   type AssetCopyRequest,
   type CopySet,
 } from "../../shared/adCopy";
-import { marketingJson } from "./marketingDrafts";
+import { marketingJsonWith } from "./marketingDrafts";
 
 const normalized = (text: string) =>
   text.trim().replace(/\s+/g, " ").toLowerCase();
@@ -39,7 +40,7 @@ export async function generateAssetCopy(
   try {
     if (target && target.field !== "set") {
       const field = target.field;
-      const result = await marketingJson(
+      const result = await marketingJsonWith("copy.asset")(
         base +
           `Rewrite only the ${field} at the requested index for ${input.channel === "facebook" ? "an organic Facebook post" : "a Meta ad"}. Return {text:string} with exactly one new alternative. Keep the same subject and factual meaning, with a distinct angle or wording. It must differ from all current options for that field. Do not generate the other copy fields.`,
         data,
@@ -65,12 +66,12 @@ export async function generateAssetCopy(
       input.channel === "meta_ads"
         ? generatedFields.description
         : z.string().trim().max(300);
-    return await marketingJson(
+    return await marketingJsonWith("copy.asset")(
       base +
         (input.channel === "facebook"
           ? `Write exactly ${count} alternative organic Facebook post captions. Put each caption in message, with a supporting headline and optional description. Keep a conversational voice and use hashtags sparingly. `
           : `Write exactly ${count} distinct ad copy sets, each with nonempty message, headline and description. `) +
-        "Return {options:[{message,headline,description}]}. Each field must have distinct wording across the returned sets, and alternatives must work independently when Meta combines fields. " +
+        systemPromptContract("contract.assetCopy.1") +
         (target
           ? "Replace only the requested set. All three fields must differ from the existing options. "
           : "Provide fresh angles rather than repeating the supplied current options. "),

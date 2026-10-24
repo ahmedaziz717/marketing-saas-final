@@ -1,4 +1,5 @@
 import { workflowAutomationRouter } from "./routers/workflowAutomation";
+import { promptsRouter } from "./routers/prompts";
 import { insightsRouter } from "./routers/insights";
 import { optimizationRouter } from "./routers/optimization";
 import { platformAdminRouter } from "./routers/platformAdmin";
@@ -28,6 +29,7 @@ import { authClient } from "./auth/supabase";
 import { publicWebsiteAdminRouter } from "./routers/publicWebsite";
 
 export const appRouter = router({
+  prompts: promptsRouter,
   system: systemRouter,
   platformAdmin: platformAdminRouter,
   publicWebsiteAdmin: publicWebsiteAdminRouter,

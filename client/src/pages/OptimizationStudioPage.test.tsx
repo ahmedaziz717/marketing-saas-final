@@ -1,3 +1,6 @@
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 10 } }),
+}));
 // @vitest-environment jsdom
 import { changeField } from "@/test/choiceControls";
 import {
@@ -108,6 +111,7 @@ function open(id = "") {
   );
 }
 beforeEach(() => {
+  localStorage.clear();
   state.detail = undefined;
   state.enabled = true;
   state.save.mockReset().mockImplementation(async input => {

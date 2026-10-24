@@ -186,6 +186,7 @@ try {
         "security",
         "data",
         "developer",
+        "prompts",
       ].map(section => `settings-${section}`),
       ...["activate", "measure", "optimize"].flatMap(family => [
         `apps-${family}`,

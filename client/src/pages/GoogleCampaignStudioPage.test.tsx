@@ -1,3 +1,6 @@
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 10 } }),
+}));
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -17,6 +20,7 @@ const api = vi.hoisted(() => ({
   inventory: {} as any,
   library: [] as any[],
   resources: [] as any[],
+  drafts: [] as any[],
 }));
 const account = {
   id: "google",
@@ -48,7 +52,7 @@ vi.mock("@/lib/trpc", () => ({
             return { data: api.inventory };
           },
         },
-        drafts: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+        drafts: { useQuery: () => ({ data: api.drafts, refetch: vi.fn() }) },
         resources: { useQuery: () => ({ data: api.resources }) },
         videoUploadStatus: {
           useQuery: () => ({ data: null, refetch: vi.fn() }),
@@ -61,6 +65,7 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
+
 import GoogleCampaignStudioPage from "./GoogleCampaignStudioPage";
 import { GoogleCampaignComposer } from "@/components/google/GoogleCampaignComposer";
 const click = (name: RegExp | string) =>
@@ -80,9 +85,11 @@ function setup(query = "?connectionId=google") {
   );
 }
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   api.library = [];
   api.resources = [];
+  api.drafts = [];
   api.inventory = {
     campaigns: [],
     groups: [],
@@ -404,4 +411,65 @@ it("requires a separate explicit confirmation before transferring an EL video to
     )
   );
   expect(api.mutate).not.toHaveBeenCalled();
+});
+it.each([1, 2])(
+  "restores local Google edits only for matching saved revision %s",
+  async revision => {
+    const view = setup();
+    click("New campaign");
+    click("Select Search");
+    fireEvent.change(screen.getByLabelText("Campaign name"), {
+      target: { value: "Local unsaved name" },
+    });
+    const key = Object.keys(localStorage).find(key =>
+      key.includes("activation:google")
+    )!;
+    const entry = JSON.parse(localStorage.getItem(key)!);
+
+    view.unmount();
+    entry.value.draftId = "saved-google";
+    entry.value.draftRevision = 1;
+    localStorage.setItem(key, JSON.stringify(entry));
+    api.drafts = [
+      {
+        id: "saved-google",
+        revision,
+        state: "draft",
+        change: { ...entry.value.change, name: "Server name" },
+      },
+    ];
+    setup();
+    section("Delivery");
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Campaign name") as HTMLInputElement).value
+      ).toBe(revision === 1 ? "Local unsaved name" : "Server name")
+    );
+    if (revision === 2)
+      expect(screen.getByText(/current version was opened/)).toBeTruthy();
+    expect(api.mutate).not.toHaveBeenCalled();
+  }
+);
+it("keeps missing saved Google drafts unavailable instead of submitting local content", async () => {
+  const view = setup();
+  click("New campaign");
+  click("Select Search");
+  const key = Object.keys(localStorage).find(key =>
+    key.includes("activation:google")
+  )!;
+  const entry = JSON.parse(localStorage.getItem(key)!);
+
+  view.unmount();
+  entry.value.draftId = "deleted-draft";
+  entry.value.draftRevision = 1;
+  localStorage.setItem(key, JSON.stringify(entry));
+  setup();
+  section("Delivery");
+  await waitFor(() =>
+    expect(screen.getByText(/saved Google draft is unavailable/)).toBeTruthy()
+  );
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(JSON.parse(localStorage.getItem(key)!).value.draftId).toBe(
+    "deleted-draft"
+  );
 });

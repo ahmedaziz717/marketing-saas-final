@@ -50,6 +50,10 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { z } from "zod";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useStudioDraft } from "@/hooks/useStudioDraft";
+import { studioDraftKey, draftShapeSchema } from "@/lib/studioDrafts";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -74,6 +78,15 @@ import {
 } from "@shared/channels";
 import type { Publication } from "../../../drizzle/channelSchema";
 export type { Publication };
+const composerDraftSchema = z.object({
+  placement: z.boolean(),
+  carousel: z.boolean(),
+  connectionId: z.string().max(128),
+  assetKey: z.string().max(1000),
+  content: draftShapeSchema(contentSchema),
+  timezone: z.string().max(100),
+  local: z.string().max(100),
+});
 export function PublicationStatus({
   item,
 }: {
@@ -170,6 +183,7 @@ export function PublicationComposer({
   ) => void;
 }) {
   const { organizationId, membership } = useWorkspace();
+  const { user } = useAuth();
   const fieldPrefix = useId();
   const fieldId = (name: string) => (studio ? `${fieldPrefix}-${name}` : name);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -266,6 +280,36 @@ export function PublicationComposer({
       : (initialTime ?? "")
   );
   const scope = { organizationId: organizationId! };
+  const remembered = useStudioDraft({
+    key: studio
+      ? studioDraftKey(
+          user?.id,
+          organizationId,
+          `activation:${channel}`,
+          item?.id ?? `new:${initialPlanId ?? ""}:${initialAssetKey ?? ""}`
+        )
+      : null,
+    value: {
+      placement,
+      carousel,
+      connectionId,
+      assetKey,
+      content,
+      timezone,
+      local,
+    },
+    schema: composerDraftSchema,
+    revision: item?.revision,
+    restore: value => {
+      setPlacement(value.placement);
+      setCarousel(value.carousel);
+      setConnection(value.connectionId);
+      setAssetKey(value.assetKey);
+      setContentValue(value.content);
+      setTimezone(value.timezone);
+      setLocal(value.local);
+    },
+  });
   const businessBrand = trpc.brand.get.useQuery(scope, {
     enabled: !!organizationId,
   });
@@ -1881,6 +1925,40 @@ export function PublicationComposer({
               ? "Save delivery settings"
               : "Save draft"}
         </Button>
+        {studio && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={save.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Reset this activation setup on this device? Saved publications and prompt defaults remain unchanged."
+                )
+              ) {
+                remembered.clear();
+                setConnection("");
+                setAssetKey("");
+                setContentValue(
+                  contentSchema.parse({
+                    title:
+                      channel === "facebook" ? "Untitled post" : "Untitled ad",
+                  })
+                );
+                setPlacement(false);
+                setCarousel(false);
+                setLocal("");
+              }
+            }}
+          >
+            Reset setup
+          </Button>
+        )}
+        {remembered.stale && (
+          <p role="status">
+            A newer saved publication replaced the older local draft.
+          </p>
+        )}
         {wizard && step !== "preview" && (
           <Button
             className={studio ? "cfg-primary" : undefined}

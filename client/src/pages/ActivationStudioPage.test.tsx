@@ -1,3 +1,6 @@
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 10 } }),
+}));
 // @vitest-environment jsdom
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -90,6 +93,7 @@ function setup(query = "") {
   );
 }
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   api.role = "owner";
   api.publication = null;

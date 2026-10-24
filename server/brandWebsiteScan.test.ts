@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("./lib/marketingDrafts", () => ({ marketingJson: vi.fn() }));
+vi.mock("./lib/marketingDrafts", () => {
+  const marketingJson = vi.fn();
+  return { marketingJson, marketingJsonWith: () => marketingJson };
+});
 vi.mock("./lib/websiteCrawler", async original => ({
   ...(await original<typeof import("./lib/websiteCrawler")>()),
   safeFetchText: vi.fn(),

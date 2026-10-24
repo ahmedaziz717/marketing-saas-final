@@ -1,7 +1,8 @@
+import { systemPromptContract } from "../../shared/promptContracts";
 import * as cheerio from "cheerio";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { marketingJson } from "./marketingDrafts";
+import { marketingJsonWith } from "./marketingDrafts";
 import { extractPageEvidence, safeFetchText, sameSite } from "./websiteCrawler";
 
 function publicLink(value: unknown, base: string) {
@@ -237,8 +238,8 @@ export async function scanBrandWebsite(website: string) {
     fonts = evidence.fonts;
   if (evidence.text.length > 80 || evidence.description.length > 80) {
     try {
-      const suggestion = await marketingJson(
-        "Suggest this website operator's brand identity for review. Return {name, voice, colors, fonts}. Voice is an inferred concise writing guide: tone, audience, vocabulary, and wording to avoid, grounded in the supplied website copy. Distinguish a directory operator from third-party providers. Select only supplied detected color codes and font names; do not invent a palette or fonts. Prefer the actual brand name over SEO titles. Do not add legal claims, guarantees, or marketing promises.",
+      const suggestion = await marketingJsonWith("brand.website")(
+        systemPromptContract("contract.brandWebsiteScan.1"),
         {
           ...evidence,
           text: evidence.text.slice(0, 14000),

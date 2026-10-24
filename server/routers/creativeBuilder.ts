@@ -6,6 +6,8 @@ import {
   renderOriginalLogo,
 } from "../lib/logoPreservation";
 import { productOverlayPlacementSchema } from "../../shared/productOverlay";
+import { generationBrand } from "../lib/brandVoiceSummary";
+import { creativePromptDefaults } from "../lib/promptRegistry";
 import { alignCopyWithCampaign } from "../../shared/creativeMessaging";
 import {
   prepareEnhancement,
@@ -342,6 +344,8 @@ export async function runBuilderJob(
     )
       throw new Error("The saved image quotes do not match this creative set.");
     const imageModel = setup.modelId ?? REQUIRED_IMAGE_MODEL_ID;
+    const promptBrand = await generationBrand(organizationId, resolved.brand);
+    const promptDefaults = await creativePromptDefaults(organizationId, setup);
     const logoSource = resolved.logo
       ? await readGenerationSource(resolved.logo.storageKey)
       : null;
@@ -409,8 +413,9 @@ export async function runBuilderJob(
           quality: "medium",
           originalImages: master ? [master, ...sources] : sources,
           prompt: buildCreativePrompt({
+            promptDefaults,
             setup,
-            brand: resolved.brand,
+            brand: promptBrand,
             products: group,
             formatId: format.id,
             hasLogo: !!resolved.logo,
@@ -676,6 +681,8 @@ export async function builderImageQuote(
   const common = await Promise.all(
     (resolved.references ?? []).map(r => readGenerationSource(r.storageKey))
   );
+  const promptBrand = await generationBrand(organizationId, resolved.brand);
+  const promptDefaults = await creativePromptDefaults(organizationId, setup);
   if (resolved.logo)
     common.push(await readGenerationSource(resolved.logo.storageKey));
   for (const person of selectedPeople(setup)) {
@@ -704,8 +711,9 @@ export async function builderImageQuote(
     for (const format of formats) {
       const request = await prepareImageRequest(model, {
         prompt: buildCreativePrompt({
+          promptDefaults,
           setup,
-          brand: resolved.brand,
+          brand: promptBrand,
           products: group,
           formatId: format.id,
           hasLogo: !!resolved.logo,
@@ -1536,11 +1544,13 @@ export const creativeBuilderRouter = router({
       try {
         const model = requireLatestGptTextModel((await listLLMModels()).data);
         const response = await invokeLLM({
+          promptTemplateId: "creative.copy",
           model,
           messages: buildCreativeCopyMessages(
             copySetup,
             resolved.brand,
-            resolved.products
+            resolved.products,
+            await creativePromptDefaults(input.organizationId, copySetup)
           ),
           maxTokens: 6000,
           reasoning: { effort: "low" },

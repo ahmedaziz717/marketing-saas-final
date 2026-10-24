@@ -26,6 +26,7 @@ import GoogleCampaignStudioPage from "./pages/GoogleCampaignStudioPage";
 import CreativeConfiguratorPage from "./pages/CreativeConfiguratorPage";
 import AssetLibraryPage from "./pages/AssetLibraryPage";
 import SettingsPage from "./pages/SettingsPage";
+import PromptsPage from "./pages/PromptsPage";
 import InvitePage from "./pages/InvitePage";
 import SocialMediaPage from "./pages/SocialMediaPage";
 import AdvertisingPage from "./pages/AdvertisingPage";
@@ -175,6 +176,7 @@ function Router() {
       <Route path="/app/activity">
         <Redirect to="/app/settings/activity" replace />
       </Route>
+      <Route path="/app/settings/prompts" component={PromptsPage} />
       <Route path="/app/settings" component={SettingsPage} />
       <Route path="/app/settings/catalog/import">
         <SettingsRedirect to="/app/catalog/import" />

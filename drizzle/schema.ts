@@ -247,6 +247,37 @@ export const brandKits = appSchema.table(
   })
 );
 
+export const promptRevisions = appSchema
+  .table(
+    "prompt_revisions",
+    {
+      id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+      organizationId: integer("organizationId")
+        .notNull()
+        .references(() => organizations.id),
+      promptId: varchar("promptId", { length: 180 }).notNull(),
+      revision: integer("revision").notNull(),
+      value: text("value"),
+      baselineVersion: integer("baselineVersion").notNull(),
+      baselineValue: text("baselineValue").notNull(),
+      action: varchar("action", { length: 32 }).notNull(),
+      restoredFromRevision: integer("restoredFromRevision"),
+      actorUserId: integer("actorUserId")
+        .notNull()
+        .references(() => users.id),
+      reason: varchar("reason", { length: 500 }).notNull(),
+      createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    },
+    table => ({
+      revisionIdx: uniqueIndex("prompt_revision_unique").on(
+        table.organizationId,
+        table.promptId,
+        table.revision
+      ),
+    })
+  )
+  .enableRLS();
+
 export const brandAssets = appSchema.table("brand_assets", {
   id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
   organizationId: integer("organizationId")
@@ -525,7 +556,11 @@ export const creativeVariants = appSchema.table("creative_variants", {
     logoPreservation?: import("../shared/logoPreservation").LogoPreservationMetadata;
     productPreservation?: import("../shared/productOverlay").ProductOverlayMetadata;
     parentVariantId?: number;
-    enhancement?: { sourceAssetKey: import("../shared/assetLibrary").AssetKey; sourceRevision: string; instruction: string };
+    enhancement?: {
+      sourceAssetKey: import("../shared/assetLibrary").AssetKey;
+      sourceRevision: string;
+      instruction: string;
+    };
     copyTags?: import("../shared/copyTaxonomy").CopyTags;
     campaignPlanId?: number;
     productIds: number[];

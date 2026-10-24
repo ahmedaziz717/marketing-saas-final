@@ -1,5 +1,6 @@
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { readStudioDraft, writeStudioDraft } from "@/lib/studioDrafts";
 import { Link } from "wouter";
 import {
   Film,
@@ -29,6 +30,7 @@ type Product = {
   images: Array<{ id: number; url: string }>;
 };
 export function StudioSources({
+  draftKey,
   organizationId,
   role,
   kind,
@@ -43,6 +45,7 @@ export function StudioSources({
   onModels,
   onProductDetails,
 }: {
+  draftKey?: string | null;
   organizationId: number;
   role: string;
   kind: "image" | "video";
@@ -58,11 +61,21 @@ export function StudioSources({
   onProductDetails?: () => void;
 }) {
   const [tab, setTab] = useState(
-      (
-        kind === "image"
+      (readStudioDraft(draftKey ? `${draftKey}:tab` : null, raw => {
+        try {
+          const value = JSON.parse(raw);
+          return ["url", "business", "catalog", "video", "upload"].includes(
+            value
+          )
+            ? value
+            : null;
+        } catch {
+          return null;
+        }
+      }) ??
+        (kind === "image"
           ? image.promotion?.sourceUrl
-          : video.promotion?.sourceUrl
-      )
+          : video.promotion?.sourceUrl))
         ? "url"
         : kind === "image" && image.promotionMode === "platform"
           ? "business"
@@ -70,6 +83,9 @@ export function StudioSources({
     ),
     [upload, setUpload] = useState(false),
     [offset, setOffset] = useState(0);
+  useEffect(() => {
+    writeStudioDraft(draftKey ? `${draftKey}:tab` : null, tab);
+  }, [draftKey, tab]);
   const isImage = kind === "image";
   const referenceLimit = isImage
     ? 9
@@ -575,6 +591,7 @@ export function StudioSources({
       )}
       {tab === "url" && (
         <PageUrlSource
+          draftKey={draftKey}
           organizationId={organizationId}
           kind={kind}
           image={image}

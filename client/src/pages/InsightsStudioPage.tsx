@@ -7,6 +7,9 @@ import { PartnerLogo } from "@/components/PartnerLogo";
 import { WorkspaceRecipients } from "@/components/WorkspaceRecipients";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useStudioDraft } from "@/hooks/useStudioDraft";
+import { studioDraftKey, draftShapeSchema } from "@/lib/studioDrafts";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -140,6 +143,7 @@ function Studio({
 }) {
   const [, navigate] = useLocation();
   const workspace = useWorkspace();
+  const { user } = useAuth();
   const root = useStudioNavigation();
   const options = trpc.insights.options.useQuery(
     { organizationId },
@@ -180,6 +184,22 @@ function Studio({
   const [revision, setRevision] = useState<number>();
   const [loaded, setLoaded] = useState(!reportId);
   const [dirty, setDirty] = useState(false);
+  const draft = useStudioDraft({
+    key: studioDraftKey(
+      user?.id,
+      organizationId,
+      "insights",
+      reportId ?? `new:${initialChannel ?? "all"}:${initialConnection ?? ""}`
+    ),
+    value: config,
+    restore: value => {
+      setConfig(value);
+      setDirty(true);
+    },
+    schema: draftShapeSchema(insightConfigSchema),
+    ready: loaded,
+    revision,
+  });
   const [page, setPage] = useState(
     initialRun ? "results" : initialChannel && !reportId ? "sources" : "purpose"
   );
@@ -440,6 +460,33 @@ function Studio({
           <Save size={16} />
           Save report
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={save.isPending || !loaded}
+          onClick={() => {
+            if (
+              window.confirm(
+                "Reset this report setup on this device? Saved reports and prompt defaults remain unchanged."
+              )
+            ) {
+              draft.clear();
+              setConfig(
+                defaultInsightConfig(
+                  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+                )
+              );
+              setDirty(true);
+            }
+          }}
+        >
+          Reset setup
+        </Button>
+        {draft.stale && (
+          <p role="status" className="text-sm text-muted-foreground">
+            A newer saved report replaced the older local draft.
+          </p>
+        )}
       </header>
       <StudioSetupSummary
         title="Report preview & summary"
@@ -1605,12 +1652,13 @@ function PlusMark() {
   return <span aria-hidden="true">+</span>;
 }
 function WorkspaceStudio() {
+  const { user } = useAuth();
   const { organizationId } = useWorkspace();
   const params = new URLSearchParams(useSearch());
   const id = params.get("id") || undefined;
   return organizationId ? (
     <Studio
-      key={`${organizationId}:${id || `new:${params.get("channel") || "all"}:${params.get("connectionId") || ""}`}`}
+      key={`${user?.id}:${organizationId}:${id || `new:${params.get("channel") || "all"}:${params.get("connectionId") || ""}`}`}
       organizationId={organizationId}
       reportId={id}
       initialRun={params.get("run") || undefined}

@@ -1,3 +1,14 @@
+vi.mock("@/hooks/usePromptDefaults", async () => {
+  const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
+  const data = PROMPT_REGISTRY.map(p => ({
+    ...p,
+    value: p.baseline,
+    revision: 0,
+    source: "system",
+    updatedAtMs: null,
+  }));
+  return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
+});
 // @vitest-environment jsdom
 import {
   changeField,
@@ -33,6 +44,9 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    prompts: {
+      change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     models: {
       imageQuote: {
         useQuery: () => ({ data: { credits: 120 }, isFetching: false }),
@@ -68,6 +82,7 @@ vi.mock("sonner", () => ({
 import { CreativeBuilder } from "./CreativeBuilder";
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   api.role = "owner";
   api.options = {
@@ -231,7 +246,9 @@ describe("Creative Builder controls", () => {
   it("shows channel sizes and replaces edited copy when a different theme is selected", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.queryByText("300 × 250")).toBeNull();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Google Ads · Display" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Google Ads · Display" })
+    );
     expect(screen.getByText("300 × 250")).toBeTruthy();
     changeField(screen.getByLabelText("Headline"), {
       target: { value: "My exact headline" },
