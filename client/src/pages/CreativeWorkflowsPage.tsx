@@ -629,6 +629,15 @@ function WorkflowEditor({
           family={family}
           target={{ id, revision: revision.current }}
           disabled={dirty || save.isPending || !!saveError}
+          onReloadDraft={(draft, nextRevision) => {
+            setGraph(draft.graph);
+            setName(draft.name);
+            revision.current = nextRevision;
+            setSavedString(
+              JSON.stringify({ graph: draft.graph, name: draft.name })
+            );
+            void detail.refetch();
+          }}
           onApplied={(_id, draft, nextRevision) => {
             setGraph(draft.graph);
             setName(draft.name);

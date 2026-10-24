@@ -482,16 +482,18 @@ export function workflowAuthoring(userId: number) {
         },
       };
     }
-    if (!requested) return { state: "missing" as const };
-    if (
-      await event(
-        tx,
-        input.organizationId,
-        input.requestId,
-        "authoring.abandoned"
-      )
-    )
+    const abandoned = await event(
+      tx,
+      input.organizationId,
+      input.requestId,
+      "authoring.abandoned"
+    );
+    if (abandoned) {
+      if (abandoned.payload?.requestHash !== stableHash(input))
+        fail("Request ID belongs to different content.", "CONFLICT");
       return { state: "abandoned" as const };
+    }
+    if (!requested) return { state: "missing" as const };
     if (
       await event(tx, input.organizationId, input.requestId, "authoring.failed")
     )
@@ -514,6 +516,24 @@ export function workflowAuthoring(userId: number) {
           input.requestId,
           "authoring.abandoned",
           { requestHash: stableHash(input) }
+        );
+        return { state: "abandoned" as const };
+      });
+    },
+    async resetChat(raw: unknown) {
+      const input = chatInput.parse(raw);
+      return transaction(input.organizationId, async tx => {
+        const status = await requestStatus(tx, input);
+        // A status read alone is not a fence: a delayed transport may arrive.
+        // Serialize the tombstone against reservation and never reset a request
+        // that became pending/completed between the UI check and this action.
+        if (status.state !== "missing") return status;
+        await record(
+          tx,
+          input.organizationId,
+          input.requestId,
+          "authoring.abandoned",
+          { requestHash: stableHash(input), reason: "unreserved_reset" }
         );
         return { state: "abandoned" as const };
       });
@@ -586,6 +606,18 @@ export function workflowAuthoring(userId: number) {
           requestHash
         );
         if (done) return { done };
+        if (
+          await event(
+            tx,
+            input.organizationId,
+            input.requestId,
+            "authoring.abandoned"
+          )
+        )
+          fail(
+            "This request ID was closed. Submit corrected input with a new request ID.",
+            "CONFLICT"
+          );
         if (
           await event(
             tx,

@@ -10,6 +10,11 @@ import {
 import { workflowAuthoring } from "../lib/workflowAuthoring";
 
 export const workflowAuthoringRouter = router({
+  resetChat: protectedProcedure
+    .input(chatInput)
+    .mutation(({ ctx, input }) =>
+      workflowAuthoring(ctx.user.id).resetChat(input)
+    ),
   chatStatus: protectedProcedure
     .input(chatInput)
     .query(({ ctx, input }) =>

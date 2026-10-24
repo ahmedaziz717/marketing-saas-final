@@ -326,6 +326,7 @@ it("fences late results after explicit abandonment and does not abandon complete
   const call = service.chat(input);
   await started;
   expect(await service.chatStatus(input)).toEqual({ state: "pending" });
+  expect(await service.resetChat(input)).toEqual({ state: "pending" });
   expect(await service.abandonChat(input)).toEqual({ state: "abandoned" });
   resolve({ choices: [{ message: { content: JSON.stringify(proposal()) } }] });
   await expect(call).rejects.toThrow("abandoned");
@@ -333,6 +334,7 @@ it("fences late results after explicit abandonment and does not abandon complete
   const retry = { ...input, requestId: randomUUID() };
   await service.chat(retry);
   expect((await service.abandonChat(retry)).state).toBe("completed");
+  expect((await service.resetChat(retry)).state).toBe("completed");
   await expect(
     workflowAuthoring(outsiderId).chatStatus(retry)
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -446,20 +448,18 @@ it("marks an oversized App contract as omitted rather than truncating its input 
     });
     return node;
   });
-  await state.db
-    .insert(workflowAppVersions)
-    .values({
-      id,
-      organizationId: org,
-      workflowId: draft.id,
-      version: 1,
-      workflowRevision: 1,
-      family: "create",
-      name: "Large contract",
-      graph: { nodes, edges: [] },
-      actorUserId: userId,
-      createdAtMs: Date.now(),
-    });
+  await state.db.insert(workflowAppVersions).values({
+    id,
+    organizationId: org,
+    workflowId: draft.id,
+    version: 1,
+    workflowRevision: 1,
+    family: "create",
+    name: "Large contract",
+    graph: { nodes, edges: [] },
+    actorUserId: userId,
+    createdAtMs: Date.now(),
+  });
   const catalog = (await service.discover({ organizationId: org })).appCatalog;
   expect(catalog.truncated).toBe(true);
   expect(catalog.apps.some(a => a.id === id)).toBe(false);
@@ -668,3 +668,65 @@ it("rejects cyclic form visibility and validates every offered model", () => {
     })
   ).toBeTruthy();
 });
+
+it.each(["stale revision", "oversized context"])(
+  "fences and resets an unreserved %s rejection before a corrected attempt",
+  async reason => {
+    const saved = await apply(await proposed());
+    const large = Array.from({ length: 10 }, (_, i) => {
+      const node = newWorkflowNode("text", "large" + i);
+      node.config.text = "x".repeat(10000);
+      return node;
+    });
+    await state.db
+      .update(creativeWorkflows)
+      .set({
+        revision: 2,
+        graph: {
+          nodes:
+            reason === "oversized context"
+              ? large
+              : [proposal().changes[0].node],
+          edges: [],
+        },
+      })
+      .where(eq(creativeWorkflows.id, saved.id));
+    const input = {
+      organizationId: org,
+      requestId: randomUUID(),
+      message: "Original request",
+      target: { id: saved.id, revision: reason === "stale revision" ? 1 : 2 },
+    };
+    const calls = state.llm.mock.calls.length;
+    await expect(service.chat(input)).rejects.toThrow(
+      reason === "stale revision" ? "Draft changed" : "context limit"
+    );
+    expect(await service.chatStatus(input)).toEqual({ state: "missing" });
+    expect(await service.resetChat(input)).toEqual({ state: "abandoned" });
+    expect(await service.chatStatus(input)).toEqual({ state: "abandoned" });
+    await expect(service.chat(input)).rejects.toThrow("closed");
+    expect(state.llm.mock.calls.length).toBe(calls);
+    await expect(
+      service.chatStatus({ ...input, message: "Altered old key" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await state.db
+      .update(creativeWorkflows)
+      .set({
+        revision: 3,
+        graph: { nodes: [proposal().changes[0].node], edges: [] },
+      })
+      .where(eq(creativeWorkflows.id, saved.id));
+    state.llm.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(proposal()) } }],
+    });
+    const corrected = {
+      ...input,
+      requestId: randomUUID(),
+      message: "Corrected shorter request",
+      target: { id: saved.id, revision: 3 },
+    };
+    await service.chat(corrected);
+    expect((await service.chatStatus(corrected)).state).toBe("completed");
+    expect(state.llm.mock.calls.length).toBe(calls + 1);
+  }
+);

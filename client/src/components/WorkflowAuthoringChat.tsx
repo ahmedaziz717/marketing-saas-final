@@ -18,19 +18,22 @@ export function WorkflowAuthoringChat({
   target,
   disabled,
   onApplied,
+  onReloadDraft,
 }: {
   organizationId: number;
   family: WorkflowFamily;
   target?: { id: string; revision: number };
   disabled?: boolean;
   onApplied: (id: string, draft: AuthoringDraft, revision: number) => void;
+  onReloadDraft?: (draft: AuthoringDraft, revision: number) => void;
 }) {
   const [open, setOpen] = useState(false),
     [messages, setMessages] = useState<Message[]>([]),
     [error, setError] = useState("");
   const chat = trpc.workflowAuthoring.chat.useMutation(),
     apply = trpc.workflowAuthoring.applyDraft.useMutation(),
-    abandon = trpc.workflowAuthoring.abandonChat.useMutation();
+    abandon = trpc.workflowAuthoring.abandonChat.useMutation(),
+    reset = trpc.workflowAuthoring.resetChat.useMutation();
   const utils = trpc.useUtils();
   const [recovering, setRecovering] = useState(false);
   const [recovery, setRecovery] = useState<string | null>(null);
@@ -134,12 +137,42 @@ export function WorkflowAuthoringChat({
       setRecovering(false);
     }
   }
-  async function recover(abandonPending = false) {
+  async function recover(abandonPending = false, resetMissing = false) {
     if (pending.current || !request.current) return;
     pending.current = true;
     setRecovering(true);
     try {
       const status = await check();
+      if (
+        resetMissing &&
+        status &&
+        ["missing", "failed", "abandoned"].includes(status.state) &&
+        request.current
+      ) {
+        const result = await reset.mutateAsync(request.current);
+        if (result.state === "completed")
+          accept(result.result, request.current.message);
+        else if (result.state === "abandoned" || result.state === "failed") {
+          if (target && onReloadDraft) {
+            const latest = await utils.workflowAuthoring.read.fetch(
+              { organizationId, id: target.id },
+              { staleTime: 0 }
+            );
+            onReloadDraft(latest, latest.revision);
+          }
+          request.current = null;
+          setRecovery(null);
+          setMessages([]);
+          setError(
+            "Previous request closed. Correct the draft or shorten your request, then send again. Chat history was cleared to release context space."
+          );
+        } else {
+          setRecovery(result.state);
+          setError(
+            "The original request has started. Check its outcome or explicitly abandon it before starting another attempt."
+          );
+        }
+      }
       if (abandonPending && status?.state === "pending" && request.current) {
         const result = await abandon.mutateAsync(request.current);
         if (result.state === "completed")
@@ -230,13 +263,28 @@ export function WorkflowAuthoringChat({
                   Start new metered attempt
                 </Button>
               )}
-              {recovery === "missing" && (
-                <Button
-                  disabled={busy}
-                  onClick={() => void send(request.current!.message)}
-                >
-                  Retry original request
-                </Button>
+              {["missing", "failed", "abandoned"].includes(recovery) && (
+                <>
+                  {recovery === "missing" && (
+                    <Button
+                      disabled={busy}
+                      onClick={() => void send(request.current!.message)}
+                    >
+                      Retry original request
+                    </Button>
+                  )}
+                  <Button
+                    disabled={busy || disabled}
+                    variant="outline"
+                    onClick={() => void recover(false, true)}
+                  >
+                    Reset chat for corrected request
+                  </Button>
+                  <p>
+                    Reset clears chat history and reloads the latest saved
+                    draft. It does not rebase unsaved edits.
+                  </p>
+                </>
               )}
             </section>
           )}
