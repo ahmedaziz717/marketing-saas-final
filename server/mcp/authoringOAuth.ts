@@ -71,11 +71,20 @@ const authorizeSchema = z
     state: z.string().min(1).max(1024),
     code_challenge_method: z.literal("S256"),
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    // Optional space-separated language-tag hint (OIDC Core 3.1.2.1).
+    // Bound its syntax/size, then discard it: it cannot affect consent or access.
+    ui_locales: z
+      .string()
+      .max(128)
+      .regex(
+        /^[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*(?: [A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*){0,7}$/
+      )
+      .optional(),
   })
   .strict();
 export function validateAuthorization(config: OAuthConfig, raw: unknown) {
-  const input = authorizeSchema.parse(raw),
-    scopes = input.scope.split(" ");
+  const { ui_locales: _uiLocales, ...input } = authorizeSchema.parse(raw);
+  const scopes = input.scope.split(" ");
   if (
     input.client_id !== config.clientId ||
     !config.redirectUris.includes(input.redirect_uri) ||
