@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerAuthoringMcp } from "../mcp/authoringRoutes";
 import { registerResendInbound } from "../lib/resendInbound";
 import { registerSiteRouting } from "../lib/siteRouting";
 import { registerPublicWebsite } from "../public/routes";
@@ -47,6 +48,7 @@ async function startServer() {
   const app = express();
   app.set("trust proxy", 1);
   const server = createServer(app);
+  registerAuthoringMcp(app);
   registerSiteRouting(app);
   registerPublicWebsite(app);
   registerResendInbound(app);

@@ -1,6 +1,6 @@
 {
-  "id": "7a477850-e2c0-4734-9aa0-14d62319d469",
-  "prevId": "380e144e-40cd-4f84-b4c9-2dc61e1258b9",
+  "id": "8ecc56a1-62a3-494c-b1b3-a85b3afcb904",
+  "prevId": "2bacebcd-0a80-4753-aa19-5bb5ca278a1f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5322,6 +5322,238 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "app_private.authoring_oauth_grants": {
+      "name": "authoring_oauth_grants",
+      "schema": "app_private",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource": {
+          "name": "resource",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tokenHash": {
+          "name": "tokenHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAtMs": {
+          "name": "createdAtMs",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiresAtMs": {
+          "name": "expiresAtMs",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revokedAtMs": {
+          "name": "revokedAtMs",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authoring_oauth_grants_userId_users_id_fk": {
+          "name": "authoring_oauth_grants_userId_users_id_fk",
+          "tableFrom": "authoring_oauth_grants",
+          "tableTo": "users",
+          "schemaTo": "app_private",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authoring_oauth_grants_organizationId_organizations_id_fk": {
+          "name": "authoring_oauth_grants_organizationId_organizations_id_fk",
+          "tableFrom": "authoring_oauth_grants",
+          "tableTo": "organizations",
+          "schemaTo": "app_private",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authoring_oauth_grants_tokenHash_unique": {
+          "name": "authoring_oauth_grants_tokenHash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tokenHash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "app_private.authoring_oauth_requests": {
+      "name": "authoring_oauth_requests",
+      "schema": "app_private",
+      "columns": {
+        "idHash": {
+          "name": "idHash",
+          "type": "varchar(64)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redirectUri": {
+          "name": "redirectUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "varchar(43)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource": {
+          "name": "resource",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiresAtMs": {
+          "name": "expiresAtMs",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "codeHash": {
+          "name": "codeHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consumedAtMs": {
+          "name": "consumedAtMs",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authoring_oauth_requests_userId_users_id_fk": {
+          "name": "authoring_oauth_requests_userId_users_id_fk",
+          "tableFrom": "authoring_oauth_requests",
+          "tableTo": "users",
+          "schemaTo": "app_private",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authoring_oauth_requests_organizationId_organizations_id_fk": {
+          "name": "authoring_oauth_requests_organizationId_organizations_id_fk",
+          "tableFrom": "authoring_oauth_requests",
+          "tableTo": "organizations",
+          "schemaTo": "app_private",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authoring_oauth_requests_codeHash_unique": {
+          "name": "authoring_oauth_requests_codeHash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "codeHash"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": true

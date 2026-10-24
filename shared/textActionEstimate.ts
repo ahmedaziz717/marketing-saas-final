@@ -12,6 +12,7 @@ export const textActionBudgets = {
   ad_copy: { input: 1800, output: 650 },
   copy_optimization: { input: 5200, output: 1100 },
   field_assistance: { input: 350, output: 420 },
+  workflow_authoring: { input: 24000, output: 8000 },
 } as const;
 export type TextAction = keyof typeof textActionBudgets;
 
@@ -20,6 +21,8 @@ export function textActionForOperation(operation?: string): TextAction {
     case "brand.update":
     case "brand.personalizePrompts":
       return "brand_defaults";
+    case "workflowAuthoring.chat":
+      return "workflow_authoring";
     case "workflow.assistant":
       return "short_response";
     case "video.draftPrompt":

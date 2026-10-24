@@ -14,7 +14,7 @@ Requests are sequential within a page, with same-page detail reuse and existing 
 
 ## Migration and release boundary
 
-Apply additive `0022_catalog_media_groups.sql` before application code. It adds nullable JSON columns to existing private tables, without grants, data rewrites or destructive changes. Number 0021 is reserved for the separately reviewed PR95 authoring migration. This draft currently branches from the pre-PR95 release; after PR95 merges, reconcile its migration journal/snapshot into this branch and rerun database-backed CI before releasing PR99. Never deploy a journal that omits an already-applied migration.
+Apply additive `0022_catalog_media_groups.sql` before application code. It adds nullable JSON columns to existing private tables, without grants, data rewrites or destructive changes. Migration 0021 belongs to the separately merged PR95 authoring release (9e6d691). This branch includes that release baseline; the media journal and snapshot were regenerated after its authoring schema. Both migrations remain in order. Run database-backed CI on this integrated head before releasing PR99.
 
 ## External input still required
 

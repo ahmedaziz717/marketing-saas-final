@@ -37,7 +37,7 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(50);
+    ).toHaveLength(52);
     expect(
       (
         await engine.query(
@@ -56,9 +56,9 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
       ).rows
     ).toEqual([{ anonymous_access: false, customer_direct_access: false }]);
     const channels = await engine.query<{ relrowsecurity: boolean }>(
-      "SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname IN ('channel_connections','channel_oauth_sessions','channel_plans','publications','platform_tiers','platform_accounts','provider_rates','ai_usage','credit_ledger','platform_financial_entries','platform_audit','video_jobs','provider_workers','creative_workflows','creative_workflow_runs','workflow_app_versions','optimization_records','optimization_syncs','optimization_classifications','workflow_triggers','workflow_trigger_receipts','insight_reports','insight_runs','insight_dashboards')"
+      "SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname IN ('channel_connections','channel_oauth_sessions','channel_plans','publications','platform_tiers','platform_accounts','provider_rates','ai_usage','credit_ledger','platform_financial_entries','platform_audit','video_jobs','provider_workers','creative_workflows','creative_workflow_runs','workflow_app_versions','optimization_records','optimization_syncs','optimization_classifications','workflow_triggers','workflow_trigger_receipts','insight_reports','insight_runs','insight_dashboards','authoring_oauth_grants','authoring_oauth_requests')"
     );
-    expect(channels.rows).toHaveLength(24);
+    expect(channels.rows).toHaveLength(26);
     expect(channels.rows.every(row => row.relrowsecurity)).toBe(true);
     await expect(engine.exec(buildBootstrapSql())).rejects.toThrow(
       "Fresh bootstrap refused"
