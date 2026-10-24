@@ -29,7 +29,7 @@ function strings(value: unknown): string[] {
       ? value.flatMap(strings)
       : [];
 }
-/** Source-scoped relationships: no provider names, guessed URLs, or count expansion. */
+/** Source-scoped relationships; indexed URLs require an explicitly configured verified recipe. */
 export function mapCatalogMediaGroups(
   row: unknown,
   config: ApiCatalogConfig,
@@ -61,36 +61,72 @@ export function mapCatalogMediaGroups(
         : typeof gallery === "string"
           ? [gallery]
           : [];
-      const images = eligible
-        ? entries.flatMap((entry, position) => {
-            const raw = [
-              ...strings(field(entry, rule.imageUrlPath)),
-              ...rule.resolutionPaths.flatMap(path =>
-                strings(field(entry, path))
-              ),
-            ];
-            const candidates = Array.from(
-              new Set(
-                raw.map(url =>
-                  resolveCatalogImage(
-                    url,
-                    config.imageBaseUrl ?? endpoint,
-                    config.imagePathMode
+      const indexed = rule.indexedGallery;
+      const count = indexed ? field(item, indexed.countPath) : undefined;
+      if (
+        indexed &&
+        eligible &&
+        (typeof count !== "number" ||
+          !Number.isInteger(count) ||
+          count < 0 ||
+          count > 1000)
+      )
+        throw new Error(
+          `Media group ${rule.key} requires a gallery count between 0 and 1,000.`
+        );
+      const indexedImages =
+        indexed && eligible
+          ? Array.from({ length: count as number }, (_, offset) => {
+              const index = offset + indexed.startIndex;
+              const candidate = indexed.urlTemplate.replace(
+                /\{([^{}]+)\}/g,
+                (_, path: string) => {
+                  const value = path === "index" ? index : field(item, path);
+                  if (
+                    !["string", "number"].includes(typeof value) ||
+                    !String(value).trim()
+                  )
+                    throw new Error(
+                      `Media group ${rule.key} is missing an indexed gallery field.`
+                    );
+                  return encodeURIComponent(String(value));
+                }
+              );
+              return { id: `index:${index}`, candidates: [candidate] };
+            })
+          : undefined;
+      const images =
+        indexedImages ??
+        (eligible
+          ? entries.flatMap((entry, position) => {
+              const raw = [
+                ...strings(field(entry, rule.imageUrlPath)),
+                ...rule.resolutionPaths.flatMap(path =>
+                  strings(field(entry, path))
+                ),
+              ];
+              const candidates = Array.from(
+                new Set(
+                  raw.map(url =>
+                    resolveCatalogImage(
+                      url,
+                      config.imageBaseUrl ?? endpoint,
+                      config.imagePathMode
+                    )
                   )
                 )
-              )
-            );
-            if (!candidates.length) return [];
-            const explicitId = rule.imageIdPath
-              ? field(entry, rule.imageIdPath)
-              : undefined;
-            const imageId =
-              typeof explicitId === "string" || typeof explicitId === "number"
-                ? String(explicitId)
-                : createHash("sha256").update(candidates[0]).digest("hex");
-            return [{ id: imageId, candidates }];
-          })
-        : [];
+              );
+              if (!candidates.length) return [];
+              const explicitId = rule.imageIdPath
+                ? field(entry, rule.imageIdPath)
+                : undefined;
+              const imageId =
+                typeof explicitId === "string" || typeof explicitId === "number"
+                  ? String(explicitId)
+                  : createHash("sha256").update(candidates[0]).digest("hex");
+              return [{ id: imageId, candidates }];
+            })
+          : []);
       if (new Set(images.map(image => image.id)).size !== images.length)
         throw new Error(
           `Media group ${rule.key} contains duplicate image identities.`
@@ -104,7 +140,12 @@ export function mapCatalogMediaGroups(
           name: typeof name === "string" && name.trim() ? name : String(id),
           role: rule.role,
           eligible,
-          expectedCount: typeof expected === "number" ? expected : undefined,
+          expectedCount: indexed
+            ? count
+            : typeof expected === "number"
+              ? expected
+              : undefined,
+          referenceOnly: rule.referenceOnly,
           images,
         })
       );

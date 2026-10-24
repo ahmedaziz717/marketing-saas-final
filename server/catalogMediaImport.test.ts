@@ -4,6 +4,12 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import sharp from "sharp";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import recipe from "../docs/catalog-recipes/clx-chassis.json";
+import galleryFixture from "./fixtures/clx-chassis-gallery.json";
+import { apiCatalogConfigSchema } from "../shared/apiCatalog";
+import { mapCatalogMediaGroups } from "./lib/catalogMediaMapping";
 import { users, organizations, productImages } from "../drizzle/schema";
 import { catalogEntrySchema } from "../shared/catalog";
 import { catalogImageEligible, catalogDefaultImage, galleryGroups } from "../shared/catalogMedia";
@@ -67,6 +73,31 @@ beforeAll(async () => {
     );
 }, 30000);
 afterAll(() => engine.close());
+it("imports every configured gallery view and preserves role-specific selectable identities", async () => {
+  const mediaGroups = mapCatalogMediaGroups(galleryFixture, apiCatalogConfigSchema.parse(recipe), "https://api.cybertron.com")!;
+  const actualRoot = process.env.CATALOG_REAL_GALLERY_ROOT;
+  const urls = [...new Set(mediaGroups.flatMap(group => group.images.flatMap(image => image.candidates)))];
+  for (const url of urls) {
+    const match = url.match(/components\/([^/]+)\/gallery\/(\d+)\.png$/)!;
+    state.bytes.set(url, actualRoot
+      ? readFileSync(join(actualRoot, `${match[1]}-${match[2]}.png`))
+      : state.bytes.get("https://images.test/large.png")!);
+  }
+  const product = await importCatalogEntry(db, 770, catalogEntrySchema.parse({
+    name: "Verified gallery fixture", productUrl: "https://shop.test/verified-gallery", mediaGroups,
+  }));
+  const images = await db.select().from(productImages).where(eq(productImages.productId, product.id));
+  expect(images).toHaveLength(183);
+  const groups = galleryGroups(images, product.mediaGroups);
+  expect(groups).toHaveLength(21);
+  for (const group of groups) {
+    expect(group.images.length).toBe(group.expectedCount);
+    expect(group.images.every(image => catalogImageEligible(image, product.mediaGroups))).toBe(true);
+  }
+  expect(groups.find(group => group.id === "chassis-option:asm-cas-nv5wsea")?.images).toHaveLength(11);
+  expect(images.every(image => image.media?.width === (actualRoot ? 700 : 600))).toBe(true);
+  if (actualRoot) writeFileSync(join(actualRoot, "imported-product.json"), JSON.stringify({ product, images }, null, 2));
+}, 120000);
 const entry = () =>
   catalogEntrySchema.parse({
     name: "System",

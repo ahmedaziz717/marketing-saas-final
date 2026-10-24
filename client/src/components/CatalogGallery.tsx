@@ -40,6 +40,7 @@ export function CatalogGallery({
               : group.role === "base_component"
                 ? "Base component gallery"
                 : "System gallery"}
+            {group.referenceOnly && "; reference photos - actual configuration may vary"}
             {` · ${group.images.length} imported`}
             {!group.eligible && " · Not eligible for this system"}
           </p>

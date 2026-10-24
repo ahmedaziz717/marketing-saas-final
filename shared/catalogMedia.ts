@@ -15,6 +15,7 @@ export const catalogMediaGroupSchema = z.object({
   name: z.string().trim().min(1).max(240),
   role: z.enum(["system", "base_component", "optional_component"]),
   eligible: z.boolean().default(true),
+  referenceOnly: z.boolean().optional(),
   expectedCount: z.number().int().min(0).max(1000).optional(),
   images: z
     .array(

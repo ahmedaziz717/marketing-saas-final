@@ -100,19 +100,35 @@ export const apiCatalogMappingSchema = z.object({
   imagePathMode: z.enum(["url", "directory"]).optional(),
   imagesPath: path.optional(),
   mediaGroupsFromDetails: z.boolean().optional(),
-  mediaGroupRules: z.array(z.object({
-    key: z.string().trim().min(1).max(80),
-    role: z.enum(["system", "base_component", "optional_component"]),
-    itemsPath: path.default(""),
-    idPath: path,
-    namePath: path,
-    imagesPath: path,
-    imageIdPath: path.optional(),
-    imageUrlPath: path.default(""),
-    resolutionPaths: z.array(path).max(12).default([]),
-    expectedCountPath: path.optional(),
-    eligiblePath: path.optional(),
-  })).max(20).optional(),
+  mediaGroupRules: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(80),
+        role: z.enum(["system", "base_component", "optional_component"]),
+        itemsPath: path.default(""),
+        idPath: path,
+        namePath: path,
+        imagesPath: path.default(""),
+        referenceOnly: z.boolean().optional(),
+        indexedGallery: z
+          .object({
+            countPath: path,
+            urlTemplate: linkTemplate.refine(
+              value => value.includes("{index}"),
+              "Indexed galleries require an {index} placeholder."
+            ),
+            startIndex: z.number().int().min(0).max(1).default(1),
+          })
+          .optional(),
+        imageIdPath: path.optional(),
+        imageUrlPath: path.default(""),
+        resolutionPaths: z.array(path).max(12).default([]),
+        expectedCountPath: path.optional(),
+        eligiblePath: path.optional(),
+      })
+    )
+    .max(20)
+    .optional(),
   specificationOrderPath: path.optional(),
   imageUrlTemplate: linkTemplate.optional(),
   skipImages: z.boolean().optional(),
