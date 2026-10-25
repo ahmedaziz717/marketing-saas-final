@@ -21,7 +21,7 @@ it.each([
     creative: 85,
     size: [480, 666],
     hash: "d3fef5ccbba5099d88b6bd6c50c1f72c9fa058da8023400baad3ed88906cb9e3",
-    box: { left: 410, top: 287, width: 479, height: 639 },
+    box: { left: 403, top: 194, width: 509, height: 699 },
     saved: { left: 435, top: 210, width: 550, height: 755 },
   },
   {
@@ -89,7 +89,11 @@ it.each([
       width: 1080,
       height: 1080,
     });
-    expect(result.layers[0]).toMatchObject({ sourceKey, sha256: fixture.hash });
+    expect(result.layers[0]).toMatchObject({
+      ...fixture.saved,
+      sourceKey,
+      sha256: fixture.hash,
+    });
     expect(automaticProductUpscaleAllowed(sources[0], fixture.saved)).toBe(
       true
     );
