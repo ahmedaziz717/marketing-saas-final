@@ -1,3 +1,4 @@
+import type { McpVideoPolicy } from "../shared/mcpVideoPolicy";
 import {
   bigint,
   index,
@@ -25,6 +26,7 @@ export const videoJobs = appSchema
         .notNull()
         .references(() => users.id),
       setup: json("setup").$type<VideoSetup>().notNull(),
+      mcpPolicy: json("mcpPolicy").$type<McpVideoPolicy>(),
       revision: integer("revision").notNull().default(1),
       status: text("status").$type<VideoStatus>().notNull().default("draft"),
       references: json("references")

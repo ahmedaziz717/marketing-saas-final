@@ -34,7 +34,8 @@ import { executeWorkflowBusinessStep } from "../lib/workflowBusinessSteps";
 import { workflowValueText } from "../../shared/workflowPlatform";
 import { invokeLLM, type MessageContent } from "../_core/llm";
 import type { TrpcContext } from "../_core/context";
-import { videoRouter } from "../routers/video";
+import { enqueueVideoGeneration, videoRouter } from "../routers/video";
+import { createMcpVideoDraftPolicy } from "../lib/mcpVideoPolicy";
 import { aiScope } from "../lib/aiMetering";
 import { requireOrganizationRole } from "../lib/access";
 import { readLibraryAsset, type LibraryDatabase } from "../lib/assetLibrary";
@@ -119,7 +120,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
     await requireOrganizationRole(run.actorUserId, run.organizationId, [
       ...workflowRoles,
     ]);
-    await guardMcpWorkflowStep(db, run);
+    const executionContext = await guardMcpWorkflowStep(db, run);
     current = workflowOrder(run.graph).find(
       id => run.steps[id] && !done(run.steps[id].status)
     );
@@ -201,7 +202,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
           await persist({ status: "stopped" });
           return true;
         }
-        job = await caller.generate({
+        job = await enqueueVideoGeneration(run.actorUserId, {
           organizationId: run.organizationId,
           id: job.id,
           revision: job.revision,
@@ -244,8 +245,17 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         message: step.error || "This step failed.",
       });
     if (
-      (await workflowNodeCredits(db, node, run.organizationId, input)) !==
-      run.creditsByNode[current]
+      (await aiScope.run(
+        {
+          organizationId: run.organizationId,
+          actorUserId: run.actorUserId,
+          operation: "workflow.quote",
+          resolvedPromptDefaults: executionContext
+            ? Promise.resolve(executionContext.prompts)
+            : undefined,
+        },
+        () => workflowNodeCredits(db, node, run.organizationId, input)
+      )) !== run.creditsByNode[current]
     )
       throw new TRPCError({
         code: "CONFLICT",
@@ -277,7 +287,14 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
         jobId = randomUUID();
       // Store the durable child ID together with the waiting step before any paid call.
       await withOrganizationTransaction(db, run.organizationId, async tx => {
+        const mcpPolicy = await createMcpVideoDraftPolicy(
+          tx,
+          run,
+          current!,
+          setup
+        );
         await tx.insert(videoJobs).values({
+          mcpPolicy,
           id: jobId,
           organizationId: run.organizationId,
           actorUserId: run.actorUserId,

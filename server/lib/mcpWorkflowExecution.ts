@@ -17,18 +17,19 @@ import {
 import { workflowRunOccupiesSlot } from "../../shared/workflowRunActivity";
 import { membershipAuthorization } from "./access";
 import { appendActivity, withOrganizationTransaction } from "./activity";
-import { creditState } from "./aiMetering";
+import { aiScope, creditState } from "./aiMetering";
 import { getDb } from "../db";
 import {
-  getWorkflow,
   prepareWorkflowRun,
   type CreativeWorkflowRun,
 } from "./creativeWorkflows";
-import { getWorkflowApp, resolveWorkflowApps } from "./workflowApps";
+import { resolveWorkflowApps } from "./workflowApps";
 import { stableHash } from "./policy";
 import { mcpScopeRoles } from "./mcpScopeRoles";
 import { resolvedPrompts } from "./promptRegistry";
 import type { ResolvedPrompt } from "../../shared/promptRegistry";
+import { workflowRunOverridesSchema } from "../../shared/workflowRunInput";
+import { resolveRunnableWorkflow } from "./workflowRunInput";
 
 type DB = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -46,6 +47,7 @@ export const executionPrepareInput = scope
     id: z.string().uuid(),
     revision: z.number().int().positive(),
     appVersionId: z.string().uuid().optional(),
+    inputs: workflowRunOverridesSchema.optional(),
     requestId: z.string().uuid(),
     maxCredits: z.number().int().min(0).max(10000),
   })
@@ -71,6 +73,7 @@ const allowed = new Set([
   "assistant",
   "optimize_copy",
   "generate_image",
+  "generate_video",
   "app_input",
   "app_output",
 ]);
@@ -83,7 +86,7 @@ function fail(
 export function assertDraftOnlyExecutionGraph(graph: WorkflowGraph) {
   if (!graph.nodes.length || graph.nodes.some(n => !allowed.has(n.type)))
     fail(
-      "This execution path supports content-only text/image graphs. Publishing, business actions, schedules, video child jobs and unknown steps are unavailable.",
+      "This execution path supports content-only graphs. Publishing, business actions, schedules and unknown steps are unavailable.",
       "BAD_REQUEST"
     );
   if (
@@ -121,6 +124,27 @@ export function assertDraftOnlyExecutionGraph(graph: WorkflowGraph) {
       "BAD_REQUEST"
     );
   executionReviewConfig(graph);
+  for (const video of graph.nodes.filter(n => n.type === "generate_video")) {
+    const visited = new Set<string>();
+    const pending = [video.id];
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      for (const edge of graph.edges.filter(e => e.target === id)) {
+        const source = graph.nodes.find(n => n.id === edge.source);
+        if (
+          source &&
+          ["generate_image", "generate_video"].includes(source.type)
+        )
+          fail(
+            "Video inputs must use stored media. Finish upstream media generation, then prepare a new run with its actual reference.",
+            "BAD_REQUEST"
+          );
+        pending.push(edge.source);
+      }
+    }
+  }
 }
 
 function executionReviewConfig(graph: WorkflowGraph) {
@@ -241,6 +265,21 @@ async function authorize(
     fail(
       "Membership no longer permits all permissions granted to this connection."
     );
+  return grant;
+}
+async function authorizeVideoGraph(
+  tx: Tx,
+  identity: McpExecutionIdentity,
+  graph: WorkflowGraph
+) {
+  const grant = await authorize(tx, identity, identity.organizationId);
+  if (
+    graph.nodes.some(n => n.type === "generate_video") &&
+    !grant.scope.split(" ").includes("creatives:generate_video")
+  )
+    fail(
+      "Video generation requires the separately consented creatives:generate_video permission."
+    );
 }
 async function event(
   tx: Tx,
@@ -306,8 +345,10 @@ async function executionContext(
   for (const n of graph.nodes) {
     if (n.type === "assistant") ids.add("workflow.assistant");
     if (n.type === "optimize_copy") ids.add("workflow.optimizeCopy");
-    if (n.type === "generate_image") {
-      ids.add("workflow.image");
+    if (n.type === "generate_image" || n.type === "generate_video") {
+      ids.add(
+        n.type === "generate_video" ? "video.direction" : "workflow.image"
+      );
       if (n.config.useBrand) ids.add("brand.summary");
       if (n.config.direction)
         for (const id of [
@@ -483,6 +524,7 @@ async function assertUnusedRunId(tx: Tx, requestId: string) {
     fail("Request ID is unavailable. Use a new request ID.", "CONFLICT");
 }
 async function queuedRun(tx: Tx, identity: McpExecutionIdentity, plan: Plan) {
+  await authorizeVideoGraph(tx, identity, plan.prepared.graph);
   const receipt = await event(tx, identity, plan.input.requestId, QUEUED);
   if (!receipt) return undefined;
   const policy = receipt.payload;
@@ -525,15 +567,11 @@ async function queuedRun(tx: Tx, identity: McpExecutionIdentity, plan: Plan) {
 }
 async function currentGraph(
   db: DB | Tx,
-  input: z.infer<typeof executionPrepareInput>
+  input: z.infer<typeof executionPrepareInput>,
+  identity: McpExecutionIdentity
 ) {
-  const workflow = await getWorkflow(db, input.organizationId, input.id);
-  const app = input.appVersionId
-    ? await getWorkflowApp(db, input.organizationId, input.appVersionId)
-    : null;
-  if (app && app.workflowId !== input.id)
-    fail("App does not belong to this workflow.", "BAD_REQUEST");
-  if ((app?.workflowRevision ?? workflow.revision) !== input.revision)
+  const workflow = await resolveRunnableWorkflow(db, input);
+  if (workflow.sourceRevision !== input.revision)
     fail(
       "Workflow or pinned App revision changed. Prepare a new request.",
       "CONFLICT"
@@ -541,9 +579,10 @@ async function currentGraph(
   const graph = await resolveWorkflowApps(
     db,
     input.organizationId,
-    app?.graph ?? workflow.graph
+    workflow.graph
   );
   assertDraftOnlyExecutionGraph(graph);
+  await authorizeVideoGraph(db as Tx, identity, graph);
   return graph;
 }
 export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
@@ -567,16 +606,24 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
             return { plan };
           }
           await assertUnusedRunId(tx, input.requestId);
-          return { graph: await currentGraph(tx, input) };
+          const graph = await currentGraph(tx, input, identity);
+          return {
+            graph,
+            context: await executionContext(tx, input.organizationId, graph),
+          };
         }
       );
       if (first.plan) return publicPlan(first.plan);
       // Preparation can read/prepare media. The FULL resolved graph was checked first.
-      const prepared = await prepareWorkflowRun(
-        db,
-        input.organizationId,
-        input.id,
-        first.graph!
+      const prepared = await aiScope.run(
+        {
+          organizationId: input.organizationId,
+          actorUserId: identity.userId,
+          operation: "workflow.quote",
+          resolvedPromptDefaults: Promise.resolve(first.context!.prompts),
+        },
+        () =>
+          prepareWorkflowRun(db, input.organizationId, input.id, first.graph!)
       );
       assertDraftOnlyExecutionGraph(prepared.graph);
       if (prepared.credits > input.maxCredits)
@@ -594,7 +641,8 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
         }
         await assertUnusedRunId(tx, input.requestId);
         if (
-          stableHash(await currentGraph(tx, input)) !== stableHash(first.graph)
+          stableHash(await currentGraph(tx, input, identity)) !==
+          stableHash(first.graph)
         )
           fail("Workflow changed during preparation.", "CONFLICT");
         const context = await executionContext(
@@ -602,6 +650,11 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
           input.organizationId,
           prepared.graph
         );
+        if (stableHash(context) !== stableHash(first.context))
+          fail(
+            "Brand or prompt defaults changed during preparation. Prepare a new request.",
+            "CONFLICT"
+          );
         const plan: Plan = {
           identity,
           input,
@@ -622,12 +675,12 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
         db = await database();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         await authorize(tx, identity, input.organizationId);
-        return publicPlan(
-          planFrom(
-            await event(tx, identity, input.requestId, PREPARED),
-            identity
-          )
+        const plan = planFrom(
+          await event(tx, identity, input.requestId, PREPARED),
+          identity
         );
+        await authorizeVideoGraph(tx, identity, plan.prepared.graph);
+        return publicPlan(plan);
       });
     },
     async execute(raw: unknown) {
@@ -654,7 +707,7 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
             "Open the run review and approve this exact credit budget before execution."
           );
         if (
-          stableHash(await currentGraph(tx, plan.input)) !==
+          stableHash(await currentGraph(tx, plan.input, identity)) !==
           plan.sourceGraphHash
         )
           fail("Resolved workflow changed after approval.", "CONFLICT");
@@ -817,7 +870,9 @@ export async function reviewMcpWorkflowExecution(userId: number, raw: unknown) {
     const identity = (row?.payload?.plan as Plan | undefined)?.identity;
     if (!identity) fail("Run review unavailable.", "NOT_FOUND");
     await authorize(tx, identity, input.organizationId);
-    return publicPlan(planFrom(row, identity));
+    const plan = planFrom(row, identity);
+    await authorizeVideoGraph(tx, identity, plan.prepared.graph);
+    return publicPlan(plan);
   });
 }
 
@@ -846,6 +901,7 @@ export async function approveMcpWorkflowExecution(
     if (!identity) fail("Run review unavailable.", "NOT_FOUND");
     await authorize(tx, identity, input.organizationId);
     const plan = planFrom(row, identity);
+    await authorizeVideoGraph(tx, identity, plan.prepared.graph);
     if (
       input.hash !== plan.hash ||
       input.maxCredits !== plan.input.maxCredits ||
@@ -887,7 +943,7 @@ export async function guardMcpWorkflowStep(
     if (!row) return;
     const policy = row.payload!;
     const identity = policy.identity as McpExecutionIdentity;
-    await authorize(tx, identity, run.organizationId);
+    await authorizeVideoGraph(tx, identity, run.graph);
     assertDraftOnlyExecutionGraph(run.graph);
     const context = policy.context as McpExecutionContext;
     if (
