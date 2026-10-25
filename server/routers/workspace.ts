@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
+import { authoringOAuthGrants } from "../../drizzle/workflowSchema";
+import { workflowRoles } from "../../shared/creativeWorkflow";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -306,6 +308,37 @@ export const workspaceRouter = router({
           .update(organizationMemberships)
           .set(input.remove ? { status: "suspended" } : { role: input.role })
           .where(eq(organizationMemberships.id, target.id));
+        if (
+          input.remove ||
+          !(workflowRoles as readonly string[]).includes(
+            input.role ?? target.role
+          )
+        ) {
+          // Rejoining later must not resurrect an earlier persistent connection.
+          const revoked = await tx
+            .update(authoringOAuthGrants)
+            .set({ revokedAtMs: Date.now() })
+            .where(
+              and(
+                eq(authoringOAuthGrants.userId, target.userId),
+                eq(authoringOAuthGrants.organizationId, input.organizationId),
+                isNull(authoringOAuthGrants.revokedAtMs)
+              )
+            )
+            .returning({ id: authoringOAuthGrants.id });
+          for (const connection of revoked)
+            await appendActivity(
+              {
+                organizationId: input.organizationId,
+                actorUserId: ctx.user.id,
+                action: "authoring.connection_revoked",
+                entityType: "authoring_connection",
+                entityId: connection.id,
+                payload: { reason: "permission_lost" },
+              },
+              tx
+            );
+        }
         if (input.remove) {
           const user = (
             await tx.select().from(users).where(eq(users.id, target.userId))

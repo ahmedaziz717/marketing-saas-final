@@ -7,6 +7,7 @@ import { organizationMemberships, organizations } from "../../drizzle/schema";
 import {
   authoringOAuthGrants as grants,
   authoringOAuthRequests as requests,
+  authoringOAuthRefreshTokens as refreshTokens,
 } from "../../drizzle/workflowSchema";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { membershipAuthorization } from "../lib/access";
@@ -14,6 +15,8 @@ import { workflowRoles } from "../../shared/creativeWorkflow";
 import { workflowAuthoring } from "../lib/workflowAuthoring";
 
 export const mcpScopes = ["workflows:read", "workflows:draft"] as const;
+export const accessLifetimeMs = 30 * 60_000;
+export const refreshIdleLifetimeMs = 30 * 24 * 60 * 60_000;
 export const opaqueHash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 export const pkceChallenge = (value: string) =>
@@ -101,7 +104,7 @@ async function database() {
   if (!db) throw new Error("Database unavailable");
   return db;
 }
-async function membership(tx: Tx, userId: number, organizationId: number) {
+async function hasMembership(tx: Tx, userId: number, organizationId: number) {
   const [row] = await tx
     .select()
     .from(organizationMemberships)
@@ -112,15 +115,36 @@ async function membership(tx: Tx, userId: number, organizationId: number) {
       )
     )
     .for("share");
-  if (
-    !membershipAuthorization({
-      membership: row,
-      userId,
-      organizationId,
-      allowedRoles: [...workflowRoles],
-    }).allowed
-  )
-    denied();
+  return membershipAuthorization({
+    membership: row,
+    userId,
+    organizationId,
+    allowedRoles: [...workflowRoles],
+  }).allowed;
+}
+async function membership(tx: Tx, userId: number, organizationId: number) {
+  if (!(await hasMembership(tx, userId, organizationId))) denied();
+}
+async function revokeConnection(
+  tx: Tx,
+  row: typeof grants.$inferSelect,
+  reason: string
+) {
+  await tx
+    .update(grants)
+    .set({ revokedAtMs: Date.now() })
+    .where(eq(grants.id, row.id));
+  await appendActivity(
+    {
+      organizationId: row.organizationId,
+      actorUserId: row.userId,
+      entityType: "authoring_connection",
+      entityId: row.id,
+      action: "authoring.connection_revoked",
+      payload: { reason },
+    },
+    tx
+  );
 }
 export function connectionGuard(
   userId: number,
@@ -191,22 +215,25 @@ export function authoringOAuth(config: OAuthConfig) {
             lt(requests.expiresAtMs, Date.now() - 86400_000)
           )
         );
-      await db
-        .insert(requests)
-        .values({
-          idHash: opaqueHash(nonce),
-          userId,
-          clientId: input.client_id,
-          redirectUri: input.redirect_uri,
-          resource: input.resource,
-          scope: input.scope,
-          state: input.state,
-          challenge: input.code_challenge,
-          expiresAtMs: Date.now() + 5 * 60_000,
-        });
+      await db.insert(requests).values({
+        idHash: opaqueHash(nonce),
+        userId,
+        clientId: input.client_id,
+        redirectUri: input.redirect_uri,
+        resource: input.resource,
+        scope: input.scope,
+        state: input.state,
+        challenge: input.code_challenge,
+        expiresAtMs: Date.now() + 5 * 60_000,
+      });
       return { nonce, scope: input.scope };
     },
-    async consent(userId: number, nonce: string, organizationId: number) {
+    async consent(
+      userId: number,
+      nonce: string,
+      organizationId: number,
+      ongoing = false
+    ) {
       return withOrganizationTransaction(
         await database(),
         organizationId,
@@ -231,7 +258,11 @@ export function authoringOAuth(config: OAuthConfig) {
           const code = secret();
           await tx
             .update(requests)
-            .set({ codeHash: opaqueHash(code), organizationId })
+            .set({
+              codeHash: opaqueHash(code),
+              organizationId,
+              ongoing: ongoing ? 1 : 0,
+            })
             .where(eq(requests.idHash, request.idHash));
           await appendActivity(
             {
@@ -240,7 +271,11 @@ export function authoringOAuth(config: OAuthConfig) {
               entityType: "authoring_connection",
               entityId: request.idHash,
               action: "authoring.connection_consented",
-              payload: { clientId: request.clientId, scope: request.scope },
+              payload: {
+                clientId: request.clientId,
+                scope: request.scope,
+                ongoing,
+              },
             },
             tx
           );
@@ -281,6 +316,128 @@ export function authoringOAuth(config: OAuthConfig) {
       });
     },
     async exchange(raw: unknown) {
+      if (
+        typeof raw === "object" &&
+        raw !== null &&
+        "grant_type" in raw &&
+        raw.grant_type === "refresh_token"
+      ) {
+        const input = z
+          .object({
+            grant_type: z.literal("refresh_token"),
+            refresh_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+            client_id: z.string().max(200),
+            resource: z.string().max(2048),
+            scope: z.string().max(100).optional(),
+          })
+          .strict()
+          .parse(raw);
+        // Reject wrong client/resource without letting outsiders revoke a known token.
+        if (
+          input.client_id !== config.clientId ||
+          input.resource !== config.resource
+        )
+          return denied();
+        const db = await database();
+        const [candidate] = await db
+          .select({
+            organizationId: grants.organizationId,
+            connectionId: grants.id,
+          })
+          .from(refreshTokens)
+          .innerJoin(grants, eq(grants.id, refreshTokens.connectionId))
+          .where(eq(refreshTokens.tokenHash, opaqueHash(input.refresh_token)));
+        if (!candidate) return denied();
+        const result = await withOrganizationTransaction(
+          db,
+          candidate.organizationId,
+          async tx => {
+            const [row] = await tx
+              .select()
+              .from(grants)
+              .where(eq(grants.id, candidate.connectionId))
+              .for("update");
+            const [credential] = await tx
+              .select()
+              .from(refreshTokens)
+              .where(
+                eq(refreshTokens.tokenHash, opaqueHash(input.refresh_token))
+              )
+              .for("update");
+            const now = Date.now();
+            if (
+              !row ||
+              !credential ||
+              credential.connectionId !== row.id ||
+              row.revokedAtMs ||
+              row.clientId !== input.client_id ||
+              row.resource !== input.resource ||
+              !row.refreshExpiresAtMs
+            )
+              return null;
+            // No escalation or implicit scope changes on refresh. Re-consent to change access.
+            if (
+              input.scope !== undefined &&
+              (new Set(input.scope.split(" ")).size !==
+                input.scope.split(" ").length ||
+                input.scope.split(" ").sort().join(" ") !==
+                  row.scope.split(" ").sort().join(" "))
+            )
+              return null;
+            const reason = credential.consumedAtMs
+              ? "refresh_reuse"
+              : row.refreshExpiresAtMs <= now
+                ? "inactivity_expired"
+                : !(await hasMembership(tx, row.userId, row.organizationId))
+                  ? "permission_lost"
+                  : null;
+            if (reason) {
+              await revokeConnection(tx, row, reason);
+              // Return, don't throw: revocation must commit before invalid_grant is returned.
+              return null;
+            }
+            const access = secret(),
+              refresh = secret();
+            await tx
+              .update(refreshTokens)
+              .set({ consumedAtMs: now })
+              .where(eq(refreshTokens.tokenHash, credential.tokenHash));
+            await tx
+              .insert(refreshTokens)
+              .values({ tokenHash: opaqueHash(refresh), connectionId: row.id });
+            await tx
+              .update(grants)
+              .set({
+                tokenHash: opaqueHash(access),
+                expiresAtMs: now + accessLifetimeMs,
+                refreshExpiresAtMs: now + refreshIdleLifetimeMs,
+              })
+              .where(eq(grants.id, row.id));
+            await appendActivity(
+              {
+                organizationId: row.organizationId,
+                actorUserId: row.userId,
+                entityType: "authoring_connection",
+                entityId: row.id,
+                action: "authoring.connection_refreshed",
+                payload: {
+                  expiresAtMs: now + accessLifetimeMs,
+                  refreshExpiresAtMs: now + refreshIdleLifetimeMs,
+                },
+              },
+              tx
+            );
+            return {
+              access_token: access,
+              refresh_token: refresh,
+              token_type: "Bearer",
+              expires_in: 1800,
+              scope: row.scope,
+            };
+          }
+        );
+        return result ?? denied();
+      }
       const input = z
         .object({
           grant_type: z.literal("authorization_code"),
@@ -323,25 +480,29 @@ export function authoringOAuth(config: OAuthConfig) {
             return denied();
           await membership(tx, request.userId, candidate.organizationId!);
           const token = secret(),
+            refresh = request.ongoing === 1 ? secret() : undefined,
             now = Date.now(),
             id = randomUUID();
           await tx
             .update(requests)
             .set({ consumedAtMs: now })
             .where(eq(requests.idHash, request.idHash));
-          await tx
-            .insert(grants)
-            .values({
-              id,
-              userId: request.userId,
-              organizationId: candidate.organizationId!,
-              clientId: request.clientId,
-              scope: request.scope,
-              resource: request.resource,
-              tokenHash: opaqueHash(token),
-              createdAtMs: now,
-              expiresAtMs: now + 30 * 60_000,
-            });
+          await tx.insert(grants).values({
+            id,
+            userId: request.userId,
+            organizationId: candidate.organizationId!,
+            clientId: request.clientId,
+            scope: request.scope,
+            resource: request.resource,
+            tokenHash: opaqueHash(token),
+            createdAtMs: now,
+            expiresAtMs: now + accessLifetimeMs,
+            refreshExpiresAtMs: refresh ? now + refreshIdleLifetimeMs : null,
+          });
+          if (refresh)
+            await tx
+              .insert(refreshTokens)
+              .values({ tokenHash: opaqueHash(refresh), connectionId: id });
           await appendActivity(
             {
               organizationId: candidate.organizationId!,
@@ -352,13 +513,17 @@ export function authoringOAuth(config: OAuthConfig) {
               payload: {
                 clientId: request.clientId,
                 scope: request.scope,
-                expiresAtMs: now + 30 * 60_000,
+                expiresAtMs: now + accessLifetimeMs,
+                refreshExpiresAtMs: refresh
+                  ? now + refreshIdleLifetimeMs
+                  : null,
               },
             },
             tx
           );
           return {
             access_token: token,
+            ...(refresh ? { refresh_token: refresh } : {}),
             token_type: "Bearer",
             expires_in: 1800,
             scope: request.scope,
@@ -381,6 +546,33 @@ export function authoringOAuth(config: OAuthConfig) {
         row.clientId !== config.clientId
       )
         return null;
+      // Commit permission-loss revocation separately from a failing domain operation.
+      const active = await withOrganizationTransaction(
+        db,
+        row.organizationId,
+        async tx => {
+          const [current] = await tx
+            .select()
+            .from(grants)
+            .where(eq(grants.id, row.id))
+            .for("update");
+          if (
+            !current ||
+            current.revokedAtMs ||
+            current.tokenHash !== opaqueHash(token) ||
+            current.expiresAtMs <= Date.now()
+          )
+            return false;
+          if (
+            !(await hasMembership(tx, current.userId, current.organizationId))
+          ) {
+            await revokeConnection(tx, current, "permission_lost");
+            return false;
+          }
+          return true;
+        }
+      );
+      if (!active) return null;
       return {
         userId: row.userId,
         organizationId: row.organizationId,
@@ -397,6 +589,7 @@ export function authoringOAuth(config: OAuthConfig) {
           organizationId: grants.organizationId,
           scope: grants.scope,
           expiresAtMs: grants.expiresAtMs,
+          refreshExpiresAtMs: grants.refreshExpiresAtMs,
           revokedAtMs: grants.revokedAtMs,
         })
         .from(grants)
