@@ -1,6 +1,11 @@
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { productImages, products } from "../../drizzle/schema";
+import { catalogCardGallery } from "../../shared/catalogMedia";
+import {
+  productComponents,
+  productImages,
+  products,
+} from "../../drizzle/schema";
 import {
   parseWorkflowMediaSelection,
   workflowProductContent,
@@ -43,7 +48,10 @@ export async function workflowMediaChoices(
   const search = input.search.trim().replace(/[\\%_]/g, "\\$&");
   const owned = and(
     eq(products.organizationId, organizationId),
-    eq(products.status, "approved")
+    or(
+      eq(products.status, "approved"),
+      sql`${products.provenance}->>'component.kind' is not null`
+    )
   );
   const rows = await db
     .select()
@@ -91,6 +99,20 @@ export async function workflowMediaChoices(
         )
         .orderBy(desc(productImages.isPrimary), asc(productImages.id))
     : [];
+  const componentLinks = catalog.length
+    ? await db
+        .select()
+        .from(productComponents)
+        .where(
+          and(
+            eq(productComponents.organizationId, organizationId),
+            inArray(
+              productComponents.parentProductId,
+              catalog.map(p => p.id)
+            )
+          )
+        )
+    : [];
   return {
     products: catalog.map(p => ({
       id: p.id,
@@ -100,12 +122,22 @@ export async function workflowMediaChoices(
       currency: p.currency,
       productUrl: p.productUrl,
       specifications: p.specifications,
+      mediaGroups: p.mediaGroups,
+      componentKind: p.provenance?.["component.kind"] ?? null,
+      unavailableReason:
+        p.status !== "approved" ? "Review needed in Catalog before use." : null,
+      representedGroupIds: componentLinks
+        .filter(link => link.parentProductId === p.id)
+        .map(link => link.groupId),
+      primaryImageId: images.find(i => i.productId === p.id && i.isPrimary)?.id,
       images: images
         .filter(i => i.productId === p.id && i.storageKey)
         .map(i => ({
           key: `product_image:${i.id}`,
           url: i.url,
           name: i.altText || p.name,
+          isPrimary: i.isPrimary,
+          media: i.media,
         })),
     })),
     pageIds: rows.slice(0, 24).map(p => p.id),
@@ -131,6 +163,7 @@ export async function resolveWorkflowMedia(
     field.kind as "asset" | "product"
   )!;
   let productId = selected.productId;
+  let selectedProductImage: typeof productImages.$inferSelect | undefined;
   if (selected.imageKey?.startsWith("product_image:")) {
     const [image] = await db
       .select()
@@ -147,6 +180,7 @@ export async function resolveWorkflowMedia(
         message: "Choose an available image belonging to the selected product.",
       });
     productId = image.productId;
+    selectedProductImage = image;
   } else if (selected.imageKey) {
     if (field.kind === "product" || productId)
       throw new TRPCError({
@@ -187,6 +221,29 @@ export async function resolveWorkflowMedia(
       message:
         "This catalog item is unavailable in this workspace or has not been approved.",
     });
+  if (selectedProductImage?.media?.references.length) {
+    const links = await db
+      .select()
+      .from(productComponents)
+      .where(
+        and(
+          eq(productComponents.organizationId, organizationId),
+          eq(productComponents.parentProductId, product.id)
+        )
+      );
+    if (
+      !catalogCardGallery(
+        [selectedProductImage],
+        product.mediaGroups,
+        links.map(link => link.groupId)
+      ).images.length
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "This saved photo now belongs to a separate component card. Select that component's approved card in Catalog before running this App or Workflow; your saved selection has not been changed.",
+      });
+  }
   // Existing numeric product defaults retain their original specification selection.
   if (/^[1-9][0-9]*$/.test(value) && !field.media)
     selected.featuredSpecKeys = Object.keys(product.specifications).slice(

@@ -1,9 +1,16 @@
 import { componentIdentityContext } from "../../shared/studioProductFacts";
-import { catalogImageEligible } from "../../shared/catalogMedia";
+import {
+  catalogCardGallery,
+  catalogImageEligible,
+} from "../../shared/catalogMedia";
 import { attachMarketingCategories } from "./catalogCategories";
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { productImages, products } from "../../drizzle/schema";
+import {
+  productImages,
+  products,
+  productComponents,
+} from "../../drizzle/schema";
 import type {
   VideoImageChoice,
   VideoReference,
@@ -62,12 +69,30 @@ function productFacts(row: Row) {
       : {}),
   };
 }
-function choice(row: Row): VideoImageChoice {
+function choice(
+  row: Row,
+  representedGroupIds: string[] = []
+): VideoImageChoice {
   return {
     key: `product_image:${row.image.id}`,
     name: row.product.name,
     url: row.image.url,
     origin: "catalog",
+    componentKind: row.product.provenance?.["component.kind"] ?? null,
+    representedGroupIds,
+    ...(row.product.status !== "approved" ||
+    !catalogCardGallery(
+      [row.image],
+      row.product.mediaGroups,
+      representedGroupIds
+    ).images.length
+      ? {
+          unavailableReason:
+            row.product.status !== "approved"
+              ? "Review needed in Catalog before use."
+              : "This saved view now belongs to a separate component card. Select its approved card in Catalog.",
+        }
+      : {}),
     isPrimary: !!row.image.isPrimary,
     media: row.image.media,
     mediaGroups: row.product.mediaGroups,
@@ -99,6 +124,14 @@ export async function listVideoCatalogImages(
       items: [] as VideoImageChoice[],
       nextOffset: null as number | null,
     };
+  const browsable = and(
+    eq(productImages.organizationId, organizationId),
+    eq(products.organizationId, organizationId),
+    or(
+      eq(products.status, "approved"),
+      sql`${products.provenance}->>'component.kind' is not null`
+    )
+  );
   const search = input.search.trim().replace(/[\\%_]/g, "\\$&");
   // Page stable products, then load their complete photo groups. A product must
   // never be split into duplicate tiles across image-page boundaries.
@@ -110,7 +143,7 @@ export async function listVideoCatalogImages(
         .innerJoin(productImages, eq(productImages.productId, products.id))
         .where(
           and(
-            owned(organizationId),
+            browsable,
             search
               ? or(
                   ilike(products.name, `%${search}%`),
@@ -132,7 +165,7 @@ export async function listVideoCatalogImages(
     .innerJoin(products, eq(products.id, productImages.productId))
     .where(
       and(
-        owned(organizationId),
+        browsable,
         input.selectedOnly
           ? inArray(productImages.id, ids)
           : inArray(products.id, productIds)
@@ -144,6 +177,20 @@ export async function listVideoCatalogImages(
       desc(productImages.isPrimary),
       productImages.id
     );
+  const componentLinks = rows.length
+    ? await db
+        .select()
+        .from(productComponents)
+        .where(
+          and(
+            eq(productComponents.organizationId, organizationId),
+            inArray(
+              productComponents.parentProductId,
+              rows.map(r => r.product.id)
+            )
+          )
+        )
+    : [];
   const enriched = await attachMarketingCategories(
     db,
     organizationId,
@@ -151,7 +198,12 @@ export async function listVideoCatalogImages(
   );
   return {
     items: rows.map((row, index) => {
-      const item = choice(row);
+      const item = choice(
+        row,
+        componentLinks
+          .filter(link => link.parentProductId === row.product.id)
+          .map(link => link.groupId)
+      );
       return {
         ...item,
         product: item.product
@@ -182,9 +234,25 @@ export async function readVideoCatalogImage(
         )
         .limit(1)
     : [];
+  const represented = row
+    ? await db
+        .select()
+        .from(productComponents)
+        .where(
+          and(
+            eq(productComponents.organizationId, organizationId),
+            eq(productComponents.parentProductId, row.product.id)
+          )
+        )
+    : [];
   if (
     !row ||
     !row.image.storageKey ||
+    !catalogCardGallery(
+      [row.image],
+      row.product.mediaGroups,
+      represented.map(link => link.groupId)
+    ).images.length ||
     !catalogImageEligible(row.image, row.product.mediaGroups)
   )
     throw new TRPCError({

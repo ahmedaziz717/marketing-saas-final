@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { appFieldSchema } from "@shared/workflowInputs";
 const fixture = vi.hoisted(() => ({
@@ -13,11 +19,19 @@ const fixture = vi.hoisted(() => ({
       currency: "USD",
       productUrl: "https://shop.test/mug",
       specifications: { Capacity: "400 ml", Material: "Steel" },
+      primaryImageId: 9,
       images: [
         {
           key: "product_image:9",
           url: "https://shop.test/mug.png",
           name: "Travel mug",
+          isPrimary: 1,
+        },
+        {
+          key: "product_image:10",
+          url: "https://shop.test/mug-back-original.png",
+          name: "Travel mug back",
+          isPrimary: 0,
         },
       ],
     },
@@ -56,16 +70,20 @@ function Harness({
   media = {},
   preview = false,
   initial = "",
+  kind = "asset",
+  locked = false,
 }: {
   media?: any;
   preview?: boolean;
   initial?: string;
+  kind?: "asset" | "product";
+  locked?: boolean;
 }) {
   const [value, setValue] = useState(initial);
   return (
     <>
       <WorkflowMediaControl
-        field={appFieldSchema.parse({ kind: "asset", media })}
+        field={appFieldSchema.parse({ kind, media, locked })}
         value={value}
         onChange={setValue}
         organizationId={1}
@@ -77,8 +95,12 @@ function Harness({
 }
 it("shows product and approved asset tiles, previews full images, and retains content selections", () => {
   render(<Harness />);
-  expect(screen.getByRole("img", { name: "Travel mug" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Select Travel mug" }));
+  expect(
+    screen.getByRole("article", { name: "Product Travel mug" })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /Use Hero for Travel mug/ })
+  );
   fireEvent.click(screen.getByLabelText(/Capacity/));
   fireEvent.click(screen.getByLabelText(/Show price/));
   expect(JSON.parse(screen.getByTestId("value").textContent!)).toMatchObject({
@@ -87,7 +109,9 @@ it("shows product and approved asset tiles, previews full images, and retains co
     featuredSpecKeys: ["Capacity"],
     includePrice: true,
   });
-  fireEvent.click(screen.getByRole("button", { name: "Preview Travel mug" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Enlarge Hero for Travel mug" })
+  );
   expect(screen.getByRole("dialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.click(screen.getByRole("button", { name: "Approved assets" }));
@@ -99,6 +123,154 @@ it("shows product and approved asset tiles, previews full images, and retains co
   expect(screen.getByTestId("value").textContent).toBe("asset:3");
   expect(screen.queryByText("Product content")).toBeNull();
   expect(screen.queryByRole("button", { name: "Upload image" })).toBeNull();
+});
+
+it.each(["asset", "product"] as const)(
+  "groups %s photos without changing the saved selection while browsing",
+  kind => {
+    const initial = JSON.stringify({
+      productId: 7,
+      imageKey: "product_image:9",
+      featuredSpecKeys: ["Capacity"],
+      includePrice: true,
+      includeDescription: false,
+      includeLink: true,
+    });
+    render(<Harness kind={kind} initial={initial} />);
+    expect(
+      screen.getAllByRole("article", { name: "Product Travel mug" })
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Preview 2 for Travel mug" })
+    );
+    expect(screen.getByTestId("value").textContent).toBe(initial);
+    expect(
+      screen
+        .getByRole("img", { name: /Travel mug.*2 preview/ })
+        .getAttribute("src")
+    ).toBe("https://shop.test/mug-back-original.png");
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Use 2 for Travel mug/ })
+    );
+    expect(JSON.parse(screen.getByTestId("value").textContent!)).toEqual({
+      ...JSON.parse(initial),
+      imageKey: "product_image:10",
+    });
+  }
+);
+
+it("keeps a legacy raw image key unchanged on mount and when previewing", () => {
+  render(<Harness initial="product_image:10" />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Preview Hero for Travel mug" })
+  );
+  expect(screen.getByTestId("value").textContent).toBe("product_image:10");
+  expect(
+    screen.getByRole("checkbox", { name: /Use 2 for Travel mug/ })
+  ).toHaveProperty("checked", true);
+});
+
+it("allows browsing a locked gallery without mutating its saved reference", () => {
+  render(<Harness initial="product_image:9" locked />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Preview 2 for Travel mug" })
+  );
+  expect(screen.getByTestId("value").textContent).toBe("product_image:9");
+  expect(
+    screen.queryByRole("checkbox", { name: /Use 2 for Travel mug/ })
+  ).toBeNull();
+});
+
+it("shows pending component galleries without selecting them and retains their saved legacy choice", () => {
+  const component = fixture.products[0] as any;
+  component.componentKind = "Chassis";
+  component.unavailableReason = "Review needed in Catalog before use.";
+  try {
+    const view = render(<Harness initial="" />);
+    expect(screen.getByText("Chassis Option")).toBeTruthy();
+    expect(
+      within(
+        screen.getByRole("article", { name: "Product Travel mug" })
+      ).getByRole("status").textContent
+    ).toContain("Review needed");
+    expect(screen.queryByRole("checkbox", { name: /Use Hero/ })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Preview 2 for Travel mug" })
+    );
+    expect(screen.getByTestId("value").textContent).toBe("");
+    view.unmount();
+    render(<Harness initial="product_image:10" />);
+    expect(
+      screen.getByRole("button", { name: "Preview selected Travel mug" })
+    ).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain(
+      "saved selection is retained"
+    );
+    expect(screen.getByTestId("value").textContent).toBe("product_image:10");
+  } finally {
+    delete component.componentKind;
+    delete component.unavailableReason;
+  }
+});
+
+it("renders promoted chassis as an independent option while preserving an old parent image selection", () => {
+  const parent = fixture.products[0] as any;
+  const oldImages = parent.images;
+  parent.representedGroupIds = ["case:7"];
+  parent.images = [
+    oldImages[0],
+    {
+      ...oldImages[1],
+      media: {
+        width: 700,
+        height: 700,
+        references: [{ groupId: "case:7", imageId: "back", position: 0 }],
+      },
+    },
+  ];
+  (fixture.products as any[]).push({
+    ...parent,
+    id: 8,
+    name: "Chassis: white case",
+    componentKind: "Chassis",
+    primaryImageId: 11,
+    representedGroupIds: [],
+    images: [
+      {
+        key: "product_image:11",
+        name: "White case",
+        url: "/case-original.png",
+        isPrimary: 1,
+      },
+    ],
+  });
+  fixture.pageIds.push(8);
+  try {
+    render(<Harness initial="product_image:10" />);
+    expect(screen.getByText("Chassis Option")).toBeTruthy();
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(
+      within(
+        screen.getByRole("article", { name: "Product Travel mug" })
+      ).queryByRole("button", { name: "Preview 2 for Travel mug" })
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Preview selected Travel mug" })
+    ).toBeTruthy();
+    expect(screen.getByTestId("value").textContent).toBe("product_image:10");
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Use Hero for Chassis: white case/ })
+    );
+    expect(JSON.parse(screen.getByTestId("value").textContent!)).toMatchObject({
+      productId: 8,
+      imageKey: "product_image:11",
+    });
+  } finally {
+    parent.images = oldImages;
+    delete parent.representedGroupIds;
+    fixture.products.pop();
+    fixture.pageIds.pop();
+  }
 });
 it("uses workflow source restrictions, fixed content settings, and optional uploads", () => {
   const view = render(

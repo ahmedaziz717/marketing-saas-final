@@ -92,30 +92,32 @@ export function galleryGroups<
   T extends { id: number; media?: CatalogImageMedia | null },
 >(images: T[], groups: CatalogMediaGroupSummary[] | null | undefined) {
   const known = new Set<string>();
-  const result = (groups ?? []).map(group => ({
-    ...group,
-    images: images
-      .filter(image =>
-        image.media?.references.some(
-          ref =>
-            ref.groupId === group.id &&
-            (!group.imageIds || group.imageIds.includes(ref.imageId))
+  const result = (groups ?? [])
+    .map(group => ({
+      ...group,
+      images: images
+        .filter(image =>
+          image.media?.references.some(
+            ref =>
+              ref.groupId === group.id &&
+              (!group.imageIds || group.imageIds.includes(ref.imageId))
+          )
         )
-      )
-      .sort(
-        (a, b) =>
-          (a.media?.references.find(
-            ref =>
-              ref.groupId === group.id &&
-              (!group.imageIds || group.imageIds.includes(ref.imageId))
-          )?.position ?? 0) -
-          (b.media?.references.find(
-            ref =>
-              ref.groupId === group.id &&
-              (!group.imageIds || group.imageIds.includes(ref.imageId))
-          )?.position ?? 0)
-      ),
-  }));
+        .sort(
+          (a, b) =>
+            (a.media?.references.find(
+              ref =>
+                ref.groupId === group.id &&
+                (!group.imageIds || group.imageIds.includes(ref.imageId))
+            )?.position ?? 0) -
+            (b.media?.references.find(
+              ref =>
+                ref.groupId === group.id &&
+                (!group.imageIds || group.imageIds.includes(ref.imageId))
+            )?.position ?? 0)
+        ),
+    }))
+    .map(group => ({ ...group, sourceImageCount: group.images.length }));
   for (const group of result)
     for (const image of group.images) known.add(String(image.id));
   const legacy = images.filter(
@@ -136,21 +138,33 @@ export function galleryGroups<
       role: "optional_component",
       eligible: false,
       declaredImages: retired.length,
+      sourceImageCount: retired.length,
       images: retired,
     });
-  if (legacy.length)
-    result.unshift({
-      id: "legacy",
-      name: "Product photos",
-      role: "system",
-      eligible: true,
-      declaredImages: legacy.length,
-      images: legacy,
-    });
+  if (legacy.length) {
+    // An older primary may predate source gallery identities. Keep it beside
+    // the product's system views instead of making a Hero-only default gallery.
+    // This is presentation only: source references, selection IDs and component
+    // galleries remain unchanged. Source counts exclude these additional photos.
+    const system = result.find(
+      group => group.role === "system" && group.eligible
+    );
+    if (system) system.images = [...legacy, ...system.images];
+    else
+      result.unshift({
+        id: "legacy",
+        name: "Product photos",
+        role: "system",
+        eligible: true,
+        declaredImages: legacy.length,
+        sourceImageCount: legacy.length,
+        images: legacy,
+      });
+  }
   return result;
 }
 
-/** Catalog-only presentation. Never alter stored galleries or generation selections. */
+/** Visible/selectable parent views; keep stored rows and saved selections unchanged. */
 export function catalogCardGallery<
   T extends { media?: CatalogImageMedia | null },
 >(
@@ -163,8 +177,18 @@ export function catalogCardGallery<
     groups: groups?.filter(g => !represented.has(g.id)),
     images: images.filter(
       image =>
-        !image.media?.references.length ||
-        image.media.references.some(r => !represented.has(r.groupId))
+        !image.media?.retired &&
+        (!image.media?.references.length ||
+          image.media.references.some(
+            ref =>
+              !represented.has(ref.groupId) &&
+              groups?.some(
+                group =>
+                  group.id === ref.groupId &&
+                  group.eligible &&
+                  (!group.imageIds || group.imageIds.includes(ref.imageId))
+              )
+          ))
     ),
   };
 }

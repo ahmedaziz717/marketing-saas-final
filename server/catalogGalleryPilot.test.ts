@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import observedRecipe from "../docs/catalog-recipes/clx-chassis.json";
 import observedDetail from "./fixtures/clx-chassis-gallery.json";
+import { galleryPilotRecipeSchema } from "../shared/catalogGalleryPilot";
 const state = vi.hoisted(() => ({
   db: null as any,
   detail: null as any,
@@ -444,16 +445,153 @@ it("honors a pause during download without committing the image and resumes the 
   });
   expect(state.imageCalls).toHaveLength(3);
 });
-it.each(["paused", "error", "connected"])("does not start an overdue full-source sync after a pilot from %s", async originalStatus => {
-  state.detail = { code: "other", name: "Other", count: 2 }; state.fail = false;
-  const originalError = originalStatus === "error" ? "Existing source error" : null;
-  await state.db.update(catalogSources).set({ status: originalStatus, error: originalError, createdByUserId: 881, autoSync: 1, nextSyncAt: 1, lastSyncAt: 123, leaseUntil: null }).where(eq(catalogSources.id, 880));
-  const preview = await caller.previewGalleryPilot({ ...scope, productId: 881, recipe });
-  await caller.queueGalleryPilot({ ...scope, token: preview.token });
-  await processNextStoreJob(state.db);
-  const [source] = await state.db.select().from(catalogSources).where(eq(catalogSources.id, 880));
-  expect(source).toMatchObject({ status: originalStatus === "connected" ? "paused" : originalStatus, error: originalError, createdByUserId: 881, autoSync: 1, nextSyncAt: 1, lastSyncAt: 123, processed: 159, total: 159 });
-  expect(await caller.galleryPilotStatus(scope)).toMatchObject({ completed: true, sourceScheduleHeld: originalStatus === "connected" });
-  expect(await processNextStoreJob(state.db)).toBe(false);
-  expect(readStorePage).not.toHaveBeenCalled();
+it.each(["paused", "error", "connected"])(
+  "does not start an overdue full-source sync after a pilot from %s",
+  async originalStatus => {
+    state.detail = { code: "other", name: "Other", count: 2 };
+    state.fail = false;
+    const originalError =
+      originalStatus === "error" ? "Existing source error" : null;
+    await state.db
+      .update(catalogSources)
+      .set({
+        status: originalStatus,
+        error: originalError,
+        createdByUserId: 881,
+        autoSync: 1,
+        nextSyncAt: 1,
+        lastSyncAt: 123,
+        leaseUntil: null,
+      })
+      .where(eq(catalogSources.id, 880));
+    const preview = await caller.previewGalleryPilot({
+      ...scope,
+      productId: 881,
+      recipe,
+    });
+    await caller.queueGalleryPilot({ ...scope, token: preview.token });
+    await processNextStoreJob(state.db);
+    const [source] = await state.db
+      .select()
+      .from(catalogSources)
+      .where(eq(catalogSources.id, 880));
+    expect(source).toMatchObject({
+      status: originalStatus === "connected" ? "paused" : originalStatus,
+      error: originalError,
+      createdByUserId: 881,
+      autoSync: 1,
+      nextSyncAt: 1,
+      lastSyncAt: 123,
+      processed: 159,
+      total: 159,
+    });
+    expect(await caller.galleryPilotStatus(scope)).toMatchObject({
+      completed: true,
+      sourceScheduleHeld: originalStatus === "connected",
+    });
+    expect(await processNextStoreJob(state.db)).toBe(false);
+    expect(readStorePage).not.toHaveBeenCalled();
+  }
+);
+
+it("saves only an owned fresh reviewed recipe, preserving lifecycle, credentials and products without queuing", async () => {
+  state.detail = { code: "other", name: "Other", count: 2 };
+  const [before] = await state.db
+    .select()
+    .from(catalogSources)
+    .where(eq(catalogSources.id, 880));
+  const settings = await caller.galleryRecipeSettings(scope);
+  expect(settings.recipeOrigin).toBe("last_repair");
+  // The fixture's identical pixels deduplicate to one stored image row.
+  expect(settings.coverage.find(p => p.id === 881)?.imageCount).toBe(1);
+  await expect(outsider.galleryRecipeSettings(scope)).rejects.toMatchObject({
+    code: "FORBIDDEN",
+  });
+  const preview = await caller.previewGalleryPilot({
+    ...scope,
+    productId: 881,
+    recipe,
+  });
+  const input = {
+    ...scope,
+    token: preview.token,
+    expectedUpdatedAtMs: before.updatedAtMs,
+    confirmed: true as const,
+  };
+  await expect(outsider.saveGalleryRecipe(input)).rejects.toMatchObject({
+    code: "FORBIDDEN",
+  });
+  await expect(
+    caller.saveGalleryRecipe({ ...input, sourceId: 999 })
+  ).rejects.toThrow(/scope/);
+  await expect(
+    caller.saveGalleryRecipe({ ...input, expectedUpdatedAtMs: -1 })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  const expiredPlan = JSON.parse(decryptToken(preview.token));
+  expiredPlan.expiresAt = 1;
+  await expect(
+    caller.saveGalleryRecipe({
+      ...input,
+      token: encryptToken(JSON.stringify(expiredPlan)),
+    })
+  ).rejects.toThrow(/expired/);
+  const pendingCredentials = JSON.parse(decryptToken(before.credentials));
+  pendingCredentials.galleryPilot.completed = false;
+  await state.db
+    .update(catalogSources)
+    .set({ credentials: encryptToken(JSON.stringify(pendingCredentials)) })
+    .where(eq(catalogSources.id, 880));
+  await expect(caller.saveGalleryRecipe(input)).rejects.toThrow(/pending/);
+  await state.db
+    .update(catalogSources)
+    .set({ credentials: before.credentials })
+    .where(eq(catalogSources.id, 880));
+  await state.db
+    .update(catalogSources)
+    .set({ leaseUntil: Date.now() + 1000 })
+    .where(eq(catalogSources.id, 880));
+  await expect(caller.saveGalleryRecipe(input)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+  await state.db
+    .update(catalogSources)
+    .set({ leaseUntil: null })
+    .where(eq(catalogSources.id, 880));
+  const productsBefore = await state.db.select().from(products);
+  const imagesBefore = await state.db.select().from(productImages);
+  state.imageCalls = [];
+  expect(await caller.saveGalleryRecipe(input)).toEqual({
+    saved: true,
+    queued: false,
+  });
+  const [after] = await state.db
+    .select()
+    .from(catalogSources)
+    .where(eq(catalogSources.id, 880));
+  expect({ ...after, credentials: null, updatedAtMs: null }).toEqual({
+    ...before,
+    credentials: null,
+    updatedAtMs: null,
+  });
+  const originalCredentials = JSON.parse(decryptToken(before.credentials));
+  const newCredentials = JSON.parse(decryptToken(after.credentials));
+  expect(newCredentials.api.auth).toEqual(originalCredentials.api.auth);
+  expect(newCredentials.galleryPilot).toEqual(originalCredentials.galleryPilot);
+  expect(newCredentials.api.mediaGroupRules).toEqual(
+    galleryPilotRecipeSchema.parse(recipe).mediaGroupRules
+  );
+  expect(newCredentials.api.mediaGroupsFromDetails).toBe(true);
+  expect(await state.db.select().from(products)).toEqual(productsBefore);
+  expect(await state.db.select().from(productImages)).toEqual(imagesBefore);
+  expect(state.imageCalls).toHaveLength(0);
+  expect(await caller.galleryRecipeSettings(scope)).toMatchObject({
+    recipeOrigin: "saved",
+    recipe,
+  });
+  await expect(
+    caller.queueGalleryPilot({ ...scope, token: preview.token })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(caller.saveGalleryRecipe(input)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
 });

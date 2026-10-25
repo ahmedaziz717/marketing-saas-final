@@ -37,8 +37,16 @@ import {
   apiMappingRevision,
 } from "../lib/apiCatalog";
 import { suggestApiMapping } from "../lib/apiInstructions";
-import { galleryPilotRecipeSchema, galleryPilotTokenSchema } from "../../shared/catalogGalleryPilot";
-import { previewGalleryPilot, pilotRecords, pilotFingerprint, type GalleryPilotPlan } from "../lib/catalogGalleryPilot";
+import {
+  galleryPilotRecipeSchema,
+  galleryPilotTokenSchema,
+} from "../../shared/catalogGalleryPilot";
+import {
+  previewGalleryPilot,
+  pilotRecords,
+  pilotFingerprint,
+  type GalleryPilotPlan,
+} from "../lib/catalogGalleryPilot";
 const org = z.object({ organizationId: z.number().int().positive() });
 const idInput = org.extend({ sourceId: z.number().int().positive() });
 async function owner(userId: number, organizationId: number) {
@@ -48,46 +56,356 @@ async function owner(userId: number, organizationId: number) {
   return db;
 }
 export const catalogSourcesRouter = router({
-  galleryPilotProducts: protectedProcedure.input(idInput).query(async ({ ctx, input }) => {
-    const db = await owner(ctx.user.id, input.organizationId);
-    return db.select({ id: products.id, externalId: products.externalId, name: products.name }).from(products)
-      .where(and(eq(products.organizationId, input.organizationId), eq(products.sourceId, input.sourceId))).orderBy(products.id).limit(500);
-  }),
-  previewGalleryPilot: protectedProcedure
-    .input(idInput.extend({ productId: z.number().int().positive(), recipe: galleryPilotRecipeSchema }))
+  galleryRecipeSettings: protectedProcedure
+    .input(idInput)
+    .query(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      const [source] = await db
+        .select()
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.id, input.sourceId),
+            eq(catalogSources.organizationId, input.organizationId)
+          )
+        );
+      if (!source?.credentials || source.provider !== "api")
+        throw new TRPCError({ code: "NOT_FOUND" });
+      const credentials = JSON.parse(decryptToken(source.credentials));
+      const saved = galleryPilotRecipeSchema.safeParse(
+        credentials.galleryRecipe
+      );
+      const previous = galleryPilotRecipeSchema.safeParse(
+        credentials.galleryPilot?.completed
+          ? credentials.galleryPilot.recipe
+          : undefined
+      );
+      const coverage = await db
+        .select({
+          id: products.id,
+          imageCount: sql<number>`(select count(*)::int from ${productImages} where ${productImages.productId} = ${products.id} and ${productImages.organizationId} = ${input.organizationId} and coalesce((${productImages.media}->>'retired')::boolean, false) = false)`,
+          groupCount: sql<number>`coalesce(json_array_length(${products.mediaGroups}), 0)`,
+        })
+        .from(products)
+        .where(
+          and(
+            eq(products.organizationId, input.organizationId),
+            eq(products.sourceId, input.sourceId),
+            sql`${products.provenance}->>'component.sourceCode' is null`
+          )
+        )
+        .orderBy(products.id)
+        .limit(500);
+      return {
+        updatedAtMs: source.updatedAtMs,
+        autoSync: !!source.autoSync,
+        nextSyncAt: source.nextSyncAt,
+        recipe: saved.success
+          ? saved.data
+          : previous.success
+            ? previous.data
+            : null,
+        recipeOrigin: saved.success
+          ? ("saved" as const)
+          : previous.success
+            ? ("last_repair" as const)
+            : null,
+        coverage,
+      };
+    }),
+  saveGalleryRecipe: protectedProcedure
+    .input(
+      idInput.extend({
+        token: galleryPilotTokenSchema,
+        expectedUpdatedAtMs: z.number(),
+        confirmed: z.literal(true),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const db = await owner(ctx.user.id, input.organizationId);
-      return previewGalleryPilot(db, input.organizationId, input.sourceId, input.productId, ctx.user.id, input.recipe);
+      let plan: GalleryPilotPlan;
+      try {
+        plan = JSON.parse(decryptToken(input.token));
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Preview this gallery recipe again.",
+        });
+      }
+      if (
+        plan.kind !== "catalog-gallery-pilot-v1" ||
+        plan.organizationId !== input.organizationId ||
+        plan.sourceId !== input.sourceId ||
+        plan.actorUserId !== ctx.user.id ||
+        plan.expiresAt < Date.now()
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "The gallery preview expired or belongs to another scope. Preview again.",
+        });
+      const recipe = galleryPilotRecipeSchema.parse(plan.recipe);
+      return withOrganizationTransaction(db, input.organizationId, async tx => {
+        await tx
+          .select({ id: catalogSources.id })
+          .from(catalogSources)
+          .where(
+            and(
+              eq(catalogSources.id, input.sourceId),
+              eq(catalogSources.organizationId, input.organizationId)
+            )
+          )
+          .for("update");
+        await tx
+          .select({ id: products.id })
+          .from(products)
+          .where(
+            and(
+              eq(products.id, plan.productId),
+              eq(products.organizationId, input.organizationId)
+            )
+          )
+          .for("update");
+        const { source, product, images } = await pilotRecords(
+          tx,
+          input.organizationId,
+          input.sourceId,
+          plan.productId
+        );
+        if (
+          source.updatedAtMs !== input.expectedUpdatedAtMs ||
+          source.updatedAtMs !== plan.sourceUpdatedAtMs ||
+          source.leaseUntil ||
+          ["queued", "syncing"].includes(source.status) ||
+          pilotFingerprint(product) !== plan.productFingerprint ||
+          pilotFingerprint(images) !== plan.imageFingerprint
+        )
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Source or product changed. Preview again before saving.",
+          });
+        const credentials = JSON.parse(decryptToken(source.credentials!));
+        if (credentials.galleryPilot && !credentials.galleryPilot.completed)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Finish the pending one-product gallery repair first.",
+          });
+        credentials.api = apiCatalogConfigSchema.parse({
+          ...credentials.api,
+          ...recipe,
+          mediaGroupsFromDetails: true,
+        });
+        credentials.galleryRecipe = recipe;
+        await tx
+          .update(catalogSources)
+          .set({
+            credentials: encryptToken(JSON.stringify(credentials)),
+            updatedAtMs: Date.now(),
+          })
+          .where(eq(catalogSources.id, source.id));
+        await appendActivity(
+          {
+            organizationId: input.organizationId,
+            actorUserId: ctx.user.id,
+            action: "catalog.gallery_recipe_saved",
+            entityType: "catalog_source",
+            entityId: source.id,
+            payload: {
+              reviewedProductId: plan.productId,
+              recipeRevision: pilotFingerprint(recipe),
+              queued: false,
+            },
+          },
+          tx
+        );
+        return { saved: true, queued: false };
+      });
+    }),
+  galleryPilotProducts: protectedProcedure
+    .input(idInput)
+    .query(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      return db
+        .select({
+          id: products.id,
+          externalId: products.externalId,
+          name: products.name,
+        })
+        .from(products)
+        .where(
+          and(
+            eq(products.organizationId, input.organizationId),
+            eq(products.sourceId, input.sourceId),
+            sql`${products.provenance}->>'component.sourceCode' is null`
+          )
+        )
+        .orderBy(products.id)
+        .limit(500);
+    }),
+  previewGalleryPilot: protectedProcedure
+    .input(
+      idInput.extend({
+        productId: z.number().int().positive(),
+        recipe: galleryPilotRecipeSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      return previewGalleryPilot(
+        db,
+        input.organizationId,
+        input.sourceId,
+        input.productId,
+        ctx.user.id,
+        input.recipe
+      );
     }),
   queueGalleryPilot: protectedProcedure
     .input(idInput.extend({ token: galleryPilotTokenSchema }))
     .mutation(async ({ ctx, input }) => {
       const db = await owner(ctx.user.id, input.organizationId);
       let plan: GalleryPilotPlan;
-      try { plan = JSON.parse(decryptToken(input.token)); } catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Preview this gallery repair again." }); }
-      if (plan.kind !== "catalog-gallery-pilot-v1" || plan.organizationId !== input.organizationId || plan.sourceId !== input.sourceId || plan.actorUserId !== ctx.user.id || plan.expiresAt < Date.now())
-        throw new TRPCError({ code: "BAD_REQUEST", message: "The gallery preview expired or belongs to another scope. Preview again." });
+      try {
+        plan = JSON.parse(decryptToken(input.token));
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Preview this gallery repair again.",
+        });
+      }
+      if (
+        plan.kind !== "catalog-gallery-pilot-v1" ||
+        plan.organizationId !== input.organizationId ||
+        plan.sourceId !== input.sourceId ||
+        plan.actorUserId !== ctx.user.id ||
+        plan.expiresAt < Date.now()
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "The gallery preview expired or belongs to another scope. Preview again.",
+        });
       return withOrganizationTransaction(db, input.organizationId, async tx => {
-        await tx.select({ id: catalogSources.id }).from(catalogSources).where(and(eq(catalogSources.id, input.sourceId), eq(catalogSources.organizationId, input.organizationId))).for("update");
-        await tx.select({ id: products.id }).from(products).where(and(eq(products.id, plan.productId), eq(products.organizationId, input.organizationId))).for("update");
-        const { source, product, images } = await pilotRecords(tx, input.organizationId, input.sourceId, plan.productId);
-        if (source.updatedAtMs !== plan.sourceUpdatedAtMs || source.leaseUntil || ["queued", "syncing"].includes(source.status) || pilotFingerprint(product) !== plan.productFingerprint || pilotFingerprint(images) !== plan.imageFingerprint)
-          throw new TRPCError({ code: "CONFLICT", message: "Source or product changed. Preview again before repairing." });
+        await tx
+          .select({ id: catalogSources.id })
+          .from(catalogSources)
+          .where(
+            and(
+              eq(catalogSources.id, input.sourceId),
+              eq(catalogSources.organizationId, input.organizationId)
+            )
+          )
+          .for("update");
+        await tx
+          .select({ id: products.id })
+          .from(products)
+          .where(
+            and(
+              eq(products.id, plan.productId),
+              eq(products.organizationId, input.organizationId)
+            )
+          )
+          .for("update");
+        const { source, product, images } = await pilotRecords(
+          tx,
+          input.organizationId,
+          input.sourceId,
+          plan.productId
+        );
+        if (
+          source.updatedAtMs !== plan.sourceUpdatedAtMs ||
+          source.leaseUntil ||
+          ["queued", "syncing"].includes(source.status) ||
+          pilotFingerprint(product) !== plan.productFingerprint ||
+          pilotFingerprint(images) !== plan.imageFingerprint
+        )
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "Source or product changed. Preview again before repairing.",
+          });
         const credentials = JSON.parse(decryptToken(source.credentials!));
-        if (credentials.galleryPilot && !credentials.galleryPilot.completed) throw new TRPCError({ code: "CONFLICT", message: "A gallery pilot is already pending." });
-        credentials.galleryPilot = { ...plan, offset: 0, previousLifecycle: { status: source.status, error: source.error, createdByUserId: source.createdByUserId }, previousProgress: { processed: source.processed, total: source.total, cursor: source.cursor } };
-        await tx.update(catalogSources).set({ credentials: encryptToken(JSON.stringify(credentials)), status: "queued", error: null, createdByUserId: ctx.user.id, updatedAtMs: Date.now() }).where(eq(catalogSources.id, source.id));
-        await appendActivity({ organizationId: input.organizationId, actorUserId: ctx.user.id, action: "catalog.gallery_pilot_queued", entityType: "catalog_source", entityId: source.id, payload: { productId: plan.productId, externalId: plan.externalId, images: plan.total, candidateUrls: plan.candidateCount, recipeRevision: pilotFingerprint(plan.recipe) } }, tx);
+        if (credentials.galleryPilot && !credentials.galleryPilot.completed)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "A gallery pilot is already pending.",
+          });
+        credentials.galleryPilot = {
+          ...plan,
+          offset: 0,
+          previousLifecycle: {
+            status: source.status,
+            error: source.error,
+            createdByUserId: source.createdByUserId,
+          },
+          previousProgress: {
+            processed: source.processed,
+            total: source.total,
+            cursor: source.cursor,
+          },
+        };
+        await tx
+          .update(catalogSources)
+          .set({
+            credentials: encryptToken(JSON.stringify(credentials)),
+            status: "queued",
+            error: null,
+            createdByUserId: ctx.user.id,
+            updatedAtMs: Date.now(),
+          })
+          .where(eq(catalogSources.id, source.id));
+        await appendActivity(
+          {
+            organizationId: input.organizationId,
+            actorUserId: ctx.user.id,
+            action: "catalog.gallery_pilot_queued",
+            entityType: "catalog_source",
+            entityId: source.id,
+            payload: {
+              productId: plan.productId,
+              externalId: plan.externalId,
+              images: plan.total,
+              candidateUrls: plan.candidateCount,
+              recipeRevision: pilotFingerprint(plan.recipe),
+            },
+          },
+          tx
+        );
         return { queued: true, productId: plan.productId, images: plan.total };
       });
     }),
-  galleryPilotStatus: protectedProcedure.input(idInput).query(async ({ ctx, input }) => {
-    const db = await owner(ctx.user.id, input.organizationId);
-    const [source] = await db.select().from(catalogSources).where(and(eq(catalogSources.id, input.sourceId), eq(catalogSources.organizationId, input.organizationId)));
-    if (!source?.credentials || source.provider !== "api") throw new TRPCError({ code: "NOT_FOUND" });
-    const plan: GalleryPilotPlan | undefined = JSON.parse(decryptToken(source.credentials)).galleryPilot;
-    return plan ? { productId: plan.productId, externalId: plan.externalId, processed: plan.offset ?? 0, total: plan.total, completed: plan.completed, status: source.status, error: plan.completed ? null : source.error, sourceError: plan.completed ? source.error : null, sourceScheduleHeld: !!plan.sourceScheduleHeld } : null;
-  }),
+  galleryPilotStatus: protectedProcedure
+    .input(idInput)
+    .query(async ({ ctx, input }) => {
+      const db = await owner(ctx.user.id, input.organizationId);
+      const [source] = await db
+        .select()
+        .from(catalogSources)
+        .where(
+          and(
+            eq(catalogSources.id, input.sourceId),
+            eq(catalogSources.organizationId, input.organizationId)
+          )
+        );
+      if (!source?.credentials || source.provider !== "api")
+        throw new TRPCError({ code: "NOT_FOUND" });
+      const plan: GalleryPilotPlan | undefined = JSON.parse(
+        decryptToken(source.credentials)
+      ).galleryPilot;
+      return plan
+        ? {
+            productId: plan.productId,
+            externalId: plan.externalId,
+            processed: plan.offset ?? 0,
+            total: plan.total,
+            completed: plan.completed,
+            status: source.status,
+            error: plan.completed ? null : source.error,
+            sourceError: plan.completed ? source.error : null,
+            sourceScheduleHeld: !!plan.sourceScheduleHeld,
+          }
+        : null;
+    }),
   imageSettings: protectedProcedure
     .input(idInput)
     .query(async ({ ctx, input }) => {
@@ -147,7 +465,11 @@ export const catalogSourcesRouter = router({
               "This source changed or is syncing. Refresh its settings first.",
           });
         const credentials = JSON.parse(decryptToken(source.credentials));
-        if (credentials.galleryPilot && !credentials.galleryPilot.completed) throw new TRPCError({ code: "CONFLICT", message: "Finish the pending one-product gallery repair first." });
+        if (credentials.galleryPilot && !credentials.galleryPilot.completed)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Finish the pending one-product gallery repair first.",
+          });
         credentials.api = apiCatalogConfigSchema.parse({
           ...credentials.api,
           imageBaseUrl: input.imageBaseUrl,
@@ -501,7 +823,10 @@ export const catalogSourcesRouter = router({
       const db = await owner(ctx.user.id, input.organizationId);
       const address = storeAddress(input.provider, input.storeUrl);
       const [activeSource] = await db
-        .select({ status: catalogSources.status, credentials: catalogSources.credentials })
+        .select({
+          status: catalogSources.status,
+          credentials: catalogSources.credentials,
+        })
         .from(catalogSources)
         .where(
           and(
@@ -511,8 +836,15 @@ export const catalogSourcesRouter = router({
           )
         );
       if (input.provider === "api" && activeSource?.credentials) {
-        const pilot = JSON.parse(decryptToken(activeSource.credentials)).galleryPilot;
-        if (pilot && !pilot.completed) throw new TRPCError({ code: "CONFLICT", message: "Finish the existing gallery pilot before replacing source settings." });
+        const pilot = JSON.parse(
+          decryptToken(activeSource.credentials)
+        ).galleryPilot;
+        if (pilot && !pilot.completed)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "Finish the existing gallery pilot before replacing source settings.",
+          });
       }
       if (activeSource && ["queued", "syncing"].includes(activeSource.status))
         throw new TRPCError({
@@ -623,9 +955,18 @@ export const catalogSourcesRouter = router({
           code: "CONFLICT",
           message: "This source is already syncing.",
         });
-      if (input.action === "sync" && source.provider === "api" && source.credentials) {
+      if (
+        input.action === "sync" &&
+        source.provider === "api" &&
+        source.credentials
+      ) {
         const pilot = JSON.parse(decryptToken(source.credentials)).galleryPilot;
-        if (pilot && !pilot.completed) throw new TRPCError({ code: "CONFLICT", message: "Resume the pending gallery pilot instead of starting a full-source sync." });
+        if (pilot && !pilot.completed)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "Resume the pending gallery pilot instead of starting a full-source sync.",
+          });
       }
       const update =
         input.action === "disconnect"
