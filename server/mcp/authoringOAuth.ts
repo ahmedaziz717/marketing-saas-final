@@ -3,7 +3,10 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb } from "../db";
-import { organizationMemberships, organizations } from "../../drizzle/schema";
+import {
+  organizationMemberships,
+  organizations,
+} from "../../drizzle/schema";
 import {
   authoringOAuthGrants as grants,
   authoringOAuthRequests as requests,
@@ -13,8 +16,20 @@ import { appendActivity, withOrganizationTransaction } from "../lib/activity";
 import { membershipAuthorization } from "../lib/access";
 import { workflowRoles } from "../../shared/creativeWorkflow";
 import { workflowAuthoring } from "../lib/workflowAuthoring";
+import { mcpScopeRoles as rolesForScopes } from "../lib/mcpScopeRoles";
 
-export const mcpScopes = ["workflows:read", "workflows:draft"] as const;
+export const mcpScopes = [
+  "workflows:read",
+  "workflows:draft",
+  "workflows:save",
+  "catalog:read",
+  "brand:read",
+  "creatives:draft",
+  "campaigns:draft",
+  "workflows:execute",
+  "brand:configure",
+  "catalog:configure",
+] as const;
 export const accessLifetimeMs = 30 * 60_000;
 export const refreshIdleLifetimeMs = 30 * 24 * 60 * 60_000;
 export const opaqueHash = (value: string) =>
@@ -70,7 +85,7 @@ const authorizeSchema = z
     client_id: z.string().max(200),
     redirect_uri: z.string().max(2048),
     resource: z.string().max(2048),
-    scope: z.string().max(100),
+    scope: z.string().max(512),
     state: z.string().min(1).max(1024),
     code_challenge_method: z.literal("S256"),
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
@@ -104,7 +119,12 @@ async function database() {
   if (!db) throw new Error("Database unavailable");
   return db;
 }
-async function hasMembership(tx: Tx, userId: number, organizationId: number) {
+async function hasMembership(
+  tx: Tx,
+  userId: number,
+  organizationId: number,
+  scope = ""
+) {
   const [row] = await tx
     .select()
     .from(organizationMemberships)
@@ -119,11 +139,16 @@ async function hasMembership(tx: Tx, userId: number, organizationId: number) {
     membership: row,
     userId,
     organizationId,
-    allowedRoles: [...workflowRoles],
+    allowedRoles: rolesForScopes(scope),
   }).allowed;
 }
-async function membership(tx: Tx, userId: number, organizationId: number) {
-  if (!(await hasMembership(tx, userId, organizationId))) denied();
+async function membership(
+  tx: Tx,
+  userId: number,
+  organizationId: number,
+  scope = ""
+) {
+  if (!(await hasMembership(tx, userId, organizationId, scope))) denied();
 }
 async function revokeConnection(
   tx: Tx,
@@ -150,8 +175,14 @@ export function connectionGuard(
   userId: number,
   connectionId: string,
   resource: string,
-  write = false
+  write: boolean | (typeof mcpScopes)[number] = false
 ) {
+  const requiredScope =
+    typeof write === "string"
+      ? write
+      : write
+        ? "workflows:draft"
+        : "workflows:read";
   return async (tx: Tx, organizationId: number) => {
     const [row] = await tx
       .select()
@@ -170,14 +201,15 @@ export function connectionGuard(
       row.expiresAtMs <= Date.now() ||
       row.resource !== resource ||
       !row.scope.split(" ").includes("workflows:read") ||
-      (write && !row.scope.split(" ").includes("workflows:draft"))
+      !row.scope.split(" ").includes(requiredScope)
     )
       denied();
+    await membership(tx, userId, organizationId, row.scope);
   };
 }
 export function authoringOAuth(config: OAuthConfig) {
   return {
-    async workspaces(userId: number) {
+    async workspaces(userId: number, scope = "") {
       const db = await database();
       return db
         .select({
@@ -197,9 +229,7 @@ export function authoringOAuth(config: OAuthConfig) {
           )
         )
         .then(rows =>
-          rows.filter(row =>
-            (workflowRoles as readonly string[]).includes(row.role)
-          )
+          rows.filter(row => rolesForScopes(scope).includes(row.role))
         );
     },
     async begin(userId: number, raw: unknown) {
@@ -238,7 +268,6 @@ export function authoringOAuth(config: OAuthConfig) {
         await database(),
         organizationId,
         async tx => {
-          await membership(tx, userId, organizationId);
           const [request] = await tx
             .select()
             .from(requests)
@@ -255,6 +284,7 @@ export function authoringOAuth(config: OAuthConfig) {
             !config.redirectUris.includes(request.redirectUri)
           )
             return denied();
+          await membership(tx, userId, organizationId, request.scope);
           const code = secret();
           await tx
             .update(requests)
@@ -328,7 +358,7 @@ export function authoringOAuth(config: OAuthConfig) {
             refresh_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
             client_id: z.string().max(200),
             resource: z.string().max(2048),
-            scope: z.string().max(100).optional(),
+            scope: z.string().max(512).optional(),
           })
           .strict()
           .parse(raw);
@@ -388,7 +418,12 @@ export function authoringOAuth(config: OAuthConfig) {
               ? "refresh_reuse"
               : row.refreshExpiresAtMs <= now
                 ? "inactivity_expired"
-                : !(await hasMembership(tx, row.userId, row.organizationId))
+                : !(await hasMembership(
+                      tx,
+                      row.userId,
+                      row.organizationId,
+                      row.scope
+                    ))
                   ? "permission_lost"
                   : null;
             if (reason) {
@@ -478,7 +513,12 @@ export function authoringOAuth(config: OAuthConfig) {
             request.challenge !== pkceChallenge(input.code_verifier)
           )
             return denied();
-          await membership(tx, request.userId, candidate.organizationId!);
+          await membership(
+            tx,
+            request.userId,
+            candidate.organizationId!,
+            request.scope
+          );
           const token = secret(),
             refresh = request.ongoing === 1 ? secret() : undefined,
             now = Date.now(),
@@ -564,7 +604,12 @@ export function authoringOAuth(config: OAuthConfig) {
           )
             return false;
           if (
-            !(await hasMembership(tx, current.userId, current.organizationId))
+            !(await hasMembership(
+              tx,
+              current.userId,
+              current.organizationId,
+              current.scope
+            ))
           ) {
             await revokeConnection(tx, current, "permission_lost");
             return false;

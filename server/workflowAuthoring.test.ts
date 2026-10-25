@@ -15,6 +15,7 @@ vi.mock("./_core/llm", () => ({
   listLLMModels: state.models,
 }));
 import { workflowAuthoring } from "./lib/workflowAuthoring";
+import { saveMcpDraft } from "./lib/mcpDraftSave";
 import { workflowAuthoringRouter } from "./routers/workflowAuthoring";
 import { aiScope } from "./lib/aiMetering";
 import {
@@ -821,4 +822,88 @@ it("meters a refinement against the persisted proposal snapshot and retries idem
   ).toEqual(first.draft);
   expect((await service.chat(input)).proposalId).toBe(next.proposalId);
   expect(state.llm.mock.calls.length).toBe(calls + 1);
+});
+
+it("direct save reuses validated draft receipts without models, publication or duplicate retries", async () => {
+  const guard = vi.fn(async () => {});
+  const input = {
+    organizationId: org,
+    requestId: randomUUID(),
+    proposal: proposal(),
+  };
+  const beforeCalls = state.llm.mock.calls.length;
+  const saved = await saveMcpDraft(userId, guard, input);
+  expect(saved).toMatchObject({
+    revision: 1,
+    state: "draft",
+    proposalId: input.requestId,
+  });
+  expect(await saveMcpDraft(userId, guard, input)).toEqual(saved);
+  expect(guard.mock.calls.length).toBeGreaterThanOrEqual(4);
+  expect(state.llm.mock.calls.length).toBe(beforeCalls);
+  await expect(
+    saveMcpDraft(userId, guard, {
+      ...input,
+      proposal: {
+        summary: "Changed",
+        changes: [{ op: "rename", name: "Different" }],
+      },
+    })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  const edit = {
+    organizationId: org,
+    requestId: randomUUID(),
+    target: { id: saved.id, revision: 1 },
+    proposal: {
+      summary: "Rename",
+      changes: [{ op: "rename", name: "Saved directly" }],
+    },
+  };
+  expect(await saveMcpDraft(userId, guard, edit)).toMatchObject({
+    id: saved.id,
+    revision: 2,
+  });
+  await expect(
+    saveMcpDraft(userId, guard, { ...edit, requestId: randomUUID() })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(
+    saveMcpDraft(outsiderId, guard, {
+      ...input,
+      requestId: randomUUID(),
+      organizationId: other,
+    })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
+    saveMcpDraft(userId, guard, {
+      ...input,
+      proposal: {
+        summary: "Delete",
+        changes: [{ op: "remove_node", id: "brief" }],
+      },
+    })
+  ).rejects.toThrow();
+});
+it("direct save stops if connection permission is lost between staging and saving, and safely resumes", async () => {
+  const input = {
+    organizationId: org,
+    requestId: randomUUID(),
+    proposal: proposal(),
+  };
+  let checks = 0;
+  await expect(
+    saveMcpDraft(
+      userId,
+      async () => {
+        if (++checks === 3) throw new Error("revoked");
+      },
+      input
+    )
+  ).rejects.toThrow("revoked");
+  const status = await service.proposalStatus({
+    organizationId: org,
+    proposalId: input.requestId,
+  });
+  expect(status.state).not.toBe("applied");
+  const result = await saveMcpDraft(userId, async () => {}, input);
+  expect(result.revision).toBe(1);
 });

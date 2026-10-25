@@ -36,6 +36,96 @@ import { categorizeGenerationError } from "../lib/generation";
 
 const scope = z.object({ organizationId: z.number().int().positive() });
 const reference = scope.extend({ id: z.string().uuid() });
+export const videoDraftSaveInput = scope.extend({
+  id: z.string().uuid().optional(),
+  revision: z.number().int().positive().optional(),
+  setup: videoSetupSchema,
+});
+type VideoSaveInput = z.infer<typeof videoDraftSaveInput>;
+type SavedVideoDraft = ReturnType<typeof publicVideoJob>;
+type VideoDraftTransaction = Parameters<
+  Parameters<typeof withOrganizationTransaction>[2]
+>[0];
+export function saveVideoSetup(
+  userId: number,
+  input: VideoSaveInput
+): Promise<SavedVideoDraft>;
+export function saveVideoSetup<T>(
+  userId: number,
+  input: VideoSaveInput,
+  aroundSave: (
+    tx: VideoDraftTransaction,
+    save: () => Promise<SavedVideoDraft>
+  ) => Promise<T>
+): Promise<T>;
+export async function saveVideoSetup<T>(
+  userId: number,
+  input: VideoSaveInput,
+  aroundSave?: (
+    tx: VideoDraftTransaction,
+    save: () => Promise<SavedVideoDraft>
+  ) => Promise<T>
+): Promise<SavedVideoDraft | T> {
+  await requireOrganizationRole(userId, input.organizationId, [...studioRoles]);
+  const db = await libraryDatabase();
+  return withOrganizationTransaction(db, input.organizationId, async tx => {
+    const save = async () => {
+      if (input.setup.campaignPlanId) {
+        const [plan] = await tx
+          .select({ id: campaignBriefs.id })
+          .from(campaignBriefs)
+          .where(
+            and(
+              eq(campaignBriefs.id, input.setup.campaignPlanId),
+              eq(campaignBriefs.organizationId, input.organizationId)
+            )
+          );
+        if (!plan)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Campaign plan not found in this workspace.",
+          });
+      }
+
+      await validateVideoPeople(tx, input.organizationId, input.setup);
+      await validateVideoLogo(tx, input.organizationId, input.setup);
+      const now = Date.now();
+      if (input.id) {
+        const job = await getVideoJob(tx, input.organizationId, input.id);
+        if (job.status !== "draft" || job.revision !== input.revision)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "This draft has changed. Reopen it before editing, or start a new version.",
+          });
+        const [saved] = await tx
+          .update(videoJobs)
+          .set({
+            setup: input.setup,
+            revision: job.revision + 1,
+            updatedAtMs: now,
+          })
+          .where(eq(videoJobs.id, job.id))
+          .returning();
+        return publicVideoJob(saved);
+      }
+      const [saved] = await tx
+        .insert(videoJobs)
+        .values({
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          actorUserId: userId,
+          setup: input.setup,
+          createdAtMs: now,
+          updatedAtMs: now,
+        })
+        .returning();
+      return publicVideoJob(saved);
+    };
+    return aroundSave ? aroundSave(tx, save) : save();
+  });
+}
+
 export const videoRouter = router({
   catalogImages: protectedProcedure
     .input(
@@ -108,71 +198,8 @@ export const videoRouter = router({
     );
   }),
   save: protectedProcedure
-    .input(
-      scope.extend({
-        id: z.string().uuid().optional(),
-        revision: z.number().int().positive().optional(),
-        setup: videoSetupSchema,
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...studioRoles,
-      ]);
-      const db = await libraryDatabase();
-      if (input.setup.campaignPlanId) {
-        const [plan] = await db
-          .select({ id: campaignBriefs.id })
-          .from(campaignBriefs)
-          .where(
-            and(
-              eq(campaignBriefs.id, input.setup.campaignPlanId),
-              eq(campaignBriefs.organizationId, input.organizationId)
-            )
-          );
-        if (!plan)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Campaign plan not found in this workspace.",
-          });
-      }
-      return withOrganizationTransaction(db, input.organizationId, async tx => {
-        await validateVideoPeople(tx, input.organizationId, input.setup);
-        await validateVideoLogo(tx, input.organizationId, input.setup);
-        const now = Date.now();
-        if (input.id) {
-          const job = await getVideoJob(tx, input.organizationId, input.id);
-          if (job.status !== "draft" || job.revision !== input.revision)
-            throw new TRPCError({
-              code: "CONFLICT",
-              message:
-                "This draft has changed. Reopen it before editing, or start a new version.",
-            });
-          const [saved] = await tx
-            .update(videoJobs)
-            .set({
-              setup: input.setup,
-              revision: job.revision + 1,
-              updatedAtMs: now,
-            })
-            .where(eq(videoJobs.id, job.id))
-            .returning();
-          return publicVideoJob(saved);
-        }
-        const [saved] = await tx
-          .insert(videoJobs)
-          .values({
-            id: randomUUID(),
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            setup: input.setup,
-            createdAtMs: now,
-            updatedAtMs: now,
-          })
-          .returning();
-        return publicVideoJob(saved);
-      });
-    }),
+    .input(videoDraftSaveInput)
+    .mutation(({ ctx, input }) => saveVideoSetup(ctx.user.id, input)),
   quote: protectedProcedure
     .input(scope.extend({ setup: videoSetupSchema }))
     .query(async ({ ctx, input }) => {

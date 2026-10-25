@@ -1,3 +1,4 @@
+import type { DraftSaveHook } from "./mcpDraftReceipt";
 import { pmaxMissingAssets } from "../../shared/googleCampaigns";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
@@ -460,16 +461,27 @@ export async function listGoogleDrafts(
     .orderBy(desc(googleCampaignDrafts.updatedAtMs))
     .limit(100);
 }
-export async function saveGoogleDraft(
+export type GoogleDraftSaveInput = {
+  organizationId: number;
+  connectionId: string;
+  id?: string;
+  revision?: number;
+  change: GoogleChange;
+};
+export function saveGoogleDraft(
   userId: number,
-  input: {
-    organizationId: number;
-    connectionId: string;
-    id?: string;
-    revision?: number;
-    change: GoogleChange;
-  }
-) {
+  input: GoogleDraftSaveInput
+): Promise<GoogleCampaignDraft>;
+export function saveGoogleDraft<T>(
+  userId: number,
+  input: GoogleDraftSaveInput,
+  aroundSave: DraftSaveHook<GoogleCampaignDraft, T>
+): Promise<T>;
+export async function saveGoogleDraft<T>(
+  userId: number,
+  input: GoogleDraftSaveInput,
+  aroundSave?: DraftSaveHook<GoogleCampaignDraft, T>
+): Promise<GoogleCampaignDraft | T> {
   await requireOrganizationRole(userId, input.organizationId, [
     "owner",
     "admin",
@@ -478,90 +490,93 @@ export async function saveGoogleDraft(
   ]);
   const db = await libraryDatabase(),
     change = googleChangeSchema.parse(input.change);
-  const connection = (
-    await db
-      .select()
-      .from(channelConnections)
-      .where(
-        and(
-          eq(channelConnections.id, input.connectionId),
-          eq(channelConnections.organizationId, input.organizationId),
-          eq(channelConnections.channel, "google_ads")
-        )
-      )
-      .limit(1)
-  )[0];
-  if (!connection || connection.status !== "connected")
-    fail("Connect a Google Ads account in this workspace first.");
   return withOrganizationTransaction(db, input.organizationId, async tx => {
-    const old = input.id
-      ? (
-          await tx
-            .select()
-            .from(googleCampaignDrafts)
-            .where(
-              and(
-                eq(googleCampaignDrafts.id, input.id),
-                eq(googleCampaignDrafts.organizationId, input.organizationId)
-              )
+    const save = async (): Promise<GoogleCampaignDraft> => {
+      const connection = (
+        await tx
+          .select()
+          .from(channelConnections)
+          .where(
+            and(
+              eq(channelConnections.id, input.connectionId),
+              eq(channelConnections.organizationId, input.organizationId),
+              eq(channelConnections.channel, "google_ads")
             )
-            .for("update")
-        )[0]
-      : undefined;
-    if (
-      input.id &&
-      (!old ||
-        old.revision !== input.revision ||
-        old.connectionId !== input.connectionId ||
-        ["publishing", "published", "uncertain"].includes(old.state))
-    )
-      fail(
-        "This draft changed or was submitted. Reload before continuing.",
-        "CONFLICT"
+          )
+          .limit(1)
+      )[0];
+      if (!connection || connection.status !== "connected")
+        fail("Connect a Google Ads account in this workspace first.");
+      const old = input.id
+        ? (
+            await tx
+              .select()
+              .from(googleCampaignDrafts)
+              .where(
+                and(
+                  eq(googleCampaignDrafts.id, input.id),
+                  eq(googleCampaignDrafts.organizationId, input.organizationId)
+                )
+              )
+              .for("update")
+          )[0]
+        : undefined;
+      if (
+        input.id &&
+        (!old ||
+          old.revision !== input.revision ||
+          old.connectionId !== input.connectionId ||
+          ["publishing", "published", "uncertain"].includes(old.state))
+      )
+        fail(
+          "This draft changed or was submitted. Reload before continuing.",
+          "CONFLICT"
+        );
+      const now = Date.now();
+      const row = old
+        ? (
+            await tx
+              .update(googleCampaignDrafts)
+              .set({
+                change,
+                state: "draft",
+                revision: old.revision + 1,
+                reviewHash: null,
+                validatedAtMs: null,
+                error: null,
+                updatedAtMs: now,
+              })
+              .where(eq(googleCampaignDrafts.id, old.id))
+              .returning()
+          )[0]
+        : (
+            await tx
+              .insert(googleCampaignDrafts)
+              .values({
+                id: randomUUID(),
+                organizationId: input.organizationId,
+                connectionId: input.connectionId,
+                change,
+                createdByUserId: userId,
+                createdAtMs: now,
+                updatedAtMs: now,
+              })
+              .returning()
+          )[0];
+      await appendActivity(
+        {
+          organizationId: input.organizationId,
+          actorUserId: userId,
+          action: "google_campaign.draft_saved",
+          entityType: "google_campaign_draft",
+          entityId: row.id,
+          payload: { kind: change.kind, revision: row.revision },
+        },
+        tx
       );
-    const now = Date.now();
-    const row = old
-      ? (
-          await tx
-            .update(googleCampaignDrafts)
-            .set({
-              change,
-              state: "draft",
-              revision: old.revision + 1,
-              reviewHash: null,
-              validatedAtMs: null,
-              error: null,
-              updatedAtMs: now,
-            })
-            .where(eq(googleCampaignDrafts.id, old.id))
-            .returning()
-        )[0]
-      : (
-          await tx
-            .insert(googleCampaignDrafts)
-            .values({
-              id: randomUUID(),
-              organizationId: input.organizationId,
-              connectionId: input.connectionId,
-              change,
-              createdByUserId: userId,
-              createdAtMs: now,
-              updatedAtMs: now,
-            })
-            .returning()
-        )[0];
-    await appendActivity(
-      {
-        organizationId: input.organizationId,
-        actorUserId: userId,
-        action: "google_campaign.draft_saved",
-        entityType: "google_campaign_draft",
-        entityId: row.id,
-        payload: { kind: change.kind, revision: row.revision },
-      },
-      tx
-    );
-    return row;
+      return row;
+    };
+    return aroundSave ? aroundSave(tx, save) : save();
   });
 }
 export async function validateGoogleDraft(

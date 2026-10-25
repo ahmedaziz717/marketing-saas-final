@@ -17,6 +17,12 @@ import {
 import { createAuthoringMcp } from "./workflowAuthoring";
 import { workflowAuthoring } from "../lib/workflowAuthoring";
 import { applyInput } from "../../shared/workflowAuthoring";
+import {
+  executionReferenceInput,
+  executionApprovalInput,
+  reviewMcpWorkflowExecution,
+  approveMcpWorkflowExecution,
+} from "../lib/mcpWorkflowExecution";
 
 const escape = (value: unknown) =>
   String(value).replace(
@@ -51,6 +57,7 @@ const paths = [
   "/mcp/oauth/token",
   "/mcp/connections",
   "/mcp/review",
+  "/mcp/run-review",
   "/.well-known/oauth-authorization-server",
   "/.well-known/oauth-protected-resource/mcp/authoring",
 ];
@@ -82,6 +89,20 @@ export function registerAuthoringMcp(
         identity.connectionId!,
         config.resource,
         identity.scopes.includes("workflows:draft")
+      ),
+    authorizeDraftSave: identity =>
+      connectionGuard(
+        identity.userId,
+        identity.connectionId!,
+        config.resource,
+        "workflows:save"
+      ),
+    authorizeCapability: (identity, scope) =>
+      connectionGuard(
+        identity.userId,
+        identity.connectionId!,
+        config.resource,
+        scope
       ),
     async requestDraftReview(identity, input) {
       const service = workflowAuthoring(
@@ -196,10 +217,10 @@ export function registerAuthoringMcp(
     "/mcp/oauth/authorize",
     consentLimit,
     safe(async (req, res) => {
-      validateAuthorization(config, req.query); // Never redirect an unvalidated OAuth request.
+      const validated = validateAuthorization(config, req.query); // Never redirect an unvalidated OAuth request.
       const user = await signedIn(req, res);
       if (!user) return;
-      const workspaces = await oauth.workspaces(user.id);
+      const workspaces = await oauth.workspaces(user.id, validated.scope);
       if (!workspaces.length) {
         res.status(403).send("No workspace permits authoring.");
         return;
@@ -208,7 +229,7 @@ export function registerAuthoringMcp(
       page(
         res,
         "Connect workflow authoring",
-        `<p>Signed in as ${escape(user.email || user.name || "your EvokeLoop account")}</p><p>Client: ${escape(config.clientId)}</p><p>Access tokens expire after 30 minutes. Ongoing access renews automatically until revoked or 30 days pass without a successful renewal. It can read drafts and App contracts${request.scope.includes("workflows:draft") ? ", propose changes and request draft review" : ""}. Applying requires a separate confirmation on EvokeLoop. It cannot run, publish, schedule, post or spend generation credits.</p><form method="post">${hidden("nonce", request.nonce)}<label>Workspace <select name="organizationId">${workspaces.map(w => `<option value="${w.id}">${escape(w.name)}</option>`).join("")}</select></label><p>Requested permissions: ${escape(request.scope)}</p><label>Duration <select name="duration"><option value="session">30 minutes only</option><option value="ongoing">Ongoing, revocable (30-day inactivity limit)</option></select></label><button name="decision" value="allow">Allow this workspace connection</button> <button name="decision" value="deny">Deny</button></form><p><a href="/app">Cancel</a> · <a href="/mcp/connections">Manage connections</a></p>`,
+        `<p>Signed in as ${escape(user.email || user.name || "your EvokeLoop account")}</p><p>Client: ${escape(config.clientId)}</p><p>Access tokens expire after 30 minutes. Ongoing access renews automatically until revoked or 30 days pass without a successful renewal. It can read drafts and App contracts${request.scope.includes("workflows:draft") ? ", propose changes and request draft review" : ""}. ${request.scope.split(" ").includes("workflows:save") ? "It can directly create and update workflow/App authoring drafts without a separate in-app apply confirmation." : "Applying requires a separate confirmation on EvokeLoop."} ${request.scope.split(" ").includes("workflows:execute") ? "It can request content-only generation runs, spending only the exact separately approved per-run budget. It cannot delete, publish, activate schedules or post." : "It cannot delete, run, publish, activate schedules, post or spend generation credits."}</p>${request.scope.split(" ").includes("catalog:read") ? "<p>It can read workspace catalog product facts, image references, and category context.</p>" : ""}${request.scope.split(" ").includes("brand:read") ? "<p>It can read workspace Brand Kit guidance and editable prompt defaults.</p>" : ""}${request.scope.split(" ").includes("creatives:draft") ? "<p>It can read and save local creative and video setup drafts.</p>" : ""}${request.scope.split(" ").includes("campaigns:draft") ? "<p>It can read and save local Google campaign and unscheduled publication drafts, including local destination account IDs and names, without provider mutation or activation.</p>" : ""}${request.scope.split(" ").includes("brand:configure") ? "<p>Workspace owners and administrators can change shared prompt defaults, affecting future work. This permission is not limited to drafts.</p>" : ""}${request.scope.split(" ").includes("catalog:configure") ? "<p>Workspace owners and administrators can change category mappings, product category overrides and shared category guidance, affecting future work. This permission is not limited to drafts.</p>" : ""}<form method="post">${hidden("nonce", request.nonce)}<label>Workspace <select name="organizationId">${workspaces.map(w => `<option value="${w.id}">${escape(w.name)}</option>`).join("")}</select></label><p>Requested permissions: ${escape(request.scope)}</p><label>Duration <select name="duration"><option value="session">30 minutes only</option><option value="ongoing">Ongoing, revocable (30-day inactivity limit)</option></select></label><button name="decision" value="allow">Allow this workspace connection</button> <button name="decision" value="deny">Deny</button></form><p><a href="/app">Cancel</a> · <a href="/mcp/connections">Manage connections</a></p>`,
         config.redirectUris.map(uri => new URL(uri).origin)
       );
     })
@@ -342,6 +363,55 @@ export function registerAuthoringMcp(
         res,
         "Draft saved",
         `<p>Saved revision ${result.revision}. Publishing and execution require separate actions.</p><a href="/app">Return to EvokeLoop</a>`
+      );
+    })
+  );
+  const runReviewQuery = executionReferenceInput.extend({
+    organizationId: z.coerce.number().int().positive(),
+  });
+  app.get(
+    "/mcp/run-review",
+    consentLimit,
+    safe(async (req, res) => {
+      const input = runReviewQuery.parse(req.query);
+      const user = await signedIn(req, res);
+      if (!user) return;
+      const plan = await reviewMcpWorkflowExecution(user.id, input);
+      page(
+        res,
+        "Approve content generation budget",
+        `<p>This authorizes one content-only run in workspace ${input.organizationId}. Estimated charge: <strong>${plan.credits} credits</strong>. Maximum authorized: <strong>${plan.maxCredits} credits</strong>. It cannot publish, activate schedules or change external campaigns.</p><p>Workflow ${escape(plan.workflowId)}, revision ${plan.revision}. Approval expires ${escape(new Date(plan.expiresAt).toISOString())}.</p><pre>${escape(JSON.stringify(plan.reviewConfig, null, 2))}</pre><form method="post">${Object.entries(
+          { ...input, hash: plan.hash, maxCredits: plan.maxCredits }
+        )
+          .map(([k, v]) => hidden(k, v))
+          .join(
+            ""
+          )}<button>Approve this run and credit budget</button></form><a href="/app">Cancel</a>`
+      );
+    })
+  );
+  app.post(
+    "/mcp/run-review",
+    consentLimit,
+    sameOrigin,
+    form,
+    safe(async (req, res) => {
+      const user = await authenticate(req, res);
+      if (!user) {
+        res.status(401).end();
+        return;
+      }
+      const input = executionApprovalInput
+        .extend({
+          organizationId: z.coerce.number().int().positive(),
+          maxCredits: z.coerce.number().int().min(0).max(10000),
+        })
+        .parse(req.body);
+      await approveMcpWorkflowExecution(user.id, input);
+      page(
+        res,
+        "Run budget approved",
+        '<p>The exact content-generation request is approved. Return to ChatGPT to queue it. This approval does not publish or enable a schedule.</p><a href="/app">Return to EvokeLoop</a>'
       );
     })
   );

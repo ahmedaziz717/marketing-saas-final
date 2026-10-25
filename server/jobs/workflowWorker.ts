@@ -1,4 +1,8 @@
 import { systemPromptContract } from "../../shared/promptContracts";
+import {
+  guardMcpWorkflowStep,
+  type McpExecutionContext,
+} from "../lib/mcpWorkflowExecution";
 import { workflowContentText } from "../../shared/workflowMedia";
 import {
   applicationPrompt,
@@ -115,6 +119,7 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
     await requireOrganizationRole(run.actorUserId, run.organizationId, [
       ...workflowRoles,
     ]);
+    await guardMcpWorkflowStep(db, run);
     current = workflowOrder(run.graph).find(
       id => run.steps[id] && !done(run.steps[id].status)
     );
@@ -299,14 +304,18 @@ export async function processNextWorkflowRun(db: LibraryDatabase) {
     }
     run.steps[current] = { status: "running", startedAtMs: Date.now() };
     await persist({ steps: run.steps });
+    const approvedContext = await guardMcpWorkflowStep(db, run, current, true);
     const outputs = await aiScope.run(
       {
         organizationId: run.organizationId,
         actorUserId: run.actorUserId,
         operation: `workflow.${node.type}`,
         quotedCredits: run.creditsByNode[current],
+        resolvedPromptDefaults: approvedContext
+          ? Promise.resolve(approvedContext.prompts)
+          : undefined,
       },
-      () => executeStep(db, run, node, text, imageKeys, input)
+      () => executeStep(db, run, node, text, imageKeys, input, approvedContext)
     );
     run.steps[current] = {
       ...run.steps[current],
@@ -378,7 +387,8 @@ async function executeStep(
   node: WorkflowNode,
   text: string,
   imageKeys: string[],
-  input: WorkflowValue[]
+  input: WorkflowValue[],
+  approvedContext?: McpExecutionContext
 ): Promise<WorkflowValue[]> {
   if (node.type === "text") return [{ type: "text", text: node.config.text }];
   if (node.type === "combine") return [{ type: "text", text }];
@@ -401,10 +411,14 @@ async function executeStep(
       },
     ];
   }
-  const [brand] = await db
-    .select()
-    .from(brandKits)
-    .where(eq(brandKits.organizationId, run.organizationId));
+  const brand = approvedContext
+    ? approvedContext.brand
+    : (
+        await db
+          .select()
+          .from(brandKits)
+          .where(eq(brandKits.organizationId, run.organizationId))
+      )[0];
   if (!brand || brand.status !== "active")
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

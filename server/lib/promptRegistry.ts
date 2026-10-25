@@ -12,6 +12,7 @@ import { getDb } from "../db";
 import { appendActivity, withOrganizationTransaction } from "./activity";
 import { aiScope } from "./aiMetering";
 import type { CreativeSetup } from "../../shared/creativeBuilder";
+import type { DraftSaveHook, DraftTransaction } from "./mcpDraftReceipt";
 
 export async function creativePromptDefaults(
   organizationId: number,
@@ -42,9 +43,10 @@ export async function creativePromptDefaults(
 }
 
 export async function resolvedPrompts(
-  organizationId: number
+  organizationId: number,
+  transaction?: DraftTransaction
 ): Promise<ResolvedPrompt[]> {
-  const db = await getDb();
+  const db = transaction ?? (await getDb());
   if (!db) throw new Error("Prompt defaults are unavailable. Please retry.");
   const rows = await db
     .selectDistinctOn([promptRevisions.promptId])
@@ -163,21 +165,24 @@ export async function applicationPrompt(
   return prompt;
 }
 
-export async function changePrompt(input: {
-  organizationId: number;
-  actorUserId: number;
-  promptId: string;
-  expectedRevision: number;
-  action:
-    | "save"
-    | "restore_system"
-    | "restore_revision"
-    | "restore_original"
-    | "restore_brand_initial";
-  value?: string;
-  restoreRevision?: number;
-  reason: string;
-}) {
+export async function changePrompt<T = { revision: number }>(
+  input: {
+    organizationId: number;
+    actorUserId: number;
+    promptId: string;
+    expectedRevision: number;
+    action:
+      | "save"
+      | "restore_system"
+      | "restore_revision"
+      | "restore_original"
+      | "restore_brand_initial";
+    value?: string;
+    restoreRevision?: number;
+    reason: string;
+  },
+  aroundSave?: DraftSaveHook<{ revision: number }, T>
+) {
   const definition = promptDefinition(input.promptId);
   if (!definition?.editable)
     throw new TRPCError({
@@ -187,119 +192,133 @@ export async function changePrompt(input: {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   return withOrganizationTransaction(db, input.organizationId, async tx => {
-    const scope = and(
-      eq(promptRevisions.organizationId, input.organizationId),
-      eq(promptRevisions.promptId, input.promptId)
-    );
-    const [current] = await tx
-      .select()
-      .from(promptRevisions)
-      .where(scope)
-      .orderBy(desc(promptRevisions.revision))
-      .limit(1);
-    if ((current?.revision ?? 0) !== input.expectedRevision)
-      throw new TRPCError({
-        code: "CONFLICT",
-        message:
-          "This default changed while you were editing. Review the latest version before saving.",
-      });
-    let value: string | null = null;
-    let restoredFromRevision: number | null = null;
-    if (input.action === "save") {
-      value = input.value?.trim() ?? "";
-      if (!value || value.length > definition.maxLength)
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Enter a prompt between 1 and ${definition.maxLength.toLocaleString("en-US")} characters.`,
-        });
-    } else if (
-      input.action === "restore_original" ||
-      input.action === "restore_brand_initial"
-    ) {
-      const [initial] = await tx
-        .select()
-        .from(promptBrandInitials)
-        .where(
-          and(
-            eq(promptBrandInitials.organizationId, input.organizationId),
-            eq(promptBrandInitials.promptId, input.promptId)
-          )
-        )
-        .limit(1);
-      const [first] = await tx
+    const save = async () => {
+      const scope = and(
+        eq(promptRevisions.organizationId, input.organizationId),
+        eq(promptRevisions.promptId, input.promptId)
+      );
+      const [current] = await tx
         .select()
         .from(promptRevisions)
-        .where(
-          input.action === "restore_brand_initial"
-            ? and(scope, eq(promptRevisions.action, "personalize_brand"))
-            : scope
-        )
-        .orderBy(asc(promptRevisions.revision))
+        .where(scope)
+        .orderBy(desc(promptRevisions.revision))
         .limit(1);
-      if (input.action === "restore_brand_initial" && !first?.value && !initial)
+      if ((current?.revision ?? 0) !== input.expectedRevision)
         throw new TRPCError({
-          code: "NOT_FOUND",
+          code: "CONFLICT",
           message:
-            "No initial brand-personalized default exists for this workspace prompt.",
+            "This default changed while you were editing. Review the latest version before saving.",
         });
-      value =
-        input.action === "restore_original"
-          ? (first?.baselineValue ??
-            initial?.baselineValue ??
-            definition.baseline)
-          : (initial?.value ?? first!.value);
-      restoredFromRevision =
-        input.action === "restore_original" ? 0 : initial ? 0 : first!.revision;
-    } else if (input.action === "restore_revision") {
-      const [previous] = await tx
-        .select()
-        .from(promptRevisions)
-        .where(
-          and(scope, eq(promptRevisions.revision, input.restoreRevision ?? -1))
+      let value: string | null = null;
+      let restoredFromRevision: number | null = null;
+      if (input.action === "save") {
+        value = input.value?.trim() ?? "";
+        if (!value || value.length > definition.maxLength)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Enter a prompt between 1 and ${definition.maxLength.toLocaleString("en-US")} characters.`,
+          });
+      } else if (
+        input.action === "restore_original" ||
+        input.action === "restore_brand_initial"
+      ) {
+        const [initial] = await tx
+          .select()
+          .from(promptBrandInitials)
+          .where(
+            and(
+              eq(promptBrandInitials.organizationId, input.organizationId),
+              eq(promptBrandInitials.promptId, input.promptId)
+            )
+          )
+          .limit(1);
+        const [first] = await tx
+          .select()
+          .from(promptRevisions)
+          .where(
+            input.action === "restore_brand_initial"
+              ? and(scope, eq(promptRevisions.action, "personalize_brand"))
+              : scope
+          )
+          .orderBy(asc(promptRevisions.revision))
+          .limit(1);
+        if (
+          input.action === "restore_brand_initial" &&
+          !first?.value &&
+          !initial
         )
-        .limit(1);
-      if (!previous)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "That workspace revision was not found.",
-        });
-      restoredFromRevision = previous.revision;
-      value =
-        previous.value ??
-        (previous.baselineVersion === definition.version
-          ? null
-          : previous.baselineValue);
-    }
-    const revision = (current?.revision ?? 0) + 1;
-    await tx.insert(promptRevisions).values({
-      organizationId: input.organizationId,
-      promptId: input.promptId,
-      revision,
-      value,
-      baselineVersion: definition.version,
-      baselineValue: definition.baseline,
-      action: input.action,
-      restoredFromRevision,
-      actorUserId: input.actorUserId,
-      reason: input.reason,
-      createdAtMs: Date.now(),
-    });
-    await appendActivity(
-      {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "No initial brand-personalized default exists for this workspace prompt.",
+          });
+        value =
+          input.action === "restore_original"
+            ? (first?.baselineValue ??
+              initial?.baselineValue ??
+              definition.baseline)
+            : (initial?.value ?? first!.value);
+        restoredFromRevision =
+          input.action === "restore_original"
+            ? 0
+            : initial
+              ? 0
+              : first!.revision;
+      } else if (input.action === "restore_revision") {
+        const [previous] = await tx
+          .select()
+          .from(promptRevisions)
+          .where(
+            and(
+              scope,
+              eq(promptRevisions.revision, input.restoreRevision ?? -1)
+            )
+          )
+          .limit(1);
+        if (!previous)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "That workspace revision was not found.",
+          });
+        restoredFromRevision = previous.revision;
+        value =
+          previous.value ??
+          (previous.baselineVersion === definition.version
+            ? null
+            : previous.baselineValue);
+      }
+      const revision = (current?.revision ?? 0) + 1;
+      await tx.insert(promptRevisions).values({
         organizationId: input.organizationId,
+        promptId: input.promptId,
+        revision,
+        value,
+        baselineVersion: definition.version,
+        baselineValue: definition.baseline,
+        action: input.action,
+        restoredFromRevision,
         actorUserId: input.actorUserId,
-        action: `prompt.${input.action}`,
-        entityType: "prompt",
-        entityId: input.promptId,
-        payload: {
-          revision,
-          baselineVersion: definition.version,
-          restoredFromRevision,
+        reason: input.reason,
+        createdAtMs: Date.now(),
+      });
+      await appendActivity(
+        {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: `prompt.${input.action}`,
+          entityType: "prompt",
+          entityId: input.promptId,
+          payload: {
+            revision,
+            baselineVersion: definition.version,
+            restoredFromRevision,
+          },
         },
-      },
-      tx
-    );
-    return { revision };
+        tx
+      );
+      return { revision };
+    };
+    return aroundSave ? aroundSave(tx, save) : save();
   });
 }
 

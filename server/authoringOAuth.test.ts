@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync, readdirSync } from "node:fs";
@@ -86,20 +94,27 @@ beforeAll(async () => {
       createdAtMs: Date.now(),
     }))
   );
+}, 30000);
+// A fresh HTTP app isolates per-IP rate-limit windows between independent tests.
+// Production limiter settings remain unchanged and active within each test.
+beforeEach(async () => {
+  const people = await state.db.select().from(users);
   const app = express();
   registerAuthoringMcp(app, config, async req =>
     req.headers["x-test-user"] === String(userId)
-      ? people[0]
+      ? people.find((user: { id: number }) => user.id === userId)
       : req.headers["x-test-user"] === String(outsiderId)
-        ? people[1]
+        ? people.find((user: { id: number }) => user.id === outsiderId)
         : null
   );
   server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   address = `http://127.0.0.1:${(server.address() as any).port}`;
-}, 30000);
-afterAll(async () => {
+});
+afterEach(async () => {
   await new Promise<void>(resolve => server?.close(() => resolve()));
+});
+afterAll(async () => {
   await engine?.close();
 });
 const authorization = (scope = "workflows:read workflows:draft") => ({
@@ -205,7 +220,7 @@ it("issues ongoing credentials only after explicit consent, rotates hashes and r
   expect(JSON.stringify(logs)).not.toContain(renewed.refresh_token);
   expect(JSON.stringify(logs)).not.toContain(renewed.access_token);
 });
-it("requires explicit ongoing HTTP consent and advertises refresh without changing resource scopes", async () => {
+it("requires explicit ongoing HTTP consent and advertises separately consented scopes", async () => {
   const metadata = await (
     await http("/.well-known/oauth-authorization-server")
   ).json();
@@ -216,6 +231,14 @@ it("requires explicit ongoing HTTP consent and advertises refresh without changi
   expect(metadata.scopes_supported).toEqual([
     "workflows:read",
     "workflows:draft",
+    "workflows:save",
+    "catalog:read",
+    "brand:read",
+    "creatives:draft",
+    "campaigns:draft",
+    "workflows:execute",
+    "brand:configure",
+    "catalog:configure",
   ]);
   const page = await http(
     "/mcp/oauth/authorize?" +
@@ -273,6 +296,7 @@ it("rejects refresh scope escalation, wrong binding, malformed and unknown input
   const { result } = await grant("workflows:read", true);
   for (const patch of [
     { scope: "workflows:read workflows:draft" },
+    { scope: "workflows:read workflows:save" },
     { scope: "admin" },
     { scope: "workflows:read workflows:read" },
     { client_id: "other" },
@@ -299,6 +323,323 @@ it("rejects refresh scope escalation, wrong binding, malformed and unknown input
       })
     ).body.result.isError
   ).toBe(true);
+});
+it("keeps direct draft saving separate from legacy proposal permission and preserves it through refresh", async () => {
+  const legacy = await grant("workflows:read workflows:draft", true);
+  const legacyIdentity = (await oauth.verify(legacy.result.access_token))!;
+  const guarded = (connectionId: string) =>
+    workflowAuthoring(
+      userId,
+      connectionGuard(userId, connectionId, config.resource, "workflows:save")
+    );
+  await expect(
+    guarded(legacyIdentity.connectionId).discover({ organizationId })
+  ).rejects.toThrow("Authoring connection unavailable or revoked.");
+  await expect(
+    oauth.exchange({
+      ...refreshInput(legacy.result.refresh_token!),
+      scope: "workflows:read workflows:draft workflows:save",
+    })
+  ).rejects.toThrow();
+  expect((await oauth.verify(legacy.result.access_token))?.scopes).toEqual([
+    "workflows:read",
+    "workflows:draft",
+  ]);
+
+  const fresh = await grant("workflows:read workflows:save", true);
+  const identity = (await oauth.verify(fresh.result.access_token))!;
+  await expect(
+    guarded(identity.connectionId).discover({ organizationId })
+  ).resolves.toBeDefined();
+  await expect(
+    workflowAuthoring(
+      userId,
+      connectionGuard(userId, identity.connectionId, config.resource, true)
+    ).discover({ organizationId })
+  ).rejects.toThrow();
+  await expect(
+    guarded(identity.connectionId).discover({ organizationId: otherOrg })
+  ).rejects.toThrow();
+  const renewed = await oauth.exchange(
+    refreshInput(fresh.result.refresh_token!)
+  );
+  expect(renewed.scope).toBe("workflows:read workflows:save");
+  await expect(
+    guarded(identity.connectionId).discover({ organizationId })
+  ).resolves.toBeDefined();
+  await oauth.revoke(userId, identity.connectionId);
+  await expect(
+    guarded(identity.connectionId).discover({ organizationId })
+  ).rejects.toThrow();
+});
+it("shows direct draft save consequences only for the new explicitly requested permission", async () => {
+  for (const [scope, directlySaves] of [
+    ["workflows:read workflows:draft", false],
+    ["workflows:read workflows:save", true],
+  ] as const) {
+    const page = await http(
+      "/mcp/oauth/authorize?" + new URLSearchParams(authorization(scope))
+    );
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(
+      html.includes("directly create and update workflow/App authoring drafts")
+    ).toBe(directlySaves);
+    expect(
+      html.includes("Applying requires a separate confirmation on EvokeLoop.")
+    ).toBe(!directlySaves);
+    expect(html).toContain(
+      "It cannot delete, run, publish, activate schedules, post or spend generation credits."
+    );
+  }
+});
+it("requires separately consented catalog and Brand Kit reads without expanding legacy grants", async () => {
+  const legacy = await grant(undefined, true);
+  const identity = (await oauth.verify(legacy.result.access_token))!;
+  for (const scope of ["catalog:read", "brand:read"] as const) {
+    const restricted = workflowAuthoring(
+      userId,
+      connectionGuard(userId, identity.connectionId, config.resource, scope)
+    );
+    await expect(restricted.discover({ organizationId })).rejects.toThrow();
+    await expect(
+      oauth.exchange({
+        ...refreshInput(legacy.result.refresh_token!),
+        scope: `workflows:read workflows:draft ${scope}`,
+      })
+    ).rejects.toThrow();
+    const fresh = await grant(`workflows:read ${scope}`);
+    const granted = (await oauth.verify(fresh.result.access_token))!;
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(userId, granted.connectionId, config.resource, scope)
+      ).discover({ organizationId })
+    ).resolves.toBeDefined();
+    const page = await http(
+      "/mcp/oauth/authorize?" +
+        new URLSearchParams(authorization(`workflows:read ${scope}`))
+    );
+    const html = await page.text();
+    expect(html.includes("workspace catalog product facts")).toBe(
+      scope === "catalog:read"
+    );
+    expect(html.includes("workspace Brand Kit guidance")).toBe(
+      scope === "brand:read"
+    );
+    expect(html).not.toContain(
+      "directly create and update workflow/App authoring drafts"
+    );
+  }
+});
+it("separates local creative/campaign draft access and per-run budget requests from existing grants", async () => {
+  const additions = [
+    "creatives:draft",
+    "campaigns:draft",
+    "workflows:execute",
+  ] as const;
+  const allScopes =
+    "workflows:read workflows:draft workflows:save catalog:read brand:read " +
+    additions.join(" ");
+  expect(allScopes.length).toBeGreaterThan(100);
+  expect(validateAuthorization(config, authorization(allScopes)).scope).toBe(
+    allScopes
+  );
+  expect(() =>
+    validateAuthorization(config, authorization(allScopes + " admin"))
+  ).toThrow();
+  expect(() =>
+    validateAuthorization(config, authorization(allScopes + " workflows:read"))
+  ).toThrow();
+  const legacy = await grant(undefined, true);
+  const legacyIdentity = (await oauth.verify(legacy.result.access_token))!;
+  for (const scope of additions) {
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(
+          userId,
+          legacyIdentity.connectionId,
+          config.resource,
+          scope
+        )
+      ).discover({ organizationId })
+    ).rejects.toThrow();
+    await expect(
+      oauth.exchange({
+        ...refreshInput(legacy.result.refresh_token!),
+        scope: `workflows:read workflows:draft ${scope}`,
+      })
+    ).rejects.toThrow();
+    const issued = await grant(`workflows:read ${scope}`);
+    const identity = (await oauth.verify(issued.result.access_token))!;
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(userId, identity.connectionId, config.resource, scope)
+      ).discover({ organizationId })
+    ).resolves.toBeDefined();
+    const page = await http(
+      "/mcp/oauth/authorize?" +
+        new URLSearchParams(authorization(`workflows:read ${scope}`))
+    );
+    const html = await page.text();
+    expect(
+      html.includes("read and save local creative and video setup drafts")
+    ).toBe(scope === "creatives:draft");
+    expect(
+      html.includes(
+        "read and save local Google campaign and unscheduled publication drafts, including local destination account IDs and names, without provider mutation or activation"
+      )
+    ).toBe(scope === "campaigns:draft");
+    expect(html.includes("exact separately approved per-run budget")).toBe(
+      scope === "workflows:execute"
+    );
+    expect(
+      html.includes(
+        "It cannot delete, run, publish, activate schedules, post or spend generation credits."
+      )
+    ).toBe(scope !== "workflows:execute");
+    expect(html).not.toContain(
+      "directly create and update workflow/App authoring drafts"
+    );
+  }
+  expect((await oauth.verify(legacy.result.access_token))?.scopes).toEqual([
+    "workflows:read",
+    "workflows:draft",
+  ]);
+});
+it("requires distinct consent for shared defaults and category configuration, never treating them as draft-only access", async () => {
+  const legacy = await grant(undefined, true);
+  const legacyIdentity = (await oauth.verify(legacy.result.access_token))!;
+  for (const scope of ["brand:configure", "catalog:configure"] as const) {
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(
+          userId,
+          legacyIdentity.connectionId,
+          config.resource,
+          scope
+        )
+      ).discover({ organizationId })
+    ).rejects.toThrow();
+    await expect(
+      oauth.exchange({
+        ...refreshInput(legacy.result.refresh_token!),
+        scope: `workflows:read workflows:draft ${scope}`,
+      })
+    ).rejects.toThrow();
+    const issued = await grant(`workflows:read ${scope}`);
+    const identity = (await oauth.verify(issued.result.access_token))!;
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(userId, identity.connectionId, config.resource, scope)
+      ).discover({ organizationId })
+    ).resolves.toBeDefined();
+    // Configuration permission does not implicitly grant separate read capabilities.
+    const readScope =
+      scope === "brand:configure" ? "brand:read" : "catalog:read";
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(
+          userId,
+          identity.connectionId,
+          config.resource,
+          readScope
+        )
+      ).discover({ organizationId })
+    ).rejects.toThrow();
+    const page = await http(
+      "/mcp/oauth/authorize?" +
+        new URLSearchParams(authorization(`workflows:read ${scope}`))
+    );
+    const html = await page.text();
+    expect(html).toContain(
+      "affecting future work. This permission is not limited to drafts."
+    );
+    expect(html.includes("change shared prompt defaults")).toBe(
+      scope === "brand:configure"
+    );
+    expect(
+      html.includes(
+        "change category mappings, product category overrides and shared category guidance"
+      )
+    ).toBe(scope === "catalog:configure");
+    expect(html).toContain("Workspace owners and administrators");
+    expect(html).toContain(
+      "It cannot delete, run, publish, activate schedules, post or spend generation credits."
+    );
+  }
+});
+it("withholds configuration grants from creators and revokes mixed grants on admin permission loss", async () => {
+  const role = async (value: "owner" | "admin" | "creator") =>
+    state.db
+      .update(organizationMemberships)
+      .set({ role: value })
+      .where(eq(organizationMemberships.organizationId, organizationId));
+  await role("admin");
+  const verifyGrant = await grant(
+    "workflows:read workflows:draft brand:configure",
+    true
+  );
+  const refreshGrant = await grant("workflows:read catalog:configure", true);
+  const ordinary = await grant(undefined, true);
+  const configIdentity = (await oauth.verify(verifyGrant.result.access_token))!;
+  const pending = await oauth.begin(
+    userId,
+    authorization("workflows:read brand:configure")
+  );
+  await role("creator");
+  try {
+    expect(
+      (await oauth.workspaces(userId, "workflows:read brand:configure")).some(
+        w => w.id === organizationId
+      )
+    ).toBe(false);
+    expect(
+      (await oauth.workspaces(userId, "workflows:read workflows:draft")).some(
+        w => w.id === organizationId
+      )
+    ).toBe(true);
+    await expect(
+      oauth.consent(userId, pending.nonce, organizationId, true)
+    ).rejects.toThrow();
+    await expect(
+      workflowAuthoring(
+        userId,
+        connectionGuard(
+          userId,
+          configIdentity.connectionId,
+          config.resource,
+          "brand:configure"
+        )
+      ).discover({ organizationId })
+    ).rejects.toThrow();
+    expect(await oauth.verify(verifyGrant.result.access_token)).toBeNull();
+    await expect(
+      oauth.exchange(refreshInput(refreshGrant.result.refresh_token!))
+    ).rejects.toThrow();
+    const revoked = await state.db
+      .select()
+      .from(authoringOAuthGrants)
+      .where(eq(authoringOAuthGrants.id, configIdentity.connectionId));
+    expect(revoked[0].revokedAtMs).toBeTruthy();
+    expect((await oauth.verify(ordinary.result.access_token))?.scopes).toEqual([
+      "workflows:read",
+      "workflows:draft",
+    ]);
+    expect(
+      (await oauth.exchange(refreshInput(ordinary.result.refresh_token!))).scope
+    ).toBe("workflows:read workflows:draft");
+  } finally {
+    await role("owner");
+  }
+  // Restoring the role cannot silently reactivate a previously revoked grant.
+  expect(await oauth.verify(verifyGrant.result.access_token)).toBeNull();
+  expect(await oauth.verify(refreshGrant.result.access_token)).toBeNull();
 });
 it("commits family revocation on replay, including a consumed credential older than one rotation", async () => {
   const { result } = await grant(undefined, true);
