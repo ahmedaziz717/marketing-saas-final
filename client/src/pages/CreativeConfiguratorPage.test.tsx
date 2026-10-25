@@ -92,7 +92,12 @@ vi.mock("@/components/LogoSourceTools", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    brand: { promptContext: { useQuery: () => ({ data: null }) } },
+    brand: {
+      promptContext: { useQuery: () => ({ data: null }) },
+      personalizePrompts: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
+    },
     prompts: {
       change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
@@ -308,7 +313,9 @@ it("allows a video prompt with zero images, switches Seedance input modes with r
   clickJourney(
     screen.getByRole("button", { name: "Open Subject & sources category" })
   );
-  clickJourney(screen.getByRole("button", { name: "Use photo 1 for Studio lamp" }));
+  clickJourney(
+    screen.getByRole("checkbox", { name: /^Use 1 for Studio lamp/ })
+  );
   expect(screen.getByText("1 image selected")).toBeTruthy();
   clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
@@ -346,7 +353,11 @@ it("generates copy from the saved page snapshot and shows which page is being us
   await waitFor(() =>
     expect(api.refreshCopy).toHaveBeenCalledWith({
       organizationId: 1,
-      setup: { ...config.image, copyDefaultInstructions: "Write one fresh set of advertising copy for the selected subject. Use the selected campaign occasion, audience and brand voice. Keep the subject specific and use a suitable call to action." },
+      setup: {
+        ...config.image,
+        copyDefaultInstructions:
+          "Write one fresh set of advertising copy for the selected subject. Use the selected campaign occasion, audience and brand voice. Keep the subject specific and use a suitable call to action.",
+      },
     })
   );
   await waitFor(() =>
@@ -495,7 +506,11 @@ it.each(["image", "video"] as const)(
     clickJourney(
       screen.getByRole("button", { name: "Open Subject & sources category" })
     );
-    clickJourney(screen.getByRole("button", { name: kind === "video" ? "Use photo 1 for Studio lamp" : "Select Studio lamp" }));
+    clickJourney(
+      kind === "video"
+        ? screen.getByRole("checkbox", { name: /^Use 1 for Studio lamp/ })
+        : screen.getByRole("button", { name: "Select Studio lamp" })
+    );
     clickJourney(
       screen.getByRole("button", { name: /Choose product details for the ad/ })
     );
@@ -1006,14 +1021,15 @@ it("requires a valid current quote and explicit confirmation before image genera
   ];
   api.job = { id: 12, status: "queued", variants: [] };
   const view = openSaved(config);
-  await waitFor(() =>
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Generate images",
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(false),
+  await waitFor(
+    () =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Generate images",
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false),
     { timeout: 3000 } // Includes the real 500ms quote debounce under a loaded test runner.
   );
   clickJourney(screen.getByRole("button", { name: "Generate images" }));

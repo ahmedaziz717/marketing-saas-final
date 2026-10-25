@@ -70,13 +70,110 @@ const setup = () => ({
 });
 
 describe("creative setup and trusted catalog inputs", () => {
+  it("creates one full-resolution set per selected view and rejects foreign or excessive views", () => {
+    const multiple = creativeSetupSchema.parse({
+      ...setup(),
+      products: [{ ...setup().products[0], imageIds: [21, 22] }],
+    });
+    const second = {
+      ...image,
+      id: 22,
+      storageKey: "org-1/lamp-side-original.png",
+      url: "/original-side.png",
+    };
+    const resolved = resolveBuilderInputs(
+      1,
+      multiple,
+      [product],
+      [image, second],
+      [logo]
+    );
+    expect(resolved.products.map(p => p.image?.storageKey)).toEqual([
+      image.storageKey,
+      second.storageKey,
+    ]);
+    expect(outputCount(multiple)).toBe(multiple.formatIds.length * 2);
+    expect(() =>
+      resolveBuilderInputs(
+        1,
+        multiple,
+        [product],
+        [image, { ...second, organizationId: 2 }],
+        [logo]
+      )
+    ).toThrow(/unavailable/);
+    expect(
+      creativeSetupSchema.safeParse({ ...multiple, productMode: "together" })
+        .success
+    ).toBe(false);
+    expect(
+      creativeSetupSchema.safeParse({
+        ...multiple,
+        products: [{ ...multiple.products[0], imageIds: [21, 22, 23, 24, 25] }],
+      }).success
+    ).toBe(false);
+    expect(
+      creativeSetupSchema.safeParse({
+        ...multiple,
+        products: [{ ...multiple.products[0], imageIds: [22, 21] }],
+      }).success
+    ).toBe(false);
+  });
   it("rejects a removed option and labels an explicitly selected optional look without altering SKU facts", () => {
-    const selectedImage = { ...image, media: { width: 1200, height: 1600, hasAlpha: true, candidates: [], selectedSourceUrl: "", unavailableCandidates: 0, references: [{ groupId: "case", imageId: "front", position: 0 }] } };
-    const selectedProduct = { ...product, mediaGroups: [{ id: "case", name: "Alternate finish", role: "optional_component" as const, eligible: true, declaredImages: 1 }] };
-    const result = resolveBuilderInputs(1, setup(), [selectedProduct], [selectedImage], [logo]);
-    expect(result.products[0].visualSource?.[0]).toMatchObject({ role: "optional_component", name: "Alternate finish" });
-    expect(result.products[0].visualSource?.[0].note).toContain("not proof of the exact configured SKU");
-    expect(() => resolveBuilderInputs(1, setup(), [{ ...selectedProduct, mediaGroups: [{ ...selectedProduct.mediaGroups[0], eligible: false }] }], [selectedImage], [logo])).toThrow(/unavailable/);
+    const selectedImage = {
+      ...image,
+      media: {
+        width: 1200,
+        height: 1600,
+        hasAlpha: true,
+        candidates: [],
+        selectedSourceUrl: "",
+        unavailableCandidates: 0,
+        references: [{ groupId: "case", imageId: "front", position: 0 }],
+      },
+    };
+    const selectedProduct = {
+      ...product,
+      mediaGroups: [
+        {
+          id: "case",
+          name: "Alternate finish",
+          role: "optional_component" as const,
+          eligible: true,
+          declaredImages: 1,
+        },
+      ],
+    };
+    const result = resolveBuilderInputs(
+      1,
+      setup(),
+      [selectedProduct],
+      [selectedImage],
+      [logo]
+    );
+    expect(result.products[0].visualSource?.[0]).toMatchObject({
+      role: "optional_component",
+      name: "Alternate finish",
+    });
+    expect(result.products[0].visualSource?.[0].note).toContain(
+      "not proof of the exact configured SKU"
+    );
+    expect(() =>
+      resolveBuilderInputs(
+        1,
+        setup(),
+        [
+          {
+            ...selectedProduct,
+            mediaGroups: [
+              { ...selectedProduct.mediaGroups[0], eligible: false },
+            ],
+          },
+        ],
+        [selectedImage],
+        [logo]
+      )
+    ).toThrow(/unavailable/);
   });
   it("provides an expanded collection of uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
     expect(CREATIVE_THEME_LIST.length).toBeGreaterThan(100);

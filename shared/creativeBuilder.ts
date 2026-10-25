@@ -341,11 +341,13 @@ export function selectedPeople(setup: {
 export const creativeSetupSchema = z
   .object({
     learningOrigin: learningOriginSchema.optional(),
-    enhancement: z.object({
-      assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/),
-      revision: z.string().regex(/^[a-f0-9]{64}$/),
-      instruction: z.string().trim().min(20).max(8000),
-    }).optional(),
+    enhancement: z
+      .object({
+        assetKey: z.string().regex(/^(asset|creative):[1-9][0-9]*$/),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        instruction: z.string().trim().min(20).max(8000),
+      })
+      .optional(),
     modelId: z.string().max(240).optional(),
     modelOptions: modelOptionsSchema.optional(),
     campaignPlanId: z.number().int().positive().optional(),
@@ -356,6 +358,7 @@ export const creativeSetupSchema = z
       { message: "Choose a supported creative theme." }
     ),
     copyDefaultInstructions: z.string().trim().min(1).max(12000).optional(),
+    imageDefaultInstructions: z.string().trim().min(1).max(12000).optional(),
     basePrompt: z
       .string()
       .trim()
@@ -372,7 +375,11 @@ export const creativeSetupSchema = z
           imageId: z.number().int().positive().nullable(),
           // Separate mode creates one creative set per selected view. imageId
           // remains the first view for backwards-compatible saved drafts.
-          imageIds: z.array(z.number().int().positive()).min(1).max(4).optional(),
+          imageIds: z
+            .array(z.number().int().positive())
+            .min(1)
+            .max(4)
+            .optional(),
           featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
           includePrice: z.boolean().default(false),
           includeDescription: z.boolean().optional(),
@@ -528,22 +535,54 @@ export const creativeSetupSchema = z
         message:
           "Combine up to three products in one image, or create separate sets.",
       });
-    for (const [index, product] of setup.products.entries()) {
-      if (product.imageIds && (new Set(product.imageIds).size !== product.imageIds.length || product.imageIds[0] !== product.imageId))
-        ctx.addIssue({ code: "custom", path: ["products", index, "imageIds"], message: "Select each image once and keep the first selected image as imageId." });
-      if (setup.productMode === "together" && (product.imageIds?.length ?? 1) > 1)
-        ctx.addIssue({ code: "custom", path: ["products", index, "imageIds"], message: "Use one view per product when combining products, or choose separate sets for multiple views." });
+    for (let index = 0; index < setup.products.length; index++) {
+      const product = setup.products[index];
+      if (
+        product.imageIds &&
+        (new Set(product.imageIds).size !== product.imageIds.length ||
+          product.imageIds[0] !== product.imageId)
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["products", index, "imageIds"],
+          message:
+            "Select each image once and keep the first selected image as imageId.",
+        });
+      if (
+        setup.productMode === "together" &&
+        (product.imageIds?.length ?? 1) > 1
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["products", index, "imageIds"],
+          message:
+            "Use one view per product when combining products, or choose separate sets for multiple views.",
+        });
     }
-    if (setup.products.reduce((count, product) => count + (product.imageIds?.length ?? 1), 0) > 12)
-      ctx.addIssue({ code: "custom", path: ["products"], message: "Choose up to 12 product views across this creative batch." });
+    if (
+      setup.products.reduce(
+        (count, product) => count + (product.imageIds?.length ?? 1),
+        0
+      ) > 12
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["products"],
+        message: "Choose up to 12 product views across this creative batch.",
+      });
   });
 export type CreativeSetup = z.infer<typeof creativeSetupSchema>;
 export type CreativeCopy = z.infer<typeof creativeCopySchema>;
-export function selectedProductImageIds(product: CreativeSetup["products"][number]): Array<number | null> {
+export function selectedProductImageIds(
+  product: CreativeSetup["products"][number]
+): Array<number | null> {
   return product.imageIds?.length ? product.imageIds : [product.imageId];
 }
 export function creativeProductViewCount(setup: CreativeSetup) {
-  return setup.products.reduce((count, product) => count + selectedProductImageIds(product).length, 0);
+  return setup.products.reduce(
+    (count, product) => count + selectedProductImageIds(product).length,
+    0
+  );
 }
 
 export function applyCreativeTheme(
@@ -619,7 +658,9 @@ export function isReferenceCreative(setup: CreativeSetup) {
 export function outputCount(setup: CreativeSetup) {
   return (
     setup.formatIds.length *
-    (setup.enhancement || setup.promotionMode === "platform" || isReferenceCreative(setup)
+    (setup.enhancement ||
+    setup.promotionMode === "platform" ||
+    isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -633,7 +674,9 @@ export function creativeImageOutputs(setup: CreativeSetup) {
     .filter(Boolean)
     .sort((a, b) => b.width * b.height - a.width * a.height);
   const groups =
-    setup.enhancement || setup.promotionMode === "platform" || isReferenceCreative(setup)
+    setup.enhancement ||
+    setup.promotionMode === "platform" ||
+    isReferenceCreative(setup)
       ? 1
       : setup.productMode === "together"
         ? Math.min(1, setup.products.length)
@@ -673,7 +716,10 @@ export function generationSetupIssues(setup: CreativeSetup) {
       "Add a promotion name and description so the creative has accurate context."
     );
   if (!setup.formatIds.length) issues.push("Select at least one size.");
-  if (!setup.enhancement && (!setup.copy.headline.trim() || !setup.copy.cta.trim()))
+  if (
+    !setup.enhancement &&
+    (!setup.copy.headline.trim() || !setup.copy.cta.trim())
+  )
     issues.push("Add a headline and call to action.");
   if (outputCount(setup) > 24)
     issues.push(

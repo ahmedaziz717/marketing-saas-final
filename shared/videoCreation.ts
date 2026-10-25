@@ -101,6 +101,7 @@ export const defaultVideoDirection: VideoDirection = {
   extraDirection: "",
 };
 export type VideoImageChoice = {
+  isPrimary?: boolean;
   media?: import("./catalogMedia").CatalogImageMedia | null;
   mediaGroups?: import("./catalogMedia").CatalogMediaGroupSummary[] | null;
   key: string;
@@ -123,10 +124,12 @@ export const videoSetupSchema = z
     mode: z.enum(["create", "edit", "extend", "motion"]),
     prompt: z.string().trim().max(10000),
     defaultInstructions: z.string().trim().min(1).max(12000).optional(),
+    plannerInstructions: z.string().trim().min(1).max(12000).optional(),
     learningOrigin: learningOriginSchema.optional(),
     promotion: promotionSchema.optional(),
     imageKeys: z.array(videoImageKey).max(30),
     productSelections: z.array(productFactSelectionSchema).max(30).optional(),
+    categoryHandling: z.enum(["require_mapping", "neutral"]).optional(),
     logoAssetId: z.number().int().positive().nullable().optional(),
     direction: videoDirectionSchema.nullable().optional(),
     sourceVideoKey: assetKey.nullable(),
@@ -260,6 +263,7 @@ export type VideoReference = {
   durationSeconds?: number;
   role?: "logo";
   catalogFingerprint?: string;
+  categoryFingerprint?: string;
   productFacts?: SelectedProductFacts;
 };
 export function videoModelKey(setup: VideoSetup) {
@@ -301,7 +305,15 @@ export function videoPrompt(
     ? `Image ${videoImageReferenceKeys(setup).length} is the selected brand logo, not the subject or product. Use this supplied artwork as restrained branding, preserving its lettering, colors and proportions. Keep the full creative styling, scene, camera movement and subject prominence; do not turn the logo into the main scene or deform the mark. Do not invent a replacement logo.`
     : "";
   if (!setup.direction)
-    return [promotion, setup.prompt, branding, identity, setup.defaultInstructions !== undefined ? defaults["video.direction"] ?? setup.defaultInstructions : undefined]
+    return [
+      promotion,
+      setup.prompt,
+      branding,
+      identity,
+      setup.defaultInstructions !== undefined
+        ? (defaults["video.direction"] ?? setup.defaultInstructions)
+        : undefined,
+    ]
       .filter(Boolean)
       .join("\n\n");
   const direction = setup.direction,

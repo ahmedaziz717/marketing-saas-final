@@ -1,5 +1,8 @@
 import { productOverlayPreview } from "../lib/productOverlayPreview";
-import { readOverlaySources, catalogOverlaySources } from "../lib/productOverlaySources";
+import {
+  readOverlaySources,
+  catalogOverlaySources,
+} from "../lib/productOverlaySources";
 import { productOverlayReplacementsSchema } from "../../shared/productOverlay";
 import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
@@ -99,7 +102,10 @@ import { stableHash } from "../lib/policy";
 import { readGenerationSource } from "../lib/creativeImages";
 import { buildCreativeCopyMessages } from "../lib/creativeCopy";
 import { previewStudioPage } from "../lib/studioProductPage";
-import { attachMarketingCategories } from "../lib/catalogCategories";
+import {
+  attachMarketingCategories,
+  assertCategorySelection,
+} from "../lib/catalogCategories";
 import {
   CREATIVE_JOB_LEASE_MS,
   recoverExpiredBuilderJobs,
@@ -311,7 +317,13 @@ export async function loadInputs(
     personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
-    ...resolveBuilderInputs(organizationId, setup, await attachMarketingCategories(db, organizationId, catalog), images, logos),
+    ...resolveBuilderInputs(
+      organizationId,
+      setup,
+      await attachMarketingCategories(db, organizationId, catalog),
+      images,
+      logos
+    ),
   };
 }
 
@@ -481,7 +493,10 @@ export async function runBuilderJob(
           })
         );
         let productOverlayApplied = false;
-        let automaticFailure: "source_resolution" | "alignment_unavailable" | undefined;
+        let automaticFailure:
+          | "source_resolution"
+          | "alignment_unavailable"
+          | undefined;
         if (cutouts.length) {
           try {
             const finished = await automaticProductOverlay(
@@ -498,13 +513,21 @@ export async function runBuilderJob(
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
           } catch (error) {
-            automaticFailure = error instanceof ProductOverlayResolutionError
-              ? "source_resolution"
-              : "alignment_unavailable";
-            if (error instanceof ProductOverlayResolutionError && error.placements) {
+            automaticFailure =
+              error instanceof ProductOverlayResolutionError
+                ? "source_resolution"
+                : "alignment_unavailable";
+            if (
+              error instanceof ProductOverlayResolutionError &&
+              error.placements
+            ) {
               preparedProductLayers = error.placements.map((placement, i) => ({
                 ...placement,
-                height: placement.height ?? Math.round(placement.width * cutouts[i].height / cutouts[i].width),
+                height:
+                  placement.height ??
+                  Math.round(
+                    (placement.width * cutouts[i].height) / cutouts[i].width
+                  ),
                 sourceKey: cutouts[i].sourceKey,
                 sha256: cutouts[i].sha256,
               }));
@@ -849,7 +872,12 @@ export const creativeBuilderRouter = router({
       );
     }),
   productOverlay: protectedProcedure
-    .input(organizationInput.extend({ variantId: z.number().int().positive(), replacements: productOverlayReplacementsSchema }))
+    .input(
+      organizationInput.extend({
+        variantId: z.number().int().positive(),
+        replacements: productOverlayReplacementsSchema,
+      })
+    )
     .query(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...editorRoles,
@@ -866,7 +894,13 @@ export const creativeBuilderRouter = router({
         `creative:${variant.id}`
       );
       const layers = [];
-      const sources = await readOverlaySources(db, input.organizationId, metadata, input.replacements, variant.renderMetadata!.productIds);
+      const sources = await readOverlaySources(
+        db,
+        input.organizationId,
+        metadata,
+        input.replacements,
+        variant.renderMetadata!.productIds
+      );
       for (let index = 0; index < metadata.layers.length; index++) {
         const layer = metadata.layers[index];
         const cutout = sources[index];
@@ -900,11 +934,22 @@ export const creativeBuilderRouter = router({
         automaticFailure: metadata.automaticFailure,
         alignment: metadata.alignment,
         layers,
-        replacementSources: (await catalogOverlaySources(db, input.organizationId, variant.renderMetadata!.productIds)).map(({storageKey: _storageKey, ...source}) => source),
+        replacementSources: (
+          await catalogOverlaySources(
+            db,
+            input.organizationId,
+            variant.renderMetadata!.productIds
+          )
+        ).map(({ storageKey: _storageKey, ...source }) => source),
       };
     }),
   alignProductOverlay: protectedProcedure
-    .input(organizationInput.extend({ variantId: z.number().int().positive(), replacements: productOverlayReplacementsSchema }))
+    .input(
+      organizationInput.extend({
+        variantId: z.number().int().positive(),
+        replacements: productOverlayReplacementsSchema,
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await requireOrganizationRole(ctx.user.id, input.organizationId, [
         ...editorRoles,
@@ -915,7 +960,13 @@ export const creativeBuilderRouter = router({
         input.organizationId,
         input.variantId
       );
-      const sources = await readOverlaySources(db, input.organizationId, metadata, input.replacements, variant.renderMetadata!.productIds);
+      const sources = await readOverlaySources(
+        db,
+        input.organizationId,
+        metadata,
+        input.replacements,
+        variant.renderMetadata!.productIds
+      );
       return suggestProductPlacement(
         Buffer.from(
           await storageGetBase64(metadata.designStorageKey),
@@ -955,13 +1006,24 @@ export const creativeBuilderRouter = router({
           code: "CONFLICT",
           message: "This version changed. Refresh before saving.",
         });
-      const cutouts = await readOverlaySources(db, input.organizationId, metadata, input.replacements, variant.renderMetadata!.productIds);
+      const cutouts = await readOverlaySources(
+        db,
+        input.organizationId,
+        metadata,
+        input.replacements,
+        variant.renderMetadata!.productIds
+      );
       const design = Buffer.from(
         await storageGetBase64(metadata.designStorageKey),
         "base64"
       );
       // Explicit enlargement consent applies to verified sharper replacements too.
-      const result = await renderProductOverlay(design, cutouts, input.layers, input.allowUpscale);
+      const result = await renderProductOverlay(
+        design,
+        cutouts,
+        input.layers,
+        input.allowUpscale
+      );
       const stored = await storagePut(
         `org-${input.organizationId}/creatives/${variant.jobId}/product-overlay.png`,
         result.png,
@@ -982,9 +1044,22 @@ export const creativeBuilderRouter = router({
               message: "This version changed. Refresh before saving.",
             });
           // Bind the previewed source revisions and bytes again at commit time.
-          const currentSources = await readOverlaySources(tx, input.organizationId, metadata, input.replacements, variant.renderMetadata!.productIds);
-          if (currentSources.some((source, i) => source.sha256 !== cutouts[i].sha256))
-            throw new TRPCError({ code: "CONFLICT", message: "A product source changed. Reopen the editor." });
+          const currentSources = await readOverlaySources(
+            tx,
+            input.organizationId,
+            metadata,
+            input.replacements,
+            variant.renderMetadata!.productIds
+          );
+          if (
+            currentSources.some(
+              (source, i) => source.sha256 !== cutouts[i].sha256
+            )
+          )
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A product source changed. Reopen the editor.",
+            });
           const {
             id: _id,
             reviewedByUserId: _reviewer,
@@ -1020,7 +1095,10 @@ export const creativeBuilderRouter = router({
               action: "creative.product_overlay_saved",
               entityType: "library_asset",
               entityId: `creative:${next.id}`,
-              payload: { parentVariantId: variant.id, replacements: input.replacements },
+              payload: {
+                parentVariantId: variant.id,
+                replacements: input.replacements,
+              },
             },
             tx
           );
@@ -1138,6 +1216,11 @@ export const creativeBuilderRouter = router({
       ]);
       const db = (await getDb())!;
       const resolved = await loadInputs(db, input.organizationId, input.setup);
+      assertCategorySelection(
+        resolved.products,
+        input.setup.categoryHandling,
+        input.setup.productMode === "separate"
+      );
       const quote = await builderImageQuote(
         db,
         input.organizationId,
@@ -1402,7 +1485,13 @@ export const creativeBuilderRouter = router({
         references: references.filter(
           r => r.metadata?.kind !== "lifestyle_person"
         ),
-        products: approvedCatalog.map(product => ({
+        products: (
+          await attachMarketingCategories(
+            db,
+            input.organizationId,
+            approvedCatalog
+          )
+        ).map(product => ({
           relatedSources: relatedCatalogSources(product, catalog),
           ...product,
           images: images.filter(image => image.productId === product.id),
@@ -1554,6 +1643,7 @@ export const creativeBuilderRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const resolved = await loadInputs(db, input.organizationId, input.setup);
       // Older saved page briefs only contained metadata. Read their missing body
+      assertCategorySelection(resolved.products, input.setup.categoryHandling);
       // before a paid AI call, retaining the user's reviewed title and summary.
       let copySetup = input.setup;
       if (
@@ -1670,6 +1760,11 @@ export const creativeBuilderRouter = router({
           message: issues.join(" "),
         });
       const resolved = await loadInputs(db, input.organizationId, setup);
+      assertCategorySelection(
+        resolved.products,
+        setup.categoryHandling,
+        setup.productMode === "separate"
+      );
       const generationQuote = await builderImageQuote(
         db,
         input.organizationId,

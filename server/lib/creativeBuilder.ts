@@ -30,7 +30,9 @@ import {
 } from "../../shared/creativeBuilder";
 import { creativeTypographyDirection } from "../../shared/creativeFonts";
 
-export type BuilderCatalogProduct = typeof products.$inferSelect & { marketingCategory?: import("../../shared/catalogCategories").ResolvedMarketingCategory };
+export type BuilderCatalogProduct = typeof products.$inferSelect & {
+  marketingCategory?: import("../../shared/catalogCategories").ResolvedMarketingCategory;
+};
 export type BuilderProductImage = typeof productImages.$inferSelect;
 export type BuilderBrandAsset = typeof brandAssets.$inferSelect;
 export type BuilderBrandKit = typeof brandKits.$inferSelect;
@@ -42,7 +44,9 @@ export function resolveBuilderInputs(
   images: BuilderProductImage[],
   logos: BuilderBrandAsset[]
 ) {
-  const selections = setup.products.flatMap(product => selectedProductImageIds(product).map(imageId => ({ ...product, imageId })));
+  const selections = setup.products.flatMap(product =>
+    selectedProductImageIds(product).map(imageId => ({ ...product, imageId }))
+  );
   const resolved = selections.map(selection => {
     const product = catalog.find(
       p => p.id === selection.productId && p.organizationId === organizationId
@@ -68,7 +72,23 @@ export function resolveBuilderInputs(
     }
     return {
       ...selectProductFacts(product, selection),
-      ...(image?.media?.references.length ? { visualSource: image.media.references.map(ref => product.mediaGroups?.find(group => group.id === ref.groupId)).filter(Boolean).map(group => ({ name: group!.name, role: group!.role, note: group!.role === "optional_component" ? "Selected optional component look, not proof of the exact configured SKU; do not infer configuration, price or availability changes." : "Source-provided product/component gallery." })) } : {}),
+      ...(image?.media?.references.length
+        ? {
+            visualSource: image.media.references
+              .map(ref =>
+                product.mediaGroups?.find(group => group.id === ref.groupId)
+              )
+              .filter(Boolean)
+              .map(group => ({
+                name: group!.name,
+                role: group!.role,
+                note:
+                  group!.role === "optional_component"
+                    ? "Selected optional component look, not proof of the exact configured SKU; do not infer configuration, price or availability changes."
+                    : "Source-provided product/component gallery.",
+              })),
+          }
+        : {}),
       image: image
         ? {
             id: image.id,
@@ -253,6 +273,7 @@ function renderCreativePrompt(input: CreativePromptInput) {
     "Render this customer-selected copy accurately: " +
       JSON.stringify(setup.copy),
     productFactsDirection,
+    `Category handling: ${setup.categoryHandling ?? "require_mapping"}.`,
     "For EACH product, render only its selected featuredSpecifications and featuredFeatures as callouts, accurately associated with that product. Other specifications are factual context only. Never mix facts between products.",
     "Render a product price only if includePrice is true, using its exact catalog price and currency. Do not invent discounts or offers.",
     "All selected copy and featured specs must remain readable and within the canvas. When includeDescription is true, integrate a concise, faithful benefit from that product's description or service benefits. Adapt the arrangement for compact formats; do not silently omit selected facts or required claims. Add no unselected claims, words or badges beyond the selected copy and explicitly selected product facts.",

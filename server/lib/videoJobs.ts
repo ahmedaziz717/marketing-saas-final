@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertCategorySelection } from "./catalogCategories";
 import { readLifestylePortrait } from "./lifestylePeople";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -338,6 +339,10 @@ export async function resolveVideoReferences(
       message:
         "A product selected for advertising details is no longer among your references. Review Product details.",
     });
+  assertCategorySelection(
+    refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
+    setup.categoryHandling
+  );
   return ordered.map(key => refs.find(ref => ref.key === key)!);
 }
 export async function validateVideoReferences(
@@ -365,6 +370,13 @@ export async function validateVideoReferences(
       if (current.reference.fingerprint !== ref.fingerprint)
         throw new Error(
           "A product reference changed. Prepare a new draft with the current product images."
+        );
+      if (
+        ref.categoryFingerprint &&
+        ref.categoryFingerprint !== current.reference.categoryFingerprint
+      )
+        throw new Error(
+          "Product category guidance changed. Review the current mappings and prepare a new draft."
         );
       if (
         ref.catalogFingerprint &&

@@ -41,6 +41,7 @@ export function buildCreativeCopyMessages(
               type: "catalog",
               products: products.map(({ image, ...product }) => product),
             },
+        categoryHandling: setup.categoryHandling ?? "require_mapping",
         subjectRules: promotionContext(setup),
         campaign: creativeMessaging(setup.theme, themePrompt),
         brandBackground: {

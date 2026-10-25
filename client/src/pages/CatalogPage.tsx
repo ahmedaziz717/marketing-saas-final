@@ -1,5 +1,9 @@
 import { catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "@/components/CatalogGallery";
+import {
+  CatalogCategoryMapping,
+  ProductCategoryOverride,
+} from "@/components/CatalogCategoryMapping";
 import { ApiProductDetails } from "@/components/ApiProductDetails";
 import { CatalogFactsFields } from "@/components/CatalogFactsFields";
 import { catalogRefreshChanges } from "@shared/catalogRefresh";
@@ -98,6 +102,14 @@ function CatalogContent() {
       : "all"
   );
   const [category, setCategory] = useState("all");
+  const [marketingCategory, setMarketingCategory] = useState("all");
+  const categorySettings = trpc.catalogCategories.read.useQuery(
+    { organizationId: organizationId! },
+    { enabled: !!organizationId }
+  );
+  const canEditCategories = ["owner", "admin", "creator"].includes(
+    membership?.role ?? ""
+  );
   const [offset, setOffset] = useState(0);
   const filters = {
     sourceId: /^[1-9]\d*$/.test(searchParams.get("sourceId") ?? "")
@@ -106,6 +118,7 @@ function CatalogContent() {
     search,
     status: status as "all" | "pending" | "approved" | "rejected",
     category,
+    marketingCategory,
     kind: tab === "services" ? ("services" as const) : ("products" as const),
   };
   const query = trpc.catalog.overview.useQuery(
@@ -371,6 +384,11 @@ function CatalogContent() {
           {summary.variants} source variants
         </span>
       </div>
+      <CatalogCategoryMapping
+        key={organizationId}
+        organizationId={organizationId!}
+        canEdit={canEditCategories}
+      />
       <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center">
         <Input
           className="h-11 max-w-md"
@@ -418,6 +436,27 @@ function CatalogContent() {
             </option>
           ))}
         </VisualSelect>
+        <label className="text-sm">
+          Marketing category
+          <select
+            aria-label="Marketing category filter"
+            className="ml-2 rounded border bg-background p-2"
+            value={marketingCategory}
+            onChange={e => {
+              setMarketingCategory(e.target.value);
+              setOffset(0);
+              clearSelection();
+            }}
+          >
+            <option value="all">All marketing categories</option>
+            <option value="unmapped">Unmapped — review needed</option>
+            {categorySettings.data?.settings.categories.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div
         className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-3 sm:p-4"
@@ -533,9 +572,15 @@ function CatalogContent() {
                     }}
                   />
                   <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-muted">
-                    {product.images.find(photo => catalogDefaultImage(photo, product.mediaGroups)) ? (
+                    {product.images.find(photo =>
+                      catalogDefaultImage(photo, product.mediaGroups)
+                    ) ? (
                       <img
-                        src={product.images.find(photo => catalogDefaultImage(photo, product.mediaGroups))!.url}
+                        src={
+                          product.images.find(photo =>
+                            catalogDefaultImage(photo, product.mediaGroups)
+                          )!.url
+                        }
                         alt={product.name}
                         className="h-full w-full object-contain"
                       />
@@ -566,7 +611,28 @@ function CatalogContent() {
                   </div>
                 </div>
                 <div className="catalog-card-facts px-5 pb-4">
-                  <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Image galleries ({product.images.length})</summary><div className="mt-3"><CatalogGallery name={product.name} images={product.images} groups={product.mediaGroups} /></div></details>
+                  <ProductCategoryOverride
+                    key={`${organizationId}:${product.id}`}
+                    organizationId={organizationId!}
+                    product={product}
+                    canEdit={canEditCategories}
+                    onSaved={() => {
+                      void refresh();
+                      void categorySettings.refetch();
+                    }}
+                  />
+                  <details className="mb-4 rounded-lg border p-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Image galleries ({product.images.length})
+                    </summary>
+                    <div className="mt-3">
+                      <CatalogGallery
+                        name={product.name}
+                        images={product.images}
+                        groups={product.mediaGroups}
+                      />
+                    </div>
+                  </details>
                   {!!reviewNotices.length && (
                     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                       <p className="font-medium">Imported for review</p>

@@ -1,5 +1,11 @@
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import {
+  usePromptDefaults,
+  announcePromptChange,
+} from "@/hooks/usePromptDefaults";
+import { ActionCredits } from "@/components/ActionCredits";
 
 export type PromptBrand = {
   name: string;
@@ -23,16 +29,70 @@ export function GenerationBrandContext({
 }: {
   organizationId: number;
 }) {
+  const { membership } = useWorkspace();
+  const defaults = usePromptDefaults(organizationId);
+  const utils = trpc.useUtils();
+  const prepare = trpc.brand.personalizePrompts.useMutation({
+    onSuccess: async () => {
+      announcePromptChange(organizationId);
+      await utils.prompts.list.invalidate({ organizationId });
+    },
+  });
   const query = trpc.brand.promptContext.useQuery(
     { organizationId },
     { enabled: !!organizationId, staleTime: 0, refetchOnMount: "always" }
   );
   return (
-    <BrandPromptContext
-      brand={query.data}
-      loading={query.isLoading}
-      error={!!query.error}
-    />
+    <div className="space-y-2">
+      <BrandPromptContext
+        brand={query.data}
+        loading={query.isLoading}
+        error={!!query.error}
+      />
+      {["owner", "admin"].includes(membership?.role ?? "") &&
+        defaults.data?.some(
+          p =>
+            p.editable &&
+            [
+              "creative.base",
+              "creative.copy",
+              "creative.image",
+              "video.planner",
+              "video.direction",
+            ].includes(p.id) &&
+            !p.restorePoints?.brand
+        ) && (
+          <details className="rounded-lg border p-3 text-sm">
+            <summary className="cursor-pointer">
+              Prepare missing initial Brand Kit defaults (V1)
+            </summary>
+            <p className="my-2">
+              This explicit AI action prepares reusable brand instructions and
+              immutable V1 restore points. Manually saved active defaults and
+              Studio drafts are preserved. Existing V1 restore points are not
+              replaced.
+            </p>
+            <button
+              type="button"
+              className="rounded border px-3 py-2"
+              disabled={prepare.isPending}
+              onClick={() => prepare.mutate({ organizationId })}
+            >
+              {prepare.isPending ? "Preparing…" : "Prepare Brand Kit defaults"}
+              <ActionCredits
+                organizationId={organizationId}
+                operation="brand.personalizePrompts"
+              />
+            </button>
+            {prepare.error && <p role="alert">{prepare.error.message}</p>}
+            {prepare.isSuccess && (
+              <p role="status">
+                Initial defaults prepared; your current draft is unchanged.
+              </p>
+            )}
+          </details>
+        )}
+    </div>
   );
 }
 /** Exact generation voice (or an honest pending state), never a second editable copy. */
@@ -54,13 +114,13 @@ export function BrandPromptContext({
     }
   }
   return (
-    <aside
+    <details
       aria-label="Brand context for generation"
       className="space-y-2 rounded-xl border bg-muted/30 p-4 text-sm"
     >
-      <h3 className="font-semibold">
+      <summary className="cursor-pointer font-semibold">
         {brand ? `Brand Kit: ${brand.name}` : "Brand Kit"}
-      </h3>
+      </summary>
       {loading ? (
         <p>Loading your brand voice…</p>
       ) : error || brand?.status === "unavailable" ? (
@@ -124,6 +184,6 @@ export function BrandPromptContext({
       <Link href="~/app/brand" className="inline-block underline">
         Review Brand Kit
       </Link>
-    </aside>
+    </details>
   );
 }
