@@ -1,4 +1,5 @@
 import { workflowAutomationRouter } from "./routers/workflowAutomation";
+import { catalogCategoriesRouter } from "./routers/catalogCategories";
 import { promptsRouter } from "./routers/prompts";
 import { insightsRouter } from "./routers/insights";
 import { optimizationRouter } from "./routers/optimization";
@@ -64,6 +65,7 @@ export const appRouter = router({
   publishing: publishingRouter,
   crawl: crawlRouter,
   catalog: catalogRouter,
+  catalogCategories: catalogCategoriesRouter,
   catalogSources: catalogSourcesRouter,
 });
 

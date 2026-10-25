@@ -1,4 +1,5 @@
 import { brandVoiceSchema } from "../../shared/brandGuidelines";
+import { attachMarketingCategories } from "../lib/catalogCategories";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -230,7 +231,7 @@ export const catalogRouter = router({
           .where(eq(products.organizationId, input.organizationId)),
       ]);
       return {
-        products: catalog.map(product => ({
+        products: (await attachMarketingCategories(db, input.organizationId, catalog)).map(product => ({
           ...product,
           images: images.filter(i => i.productId === product.id),
           variants: variants.filter(v => v.productId === product.id),

@@ -51,6 +51,7 @@ export function selectProductFacts(
     sku: product.sku,
     description: product.description,
     category: product.category,
+    ...(product.marketingCategory ? { marketingCategory: product.marketingCategory } : {}),
     recordType: product.recordType,
     serviceDetails: product.serviceDetails,
     specifications,

@@ -29,7 +29,7 @@ import {
 } from "../../shared/creativeBuilder";
 import { creativeTypographyDirection } from "../../shared/creativeFonts";
 
-export type BuilderCatalogProduct = typeof products.$inferSelect;
+export type BuilderCatalogProduct = typeof products.$inferSelect & { marketingCategory?: import("../../shared/catalogCategories").ResolvedMarketingCategory };
 export type BuilderProductImage = typeof productImages.$inferSelect;
 export type BuilderBrandAsset = typeof brandAssets.$inferSelect;
 export type BuilderBrandKit = typeof brandKits.$inferSelect;

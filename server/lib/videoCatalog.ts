@@ -1,4 +1,5 @@
 import { catalogImageEligible } from "../../shared/catalogMedia";
+import { attachMarketingCategories } from "./catalogCategories";
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { productImages, products } from "../../drizzle/schema";
@@ -172,6 +173,6 @@ export async function readVideoCatalogImage(
   return {
     reference,
     choice: choice(row),
-    facts: productFacts(row),
+    facts: { ...productFacts(row), marketingCategory: (await attachMarketingCategories(db, organizationId, [row.product]))[0].marketingCategory },
   };
 }

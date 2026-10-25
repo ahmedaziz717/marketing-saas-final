@@ -99,6 +99,7 @@ import { stableHash } from "../lib/policy";
 import { readGenerationSource } from "../lib/creativeImages";
 import { buildCreativeCopyMessages } from "../lib/creativeCopy";
 import { previewStudioPage } from "../lib/studioProductPage";
+import { attachMarketingCategories } from "../lib/catalogCategories";
 import {
   CREATIVE_JOB_LEASE_MS,
   recoverExpiredBuilderJobs,
@@ -310,7 +311,7 @@ export async function loadInputs(
     personAssets,
     ...(personAsset ? { personAsset } : {}),
     brand: kit[0],
-    ...resolveBuilderInputs(organizationId, setup, catalog, images, logos),
+    ...resolveBuilderInputs(organizationId, setup, await attachMarketingCategories(db, organizationId, catalog), images, logos),
   };
 }
 

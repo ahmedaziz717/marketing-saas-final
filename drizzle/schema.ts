@@ -172,6 +172,14 @@ export const organizations = appSchema.table(
   })
 );
 
+export const catalogCategorySettings = appSchema.table("catalog_category_settings", {
+  organizationId: integer("organizationId").primaryKey().references(() => organizations.id),
+  revision: integer("revision").notNull(),
+  settings: json("settings").$type<import("../shared/catalogCategories").CategorySettings>().notNull(),
+  updatedByUserId: integer("updatedByUserId").notNull().references(() => users.id),
+  updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+});
+
 export const organizationMemberships = appSchema.table(
   "organization_memberships",
   {
