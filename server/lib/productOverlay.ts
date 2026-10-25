@@ -3,6 +3,7 @@ import sharp from "sharp";
 import {
   constrainProductLayer,
   type ProductOverlayPlacement,
+  type ProductOverlayFailureDiagnostic,
 } from "../../shared/productOverlay";
 import type { ProductCutout } from "./productPreservation";
 import { z } from "zod";
@@ -11,6 +12,59 @@ import { requireLatestGptTextModel } from "./models";
 
 export class ProductOverlayResolutionError extends Error {
   placements?: ProductOverlayPlacement[];
+}
+
+export class ProductOverlayFailureError extends Error {
+  constructor(
+    message: string,
+    readonly diagnostic: ProductOverlayFailureDiagnostic
+  ) {
+    super(message);
+  }
+}
+
+/** Persist only allowlisted codes and bounded measurements, never provider text or source URLs. */
+export function productOverlayFailureDiagnostic(
+  error: unknown,
+  stage: ProductOverlayFailureDiagnostic["stage"]
+): ProductOverlayFailureDiagnostic {
+  if (error instanceof ProductOverlayFailureError) return error.diagnostic;
+  if (error instanceof ProductOverlayResolutionError)
+    return { stage: "render", reason: "source_resolution" };
+  return {
+    stage,
+    reason:
+      stage === "source_read"
+        ? "source_read_failed"
+        : stage === "storage"
+          ? "storage_failed"
+          : stage === "render"
+            ? "render_failed"
+            : "alignment_failed",
+  };
+}
+
+/** Use decoded canvas AND usable artwork. Padding alone cannot qualify a thumbnail.
+ * Limit resampling on both axes, including independently stretched footprints. */
+export function automaticProductUpscaleAllowed(
+  source: ProductCutout,
+  layer: ProductOverlayPlacement
+) {
+  const scaleX = layer.width / source.width;
+  const scaleY =
+    (layer.height ?? (layer.width * source.height) / source.width) /
+    source.height;
+  if (scaleX <= 1 && scaleY <= 1) return true;
+  return (
+    Math.max(
+      source.originalWidth ?? source.width,
+      source.originalHeight ?? source.height
+    ) >= 600 &&
+    Math.max(source.width, source.height) >= 500 &&
+    Math.min(source.width, source.height) >= 300 &&
+    scaleX <= 1.5 &&
+    scaleY <= 1.5
+  );
 }
 
 export async function suggestProductPlacement(
@@ -41,72 +95,98 @@ export async function suggestProductPlacement(
         .png()
         .toBuffer()
     );
-  const model = requireLatestGptTextModel((await listLLMModels()).data);
-  const result = await invokeLLM({
-    model,
-    includedInAction: automatic,
-    maxTokens: 1800,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: systemPromptContract("contract.productOverlay.1"),
-      },
-      {
-        role: "user",
-        content: images.map(image => ({
-          type: "image_url" as const,
-          image_url: {
-            url: `data:image/png;base64,${image.toString("base64")}`,
-            detail: "high" as const,
+  const result = await (async () => {
+    try {
+      const model = requireLatestGptTextModel((await listLLMModels()).data);
+      return await invokeLLM({
+        model,
+        includedInAction: automatic,
+        maxTokens: 1800,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: systemPromptContract("contract.productOverlay.1"),
           },
-        })),
-      },
-    ],
+          {
+            role: "user",
+            content: images.map(image => ({
+              type: "image_url" as const,
+              image_url: {
+                url: `data:image/png;base64,${image.toString("base64")}`,
+                detail: "high" as const,
+              },
+            })),
+          },
+        ],
+      });
+    } catch {
+      throw new ProductOverlayFailureError(
+        "Product alignment is temporarily unavailable. Align the layer manually.",
+        { stage: "alignment", reason: "provider_unavailable" }
+      );
+    }
+  })();
+  const text = result?.choices?.[0]?.message?.content;
+  const responseSchema = z.object({
+    products: z
+      .array(
+        z.object({
+          left: z.number().int().min(0).max(1000),
+          top: z.number().int().min(0).max(1000),
+          width: z.number().int().min(1).max(1000),
+          height: z.number().int().min(1).max(1000),
+          confidence: z.number().min(0).max(1),
+          sameAngle: z.boolean(),
+        })
+      )
+      .length(sources.length),
   });
-  const text = result.choices[0]?.message?.content;
-  const parsed = z
-    .object({
-      products: z
-        .array(
-          z.object({
-            left: z.number().int().min(0).max(1000),
-            top: z.number().int().min(0).max(1000),
-            width: z.number().int().min(1).max(1000),
-            height: z.number().int().min(1).max(1000),
-            confidence: z.number().min(0).max(1),
-            sameAngle: z.boolean(),
-          })
-        )
-        .length(sources.length),
-    })
-    .parse(JSON.parse(typeof text === "string" ? text : "{}"));
-  if (
-    parsed.products.some(
-      p =>
-        p.confidence < (automatic ? 0.85 : 0.65) ||
-        (automatic && !p.sameAngle) ||
-        p.left + p.width > 1000 ||
-        p.top + p.height > 1000
-    )
-  )
-    throw new Error(
-      "The product position is uncertain. Keep the original design and align the layer manually."
+  let parsed: z.infer<typeof responseSchema>;
+  try {
+    parsed = responseSchema.parse(
+      JSON.parse(typeof text === "string" ? text : "{}")
     );
-  if (
-    automatic &&
-    parsed.products.some((box, i) => {
+  } catch {
+    throw new ProductOverlayFailureError(
+      "Product alignment returned an invalid response. Align the layer manually.",
+      { stage: "alignment", reason: "invalid_response" }
+    );
+  }
+  for (let i = 0; i < parsed.products.length; i++) {
+    const box = parsed.products[i];
+    const metrics = {
+      stage: "alignment" as const,
+      layerIndex: i,
+      confidence: box.confidence,
+      sameAngle: box.sameAngle,
+    };
+    const reason =
+      box.confidence < (automatic ? 0.85 : 0.65)
+        ? "low_confidence"
+        : automatic && !box.sameAngle
+          ? "camera_angle"
+          : box.left + box.width > 1000 || box.top + box.height > 1000
+            ? "invalid_geometry"
+            : undefined;
+    if (reason)
+      throw new ProductOverlayFailureError(
+        "The product position is uncertain. Keep the original design and align the layer manually.",
+        { ...metrics, reason }
+      );
+    if (automatic) {
       const measuredAspect =
         (box.width * canvas.width) / (box.height * canvas.height);
-      return (
-        Math.abs(measuredAspect / (sources[i].width / sources[i].height) - 1) >
-        0.15
+      const aspectDifference = Math.abs(
+        measuredAspect / (sources[i].width / sources[i].height) - 1
       );
-    })
-  )
-    throw new Error(
-      "The product view does not match the original cutout closely enough for automatic placement."
-    );
+      if (aspectDifference > 0.15)
+        throw new ProductOverlayFailureError(
+          "The product view does not match the original cutout closely enough for automatic placement.",
+          { ...metrics, reason: "aspect_mismatch", aspectDifference }
+        );
+    }
+  }
   return {
     layers: parsed.products.map((box, i) => {
       const aspect = sources[i].width / sources[i].height;
@@ -145,8 +225,9 @@ export async function suggestProductPlacement(
             ) > 1
         )
       )
-        throw new Error(
-          "Automatic product placement would clip or shift the original product."
+        throw new ProductOverlayFailureError(
+          "Automatic product placement would clip or shift the original product.",
+          { stage: "alignment", reason: "invalid_geometry", layerIndex: i }
         );
       return constrained;
     }),
@@ -205,7 +286,7 @@ export async function renderProductOverlay(
       !allowUpscale
     )
       throw new ProductOverlayResolutionError(
-        `Product ${i + 1} is only ${source.width} pixels wide but needs ${layer.width} pixels here. Use a higher-resolution original or explicitly accept enlargement in the editor.`
+        `Product ${i + 1} has ${source.width} x ${source.height} usable pixels and needs ${layer.width} x ${Math.round(layer.height ?? (layer.width * source.height) / source.width)} here. Use a higher-resolution original or explicitly accept enlargement in the editor.`
       );
     const result = await sharp(source.png)
       .resize(
@@ -244,10 +325,8 @@ export async function automaticProductOverlay(
     true
   );
   try {
-    // Permit resampling an original with substantial usable pixels. Do not
-    // silently stretch legacy thumbnail cutouts; recovery can explicitly accept it.
-    const originalQuality = sources.every(
-      source => Math.max(source.width, source.height) >= 600
+    const originalQuality = sources.every((source, i) =>
+      automaticProductUpscaleAllowed(source, placement.layers[i])
     );
     return await renderProductOverlay(
       design,
@@ -256,8 +335,13 @@ export async function automaticProductOverlay(
       originalQuality
     );
   } catch (error) {
-    if (error instanceof ProductOverlayResolutionError)
+    if (error instanceof ProductOverlayResolutionError) {
       error.placements = placement.layers;
-    throw error;
+      throw error;
+    }
+    throw new ProductOverlayFailureError(
+      "The product overlay could not be rendered. The complete design is preserved.",
+      { stage: "render", reason: "render_failed" }
+    );
   }
 }

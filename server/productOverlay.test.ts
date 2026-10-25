@@ -278,6 +278,7 @@ it("clears needs-adjustment on manual correction without changing the original v
     designUrl: "/base",
     applied: false,
     alignment: "needs_adjustment" as const,
+    automaticFailureDiagnostic: { stage: "alignment" as const, reason: "low_confidence" as const, confidence: 0.7 },
     layers: [],
   };
   const corrected = manuallyAppliedProductOverlay(original, []);
@@ -285,6 +286,7 @@ it("clears needs-adjustment on manual correction without changing the original v
     applied: true,
     alignment: "manual",
     designStorageKey: "base",
+    automaticFailureDiagnostic: undefined,
   });
   expect(original).toMatchObject({
     applied: false,

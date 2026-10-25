@@ -7,6 +7,9 @@ export type ProductCutout = {
   png: Buffer;
   width: number;
   height: number;
+  /** Decoded source canvas, before trimming alpha; never inferred from catalog metadata. */
+  originalWidth?: number;
+  originalHeight?: number;
   sourceKey: string;
   sha256: string;
 };
@@ -121,6 +124,8 @@ export async function readTransparentArtwork(
     png,
     width,
     height,
+    originalWidth: info.width,
+    originalHeight: info.height,
     sourceKey,
     sha256: createHash("sha256").update(bytes).digest("hex"),
   };

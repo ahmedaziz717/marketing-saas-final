@@ -509,10 +509,16 @@ it("does not spend credits or return an AI redraw when a queued product image is
   );
 });
 
-it.each([{ matched: false, lowResolution: false, stretch: false }, { matched: true, lowResolution: false, stretch: false }, { matched: true, lowResolution: true, stretch: false }, { matched: true, lowResolution: true, stretch: true }])(
+it.each([
+  { matched: false, lowResolution: false, stretch: false, storageFailure: false },
+  { matched: true, lowResolution: false, stretch: false, storageFailure: false },
+  { matched: true, lowResolution: true, stretch: false, storageFailure: false },
+  { matched: true, lowResolution: true, stretch: true, storageFailure: false },
+  { matched: true, lowResolution: false, stretch: false, storageFailure: true },
+])(
   "finishes every size with original artwork and immutable editor base (automatic product match/resolution: %j)",
-  async ({ matched, lowResolution, stretch }) => {
-    const applied = matched && !lowResolution;
+  async ({ matched, lowResolution, stretch, storageFailure }) => {
+    const applied = matched && !lowResolution && !storageFailure;
     const { db, args, written } = fixture();
     args.setup.preserveLogo = true;
     args.setup.preserveProduct = true;
@@ -588,13 +594,14 @@ it.each([{ matched: false, lowResolution: false, stretch: false }, { matched: tr
       };
     });
     mocked.put.mockImplementation(async (key: string, bytes: Buffer) => {
+      if (storageFailure && key.endsWith("product-finish")) throw new Error("private storage URL with credentials");
       const unique = key + "-" + storage.size;
       storage.set(unique, bytes);
       return { key: unique, url: "/" + unique };
     });
     await runBuilderJob(db, args);
     expect(written.flat()).toHaveLength(3);
-    expect(mocked.put).toHaveBeenCalledTimes(applied ? 6 : 3);
+    expect(mocked.put).toHaveBeenCalledTimes(applied || storageFailure ? 6 : 3);
     expect(mocked.vision).toHaveBeenCalledTimes(6);
     expect(
       mocked.vision.mock.calls.every(
@@ -616,6 +623,10 @@ it.each([{ matched: false, lowResolution: false, stretch: false }, { matched: tr
         applied,
         alignment: applied ? "automatic" : "needs_adjustment",
         automaticFailure: applied ? undefined : lowResolution ? "source_resolution" : "alignment_unavailable",
+        automaticFailureDiagnostic: applied ? undefined : lowResolution
+          ? { stage: "render", reason: "source_resolution" }
+          : storageFailure ? { stage: "storage", reason: "storage_failed" }
+          : { stage: "alignment", reason: "invalid_response" },
       });
       if (matched && lowResolution) {
         // Preserve the measured independent height across resolution failure and recovery.
