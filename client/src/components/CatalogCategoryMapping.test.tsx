@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   save: vi.fn(),
+  override: vi.fn(),
   callbacks: null as any,
   revision: 1,
 }));
@@ -14,6 +15,9 @@ vi.mock("@/lib/trpc", () => ({
       catalog: { overview: { invalidate: vi.fn() } },
     }),
     catalogCategories: {
+      override: {
+        useMutation: () => ({ mutate: state.override, isPending: false }),
+      },
       read: {
         useQuery: () => ({
           data: {
@@ -46,11 +50,69 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
-import { CatalogCategoryMapping } from "./CatalogCategoryMapping";
+import {
+  CatalogCategoryMapping,
+  ProductCategoryOverride,
+} from "./CatalogCategoryMapping";
 afterEach(() => {
   cleanup();
   state.revision = 1;
   state.save.mockReset();
+  state.override.mockReset();
+});
+it("keeps the product and mapping revision captured when assignment editing began", () => {
+  const product = {
+    id: 7,
+    name: "Lamp",
+    updatedAtMs: 10,
+    provenance: {},
+    marketingCategory: {
+      status: "unmapped" as const,
+      category: null,
+      sourceCategory: "LIGHT",
+      sourceId: 1,
+      origin: "unmapped" as const,
+      revision: 1,
+    },
+  };
+  const view = render(
+    <ProductCategoryOverride
+      organizationId={1}
+      product={product}
+      canEdit
+      onSaved={() => {}}
+    />
+  );
+  fireEvent.click(screen.getByText(/Marketing category:/));
+  fireEvent.change(screen.getByLabelText("Marketing category for Lamp"), {
+    target: { value: id },
+  });
+  state.revision = 2;
+  view.rerender(
+    <ProductCategoryOverride
+      organizationId={1}
+      product={{ ...product, updatedAtMs: 20 }}
+      canEdit
+      onSaved={() => {}}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirm product assignment" })
+  );
+  expect(state.override).toHaveBeenCalledWith({
+    organizationId: 1,
+    productId: 7,
+    categoryId: id,
+    updatedAtMs: 10,
+    categoryRevision: 1,
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Discard assignment edit" })
+  );
+  expect(
+    (screen.getByLabelText("Marketing category for Lamp") as HTMLSelectElement)
+      .value
+  ).toBe("");
 });
 it("requires review and preserves manual edits with their original revision after a conflict", () => {
   state.save.mockImplementation(() =>

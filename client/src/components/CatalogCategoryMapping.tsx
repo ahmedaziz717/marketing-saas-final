@@ -297,10 +297,14 @@ export function ProductCategoryOverride({
   onSaved: () => void;
 }) {
   const config = trpc.catalogCategories.read.useQuery({ organizationId });
-  const [value, setValue] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{
+    value: string;
+    updatedAtMs: number;
+    categoryRevision: number;
+  } | null>(null);
   const save = trpc.catalogCategories.override.useMutation({
     onSuccess: () => {
-      setValue(null);
+      setDraft(null);
       onSaved();
     },
   });
@@ -321,8 +325,17 @@ export function ProductCategoryOverride({
           <select
             aria-label={`Marketing category for ${product.name}`}
             className="w-full rounded border bg-background p-2"
-            value={value ?? product.provenance["marketing.categoryId"] ?? ""}
-            onChange={e => setValue(e.target.value)}
+            value={
+              draft?.value ?? product.provenance["marketing.categoryId"] ?? ""
+            }
+            onChange={e =>
+              setDraft({
+                value: e.target.value,
+                updatedAtMs: draft?.updatedAtMs ?? product.updatedAtMs,
+                categoryRevision:
+                  draft?.categoryRevision ?? config.data!.revision,
+              })
+            }
           >
             <option value="">Use source mapping</option>
             {config.data.settings.categories.map(c => (
@@ -334,19 +347,30 @@ export function ProductCategoryOverride({
           <Button
             className="mt-2"
             size="sm"
-            disabled={value === null || save.isPending}
+            disabled={!draft || save.isPending}
             onClick={() =>
               save.mutate({
                 organizationId,
                 productId: product.id,
-                updatedAtMs: product.updatedAtMs,
-                categoryRevision: config.data!.revision,
-                categoryId: value || null,
+                updatedAtMs: draft!.updatedAtMs,
+                categoryRevision: draft!.categoryRevision,
+                categoryId: draft!.value || null,
               })
             }
           >
             Confirm product assignment
           </Button>
+          {draft && (
+            <Button
+              className="ml-2 mt-2"
+              size="sm"
+              variant="ghost"
+              disabled={save.isPending}
+              onClick={() => setDraft(null)}
+            >
+              Discard assignment edit
+            </Button>
+          )}
         </>
       )}
       {save.error && <p role="alert">{save.error.message}</p>}

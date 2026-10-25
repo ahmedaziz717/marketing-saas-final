@@ -48,3 +48,42 @@ provider request ID/code is unverified. No claim of an OAuth/account failure.
 
 The create path does not issue that group query and is independently covered;
 live creation success is not inferred from reports or local mocks.
+
+## Integrated candidate and local QA
+
+- Gallery commits 9018702/d21a11a and Google/PMax d3269d7 are integrated without
+  duplicating their shared contract parent. Draft PR: #105.
+- Additive migrations 0024/0025 create workspace category settings and immutable
+  initial brand prompt values. No production category or prompt data is seeded.
+  Personalization remains an explicit metered action and preserves manual active
+  revisions. Restoring V0/V1 in Studio is a session edit until explicitly saved.
+- Studio enforces an explicit neutral choice for unmapped/mixed subjects before
+  provider calls. Shared workflow/App media resolution continues to accept old
+  forms while carrying authoritative category facts; no App version migration.
+- Image multi-select supports up to four views per product, twelve views total;
+  separate mode produces each selected view for each format. Together mode keeps
+  one view per product. Display thumbnails never replace source image IDs/URLs.
+- The combined local gallery fixture was inspected at desktop and narrow width:
+  preview changes did not change selection; optional-group selection retained the
+  earlier image; incomplete source galleries stayed explicit; lightbox used the
+  original image. Touch swipe is automated event-test coverage, not device QA.
+- Actual category/prompt components were inspected at 375px with synthetic data:
+  no horizontal overflow, explicit unmapped choice, compact disclosures, session
+  editing and V0 restore. Fixtures make no real provider or production saves.
+- Initial combined CI b6596b7 passed migrations/TypeScript, then reported 28 failed,
+  1694 passed and one skipped test. Failures exposed the shared App media gate
+  above plus outdated UI mocks/selectors and a route allowlist. Those failures
+  were corrected and the affected suites rerun locally. Final exact-head full CI
+  remains the release gate, including production build and Chrome checks.
+
+Run the standalone gallery fixture with `vite --config
+client/src/components/__fixtures__/vite.gallery.config.ts`. For actual shared
+workspace components, use `vite --config
+client/src/components/__fixtures__/vite.authoring.config.ts` and open
+`/client/src/components/__fixtures__/authoring-context.html?page=authoring-context`.
+The `catalog-gallery` page exercises grouped selection. Both fixtures are local
+only and have no production credentials.
+
+No Google publication/upload or paid generation has been tested against production.
+The fresh automatic overlay/edit/reset report remains separate and unverified;
+the previously user-approved product stretching/background controls are unchanged.
