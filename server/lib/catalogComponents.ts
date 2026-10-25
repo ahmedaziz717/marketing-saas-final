@@ -464,6 +464,15 @@ export async function createCatalogComponents(
           .update(products)
           .set({
             ...sourceIdentity,
+            // Source-owned facts require the same fresh review as ordinary catalog edits.
+            // Image-only repairs and no-op retries retain their existing approval.
+            ...(identityChanged
+              ? {
+                  status: "pending" as const,
+                  reviewedByUserId: null,
+                  reviewedAtMs: null,
+                }
+              : {}),
             mediaGroups,
             updatedAtMs: Math.max(Date.now(), component.updatedAtMs + 1),
           })

@@ -69,3 +69,9 @@ new generation; they are never silently replaced with another angle. Source-owne
 kind/specifications/provenance and compatibility kind/role refresh together. Manual
 labels/descriptions and unrelated specifications remain intact. No-op review retries
 do not advance the component revision.
+
+Substantive source-owned identity/fact corrections reset component approval to
+pending and clear reviewer/time attribution, matching ordinary catalog edits.
+No-op retries preserve approval and revision; image-only repair retains the existing
+approval policy. Corrected pending components cannot be newly used by the existing
+approved-product generation resolvers until reviewed again.

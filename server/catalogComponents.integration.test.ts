@@ -550,3 +550,64 @@ it("corrects source-owned kind/specifications and relationship role while preser
     (await state.db.select().from(products).where(eq(products.id, id)))[0].name
   ).toBe("Chassis: Corrected source enclosure");
 });
+
+it("invalidates approved component facts after source correction and preserves approval on no-op retries", async () => {
+  let preview = await previewCatalogComponents(state.db, 1, first.id);
+  const {
+    componentIds: [id],
+  } = await createCatalogComponents(1, first.id, preview.hash, 1);
+  const approval = {
+    status: "approved",
+    reviewedByUserId: 1,
+    reviewedAtMs: 12345,
+  };
+  await state.db.update(products).set(approval).where(eq(products.id, id));
+  const [approved] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, id));
+  await createCatalogComponents(1, first.id, preview.hash, 1);
+  expect(
+    (await state.db.select().from(products).where(eq(products.id, id)))[0]
+  ).toMatchObject({ ...approval, updatedAtMs: approved.updatedAtMs });
+  for (const [parent, groupId, amount] of [
+    [first, "option-1", "50"],
+    [second, "option-2", "75"],
+  ] as const) {
+    const g = group(groupId, amount);
+    await state.db
+      .update(products)
+      .set({
+        mediaGroups: [
+          {
+            ...g,
+            name: "Corrected rack enclosure",
+            component: { ...g.component, kind: "Rack chassis" },
+          },
+        ],
+      })
+      .where(eq(products.id, parent.id));
+  }
+  preview = await previewCatalogComponents(state.db, 1, first.id);
+  await createCatalogComponents(1, first.id, preview.hash, 1);
+  const [corrected] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, id));
+  expect(corrected).toMatchObject({
+    status: "pending",
+    reviewedByUserId: null,
+    reviewedAtMs: null,
+    name: "Rack chassis: Corrected rack enclosure",
+    specifications: { "Component type": "Rack chassis" },
+    provenance: { "component.kind": "Rack chassis" },
+  });
+  expect(corrected.description).toContain("Rack chassis component only");
+  expect(corrected.updatedAtMs).toBeGreaterThan(approved.updatedAtMs);
+  // After a reviewer approves the corrected facts, repeat conversion must not revoke approval.
+  await state.db.update(products).set(approval).where(eq(products.id, id));
+  await createCatalogComponents(1, first.id, preview.hash, 1);
+  expect(
+    (await state.db.select().from(products).where(eq(products.id, id)))[0]
+  ).toMatchObject({ ...approval, updatedAtMs: corrected.updatedAtMs });
+});
