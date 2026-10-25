@@ -662,6 +662,49 @@ export function workflowAuthoring(
         getWorkflowApp(tx, input.organizationId, input.id)
       );
     },
+    /** Receipt-only recovery: authorize the caller first, then bind the exact
+     * original request without revalidating dependencies that may since change. */
+    async completedDraftRequest(raw: unknown) {
+      const input = proposalInput.parse(raw);
+      return transaction(input.organizationId, async tx => {
+        const proposed = await event(
+          tx,
+          input.organizationId,
+          input.requestId,
+          "authoring.proposed"
+        );
+        if (proposed && proposed.payload?.requestHash !== stableHash(input))
+          fail(
+            "Request ID was already used for different content.",
+            "CONFLICT"
+          );
+        const applied = await event(
+          tx,
+          input.organizationId,
+          input.requestId,
+          "authoring.applied"
+        );
+        if (!applied) return null;
+        const proposal = proposed?.payload?.proposal as Proposal | undefined;
+        if (!proposal)
+          return fail(
+            "Request ID was already used for different content.",
+            "CONFLICT"
+          );
+        if (
+          applied.payload?.proposalId !== proposal.proposalId ||
+          applied.payload?.hash !== proposal.hash
+        )
+          fail(
+            "Request ID was already used for different content.",
+            "CONFLICT"
+          );
+        return {
+          ...(applied.payload!.result as { id: string; revision: number }),
+          proposalId: proposal.proposalId,
+        };
+      });
+    },
     async propose(raw: unknown) {
       const input = proposalInput.parse(raw),
         hash = stableHash(input);

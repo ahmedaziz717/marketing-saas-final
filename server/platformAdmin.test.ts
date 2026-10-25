@@ -645,3 +645,90 @@ it("keeps a fixed action charge when provider token usage exceeds the estimate",
   ).rejects.toThrow("credit price changed");
   expect(call).not.toHaveBeenCalled();
 });
+
+it("accounts bundled brand summaries at zero credits under the enclosing image quote without weakening its price or pause guard", async () => {
+  const { organizationId } = await admin.createAccount({
+    name: "Bundled image quote",
+    ownerEmail: "owner@test.com",
+    tierId: "trial",
+  });
+  const rate: ProviderRate = {
+    provider: "test",
+    model: "bundled-summary",
+    kind: "text",
+    credits: 5,
+    billingMode: "fixed",
+    inputPerMillion: 2,
+    cachedInputPerMillion: 1,
+    outputPerMillion: 8,
+    perRequestUsd: null,
+    note: "Mock only",
+  };
+  const imageRate: ProviderRate = {
+    ...rate,
+    model: "outer-image",
+    kind: "image",
+    credits: 12,
+    perRequestUsd: 0.12,
+  };
+  const scope = {
+    organizationId,
+    actorUserId: 2,
+    operation: "workflow.generate_image",
+    quotedCredits: 12,
+  };
+  const summary = vi.fn(async () => ({
+    value: "Summarized brand",
+    usage: { input_tokens: 1000, output_tokens: 100 },
+  }));
+  const image = vi.fn(async () => ({ value: "Mock image", usage: {} }));
+  await aiScope.run(scope, async () => {
+    expect(
+      await meteredCall("test", "bundled-summary", "text", summary, {
+        rateSnapshot: rate,
+        includedInAction: true,
+      })
+    ).toBe("Summarized brand");
+    expect((await creditState(state.db, organizationId)).remaining).toBe(100);
+    await meteredCall("test", "outer-image", "image", image, {
+      rateSnapshot: imageRate,
+    });
+  });
+  const rows = await state.db
+    .select()
+    .from(aiUsage)
+    .where(eq(aiUsage.organizationId, organizationId));
+  const bundled = rows.find((row: any) => row.model === "bundled-summary");
+  expect(bundled).toMatchObject({
+    actorUserId: 2,
+    operation: "workflow.generate_image",
+    credits: 0,
+    status: "succeeded",
+    costMicros: 2800,
+  });
+  expect(rows.find((row: any) => row.model === "outer-image").credits).toBe(12);
+  expect((await creditState(state.db, organizationId)).remaining).toBe(88);
+  const beforeImageCalls = image.mock.calls.length;
+  await expect(
+    aiScope.run({ ...scope, quotedCredits: 11 }, () =>
+      meteredCall("test", "outer-image", "image", image, {
+        rateSnapshot: imageRate,
+      })
+    )
+  ).rejects.toThrow("credit price changed");
+  expect(image).toHaveBeenCalledTimes(beforeImageCalls);
+  await state.db
+    .update(platformAccounts)
+    .set({ aiPaused: 1 })
+    .where(eq(platformAccounts.organizationId, organizationId));
+  const beforeSummaryCalls = summary.mock.calls.length;
+  await expect(
+    aiScope.run(scope, () =>
+      meteredCall("test", "bundled-summary", "text", summary, {
+        rateSnapshot: rate,
+        includedInAction: true,
+      })
+    )
+  ).rejects.toThrow("AI generation is paused");
+  expect(summary).toHaveBeenCalledTimes(beforeSummaryCalls);
+});

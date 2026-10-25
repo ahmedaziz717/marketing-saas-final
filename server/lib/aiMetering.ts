@@ -106,7 +106,14 @@ export async function meteredCall<T>(
     id = randomUUID(),
     period = utcCreditMonth(),
     createdAtMs = Date.now();
-  if (scope?.quotedCredits != null && scope.quotedCredits !== credits)
+  // A bundled internal call (for example a long-brand summary) inherits the
+  // enclosing image's quote, but has no separate retail charge. The outer paid
+  // call still validates that exact quote through the ordinary path below.
+  if (
+    !options?.includedInAction &&
+    scope?.quotedCredits != null &&
+    scope.quotedCredits !== credits
+  )
     throw new TRPCError({
       code: "CONFLICT",
       message:
