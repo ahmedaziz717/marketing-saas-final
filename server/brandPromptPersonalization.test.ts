@@ -8,6 +8,7 @@ import {
   organizations,
   brandKits,
   promptRevisions,
+  promptBrandInitials,
 } from "../drizzle/schema";
 import { PROMPT_REGISTRY } from "../shared/promptRegistry";
 const state = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ vi.mock("./_core/llm", () => ({
   },
 }));
 import { personalizeBrandPrompts } from "./lib/brandPromptDefaults";
+import { resolvedPrompts, changePrompt } from "./lib/promptRegistry";
 const engine = new PGlite();
 beforeAll(async () => {
   state.db = drizzle(engine);
@@ -65,46 +67,40 @@ beforeAll(async () => {
     .insert(users)
     .values({ id: 990, openId: "personalization-test" });
   for (const id of [990, 991]) {
-    await state.db
-      .insert(organizations)
-      .values({
-        id,
-        name: `Workspace ${id}`,
-        slug: `personalize-${id}`,
-        createdByUserId: 990,
-        createdAtMs: 1,
-      });
-    await state.db
-      .insert(brandKits)
-      .values({
-        organizationId: id,
-        name: `Brand ${id}`,
-        voice: "Practical and clear for business owners",
-        colors: [],
-        fonts: [],
-        status: "active",
-        updatedByUserId: 990,
-        updatedAtMs: 1,
-      });
+    await state.db.insert(organizations).values({
+      id,
+      name: `Workspace ${id}`,
+      slug: `personalize-${id}`,
+      createdByUserId: 990,
+      createdAtMs: 1,
+    });
+    await state.db.insert(brandKits).values({
+      organizationId: id,
+      name: `Brand ${id}`,
+      voice: "Practical and clear for business owners",
+      colors: [],
+      fonts: [],
+      status: "active",
+      updatedByUserId: 990,
+      updatedAtMs: 1,
+    });
   }
 }, 30000);
 afterAll(() => engine.close());
 it("atomically personalizes only eligible defaults, caches unchanged kits and preserves manual revisions and other tenants", async () => {
   const base = PROMPT_REGISTRY.find(p => p.id === "creative.base")!;
-  await state.db
-    .insert(promptRevisions)
-    .values({
-      organizationId: 990,
-      promptId: base.id,
-      revision: 1,
-      value: "My intentional direction",
-      baselineVersion: base.version,
-      baselineValue: base.baseline,
-      action: "save",
-      actorUserId: 990,
-      reason: "Manual",
-      createdAtMs: 1,
-    });
+  await state.db.insert(promptRevisions).values({
+    organizationId: 990,
+    promptId: base.id,
+    revision: 1,
+    value: "My intentional direction",
+    baselineVersion: base.version,
+    baselineValue: base.baseline,
+    action: "save",
+    actorUserId: 990,
+    reason: "Manual",
+    createdAtMs: 1,
+  });
   const result = await personalizeBrandPrompts(990, 990);
   expect(result.updated).toBeGreaterThan(0);
   expect(result.preserved).toBe(1);
@@ -128,6 +124,26 @@ it("atomically personalizes only eligible defaults, caches unchanged kits and pr
   ).toHaveLength(0);
   expect((await personalizeBrandPrompts(990, 990)).updated).toBe(0);
   expect(state.calls).toBe(1);
+  const initials = await state.db
+    .select()
+    .from(promptBrandInitials)
+    .where(eq(promptBrandInitials.organizationId, 990));
+  expect(initials.find((r: any) => r.promptId === base.id)?.value).toContain(
+    "Brand Kit: Brand 990"
+  );
+  expect(initials.find((r: any) => r.promptId === base.id)?.value).not.toBe(
+    "My intentional direction"
+  );
+  const before = JSON.stringify(initials);
+  await personalizeBrandPrompts(990, 990);
+  expect(
+    JSON.stringify(
+      await state.db
+        .select()
+        .from(promptBrandInitials)
+        .where(eq(promptBrandInitials.organizationId, 990))
+    )
+  ).toBe(before);
 });
 it("leaves every active revision untouched when changed-kit preparation fails", async () => {
   const before = await state.db.select().from(promptRevisions);
@@ -140,4 +156,25 @@ it("leaves every active revision untouched when changed-kit preparation fails", 
     "provider unavailable"
   );
   expect(await state.db.select().from(promptRevisions)).toEqual(before);
+});
+it("restores immutable V1 explicitly without losing generic V0 or another tenant's defaults", async () => {
+  const before = (await resolvedPrompts(990)).find(
+    p => p.id === "creative.base"
+  )!;
+  expect(before.value).toBe("My intentional direction");
+  expect(before.restorePoints?.brand?.value).toContain("Brand Kit: Brand 990");
+  await changePrompt({
+    organizationId: 990,
+    actorUserId: 990,
+    promptId: before.id,
+    expectedRevision: before.revision,
+    action: "restore_brand_initial",
+    reason: "Explicit fixture restore",
+  });
+  const after = (await resolvedPrompts(990)).find(p => p.id === before.id)!;
+  expect(after.value).toBe(before.restorePoints!.brand!.value);
+  expect(after.restorePoints!.original.value).toBe(before.baseline);
+  expect(
+    (await resolvedPrompts(991)).find(p => p.id === before.id)!.revision
+  ).toBe(0);
 });

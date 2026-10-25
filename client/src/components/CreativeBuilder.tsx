@@ -2,6 +2,7 @@ import { TaskPromptField } from "./TaskPromptField";
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { PromptDefaultControls } from "@/components/PromptDefaultControls";
 import { GenerationBrandContext } from "@/components/BrandPromptContext";
+import { ProductCategoryContext } from "./ProductCategoryContext";
 import { usePromptDefaults } from "@/hooks/usePromptDefaults";
 import { newCreativeDefaults } from "@shared/promptRegistry";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
@@ -358,6 +359,13 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
 
   return (
     <div className="space-y-5">
+      <ProductCategoryContext
+        products={catalog.filter(product =>
+          setup.products.some(selection => selection.productId === product.id)
+        )}
+        handling={setup.categoryHandling}
+        onChange={categoryHandling => change({ ...setup, categoryHandling })}
+      />
       <section className="surface grid gap-5 p-5 lg:grid-cols-2">
         <ModelPicker
           organizationId={organizationId!}
@@ -1249,7 +1257,14 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 ? " Copy is shared across product sets."
                 : ""}
             </p>
-            <TaskPromptField promptId="creative.copy" label="Default copy instructions" value={setup.copyDefaultInstructions} onChange={value => change({ ...setup, copyDefaultInstructions: value })} />
+            <TaskPromptField
+              promptId="creative.copy"
+              label="Default copy instructions"
+              value={setup.copyDefaultInstructions}
+              onChange={value =>
+                change({ ...setup, copyDefaultInstructions: value })
+              }
+            />
             <div className="mt-4 grid gap-4">
               {(["headline", "subheadline", "cta"] as const).map(key => (
                 <label key={key}>

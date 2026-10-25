@@ -8,6 +8,12 @@ import { requireOrganizationRole } from "../lib/access";
 import { libraryDatabase } from "../lib/assetLibrary";
 import { GoogleAdsError } from "../lib/googleAdsApi";
 import { GoogleMutationError } from "../lib/googleAdsMutate";
+import { and, eq, inArray } from "drizzle-orm";
+import { brandKits, products } from "../../drizzle/schema";
+import { generatePmaxCopy } from "../lib/googlePmaxAi";
+import { attachMarketingCategories } from "../lib/catalogCategories";
+import { selectProductFacts } from "../lib/productFacts";
+import { categorySelectionState } from "../../shared/catalogCategories";
 import {
   getGoogleDraft,
   googleCampaignInventory,
@@ -42,6 +48,87 @@ const libraryVideo = account.extend({
   revision: z.string().min(1).max(200),
 });
 export const googleCampaignsRouter = router({
+  draftPmaxCopy: protectedProcedure
+    .input(
+      scopeSchema.extend({
+        productIds: z.array(z.number().int().positive()).max(10).default([]),
+        direction: z.string().trim().max(2000).default(""),
+        defaultInstructions: z.string().trim().min(1).max(6000).optional(),
+        neutralCategories: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+        "publisher",
+      ]);
+      const db = await libraryDatabase();
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      if (!brand)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your Brand Kit before generating PMax copy.",
+        });
+      const catalog = input.productIds.length
+        ? await db
+            .select()
+            .from(products)
+            .where(
+              and(
+                eq(products.organizationId, input.organizationId),
+                eq(products.status, "approved"),
+                inArray(products.id, input.productIds)
+              )
+            )
+        : [];
+      if (catalog.length !== new Set(input.productIds).size)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose approved products from this workspace.",
+        });
+      const categorized = await attachMarketingCategories(
+        db,
+        input.organizationId,
+        catalog
+      );
+      if (
+        categorySelectionState(categorized).requiresChoice &&
+        !input.neutralCategories
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Selected products have mixed or unmapped marketing categories. Confirm neutral wording or choose one confirmed category.",
+        });
+      return generatePmaxCopy(
+        {
+          brand: {
+            name: brand.name,
+            businessProfile: brand.businessProfile,
+            voice: brand.voice,
+            requiredClaims: brand.requiredClaims,
+            prohibitedContent: brand.prohibitedContent,
+          },
+          products: categorized.map(product =>
+            selectProductFacts(product, {
+              productId: product.id,
+              featuredSpecKeys: [],
+              includePrice: false,
+              includeDescription: true,
+            })
+          ),
+          neutralCategories: input.neutralCategories,
+          direction: input.direction,
+        },
+        input.defaultInstructions
+      );
+    }),
   videoUploadStatus: protectedProcedure
     .input(libraryVideo)
     .query(({ ctx, input }) =>

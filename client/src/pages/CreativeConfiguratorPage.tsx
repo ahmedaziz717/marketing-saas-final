@@ -1,4 +1,5 @@
 import { TaskPromptField } from "@/components/TaskPromptField";
+import { ProductCategoryContext } from "@/components/ProductCategoryContext";
 import {
   learningHandoffSchema,
   type LearningOrigin,
@@ -1227,39 +1228,59 @@ function Configurator({
       );
     if (category === "productDetails")
       return (
-        <StudioProductFacts
-          products={factProducts}
-          selections={factSelections}
-          loading={isImage ? options.isLoading : selectedCatalog.isLoading}
-          error={(isImage ? options.error : selectedCatalog.error)?.message}
-          onRetry={() => {
-            void (isImage ? options.refetch() : selectedCatalog.refetch());
-          }}
-          onSources={() => go("type", "source")}
-          onChange={selection => {
-            if (isImage)
-              updateImage({
-                products: image.products.map(p =>
-                  p.productId === selection.productId
-                    ? { ...p, ...selection }
-                    : p
-                ),
-              });
-            else
-              updateVideo({
-                productSelections: [
-                  ...(video.productSelections ?? []).filter(
-                    p => p.productId !== selection.productId
+        <>
+          <ProductCategoryContext
+            products={factProducts}
+            handling={isImage ? image.categoryHandling : video.categoryHandling}
+            onChange={value =>
+              isImage
+                ? updateImage({ categoryHandling: value })
+                : updateVideo({ categoryHandling: value })
+            }
+          />
+          <StudioProductFacts
+            products={factProducts}
+            selections={factSelections}
+            loading={isImage ? options.isLoading : selectedCatalog.isLoading}
+            error={(isImage ? options.error : selectedCatalog.error)?.message}
+            onRetry={() => {
+              void (isImage ? options.refetch() : selectedCatalog.refetch());
+            }}
+            onSources={() => go("type", "source")}
+            onChange={selection => {
+              if (isImage)
+                updateImage({
+                  products: image.products.map(p =>
+                    p.productId === selection.productId
+                      ? { ...p, ...selection }
+                      : p
                   ),
-                  selection,
-                ],
-              });
-          }}
-        />
+                });
+              else
+                updateVideo({
+                  productSelections: [
+                    ...(video.productSelections ?? []).filter(
+                      p => p.productId !== selection.productId
+                    ),
+                    selection,
+                  ],
+                });
+            }}
+          />
+        </>
       );
     if (category === "source")
       return (
         <>
+          <ProductCategoryContext
+            products={factProducts}
+            handling={isImage ? image.categoryHandling : video.categoryHandling}
+            onChange={value =>
+              isImage
+                ? updateImage({ categoryHandling: value })
+                : updateVideo({ categoryHandling: value })
+            }
+          />
           {isImage && image.preserveProduct && (
             <div className="cfg-note" role="status">
               {quote.error
@@ -1578,14 +1599,47 @@ function Configurator({
     if (category === "message")
       return (
         <div className="cfg-form">
+          <GenerationBrandContext organizationId={organizationId} />
+          <ProductCategoryContext
+            products={factProducts}
+            handling={isImage ? image.categoryHandling : video.categoryHandling}
+            onChange={value =>
+              isImage
+                ? updateImage({ categoryHandling: value })
+                : updateVideo({ categoryHandling: value })
+            }
+          />
+          {!isImage && (
+            <TaskPromptField
+              promptId="video.planner"
+              label="Video prompt writer instructions"
+              value={video.plannerInstructions}
+              onChange={value => updateVideo({ plannerInstructions: value })}
+            />
+          )}
           <div className="cfg-note">
             {isImage
               ? "This image pipeline requires a headline and CTA. Text is generated into the image; inspect spelling and placement in the result."
               : "Describe the action, sequence and camera movement. Dialogue and sound are available only on models that support them."}
           </div>
-          <TaskPromptField promptId={isImage ? "creative.copy" : "video.direction"} label={isImage ? "Copy generation instructions" : "Video generation instructions"}
-            value={isImage ? image.copyDefaultInstructions : video.defaultInstructions}
-            onChange={value => isImage ? updateImage({ copyDefaultInstructions: value }) : updateVideo({ defaultInstructions: value })} />
+          <TaskPromptField
+            promptId={isImage ? "creative.copy" : "video.direction"}
+            label={
+              isImage
+                ? "Copy generation instructions"
+                : "Video generation instructions"
+            }
+            value={
+              isImage
+                ? image.copyDefaultInstructions
+                : video.defaultInstructions
+            }
+            onChange={value =>
+              isImage
+                ? updateImage({ copyDefaultInstructions: value })
+                : updateVideo({ defaultInstructions: value })
+            }
+          />
           {isImage ? (
             (["headline", "subheadline", "cta"] as const).map(key => (
               <Field
@@ -1676,17 +1730,39 @@ function Configurator({
       return (
         <div className="cfg-form">
           {isImage && (
+            <TaskPromptField
+              promptId="creative.image"
+              label="Image generation instructions"
+              value={image.imageDefaultInstructions}
+              onChange={value =>
+                updateImage({ imageDefaultInstructions: value })
+              }
+            />
+          )}
+          {isImage && (
             <GenerationBrandContext organizationId={organizationId} />
           )}
           <Field title="Theme direction">
             <textarea
-              value={direction.themePrompt ?? theme.direction}
+              value={
+                direction.themePrompt ||
+                promptDefaults.data?.find(
+                  p => p.id === `creative.theme.${direction.theme}`
+                )?.value ||
+                theme.direction
+              }
               maxLength={4000}
               onChange={e => updateDirection({ themePrompt: e.target.value })}
             />
             <PromptDefaultControls
               promptId={`creative.theme.${direction.theme}`}
-              value={direction.themePrompt ?? theme.direction}
+              value={
+                direction.themePrompt ||
+                promptDefaults.data?.find(
+                  p => p.id === `creative.theme.${direction.theme}`
+                )?.value ||
+                theme.direction
+              }
               onChange={themePrompt => updateDirection({ themePrompt })}
             />
           </Field>

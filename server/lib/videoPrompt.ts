@@ -10,9 +10,13 @@ import { requireLatestGptTextModel } from "./models";
 import { readGenerationSource } from "./creativeImages";
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { productFactsDirection } from "../../shared/studioProductFacts";
+import { assertCategorySelection } from "./catalogCategories";
 import type { LibraryDatabase } from "./assetLibrary";
 import { previewStudioPage } from "./studioProductPage";
-import { applicationPromptForRun, visualDirectionDefaults } from "./promptRegistry";
+import {
+  applicationPromptForRun,
+  visualDirectionDefaults,
+} from "./promptRegistry";
 
 export async function draftVideoPrompt(
   db: LibraryDatabase,
@@ -30,6 +34,10 @@ export async function draftVideoPrompt(
       prompt: "Draft from selected images",
     },
     "prompt"
+  );
+  assertCategorySelection(
+    references.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
+    setup.categoryHandling
   );
   const [brand] = await db
     .select()
@@ -75,9 +83,19 @@ export async function draftVideoPrompt(
         sound: setup.sound,
         creativeDirection: videoPrompt(
           { ...setup, prompt: "" },
-          { ...(await visualDirectionDefaults(organizationId, setup.direction)), "video.direction": (await applicationPromptForRun("video.direction", setup.defaultInstructions, organizationId)).value }
+          {
+            ...(await visualDirectionDefaults(organizationId, setup.direction)),
+            "video.direction": (
+              await applicationPromptForRun(
+                "video.direction",
+                setup.defaultInstructions,
+                organizationId
+              )
+            ).value,
+          }
         ),
         priorDescription: setup.prompt,
+        categoryHandling: setup.categoryHandling ?? "require_mapping",
         productFactRules: productFactsDirection,
         brand: brand
           ? {
@@ -121,6 +139,7 @@ export async function draftVideoPrompt(
   const model = requireLatestGptTextModel((await listLLMModels()).data);
   const response = await invokeLLM({
     promptTemplateId: "video.planner",
+    promptTemplateOverride: setup.plannerInstructions,
     model,
     maxTokens: 6000,
     reasoning: { effort: "low" },

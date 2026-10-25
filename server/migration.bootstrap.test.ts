@@ -37,7 +37,7 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(53);
+    ).toHaveLength(55);
     expect(
       (
         await engine.query(

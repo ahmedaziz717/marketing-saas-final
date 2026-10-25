@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
-import { brandKits, promptRevisions } from "../../drizzle/schema";
+import {
+  brandKits,
+  promptRevisions,
+  promptBrandInitials,
+} from "../../drizzle/schema";
 import { PROMPT_REGISTRY } from "../../shared/promptRegistry";
 import { promptGroup } from "../../shared/promptPresentation";
 import {
@@ -93,7 +97,9 @@ async function prepareProfile(brand: Brand, hash: string) {
   if (saved.error) {
     const winner = await bucket.download(key);
     if (winner.error || !winner.data)
-      throw new Error("Brand instructions could not be read. Your current defaults are unchanged.");
+      throw new Error(
+        "Brand instructions could not be read. Your current defaults are unchanged."
+      );
     return brandPromptProfileSchema.parse(JSON.parse(await winner.data.text()));
   }
   return profile;
@@ -123,7 +129,14 @@ export async function personalizeBrandPrompts(
     .from(promptRevisions)
     .where(eq(promptRevisions.organizationId, organizationId))
     .orderBy(promptRevisions.promptId, desc(promptRevisions.revision));
+  const initials = await db
+    .select()
+    .from(promptBrandInitials)
+    .where(eq(promptBrandInitials.organizationId, organizationId));
   if (
+    definitions.every(p =>
+      initials.some(initial => initial.promptId === p.id)
+    ) &&
     !definitions.some(p =>
       mayPersonalizeBrandDefault(latest.find(r => r.promptId === p.id))
     )
@@ -159,36 +172,77 @@ export async function personalizeBrandPrompts(
       .from(promptRevisions)
       .where(eq(promptRevisions.organizationId, organizationId))
       .orderBy(promptRevisions.promptId, desc(promptRevisions.revision));
+    const prepared = await tx
+      .select()
+      .from(promptBrandInitials)
+      .where(eq(promptBrandInitials.organizationId, organizationId));
+    const historicalBrands = await tx
+      .select()
+      .from(promptRevisions)
+      .where(eq(promptRevisions.organizationId, organizationId))
+      .orderBy(promptRevisions.revision);
     let updated = 0,
       preserved = 0;
     const now = Date.now();
     for (const definition of definitions) {
       const previous = current.find(row => row.promptId === definition.id);
+      const value = personalizedBrandDefault(definition, brand.name, profile);
+      if (!prepared.some(initial => initial.promptId === definition.id)) {
+        const first = historicalBrands.find(
+          row =>
+            row.promptId === definition.id &&
+            row.action === "personalize_brand" &&
+            row.value
+        );
+        await tx
+          .insert(promptBrandInitials)
+          .values({
+            organizationId,
+            promptId: definition.id,
+            value: first?.value ?? value,
+            baselineValue: first?.baselineValue ?? definition.baseline,
+            baselineVersion: first?.baselineVersion ?? definition.version,
+            brandSourceHash: hash,
+            actorUserId,
+            createdAtMs: now,
+          });
+        await appendActivity(
+          {
+            organizationId,
+            actorUserId,
+            action: "prompt.prepare_brand_initial",
+            entityType: "prompt",
+            entityId: definition.id,
+            payload: {
+              brandSourceHash: hash,
+              preservedActive: !mayPersonalizeBrandDefault(previous),
+            },
+          },
+          tx
+        );
+      }
       if (!mayPersonalizeBrandDefault(previous)) {
         preserved++;
         continue;
       }
-      const value = personalizedBrandDefault(definition, brand.name, profile);
       if (
         previous?.value === value &&
         previous.baselineVersion === definition.version
       )
         continue;
       const revision = (previous?.revision ?? 0) + 1;
-      await tx
-        .insert(promptRevisions)
-        .values({
-          organizationId,
-          promptId: definition.id,
-          revision,
-          value,
-          baselineVersion: definition.version,
-          baselineValue: definition.baseline,
-          action: "personalize_brand",
-          actorUserId,
-          reason: `Brand Kit ${brand.id}, saved ${brand.updatedAtMs}; profile v${PROFILE_VERSION}; source ${hash}`,
-          createdAtMs: now,
-        });
+      await tx.insert(promptRevisions).values({
+        organizationId,
+        promptId: definition.id,
+        revision,
+        value,
+        baselineVersion: definition.version,
+        baselineValue: definition.baseline,
+        action: "personalize_brand",
+        actorUserId,
+        reason: `Brand Kit ${brand.id}, saved ${brand.updatedAtMs}; profile v${PROFILE_VERSION}; source ${hash}`,
+        createdAtMs: now,
+      });
       await appendActivity(
         {
           organizationId,

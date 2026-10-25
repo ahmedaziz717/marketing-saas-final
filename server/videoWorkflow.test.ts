@@ -114,6 +114,7 @@ let owner: ReturnType<typeof appRouter.createCaller>,
   reviewer: typeof owner;
 const setup = (): VideoSetup => ({
   ...defaultVideoSetup,
+  categoryHandling: "neutral",
   title: "Product orbit",
   prompt: "Orbit around Image 1",
   imageKeys: [`asset:${imageId}`],
@@ -569,6 +570,31 @@ describe("durable video generation", () => {
       .where(eq(products.id, productId));
   });
 
+  it("requires a Studio category choice before provider work while keeping shared App reference resolution compatible", async () => {
+    const settings = {
+      ...setup(),
+      categoryHandling: undefined,
+      imageKeys: [`product_image:${catalogImageId}`],
+    };
+    await expect(
+      owner.video.quote({ organizationId: org, setup: settings })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(
+      owner.video.draftPrompt({ organizationId: org, setup: settings })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(state.estimate).not.toHaveBeenCalled();
+    expect(state.llm).not.toHaveBeenCalled();
+    expect(
+      (await resolveVideoReferences(state.db, org, settings))[0].productFacts
+        ?.marketingCategory?.status
+    ).toBe("unmapped");
+    await owner.video.quote({
+      organizationId: org,
+      setup: { ...settings, categoryHandling: "neutral" },
+    });
+    expect(state.estimate).toHaveBeenCalledTimes(1);
+  });
+
   it("saves and sends an approved brand logo after subject images and before people", async () => {
     const settings = {
       ...setup(),
@@ -702,7 +728,8 @@ describe("durable video generation", () => {
       organizationId: org,
       setup: {
         ...settings,
-        defaultInstructions: "Keep the camera still and preserve the product silhouette.",
+        defaultInstructions:
+          "Keep the camera still and preserve the product silhouette.",
         productSelections: [
           {
             productId,
@@ -729,7 +756,9 @@ describe("durable video generation", () => {
       `data:image/png;base64,${Buffer.from(`org-${org}/reference.png`).toString("base64")}`,
     ]);
     expect(parts[0].text).toContain("Creative theme");
-    expect(JSON.stringify(parts)).toContain("Keep the camera still and preserve the product silhouette.");
+    expect(JSON.stringify(parts)).toContain(
+      "Keep the camera still and preserve the product silhouette."
+    );
     expect(parts[1].text).toContain("A brass lamp.");
     expect(parts[1].text).toContain(
       '"featuredSpecifications":{"Material":"Brass"}'
@@ -808,7 +837,16 @@ describe("durable video generation", () => {
     expect(videoPrompt({ ...settings, direction: undefined })).toBe(
       settings.prompt
     );
-    expect(videoPrompt({ ...settings, direction: undefined, defaultInstructions: "Use a locked camera." }, { "video.direction": "Use a locked camera." })).toContain("Use a locked camera.");
+    expect(
+      videoPrompt(
+        {
+          ...settings,
+          direction: undefined,
+          defaultInstructions: "Use a locked camera.",
+        },
+        { "video.direction": "Use a locked camera." }
+      )
+    ).toContain("Use a locked camera.");
     expect(
       publicVideoJob({ setup: { ...settings, direction: undefined } } as any)
         .setup.direction
@@ -1339,12 +1377,49 @@ it("never forwards provider credentials to an arbitrary request URL", () => {
 
 it("keeps every product photo together across the former 60-image page boundary", async () => {
   const now = Date.now();
-  const [product] = await state.db.insert(products).values({ organizationId: org, name: "Gallery grouped", dedupeKey: "gallery-grouped", productUrl: "https://example.test/grouped", description: "Gallery test", specifications: {}, provenance: {}, status: "approved", createdAtMs: now, updatedAtMs: now }).returning();
-  const photos = await state.db.insert(productImages).values(Array.from({ length: 65 }, (_, i) => ({ organizationId: org, productId: product.id, sourceUrl: `https://example.test/grouped/${i}.png`, storageKey: `org-${org}/grouped/${i}.png`, url: `/grouped/${i}.png`, isPrimary: i === 64 ? 1 : 0, createdAtMs: now }))).returning();
-  const result = await owner.video.catalogImages({ organizationId: org, search: "Gallery grouped" });
+  const [product] = await state.db
+    .insert(products)
+    .values({
+      organizationId: org,
+      name: "Gallery grouped",
+      dedupeKey: "gallery-grouped",
+      productUrl: "https://example.test/grouped",
+      description: "Gallery test",
+      specifications: {},
+      provenance: {},
+      status: "approved",
+      createdAtMs: now,
+      updatedAtMs: now,
+    })
+    .returning();
+  const photos = await state.db
+    .insert(productImages)
+    .values(
+      Array.from({ length: 65 }, (_, i) => ({
+        organizationId: org,
+        productId: product.id,
+        sourceUrl: `https://example.test/grouped/${i}.png`,
+        storageKey: `org-${org}/grouped/${i}.png`,
+        url: `/grouped/${i}.png`,
+        isPrimary: i === 64 ? 1 : 0,
+        createdAtMs: now,
+      }))
+    )
+    .returning();
+  const result = await owner.video.catalogImages({
+    organizationId: org,
+    search: "Gallery grouped",
+  });
   expect(result.items).toHaveLength(65);
   expect(result.nextOffset).toBeNull();
   expect(result.items[0].key).toBe(`product_image:${photos[64].id}`);
-  expect(new Set(result.items.map(item => item.product?.id))).toEqual(new Set([product.id]));
-  await expect(outsider.video.catalogImages({ organizationId: org, search: "Gallery grouped" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  expect(new Set(result.items.map(item => item.product?.id))).toEqual(
+    new Set([product.id])
+  );
+  await expect(
+    outsider.video.catalogImages({
+      organizationId: org,
+      search: "Gallery grouped",
+    })
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
 });

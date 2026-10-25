@@ -29,6 +29,21 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    catalogCategories: {
+      read: {
+        useQuery: () => ({
+          data: {
+            revision: 0,
+            settings: { categories: [], mappings: [] },
+            sources: [],
+            codes: [],
+          },
+          refetch: vi.fn(),
+        }),
+      },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      override: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({
       catalog: { overview: { invalidate: state.invalidate } },
       activity: { list: { invalidate: state.invalidate } },
@@ -41,6 +56,14 @@ vi.mock("@/lib/trpc", () => ({
               id: id + input.offset,
               name: `Item ${id + input.offset}`,
               category: "Shoes",
+              provenance: {},
+              marketingCategory: {
+                status: "unmapped",
+                category: null,
+                sourceCategory: "Shoes",
+                origin: "unmapped",
+                revision: 0,
+              },
               recordType: input.kind === "services" ? "service" : "standalone",
               status: "pending",
               specifications: {},
@@ -138,6 +161,8 @@ it("offers all matching entries across pages and resets selection when filters c
       search: "shoe",
       kind: "products",
       category: "all",
+      marketingCategory: "all",
+      sourceId: undefined,
       status: "all",
     },
   });

@@ -469,14 +469,22 @@ export function googleChangeAssets(change: GoogleChange): GoogleAssetInput[] {
         field: "DESCRIPTION" as const,
         source: { kind: "text" as const, text },
       })),
-      {
-        field: "LONG_HEADLINE",
-        source: { kind: "text", text: change.ad.longHeadline! },
-      },
-      {
-        field: "BUSINESS_NAME",
-        source: { kind: "text", text: change.ad.businessName! },
-      },
+      ...(change.ad.longHeadline
+        ? [
+            {
+              field: "LONG_HEADLINE" as const,
+              source: { kind: "text" as const, text: change.ad.longHeadline },
+            },
+          ]
+        : []),
+      ...(change.ad.businessName
+        ? [
+            {
+              field: "BUSINESS_NAME" as const,
+              source: { kind: "text" as const, text: change.ad.businessName },
+            },
+          ]
+        : []),
     ];
   if (change.kind === "campaign_create" || change.kind === "ad_create")
     return change.ad.assets;

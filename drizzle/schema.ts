@@ -172,6 +172,23 @@ export const organizations = appSchema.table(
   })
 );
 
+export const catalogCategorySettings = appSchema.table(
+  "catalog_category_settings",
+  {
+    organizationId: integer("organizationId")
+      .primaryKey()
+      .references(() => organizations.id),
+    revision: integer("revision").notNull(),
+    settings: json("settings")
+      .$type<import("../shared/catalogCategories").CategorySettings>()
+      .notNull(),
+    updatedByUserId: integer("updatedByUserId")
+      .notNull()
+      .references(() => users.id),
+    updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+  }
+);
+
 export const organizationMemberships = appSchema.table(
   "organization_memberships",
   {
@@ -243,6 +260,31 @@ export const brandKits = appSchema.table(
   table => ({
     orgIdx: uniqueIndex("brand_kit_organization_unique").on(
       table.organizationId
+    ),
+  })
+);
+
+export const promptBrandInitials = appSchema.table(
+  "prompt_brand_initials",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    organizationId: integer("organizationId")
+      .notNull()
+      .references(() => organizations.id),
+    promptId: varchar("promptId", { length: 180 }).notNull(),
+    value: text("value").notNull(),
+    baselineValue: text("baselineValue").notNull(),
+    baselineVersion: integer("baselineVersion").notNull(),
+    brandSourceHash: varchar("brandSourceHash", { length: 64 }).notNull(),
+    actorUserId: integer("actorUserId")
+      .notNull()
+      .references(() => users.id),
+    createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+  },
+  table => ({
+    initialIdx: uniqueIndex("prompt_brand_initial_org_prompt_unique").on(
+      table.organizationId,
+      table.promptId
     ),
   })
 );
@@ -413,7 +455,10 @@ export const products = appSchema.table(
       .notNull(),
     features: json("features").$type<string[]>().default([]).notNull(),
     availability: varchar("availability", { length: 120 }),
-    mediaGroups: json("mediaGroups").$type<import("../shared/catalogMedia").CatalogMediaGroupSummary[]>(),
+    mediaGroups:
+      json("mediaGroups").$type<
+        import("../shared/catalogMedia").CatalogMediaGroupSummary[]
+      >(),
     provenance: json("provenance").$type<Record<string, string>>().notNull(),
     status: productsStatusEnum("status").default("pending").notNull(),
     reviewedByUserId: integer("reviewedByUserId").references(() => users.id),
@@ -471,7 +516,8 @@ export const productImages = appSchema.table("product_images", {
   sourceUrl: text("sourceUrl").notNull(),
   storageKey: varchar("storageKey", { length: 500 }).notNull(),
   url: text("url").notNull(),
-  media: json("media").$type<import("../shared/catalogMedia").CatalogImageMedia>(),
+  media:
+    json("media").$type<import("../shared/catalogMedia").CatalogImageMedia>(),
   altText: varchar("altText", { length: 500 }),
   isPrimary: integer("isPrimary").default(0).notNull(),
   createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),

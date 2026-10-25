@@ -1,10 +1,12 @@
 import { brandVoiceSchema } from "../../shared/brandGuidelines";
+import { attachMarketingCategories } from "../lib/catalogCategories";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   brandAssets,
+  catalogCategorySettings,
   brandKits,
   campaignBriefs,
   productImages,
@@ -38,6 +40,9 @@ const catalogFilters = z.object({
   kind: z.enum(["all", "products", "services"]).default("all"),
   status: z.enum(["all", "pending", "approved", "rejected"]).default("all"),
   category: z.string().max(240).default("all"),
+  marketingCategory: z
+    .union([z.literal("all"), z.literal("unmapped"), z.string().uuid()])
+    .default("all"),
   sourceId: z.number().int().positive().optional(),
 });
 
@@ -47,8 +52,21 @@ function catalogWhere(
 ) {
   // Treat search text literally, so selection has the same scope as the list.
   const search = `%${filter.search.replace(/[\\%_]/g, "\\$&")}%`;
+  const categoryId = sql`case when ${products.provenance}->>'marketing.categoryOverride' is not null
+    then ${products.provenance}->>'marketing.categoryId'
+    else (select m->>'categoryId' from ${catalogCategorySettings}, json_array_elements(${catalogCategorySettings.settings}->'mappings') m
+      where ${catalogCategorySettings.organizationId} = ${products.organizationId}
+      and (m->>'sourceId') is not distinct from ${products.sourceId}::text
+      and m->>'sourceCategory' = trim(${products.category}) limit 1) end`;
+  const confirmedCategory = sql`exists (select 1 from ${catalogCategorySettings}, json_array_elements(${catalogCategorySettings.settings}->'categories') c
+    where ${catalogCategorySettings.organizationId} = ${products.organizationId} and c->>'id' = (${categoryId}))`;
   return and(
     eq(products.organizationId, organizationId),
+    filter.marketingCategory === "unmapped"
+      ? sql`not (${confirmedCategory})`
+      : filter.marketingCategory !== "all"
+        ? sql`(${confirmedCategory}) and (${categoryId}) = ${filter.marketingCategory}`
+        : undefined,
     filter.sourceId ? eq(products.sourceId, filter.sourceId) : undefined,
     filter.kind === "services"
       ? eq(products.recordType, "service")
@@ -230,7 +248,9 @@ export const catalogRouter = router({
           .where(eq(products.organizationId, input.organizationId)),
       ]);
       return {
-        products: catalog.map(product => ({
+        products: (
+          await attachMarketingCategories(db, input.organizationId, catalog)
+        ).map(product => ({
           ...product,
           images: images.filter(i => i.productId === product.id),
           variants: variants.filter(v => v.productId === product.id),

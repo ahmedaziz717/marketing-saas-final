@@ -31,7 +31,12 @@ export const googleCampaignTypeSchema = z.enum([
 const id = z
   .string()
   .regex(/^\d{1,20}$/, "Choose a Google Ads resource from this account.");
-const text = (max: number) => z.string().trim().min(1).max(max);
+const text = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1, "This field is required.")
+    .max(max, `Use at most ${max} characters.`);
 const landingUrl = z
   .string()
   .url()
@@ -85,7 +90,7 @@ export const googleAssetInputSchema = z
     )
       ctx.addIssue({
         code: "custom",
-        message: `Check the text and character limit for ${v.field}.`,
+        message: `${v.field.toLowerCase().replaceAll("_", " ")}: use at most ${limits[v.field] ?? 0} characters in a text placement.`,
       });
     if (
       v.source.kind === "library" &&
@@ -267,21 +272,33 @@ export const googleCampaignCreateSchema = z
       issue("Provide a business name, landscape image and square image.");
     if (v.type === "DISPLAY" && !v.ad.longHeadline)
       issue("Display requires a long headline.");
-    if (
-      v.type === "PERFORMANCE_MAX" &&
-      (!v.ad.longHeadline ||
-        !v.ad.businessName ||
-        v.ad.headlines.length < 3 ||
-        v.ad.descriptions.length < 2 ||
-        !["MARKETING_IMAGE", "SQUARE_MARKETING_IMAGE", "LOGO"].every(f =>
-          v.ad.assets.some(a => a.field === f)
-        ))
-    )
-      issue(
-        "Performance Max needs 3 headlines, 2 descriptions, a long headline, business name, landscape image, square image and logo."
-      );
+    if (v.type === "PERFORMANCE_MAX") {
+      const fields = [
+        ...v.ad.assets.map(a => a.field),
+        ...v.ad.headlines.filter(h => h.trim()).map(() => "HEADLINE"),
+        ...v.ad.descriptions.filter(h => h.trim()).map(() => "DESCRIPTION"),
+        ...(v.ad.longHeadline ? ["LONG_HEADLINE"] : []),
+        ...(v.ad.businessName ? ["BUSINESS_NAME"] : []),
+      ];
+      for (const item of pmaxMissingAssets(fields)) {
+        const target =
+          (
+            {
+              HEADLINE: "headlines",
+              DESCRIPTION: "descriptions",
+              LONG_HEADLINE: "longHeadline",
+              BUSINESS_NAME: "businessName",
+            } as Record<string, string>
+          )[item.field] ?? "assets";
+        ctx.addIssue({
+          code: "custom",
+          path: ["ad", target],
+          message: item.message,
+        });
+      }
+    }
   });
-export const googleChangeSchema = z.union([
+export const googleChangeSchema = z.discriminatedUnion("kind", [
   googleCampaignCreateSchema,
   z.object({
     kind: z.literal("campaign_update"),
@@ -330,3 +347,43 @@ export const googleChangeSchema = z.union([
 export type GoogleChange = z.infer<typeof googleChangeSchema>;
 export type GoogleCampaignCreate = z.infer<typeof googleCampaignCreateSchema>;
 export type GoogleAdContent = z.infer<typeof googleAdContentSchema>;
+
+// Official requirements: https://developers.google.com/google-ads/api/performance-max/asset-requirements
+// Checked 2026-10-25. Existing groups are assessed after additions AND removals.
+export const pmaxAssetLimits: Record<
+  string,
+  { label: string; min: number; max: number }
+> = {
+  HEADLINE: { label: "headlines", min: 3, max: 15 },
+  LONG_HEADLINE: { label: "long headlines", min: 1, max: 5 },
+  DESCRIPTION: { label: "descriptions", min: 2, max: 5 },
+  MARKETING_IMAGE: {
+    label: "landscape images (at least 600 × 314)",
+    min: 1,
+    max: 20,
+  },
+  SQUARE_MARKETING_IMAGE: {
+    label: "square images (at least 300 × 300)",
+    min: 1,
+    max: 20,
+  },
+  LOGO: { label: "square logos (at least 128 × 128)", min: 1, max: 5 },
+  BUSINESS_NAME: { label: "business name", min: 1, max: 1 },
+};
+export function pmaxMissingAssets(
+  fields: string[],
+  brandGuidelinesEnabled = false
+) {
+  return Object.entries(pmaxAssetLimits).flatMap(([field, spec]) => {
+    if (brandGuidelinesEnabled && ["LOGO", "BUSINESS_NAME"].includes(field))
+      return [];
+    const count = fields.filter(f => f === field).length;
+    const message =
+      count < spec.min
+        ? `Add ${spec.min - count} more ${spec.label} (${count}/${spec.min} required).`
+        : count > spec.max
+          ? `Remove ${count - spec.max} ${spec.label} (maximum ${spec.max}).`
+          : null;
+    return message ? [{ field, message }] : [];
+  });
+}

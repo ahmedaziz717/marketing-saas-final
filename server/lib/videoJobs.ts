@@ -367,6 +367,13 @@ export async function validateVideoReferences(
           "A product reference changed. Prepare a new draft with the current product images."
         );
       if (
+        ref.categoryFingerprint &&
+        ref.categoryFingerprint !== current.reference.categoryFingerprint
+      )
+        throw new Error(
+          "Product category guidance changed. Review the current mappings and prepare a new draft."
+        );
+      if (
         ref.catalogFingerprint &&
         current.reference.catalogFingerprint !== ref.catalogFingerprint
       )

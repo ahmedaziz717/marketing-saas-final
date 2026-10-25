@@ -20,11 +20,15 @@ export function personalizedBrandDefault(
   if (!definition.editable || promptGroup(definition.id) === "technical")
     throw new Error("Only user-facing creative defaults can be personalized.");
   const direction =
-    promptGroup(definition.id) === "visual"
+    promptGroup(definition.id) === "visual" ||
+    definition.id === "creative.image"
       ? profile.visual
-      : ["creative.copy", "copy.asset", "publishing.copy"].includes(
-            definition.id
-          )
+      : [
+            "creative.copy",
+            "copy.asset",
+            "publishing.copy",
+            "google.pmax.copy",
+          ].includes(definition.id)
         ? profile.copy
         : profile.general;
   const value = `${definition.baseline}\n\nBrand Kit: ${brandName}\n${direction}\nUse the current Brand Kit for up-to-date facts, required claims and restrictions; these instructions do not authorize invented claims.`;

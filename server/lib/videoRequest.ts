@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import { applicationPromptForRun, visualDirectionDefaults } from "./promptRegistry";
+import {
+  applicationPromptForRun,
+  visualDirectionDefaults,
+} from "./promptRegistry";
 import {
   type VideoSetup,
   type VideoReference,
@@ -21,7 +24,7 @@ export function videoCatalogContext(
         : []
     );
   return products.length
-    ? `${productFactsDirection}\nSelected catalog products: ${JSON.stringify(products)}`
+    ? `${productFactsDirection}\nCategory handling: ${setup.categoryHandling ?? "require_mapping"}.\nSelected catalog products: ${JSON.stringify(products)}`
     : "";
 }
 
@@ -64,7 +67,11 @@ export async function prepareVideoRequest(
     {
       ...(await visualDirectionDefaults(organizationId, setup.direction)),
       "video.direction": (
-        await applicationPromptForRun("video.direction", setup.defaultInstructions, organizationId)
+        await applicationPromptForRun(
+          "video.direction",
+          setup.defaultInstructions,
+          organizationId
+        )
       ).value,
     }
   );

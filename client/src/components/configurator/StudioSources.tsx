@@ -1,6 +1,9 @@
 import { catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "../CatalogGallery";
-import type { CatalogImageMedia, CatalogMediaGroupSummary } from "@shared/catalogMedia";
+import type {
+  CatalogImageMedia,
+  CatalogMediaGroupSummary,
+} from "@shared/catalogMedia";
 import { ProductPhotoGroups } from "../ProductPhotoGroups";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { useEffect, useState } from "react";
@@ -18,7 +21,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { PROMOTION_TYPES, type CreativeSetup } from "@shared/creativeBuilder";
+import {
+  PROMOTION_TYPES,
+  selectedProductImageIds,
+  creativeProductViewCount,
+  type CreativeSetup,
+} from "@shared/creativeBuilder";
 import { videoReferenceCount, type VideoSetup } from "@shared/videoCreation";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { generationModel, referenceCapacity } from "@shared/modelCatalog";
@@ -31,7 +39,12 @@ type Product = {
   name: string;
   recordType?: string;
   sku?: string | null;
-  images: Array<{ id: number; url: string; media?: CatalogImageMedia | null }>;
+  images: Array<{
+    id: number;
+    url: string;
+    isPrimary?: number | boolean;
+    media?: CatalogImageMedia | null;
+  }>;
   mediaGroups?: CatalogMediaGroupSummary[] | null;
 };
 export function StudioSources({
@@ -116,16 +129,21 @@ export function StudioSources({
   const sourceKeys = isImage ? (image.sourceAssetKeys ?? []) : video.imageKeys;
   const selectedItems = isImage
     ? [
-        ...image.products.map(p => ({
-          key: `product:${p.productId}`,
-          name:
-            products.find(i => i.id === p.productId)?.name ??
-            "Product unavailable",
-          url: products
-            .find(i => i.id === p.productId)
-            ?.images.find(i => i.id === p.imageId)?.url,
-          video: false,
-        })),
+        ...image.products.flatMap(p =>
+          (selectedProductImageIds(p).length
+            ? selectedProductImageIds(p)
+            : [null]
+          ).map(imageId => ({
+            key: `product:${p.productId}:${imageId ?? "service"}`,
+            name:
+              products.find(i => i.id === p.productId)?.name ??
+              "Product unavailable",
+            url: products
+              .find(i => i.id === p.productId)
+              ?.images.find(i => i.id === imageId)?.url,
+            video: false,
+          }))
+        ),
         ...sourceKeys.map(key => ({
           key,
           name: assets.find(a => a.key === key)?.name ?? "Image unavailable",
@@ -151,19 +169,64 @@ export function StudioSources({
           video: key === video.sourceVideoKey,
         };
       });
+  function toggleProductImage(productId: number, imageId: number) {
+    const current = image.products.find(p => p.productId === productId);
+    const ids = current
+      ? selectedProductImageIds(current).filter(
+          (id): id is number => id != null
+        )
+      : [];
+    const removing = ids.includes(imageId);
+    if (
+      !removing &&
+      (creativeProductViewCount(image) >= 12 ||
+        ids.length >= (image.productMode === "together" ? 1 : 4) ||
+        (!current &&
+          image.productMode === "together" &&
+          image.products.length >= 3))
+    )
+      return;
+    const next = removing
+      ? ids.filter(id => id !== imageId)
+      : [...ids, imageId];
+    updateImage({
+      promotionMode: "offerings",
+      products: !next.length
+        ? image.products.filter(p => p.productId !== productId)
+        : current
+          ? image.products.map(p =>
+              p.productId === productId
+                ? { ...p, imageId: next[0], imageIds: next }
+                : p
+            )
+          : [
+              ...image.products,
+              {
+                productId,
+                imageId: next[0],
+                imageIds: next,
+                featuredSpecKeys: [],
+                includePrice: false,
+              },
+            ],
+    });
+  }
   function remove(key: string) {
-    if (isImage)
-      key.startsWith("product:")
-        ? updateImage({
+    if (isImage) {
+      if (key.startsWith("product:")) {
+        const [, productId, imageId] = key.split(":");
+        if (imageId === "service")
+          updateImage({
             products: image.products.filter(
-              p => `product:${p.productId}` !== key
+              p => p.productId !== Number(productId)
             ),
-          })
-        : updateImage({ sourceAssetKeys: sourceKeys.filter(k => k !== key) });
-    else
-      key === video.sourceVideoKey
-        ? updateVideo({ sourceVideoKey: null })
-        : updateVideoSources(video.imageKeys.filter(k => k !== key));
+          });
+        else toggleProductImage(Number(productId), Number(imageId));
+      } else
+        updateImage({ sourceAssetKeys: sourceKeys.filter(k => k !== key) });
+    } else if (key === video.sourceVideoKey)
+      updateVideo({ sourceVideoKey: null });
+    else updateVideoSources(video.imageKeys.filter(k => k !== key));
   }
   function updateVideoSources(imageKeys: string[]) {
     const removed = video.imageKeys.filter(key => !imageKeys.includes(key));
@@ -375,17 +438,22 @@ export function StudioSources({
                 onChange={e => {
                   if (
                     e.target.value === "together" &&
-                    image.products.length > 3
+                    (image.products.length > 3 ||
+                      image.products.some(
+                        p => selectedProductImageIds(p).length > 1
+                      ))
                   )
                     return toast.info(
-                      "Choose up to three products to combine them."
+                      "Choose one view per product and up to three products to combine them."
                     );
                   updateImage({
                     productMode: e.target.value as "separate" | "together",
                   });
                 }}
               >
-                <option value="separate">One creative set per product</option>
+                <option value="separate">
+                  One creative set per selected view
+                </option>
                 <option value="together">Combine up to three products</option>
               </VisualSelect>
             </ChoiceField>
@@ -399,7 +467,15 @@ export function StudioSources({
                     .includes(search.toLowerCase())
                 )
                 .map(p => {
-                  const primary = p.images.find(photo => catalogDefaultImage(photo, p.mediaGroups));
+                  const primary =
+                    p.images.find(
+                      photo =>
+                        photo.isPrimary &&
+                        catalogDefaultImage(photo, p.mediaGroups)
+                    ) ??
+                    p.images.find(photo =>
+                      catalogDefaultImage(photo, p.mediaGroups)
+                    );
                   const selection = image.products.find(
                     i => i.productId === p.id
                   );
@@ -420,10 +496,13 @@ export function StudioSources({
                       contain
                       selected={!!selection}
                       disabled={
-                        (!primary && !selection && p.recordType !== "service") ||
+                        (!primary &&
+                          !selection &&
+                          p.recordType !== "service") ||
                         (!selection &&
-                          image.products.length >=
-                            (image.productMode === "together" ? 3 : 12))
+                          (image.productMode === "together"
+                            ? image.products.length >= 3
+                            : creativeProductViewCount(image) >= 12))
                       }
                       onSelect={() =>
                         updateImage({
@@ -441,13 +520,40 @@ export function StudioSources({
                               ],
                         })
                       }
-                    >
-                      <CatalogGallery name={p.name} images={p.images} groups={p.mediaGroups} selected={selection?.imageId}
-                        disabled={!selection && image.products.length >= (image.productMode === "together" ? 3 : 12)}
-                        onSelect={imageId => updateImage({ promotionMode: "offerings", products: selection
-                          ? image.products.map(s => s.productId === p.id ? { ...s, imageId } : s)
-                          : [...image.products, { productId: p.id, imageId, featuredSpecKeys: [], includePrice: false }] })} />
-                    </StudioCard>
+                      gallery={
+                        <>
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            {image.productMode === "together"
+                              ? "Choose one view per product."
+                              : "Choose up to four views per product, twelve total."}{" "}
+                            Preview without changing selection.
+                          </p>
+                          <CatalogGallery
+                            name={p.name}
+                            images={p.images}
+                            groups={p.mediaGroups}
+                            selectedIds={
+                              selection
+                                ? selectedProductImageIds(selection).filter(
+                                    (id): id is number => id != null
+                                  )
+                                : []
+                            }
+                            disabled={
+                              creativeProductViewCount(image) >= 12 ||
+                              (selection
+                                ? selectedProductImageIds(selection).length >=
+                                  (image.productMode === "together" ? 1 : 4)
+                                : image.productMode === "together" &&
+                                  image.products.length >= 3)
+                            }
+                            onSelect={imageId =>
+                              toggleProductImage(p.id, imageId)
+                            }
+                          />
+                        </>
+                      }
+                    />
                   );
                 })
             ) : (

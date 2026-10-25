@@ -66,6 +66,16 @@ beforeEach(() => {
 const caller = () =>
   creativeBuilderRouter.createCaller({ user: { id: 4 } } as any);
 
+it("passes explicit neutral category handling to copy generation without changing saved copy", () => {
+  const input = { ...setup(), categoryHandling: "neutral" as const };
+  const before = JSON.stringify(input);
+  const messages = buildCreativeCopyMessages(input, brand, []);
+  expect(JSON.parse(messages[1].content as string).categoryHandling).toBe(
+    "neutral"
+  );
+  expect(JSON.stringify(input)).toBe(before);
+});
+
 it.each([
   "black-friday",
   "black-friday-minimal",

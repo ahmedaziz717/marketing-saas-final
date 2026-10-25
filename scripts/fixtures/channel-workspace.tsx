@@ -1,4 +1,8 @@
 import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
+import { CatalogCategoryMapping } from "../../client/src/components/CatalogCategoryMapping";
+import { ProductCategoryContext } from "../../client/src/components/ProductCategoryContext";
+import { GenerationBrandContext } from "../../client/src/components/BrandPromptContext";
+import { TaskPromptField } from "../../client/src/components/TaskPromptField";
 import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGroups";
 import OptimizationIntelligencePage from "../../client/src/pages/OptimizationIntelligencePage";
 import OnboardingPage from "../../client/src/pages/OnboardingPage";
@@ -293,6 +297,12 @@ const fixtureModels = [
   generationModels.find(m => m.id === "openai:gpt-image-2.5-flare")!,
 ];
 function respond(path: string, input: any) {
+  if (path === "catalogCategories.read") return {
+    revision: 1,
+    settings: { categories: [{ id: "10000000-0000-4000-8000-000000000001", name: "Home lighting", audience: "People furnishing their home", useCases: "Reading and focused desk work", vocabulary: "Warm, practical, specific", cta: "Explore the collection", avoid: "Unverified health benefits" }], mappings: [{ sourceId: 1, sourceCategory: "DESK-LIGHT", categoryId: "10000000-0000-4000-8000-000000000001" }] },
+    sources: [{ id: 1, name: "Product feed" }],
+    codes: [{ sourceId: 1, category: "DESK-LIGHT", count: 12, overrides: 2 }, { sourceId: 1, category: "NEW-CODE", count: 3, overrides: 0 }],
+  };
   if (path === "prompts.list")
     return PROMPT_REGISTRY.map(p => ({
       ...p,
@@ -1434,8 +1444,14 @@ function CatalogGalleryFixture() {
   choices.push({ ...choices[0], key: "product_image:99", url: choices[0].url.replace("Emerald%20angle%200", "Optional%20white%20chassis"), media: { width: 1600, height: 1200, hasAlpha: true, candidates: [], selectedSourceUrl: "", unavailableCandidates: 0, references: [{ groupId: "white", imageId: "front", position: 0 }] } });
   return <div className="p-5"><h1>Product catalog</h1><ProductPhotoGroups choices={choices} selected={selected} limit={3} onToggle={key => setSelected(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key])} /></div>;
 }
+function AuthoringContextFixture() {
+  const [handling, setHandling] = useState<"require_mapping" | "neutral">("require_mapping");
+  const [instructions, setInstructions] = useState<string>();
+  return <div className="mx-auto max-w-4xl space-y-4 p-4"><h1 className="text-xl font-semibold">Category mapping and authoring context</h1><p>Local fixture only. No production saves or AI calls.</p><CatalogCategoryMapping organizationId={1} canEdit /><ProductCategoryContext products={[{ id: 1, name: "New product awaiting category mapping" }]} handling={handling} onChange={setHandling} /><GenerationBrandContext organizationId={1} /><TaskPromptField promptId="creative.image" label="Active image-generation instructions" value={instructions} onChange={setInstructions} /></div>;
+}
 function RoutedPage() {
   const [path] = useLocation();
+  if (which === "authoring-context") return <AuthoringContextFixture />;
   if (which === "catalog-pilot") return <DashboardLayout><h1>Catalog gallery pilot</h1><CatalogGalleryPilot organizationId={1} sourceId={1} onQueued={async () => {}} /></DashboardLayout>;
   if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
   if (which === "onboarding")
@@ -2298,13 +2314,20 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       layout();
     }
     if (which === "catalog-gallery") {
-      await click("Use photo 2 for Emerald collection");
-      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Alternate angle selection is retained within its product");
       check(document.querySelectorAll('section[aria-label^="Photos for"]').length === 2, "One group per product rather than duplicate tiles");
+      await fillControl('select[aria-label="Gallery for Emerald collection"]', "base");
       check(document.body.textContent?.includes("source reports 8 images"), "Missing URLs show an incomplete gallery, not fabricated angles");
+      await fillControl('select[aria-label="Gallery for Emerald collection"]', "legacy");
+      const selectedPhoto = () => document.querySelector<HTMLInputElement>('input[aria-label="Use 2 for Emerald collection - Product photos"]');
+      selectedPhoto()!.click();
+      await pause();
+      check(selectedPhoto()?.checked, "Alternate angle selection is retained within its product");
+      await fillControl('select[aria-label="Gallery for Emerald collection"]', "white");
       check(document.body.textContent?.includes("not the exact configured system"), "Optional component views are clearly distinguished");
-      await click("Use photo 1 for Emerald collection \u2014 White chassis");
-      check(button("Use photo 2 for Emerald collection")?.getAttribute("aria-pressed") === "true", "Choosing an optional view preserves earlier selection");
+      document.querySelector<HTMLInputElement>('input[aria-label="Use 3 for Emerald collection - White chassis"]')!.click();
+      await pause();
+      await fillControl('select[aria-label="Gallery for Emerald collection"]', "legacy");
+      check(selectedPhoto()?.checked, "Choosing an optional view preserves earlier selection");
       layout();
     }
     if (which === "creative-people") {

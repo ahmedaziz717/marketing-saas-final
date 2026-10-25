@@ -9,6 +9,10 @@ const f = vi.hoisted(() => ({
   read: vi.fn(),
   mutate: vi.fn(),
   videoUpload: vi.fn(),
+  generate: vi.fn(),
+}));
+vi.mock("./lib/googlePmaxAi", () => ({
+  generatePmaxCopy: (...args: unknown[]) => f.generate(...args),
 }));
 vi.mock("./db", () => ({ getDb: async () => f.db }));
 vi.mock("./lib/googleAdsApi", async original => ({
@@ -36,7 +40,9 @@ import {
   organizations,
   organizationMemberships,
   activityEvents,
+  products,
 } from "../drizzle/schema";
+import { googleCampaignsRouter } from "./routers/googleCampaigns";
 import {
   channelConnections,
   googleCampaignDrafts,
@@ -182,6 +188,7 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 beforeEach(() => {
+  f.generate.mockReset().mockResolvedValue({ headlines: ["Draft"] });
   f.read.mockReset().mockResolvedValue([snapshot()]);
   f.mutate
     .mockReset()
@@ -194,6 +201,74 @@ beforeEach(() => {
           ),
       requestId: "test-request",
     }));
+});
+
+it("scopes PMax AI products server-side and requires explicit neutral category handling", async () => {
+  await f.db
+    .insert(brandKits)
+    .values({
+      organizationId: org,
+      name: "Test brand",
+      colors: [],
+      fonts: [],
+      updatedByUserId: owner,
+      updatedAtMs: 1,
+    })
+    .onConflictDoNothing();
+  const rows = await f.db
+    .insert(products)
+    .values(
+      [
+        { organizationId: org, name: "Approved product", status: "approved" },
+        { organizationId: org2, name: "Foreign product", status: "approved" },
+        { organizationId: org, name: "Pending product", status: "pending" },
+      ].map(p => ({
+        ...p,
+        productUrl: "https://example.test/product",
+        dedupeKey: randomUUID(),
+        specifications: {},
+        provenance: {},
+        createdAtMs: 1,
+        updatedAtMs: 1,
+      }))
+    )
+    .returning();
+  const caller = googleCampaignsRouter.createCaller({
+    user: { id: owner },
+  } as any);
+  for (const productId of [rows[1].id, rows[2].id, 999999]) {
+    await expect(
+      caller.draftPmaxCopy({
+        organizationId: org,
+        productIds: [productId],
+        neutralCategories: true,
+      })
+    ).rejects.toThrow("approved products from this workspace");
+  }
+  await expect(
+    caller.draftPmaxCopy({ organizationId: org, productIds: [rows[0].id] })
+  ).rejects.toThrow("mixed or unmapped");
+  expect(f.generate).not.toHaveBeenCalled();
+  await caller.draftPmaxCopy({
+    organizationId: org,
+    productIds: [rows[0].id],
+    neutralCategories: true,
+    defaultInstructions: "Per-run instructions",
+  });
+  expect(f.generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      products: [
+        expect.objectContaining({
+          id: rows[0].id,
+          marketingCategory: expect.objectContaining({ status: "unmapped" }),
+          includePrice: false,
+        }),
+      ],
+    }),
+    "Per-run instructions"
+  );
+  expect(f.mutate).not.toHaveBeenCalled();
+  expect(f.videoUpload).not.toHaveBeenCalled();
 });
 async function reviewed(change = search()) {
   const draft = await saveGoogleDraft(owner, {
@@ -308,6 +383,106 @@ it("saves and validates without delivery, then publishes exactly once and record
     "google_campaign.publish_approved"
   );
   expect(JSON.stringify(events)).not.toContain("private-access");
+});
+it("validates existing PMax group changes without unsortable GAQL and keeps stable review identity", async () => {
+  let reverse = false;
+  f.read.mockImplementation(async (_token, _customer, query: string) => {
+    expect(query).not.toMatch(/ORDER BY asset_group_asset\.resource_name/);
+    if (query.includes("FROM asset_group_asset")) {
+      const links = [
+        "HEADLINE",
+        "HEADLINE",
+        "HEADLINE",
+        "HEADLINE",
+        "LONG_HEADLINE",
+        "DESCRIPTION",
+        "DESCRIPTION",
+        "MARKETING_IMAGE",
+        "SQUARE_MARKETING_IMAGE",
+        "LOGO",
+        "BUSINESS_NAME",
+      ].map((fieldType, index) => {
+        const id = String(42 + index);
+        return {
+          asset: { id },
+          assetGroupAsset: {
+            resourceName: `customers/2222222222/assetGroupAssets/22~${id}~${fieldType}`,
+            fieldType,
+          },
+        };
+      });
+      return reverse ? links.reverse() : links;
+    }
+    if (query.includes("FROM asset_group "))
+      return [{ assetGroup: { id: "22", name: "Group", status: "ENABLED" } }];
+    const value = snapshot();
+    value.campaign.advertisingChannelType = "PERFORMANCE_MAX";
+    return [value];
+  });
+  const validated = await reviewed({
+    kind: "asset_group_assets",
+    campaignId: "11",
+    assetGroupId: "22",
+    add: [],
+    remove: [{ assetId: "42", field: "HEADLINE" }],
+  });
+  reverse = true;
+  const again = await validateGoogleDraft(owner, {
+    organizationId: org,
+    id: validated.id,
+    revision: validated.revision,
+  });
+  expect(again.reviewHash).toBe(validated.reviewHash);
+  const tooFew = await saveGoogleDraft(owner, {
+    organizationId: org,
+    connectionId,
+    change: {
+      kind: "asset_group_assets",
+      campaignId: "11",
+      assetGroupId: "22",
+      add: [],
+      remove: [
+        { assetId: "42", field: "HEADLINE" },
+        { assetId: "43", field: "HEADLINE" },
+      ],
+    },
+  });
+  await expect(
+    validateGoogleDraft(owner, {
+      organizationId: org,
+      id: tooFew.id,
+      revision: tooFew.revision,
+    })
+  ).rejects.toThrow("Add 1 more headlines (2/3 required)");
+  const emptyGroup = await saveGoogleDraft(owner, {
+    organizationId: org,
+    connectionId,
+    change: {
+      kind: "asset_group_create",
+      campaignId: "11",
+      name: "New group",
+      finalUrl: "https://example.test",
+      assets: [
+        { field: "HEADLINE", source: { kind: "text", text: "One headline" } },
+      ],
+    },
+  });
+  await expect(
+    validateGoogleDraft(owner, {
+      organizationId: org,
+      id: emptyGroup.id,
+      revision: emptyGroup.revision,
+    })
+  ).rejects.toThrow("Add 2 more headlines (1/3 required)");
+  expect(f.mutate.mock.calls).toHaveLength(2);
+  expect(f.mutate.mock.calls.every(call => call[3] === true)).toBe(true);
+  expect(f.mutate.mock.calls[0][2]).toEqual([
+    {
+      assetGroupAssetOperation: {
+        remove: "customers/2222222222/assetGroupAssets/22~42~HEADLINE",
+      },
+    },
+  ]);
 });
 it("rejects foreign workspace drafts, foreign accounts and creator publishing", async () => {
   const draft = await reviewed();

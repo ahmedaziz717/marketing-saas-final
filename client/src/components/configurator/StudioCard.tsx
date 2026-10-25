@@ -14,6 +14,7 @@ export function StudioCard({
   badge,
   children,
   contain = false,
+  gallery,
   icon: Icon,
 }: {
   title: string;
@@ -26,10 +27,13 @@ export function StudioCard({
   badge?: string;
   children?: ReactNode;
   contain?: boolean;
+  /** A gallery owns the preview and its controls, outside the selection button. */
+  gallery?: ReactNode;
   icon?: LucideIcon;
 }) {
   return (
     <article
+      style={{ minWidth: 0, alignSelf: "start" }}
       className={`cfg-card${selected ? " is-selected" : ""}${disabled ? " is-unavailable" : ""}`}
     >
       <button
@@ -40,26 +44,34 @@ export function StudioCard({
         disabled={disabled}
         onClick={onSelect}
       >
-        <div className={`cfg-card-art${contain ? " cfg-contain" : ""}`}>
-          {media ??
-            (image ? (
-              <img src={image} alt={title} loading="lazy" />
-            ) : (
-              <ChoiceArt name={title} />
-            ))}
-          {badge && <span className="cfg-badge">{badge}</span>}
-          <span className="cfg-selected-mark">
-            {selected ? <Check size={15} /> : "+"}
-          </span>
-        </div>
+        {!gallery && (
+          <div className={`cfg-card-art${contain ? " cfg-contain" : ""}`}>
+            {media ??
+              (image ? (
+                <img src={image} alt={title} loading="lazy" />
+              ) : (
+                <ChoiceArt name={title} />
+              ))}
+            {badge && <span className="cfg-badge">{badge}</span>}
+            <span className="cfg-selected-mark">
+              {selected ? <Check size={15} /> : "+"}
+            </span>
+          </div>
+        )}
         <div className="cfg-card-copy">
           <h3>
             {Icon && <Icon size={16} aria-hidden="true" />}
             {title}
           </h3>
           {description && <p>{description}</p>}
+          {gallery && (
+            <span className="text-xs">
+              {selected ? "Selected - Remove product" : "Select product"}
+            </span>
+          )}
         </div>
       </button>
+      {gallery && <div className="min-w-0 p-3 pt-0">{gallery}</div>}
       {children}
     </article>
   );

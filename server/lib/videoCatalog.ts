@@ -1,4 +1,5 @@
 import { catalogImageEligible } from "../../shared/catalogMedia";
+import { attachMarketingCategories } from "./catalogCategories";
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { productImages, products } from "../../drizzle/schema";
@@ -42,7 +43,21 @@ function productFacts(row: Row) {
     serviceDetails: p.serviceDetails,
     productUrl: p.productUrl,
     updatedAtMs: p.updatedAtMs,
-    ...(row.image.media?.references.length ? { visualSource: row.image.media.references.map(ref => p.mediaGroups?.find(group => group.id === ref.groupId)).filter(Boolean).map(group => ({ name: group!.name, role: group!.role, note: group!.role === "optional_component" ? "Optional component appearance, not the exact configured SKU or a price/configuration change." : "Source-provided gallery." })) } : {}),
+    ...(row.image.media?.references.length
+      ? {
+          visualSource: row.image.media.references
+            .map(ref => p.mediaGroups?.find(group => group.id === ref.groupId))
+            .filter(Boolean)
+            .map(group => ({
+              name: group!.name,
+              role: group!.role,
+              note:
+                group!.role === "optional_component"
+                  ? "Optional component appearance, not the exact configured SKU or a price/configuration change."
+                  : "Source-provided gallery.",
+            })),
+        }
+      : {}),
   };
 }
 function choice(row: Row): VideoImageChoice {
@@ -51,6 +66,7 @@ function choice(row: Row): VideoImageChoice {
     name: row.product.name,
     url: row.image.url,
     origin: "catalog",
+    isPrimary: !!row.image.isPrimary,
     media: row.image.media,
     mediaGroups: row.product.mediaGroups,
     width: row.image.media?.width,
@@ -126,8 +142,24 @@ export async function listVideoCatalogImages(
       desc(productImages.isPrimary),
       productImages.id
     );
+  const enriched = await attachMarketingCategories(
+    db,
+    organizationId,
+    rows.map(row => row.product)
+  );
   return {
-    items: rows.map(choice),
+    items: rows.map((row, index) => {
+      const item = choice(row);
+      return {
+        ...item,
+        product: item.product
+          ? {
+              ...item.product,
+              marketingCategory: enriched[index].marketingCategory,
+            }
+          : undefined,
+      };
+    }),
     nextOffset:
       !input.selectedOnly && page.length > 60 ? input.offset + 60 : null,
   };
@@ -148,12 +180,19 @@ export async function readVideoCatalogImage(
         )
         .limit(1)
     : [];
-  if (!row || !row.image.storageKey || !catalogImageEligible(row.image, row.product.mediaGroups))
+  if (
+    !row ||
+    !row.image.storageKey ||
+    !catalogImageEligible(row.image, row.product.mediaGroups)
+  )
     throw new TRPCError({
       code: "NOT_FOUND",
       message:
         "This product image is unavailable. Choose an image from an approved product in this workspace.",
     });
+  const marketingCategory = (
+    await attachMarketingCategories(db, organizationId, [row.product])
+  )[0].marketingCategory;
   const reference: VideoReference = {
     key,
     storageKey: row.image.storageKey,
@@ -168,10 +207,11 @@ export async function readVideoCatalogImage(
       description: row.product.description,
     }),
     catalogFingerprint: stableHash(productFacts(row)),
+    categoryFingerprint: stableHash(marketingCategory),
   };
   return {
     reference,
     choice: choice(row),
-    facts: productFacts(row),
+    facts: { ...productFacts(row), marketingCategory },
   };
 }

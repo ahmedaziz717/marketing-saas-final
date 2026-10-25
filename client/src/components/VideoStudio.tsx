@@ -1,4 +1,5 @@
 import { TaskPromptField } from "./TaskPromptField";
+import { ProductCategoryContext } from "./ProductCategoryContext";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ActionCredits } from "./ActionCredits";
 import { ModelPicker, ModelSettings } from "./ModelPicker";
@@ -382,6 +383,19 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const maxImages = setup.mode === "motion" ? 8 : 9;
   return (
     <section aria-labelledby="video-studio-title" className="min-w-0">
+      <ProductCategoryContext
+        products={Array.from(
+          new Map(
+            (catalogSelection.data?.items ?? [])
+              .filter(
+                item => setup.imageKeys.includes(item.key) && item.product
+              )
+              .map(item => [item.product!.id, item.product!])
+          ).values()
+        )}
+        handling={setup.categoryHandling}
+        onChange={categoryHandling => update({ categoryHandling })}
+      />
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="video-studio-title" className="text-2xl font-semibold">
@@ -714,7 +728,14 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                     Add an image to have AI draft the scene and camera movement.
                   </p>
                 )}
-                <TaskPromptField promptId="video.direction" label="Video generation instructions" value={setup.defaultInstructions} onChange={defaultInstructions => update({ defaultInstructions })} />
+                <TaskPromptField
+                  promptId="video.direction"
+                  label="Video generation instructions"
+                  value={setup.defaultInstructions}
+                  onChange={defaultInstructions =>
+                    update({ defaultInstructions })
+                  }
+                />
                 <label htmlFor="video-prompt" className="text-sm font-medium">
                   Describe your video{" "}
                   {setup.mode !== "motion" && (

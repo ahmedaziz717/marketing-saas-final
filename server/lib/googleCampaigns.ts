@@ -1,3 +1,4 @@
+import { pmaxMissingAssets } from "../../shared/googleCampaigns";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -231,7 +232,14 @@ async function prepare(
       if (!groups.length)
         fail("Asset group not found in the selected campaign.");
       const links = await read(
-        `SELECT asset_group_asset.resource_name, asset_group_asset.field_type, asset.id FROM asset_group_asset WHERE campaign.id = ${change.campaignId} AND asset_group.id = ${change.assetGroupId} AND asset_group_asset.status != 'REMOVED' ORDER BY asset_group_asset.resource_name`
+        `SELECT asset_group_asset.resource_name, asset_group_asset.field_type, asset.id FROM asset_group_asset WHERE campaign.id = ${change.campaignId} AND asset_group.id = ${change.assetGroupId} AND asset_group_asset.status != 'REMOVED'`
+      );
+      // Google marks this resource name as non-sortable in GAQL. Canonicalize
+      // locally so equivalent provider ordering cannot invalidate reviewed hashes.
+      links.sort((a, b) =>
+        String(a.assetGroupAsset.resourceName).localeCompare(
+          String(b.assetGroupAsset.resourceName)
+        )
       );
       for (const remove of change.kind === "asset_group_assets"
         ? change.remove
@@ -247,8 +255,46 @@ async function prepare(
             "An asset association changed. Reload before replacing it.",
             "CONFLICT"
           );
+      if (change.kind === "asset_group_assets") {
+        const retained = links.filter(
+          r =>
+            !change.remove.some(
+              v =>
+                v.assetId === String(r.asset.id) &&
+                v.field === r.assetGroupAsset.fieldType
+            )
+        );
+        const fields = [
+          ...retained.map(r => r.assetGroupAsset.fieldType),
+          ...change.add
+            .filter(a => {
+              const source = a.source;
+              return (
+                source.kind !== "existing" ||
+                !retained.some(
+                  r =>
+                    String(r.asset.id) === source.id &&
+                    r.assetGroupAsset.fieldType === a.field
+                )
+              );
+            })
+            .map(a => a.field),
+        ];
+        const missing = pmaxMissingAssets(
+          fields,
+          snapshot?.campaign.brandGuidelinesEnabled
+        );
+        if (missing.length) fail(missing.map(i => i.message).join(" "));
+      }
       evidence.push(groups, links);
     }
+  }
+  if (change.kind === "asset_group_create") {
+    const missing = pmaxMissingAssets(
+      change.assets.map(a => a.field),
+      snapshot?.campaign.brandGuidelinesEnabled
+    );
+    if (missing.length) fail(missing.map(i => i.message).join(" "));
   }
   const assets: PreparedGoogleAsset[] = [];
   let uploadBytes = 0;
