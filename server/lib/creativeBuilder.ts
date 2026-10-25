@@ -10,6 +10,7 @@ import {
   isReferenceCreative,
   promotionContext,
   selectedPeople,
+  selectedProductImageIds,
 } from "../../shared/creativeBuilder";
 import { TRPCError } from "@trpc/server";
 import type {
@@ -41,7 +42,8 @@ export function resolveBuilderInputs(
   images: BuilderProductImage[],
   logos: BuilderBrandAsset[]
 ) {
-  const resolved = setup.products.map(selection => {
+  const selections = setup.products.flatMap(product => selectedProductImageIds(product).map(imageId => ({ ...product, imageId })));
+  const resolved = selections.map(selection => {
     const product = catalog.find(
       p => p.id === selection.productId && p.organizationId === organizationId
     );

@@ -35,7 +35,7 @@ const definition = (
   editable: true,
   description,
   maxLength:
-    id === "creative.base"
+    id === "google.pmax.copy" ? 6000 : id === "creative.base"
       ? 8000
       : id.startsWith("creative.theme.")
         ? 4000
@@ -83,6 +83,12 @@ export const PROMPT_REGISTRY: readonly PromptDefinition[] = [
     "Creative copy writer",
     "Creative Studio",
     "Write one fresh set of advertising copy for the selected subject. Use the selected campaign occasion, audience and brand voice. Keep the subject specific and use a suitable call to action."
+  ),
+  definition(
+    "google.pmax.copy",
+    "Performance Max copy writer",
+    "Google Ads",
+    "Draft Google Performance Max headlines, long headlines and descriptions from supplied brand, product facts and confirmed category guidance. Use specific truthful benefits and varied natural copy. Never invent offers, specifications or claims. Return draft suggestions for human review."
   ),
   definition(
     "creative.image",

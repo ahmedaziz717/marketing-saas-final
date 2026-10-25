@@ -3,6 +3,7 @@ export type PromptGroup = "creative" | "visual" | "technical";
 const essentials = new Set([
   "creative.base",
   "creative.copy",
+  "google.pmax.copy",
   "video.direction",
   "publishing.copy",
   "copy.asset",

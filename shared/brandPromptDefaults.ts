@@ -22,7 +22,7 @@ export function personalizedBrandDefault(
   const direction =
     promptGroup(definition.id) === "visual"
       ? profile.visual
-      : ["creative.copy", "copy.asset", "publishing.copy"].includes(
+      : ["creative.copy", "copy.asset", "publishing.copy", "google.pmax.copy"].includes(
             definition.id
           )
         ? profile.copy
