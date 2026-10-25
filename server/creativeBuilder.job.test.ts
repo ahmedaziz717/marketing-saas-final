@@ -509,9 +509,9 @@ it("does not spend credits or return an AI redraw when a queued product image is
   );
 });
 
-it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolution: false }, { matched: true, lowResolution: true }])(
+it.each([{ matched: false, lowResolution: false, stretch: false }, { matched: true, lowResolution: false, stretch: false }, { matched: true, lowResolution: true, stretch: false }, { matched: true, lowResolution: true, stretch: true }])(
   "finishes every size with original artwork and immutable editor base (automatic product match/resolution: %j)",
-  async ({ matched, lowResolution }) => {
+  async ({ matched, lowResolution, stretch }) => {
     const applied = matched && !lowResolution;
     const { db, args, written } = fixture();
     args.setup.preserveLogo = true;
@@ -575,7 +575,7 @@ it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolutio
                     top: 400,
                     width: 300,
                     height: Math.round(
-                      ((300 * size.width) / size.height) * 0.6
+                      ((300 * size.width) / size.height) * (stretch ? 0.65 : 0.6)
                     ),
                     confidence: 0.98,
                     sameAngle: true,
@@ -618,6 +618,12 @@ it.each([{ matched: false, lowResolution: false }, { matched: true, lowResolutio
         automaticFailure: applied ? undefined : lowResolution ? "source_resolution" : "alignment_unavailable",
       });
       if (matched && lowResolution) {
+        // Preserve the measured independent height across resolution failure and recovery.
+        if (stretch) {
+          const expectedHeight = Math.round(Math.round(300 * variant.renderMetadata.width / variant.renderMetadata.height * 0.65) * variant.renderMetadata.height / 1000);
+          expect(preservation.layers[0].height).toBe(expectedHeight);
+          expect(preservation.layers[0].height).not.toBe(Math.round(preservation.layers[0].width * 0.6));
+        }
         // Keep the confident model match, not the generic editor fallback box.
         expect(Math.abs(preservation.layers[0].left - variant.renderMetadata.width * 0.4)).toBeLessThanOrEqual(1);
         expect(Math.abs(preservation.layers[0].width - variant.renderMetadata.width * 0.3)).toBeLessThanOrEqual(1);
