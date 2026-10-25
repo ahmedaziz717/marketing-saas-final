@@ -27,6 +27,25 @@ export const productOverlayReplacementsSchema = z
 export type ProductOverlayReplacement = z.infer<
   typeof productOverlayReplacementsSchema
 >[number];
+export type ProductOverlayFailureDiagnostic = {
+  stage: "source_read" | "alignment" | "render" | "storage";
+  reason:
+    | "low_confidence"
+    | "camera_angle"
+    | "aspect_mismatch"
+    | "invalid_geometry"
+    | "invalid_response"
+    | "provider_unavailable"
+    | "alignment_failed"
+    | "source_resolution"
+    | "render_failed"
+    | "source_read_failed"
+    | "storage_failed";
+  layerIndex?: number;
+  confidence?: number;
+  sameAngle?: boolean;
+  aspectDifference?: number;
+};
 export type ProductOverlayMetadata = {
   method: "editable_original_v3";
   designStorageKey: string;
@@ -34,6 +53,7 @@ export type ProductOverlayMetadata = {
   applied: boolean;
   alignment?: "automatic" | "manual" | "needs_adjustment";
   automaticFailure?: "source_resolution" | "alignment_unavailable";
+  automaticFailureDiagnostic?: ProductOverlayFailureDiagnostic;
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;
@@ -80,6 +100,7 @@ export function manuallyAppliedProductOverlay(
     applied: true,
     alignment: "manual",
     automaticFailure: undefined,
+    automaticFailureDiagnostic: undefined,
     layers,
   };
 }

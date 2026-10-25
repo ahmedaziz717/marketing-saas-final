@@ -57,6 +57,28 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
+it("keeps failed alignment visible and editable on open/reset without paid calls", () => {
+  calls.applied = false;
+  render(
+    <ProductOverlayEditor organizationId={3} variantId={90} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  expect(screen.getByAltText("Original product 1")).toBeTruthy();
+  fireEvent.click(screen.getByLabelText("Compare with original design"));
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.getByAltText("Original product 1")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("left in pixels"), {
+    target: { value: "150" },
+  });
+  expect(screen.getByAltText("Original product 1").style.left).toBe("15%");
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.getByAltText("Original product 1").style.left).toBe("10%");
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(calls.save).not.toHaveBeenCalled();
+});
 afterEach(cleanup);
 beforeEach(() => {
   calls.sourceWidth = 600;
@@ -202,7 +224,9 @@ it("explains a recorded resolution failure without starting another paid alignme
   fireEvent.click(
     screen.getByRole("button", { name: "Adjust original product" })
   );
-  expect(screen.getByText(/saved cutout is too small/)).toBeTruthy();
+  expect(
+    screen.getByText(/sharper source or accepted enlargement/)
+  ).toBeTruthy();
   expect(calls.align).not.toHaveBeenCalled();
   expect(calls.save).not.toHaveBeenCalled();
 });
@@ -244,7 +268,7 @@ it("separates unsaved alignment from saved state and resets without spending cre
   expect(
     (screen.getByLabelText("Compare with original design") as HTMLInputElement)
       .checked
-  ).toBe(true);
+  ).toBe(false);
   expect(
     (
       screen.getByLabelText(

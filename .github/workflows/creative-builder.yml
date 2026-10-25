@@ -39,6 +39,16 @@ jobs:
         run: node scripts/check-theme-persistence.mjs
       - name: Check Studio draft navigation and reset in Chrome
         run: node scripts/check-studio-persistence.mjs
+      - name: Check product overlay recovery on desktop and mobile
+        run: node scripts/check-product-overlay.mjs
+      - name: Save product overlay regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-overlay
+          path: artifacts/product-overlay/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save Studio persistence screenshots
         if: always()
         uses: actions/upload-artifact@v4

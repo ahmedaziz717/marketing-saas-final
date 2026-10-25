@@ -2,6 +2,7 @@ import { productOverlayPreview } from "../lib/productOverlayPreview";
 import { readOverlaySources, catalogOverlaySources } from "../lib/productOverlaySources";
 import { productOverlayReplacementsSchema } from "../../shared/productOverlay";
 import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
+import type { ProductOverlayFailureDiagnostic } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
   findSafeLogoPlacement,
@@ -20,6 +21,7 @@ import {
 import {
   automaticProductOverlay,
   ProductOverlayResolutionError,
+  productOverlayFailureDiagnostic,
   renderProductOverlay,
   suggestProductPlacement,
 } from "../lib/productOverlay";
@@ -481,13 +483,18 @@ export async function runBuilderJob(
         );
         let productOverlayApplied = false;
         let automaticFailure: "source_resolution" | "alignment_unavailable" | undefined;
+        let automaticFailureDiagnostic: ProductOverlayFailureDiagnostic | undefined;
         if (cutouts.length) {
+          let overlayStage: ProductOverlayFailureDiagnostic["stage"] = "source_read";
           try {
+            const design = Buffer.from(await storageGetBase64(image.storageKey), "base64");
+            overlayStage = "alignment";
             const finished = await automaticProductOverlay(
-              Buffer.from(await storageGetBase64(image.storageKey), "base64"),
+              design,
               cutouts,
               format
             );
+            overlayStage = "storage";
             const stored = await storagePut(
               `org-${organizationId}/creatives/${jobId}/product-finish`,
               finished.png,
@@ -497,6 +504,7 @@ export async function runBuilderJob(
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
           } catch (error) {
+            automaticFailureDiagnostic = productOverlayFailureDiagnostic(error, overlayStage);
             automaticFailure = error instanceof ProductOverlayResolutionError
               ? "source_resolution"
               : "alignment_unavailable";
@@ -579,6 +587,7 @@ export async function runBuilderJob(
                     designUrl: overlayDesign.url,
                     applied: productOverlayApplied,
                     automaticFailure,
+                    automaticFailureDiagnostic,
                     alignment: productOverlayApplied
                       ? "automatic"
                       : "needs_adjustment",
@@ -897,6 +906,7 @@ export const creativeBuilderRouter = router({
         revision: asset.revision,
         applied: metadata.applied,
         automaticFailure: metadata.automaticFailure,
+        automaticFailureDiagnostic: metadata.automaticFailureDiagnostic,
         alignment: metadata.alignment,
         layers,
         replacementSources: (await catalogOverlaySources(db, input.organizationId, variant.renderMetadata!.productIds)).map(({storageKey: _storageKey, ...source}) => source),

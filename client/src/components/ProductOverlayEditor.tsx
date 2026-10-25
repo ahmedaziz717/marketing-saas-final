@@ -96,7 +96,7 @@ function OverlayControls({
     setSameView(false);
   };
   const [opacity, setOpacity] = useState(100);
-  const [original, setOriginal] = useState<boolean | null>(null);
+  const [original, setOriginal] = useState(false);
   const [error, setError] = useState("");
   const canvas = useRef<HTMLDivElement>(null);
   const drag = useRef<{
@@ -207,7 +207,7 @@ function OverlayControls({
           className="block h-full w-full"
           draggable={false}
         />
-        {!(original ?? !data.applied) &&
+        {!original &&
           layers.map((layer, i) => (
             <img
               key={i}
@@ -266,8 +266,8 @@ function OverlayControls({
             : data.applied
               ? "The original product is already placed. Adjust it only if needed."
               : data.automaticFailure === "source_resolution"
-                ? "Automatic placement was stopped because the saved cutout is too small for sharp output. Another alignment request cannot add image detail. The complete design is preserved."
-                : "This saved version has no applied original-product placement. The complete design is preserved. Opening this editor does not run alignment or spend credits."}
+                ? "Automatic placement needs a sharper source or accepted enlargement. The visible product layer is an unsaved preview: move or resize it to cover the generated product."
+                : "This saved version has no applied original-product placement. The visible product layer is an unsaved preview: move or resize it to cover the generated product. Opening this editor does not run alignment or spend credits."}
         </p>
         <p className="text-sm">
           {replacements.length ? "Preview cutout" : "Saved cutout"}:{" "}
@@ -497,7 +497,7 @@ function OverlayControls({
         <label className="flex gap-2 text-sm">
           <input
             type="checkbox"
-            checked={original ?? !data.applied}
+            checked={original}
             onChange={e => setOriginal(e.target.checked)}
           />
           Compare with original design
@@ -572,7 +572,7 @@ function OverlayControls({
             setNotice("");
             setError("");
             setAllowUpscale(false);
-            setOriginal(null);
+            setOriginal(false);
             setOpacity(100);
           }}
         >
