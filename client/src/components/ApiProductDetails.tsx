@@ -19,9 +19,11 @@ function ComponentImage({ url, name }: { url: string; name: string }) {
 export function ApiProductDetails({
   organizationId,
   productId,
+  representedCodes = [],
 }: {
   organizationId: number;
   productId: number;
+  representedCodes?: string[];
 }) {
   const details = trpc.catalogSources.productDetails.useMutation();
   return (
@@ -87,47 +89,59 @@ export function ApiProductDetails({
                 <p className="text-muted-foreground">No component selected</p>
               )}
               <p className="mt-3 font-medium">Optional upgrades</p>
-              {group.options.length ? (
+              {group.options.some(option =>
+                representedCodes.includes(option.code)
+              ) && (
+                <p className="my-2 text-xs text-muted-foreground">
+                  Represented options appear as separate catalog component cards
+                  above.
+                </p>
+              )}
+              {group.options.some(
+                option => !representedCodes.includes(option.code)
+              ) ? (
                 <ul className="mt-2 space-y-2">
-                  {group.options.map((option, j) => (
-                    <li
-                      key={`${option.code}:${j}`}
-                      className="rounded border p-2"
-                    >
-                      <div className="flex items-start gap-3">
-                        {option.imageUrl && (
-                          <ComponentImage
-                            url={option.imageUrl}
-                            name={option.name}
-                          />
-                        )}
-                        <div>
-                          <p>{option.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {option.code}
-                            {option.apiPrice
-                              ? ` · API option price: ${option.apiPrice}`
-                              : ""}
-                          </p>
-                          <p className="mt-1 text-xs">{option.description}</p>
+                  {group.options
+                    .filter(option => !representedCodes.includes(option.code))
+                    .map((option, j) => (
+                      <li
+                        key={`${option.code}:${j}`}
+                        className="rounded border p-2"
+                      >
+                        <div className="flex items-start gap-3">
+                          {option.imageUrl && (
+                            <ComponentImage
+                              url={option.imageUrl}
+                              name={option.name}
+                            />
+                          )}
+                          <div>
+                            <p>{option.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {option.code}
+                              {option.apiPrice
+                                ? ` · API option price: ${option.apiPrice}`
+                                : ""}
+                            </p>
+                            <p className="mt-1 text-xs">{option.description}</p>
+                          </div>
                         </div>
-                      </div>
-                      {Object.keys(option.specifications).length > 0 && (
-                        <details className="mt-2 text-xs">
-                          <summary>Component specifications</summary>
-                          <ul>
-                            {Object.entries(option.specifications).map(
-                              ([k, v]) => (
-                                <li key={k}>
-                                  {k.replaceAll("_", " ")}: {v}
-                                </li>
-                              )
-                            )}
-                          </ul>
-                        </details>
-                      )}
-                    </li>
-                  ))}
+                        {Object.keys(option.specifications).length > 0 && (
+                          <details className="mt-2 text-xs">
+                            <summary>Component specifications</summary>
+                            <ul>
+                              {Object.entries(option.specifications).map(
+                                ([k, v]) => (
+                                  <li key={k}>
+                                    {k.replaceAll("_", " ")}: {v}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </details>
+                        )}
+                      </li>
+                    ))}
                 </ul>
               ) : (
                 <p className="text-muted-foreground">

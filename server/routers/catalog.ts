@@ -1,3 +1,8 @@
+import {
+  previewCatalogComponents,
+  createCatalogComponents,
+  componentGroupHash,
+} from "../lib/catalogComponents";
 import { brandVoiceSchema } from "../../shared/brandGuidelines";
 import { attachMarketingCategories } from "../lib/catalogCategories";
 import { randomUUID } from "node:crypto";
@@ -10,6 +15,7 @@ import {
   brandKits,
   campaignBriefs,
   productImages,
+  productComponents,
   products,
   productVariants,
   websiteCrawlJobs,
@@ -189,6 +195,35 @@ export async function removeCatalogProducts(
 }
 
 export const catalogRouter = router({
+  previewComponents: protectedProcedure
+    .input(organizationInput.extend({ productId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      return previewCatalogComponents(
+        db,
+        input.organizationId,
+        input.productId
+      );
+    }),
+  createComponents: protectedProcedure
+    .input(
+      organizationInput.extend({
+        productId: z.number().int().positive(),
+        reviewedHash: z.string().regex(/^[a-f0-9]{64}$/),
+        confirmed: z.literal(true),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      createCatalogComponents(
+        input.organizationId,
+        input.productId,
+        input.reviewedHash,
+        ctx.user.id
+      )
+    ),
+
   overview: protectedProcedure
     .input(
       organizationInput.extend({
@@ -247,11 +282,72 @@ export const catalogRouter = router({
           .from(products)
           .where(eq(products.organizationId, input.organizationId)),
       ]);
+      const componentLinks = ids.length
+        ? await db
+            .select()
+            .from(productComponents)
+            .where(
+              and(
+                eq(productComponents.organizationId, input.organizationId),
+                or(
+                  inArray(productComponents.parentProductId, ids),
+                  inArray(productComponents.componentProductId, ids)
+                )
+              )
+            )
+        : [];
+      const linkedIds = Array.from(
+        new Set(
+          componentLinks.flatMap(l => [l.parentProductId, l.componentProductId])
+        )
+      );
+      const linkedProducts = linkedIds.length
+        ? await db
+            .select()
+            .from(products)
+            .where(
+              and(
+                eq(products.organizationId, input.organizationId),
+                inArray(products.id, linkedIds)
+              )
+            )
+        : [];
+      const validLinks = componentLinks.filter(
+        l =>
+          linkedProducts.some(p => p.id === l.componentProductId) &&
+          linkedProducts.some(
+            p =>
+              p.id === l.parentProductId &&
+              p.mediaGroups?.some(
+                g =>
+                  g.id === l.groupId &&
+                  g.eligible &&
+                  componentGroupHash(g) === l.sourceHash
+              )
+          )
+      );
       return {
         products: (
           await attachMarketingCategories(db, input.organizationId, catalog)
         ).map(product => ({
           ...product,
+          componentLinks: validLinks
+            .filter(
+              l =>
+                l.parentProductId === product.id ||
+                l.componentProductId === product.id
+            )
+            .map(l => ({
+              ...l,
+              parentName: linkedProducts.find(p => p.id === l.parentProductId)!
+                .name,
+              componentName: linkedProducts.find(
+                p => p.id === l.componentProductId
+              )!.name,
+            })),
+          representedGroupIds: validLinks
+            .filter(l => l.parentProductId === product.id)
+            .map(l => l.groupId),
           images: images.filter(i => i.productId === product.id),
           variants: variants.filter(v => v.productId === product.id),
         })),

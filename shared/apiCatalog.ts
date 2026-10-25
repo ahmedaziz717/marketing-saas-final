@@ -110,6 +110,11 @@ export const apiCatalogMappingSchema = z.object({
         namePath: path,
         imagesPath: path.default(""),
         referenceOnly: z.boolean().optional(),
+        componentKind: z.string().trim().min(1).max(120).optional(),
+        optionAmountPath: path.optional(),
+        optionAmountMeaning: z
+          .enum(["unknown", "upgrade_delta"])
+          .default("unknown"),
         indexedGallery: z
           .object({
             countPath: path,

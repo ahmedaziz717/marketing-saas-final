@@ -92,8 +92,22 @@ export function mapCatalogMediaGroups(
                   return encodeURIComponent(String(value));
                 }
               );
-              const aliases = offset === 0 ? (indexed.firstImageResolutionPaths ?? []).flatMap(path => strings(field(item, path))).map(url => resolveCatalogImage(url, config.imageBaseUrl ?? endpoint, config.imagePathMode)) : [];
-              return { id: `index:${index}`, candidates: Array.from(new Set([...aliases, candidate])) };
+              const aliases =
+                offset === 0
+                  ? (indexed.firstImageResolutionPaths ?? [])
+                      .flatMap(path => strings(field(item, path)))
+                      .map(url =>
+                        resolveCatalogImage(
+                          url,
+                          config.imageBaseUrl ?? endpoint,
+                          config.imagePathMode
+                        )
+                      )
+                  : [];
+              return {
+                id: `index:${index}`,
+                candidates: Array.from(new Set([...aliases, candidate])),
+              };
             })
           : undefined;
       const images =
@@ -140,6 +154,24 @@ export function mapCatalogMediaGroups(
           id: `${rule.key}:${id}`,
           name: typeof name === "string" && name.trim() ? name : String(id),
           role: rule.role,
+          ...(rule.role !== "system"
+            ? {
+                component: {
+                  sourceCode: String(id),
+                  kind: rule.componentKind ?? "Component",
+                  ...(["number", "string"].includes(
+                    typeof field(item, rule.optionAmountPath ?? "price")
+                  )
+                    ? {
+                        optionAmount: String(
+                          field(item, rule.optionAmountPath ?? "price")
+                        ),
+                      }
+                    : {}),
+                  amountMeaning: rule.optionAmountMeaning,
+                },
+              }
+            : {}),
           eligible,
           expectedCount: indexed
             ? count

@@ -37,7 +37,7 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
           "SELECT tablename FROM pg_tables WHERE schemaname = 'app_private'"
         )
       ).rows
-    ).toHaveLength(55);
+    ).toHaveLength(56);
     expect(
       (
         await engine.query(
@@ -58,6 +58,13 @@ it("bootstraps private cloud storage and tables without replaying migrations on 
     const channels = await engine.query<{ relrowsecurity: boolean }>(
       "SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname IN ('channel_connections','channel_oauth_sessions','channel_plans','publications','platform_tiers','platform_accounts','provider_rates','ai_usage','credit_ledger','platform_financial_entries','platform_audit','video_jobs','provider_workers','creative_workflows','creative_workflow_runs','workflow_app_versions','optimization_records','optimization_syncs','optimization_classifications','workflow_triggers','workflow_trigger_receipts','insight_reports','insight_runs','insight_dashboards','authoring_oauth_grants','authoring_oauth_requests','authoring_oauth_refresh_tokens')"
     );
+    expect(
+      (
+        await engine.query(
+          "SELECT relrowsecurity FROM pg_class WHERE relnamespace = 'app_private'::regnamespace AND relname = 'product_components'"
+        )
+      ).rows
+    ).toEqual([{ relrowsecurity: true }]);
     expect(channels.rows).toHaveLength(27);
     expect(channels.rows.every(row => row.relrowsecurity)).toBe(true);
     await expect(engine.exec(buildBootstrapSql())).rejects.toThrow(

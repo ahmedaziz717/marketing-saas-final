@@ -183,6 +183,13 @@
       "when": 1792890000001,
       "tag": "0025_initial_brand_prompts",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792890000002,
+      "tag": "0026_catalog_components",
+      "breakpoints": true
     }
   ]
 }
