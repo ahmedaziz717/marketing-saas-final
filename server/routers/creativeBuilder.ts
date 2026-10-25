@@ -1,3 +1,4 @@
+import type { DraftSaveHook } from "../lib/mcpDraftReceipt";
 import { productOverlayPreview } from "../lib/productOverlayPreview";
 import {
   readOverlaySources,
@@ -499,11 +500,17 @@ export async function runBuilderJob(
           | "source_resolution"
           | "alignment_unavailable"
           | undefined;
-        let automaticFailureDiagnostic: ProductOverlayFailureDiagnostic | undefined;
+        let automaticFailureDiagnostic:
+          | ProductOverlayFailureDiagnostic
+          | undefined;
         if (cutouts.length) {
-          let overlayStage: ProductOverlayFailureDiagnostic["stage"] = "source_read";
+          let overlayStage: ProductOverlayFailureDiagnostic["stage"] =
+            "source_read";
           try {
-            const design = Buffer.from(await storageGetBase64(image.storageKey), "base64");
+            const design = Buffer.from(
+              await storageGetBase64(image.storageKey),
+              "base64"
+            );
             overlayStage = "alignment";
             const finished = await automaticProductOverlay(
               design,
@@ -520,7 +527,10 @@ export async function runBuilderJob(
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
           } catch (error) {
-            automaticFailureDiagnostic = productOverlayFailureDiagnostic(error, overlayStage);
+            automaticFailureDiagnostic = productOverlayFailureDiagnostic(
+              error,
+              overlayStage
+            );
             automaticFailure =
               error instanceof ProductOverlayResolutionError
                 ? "source_resolution"
@@ -847,6 +857,151 @@ async function readOverlayDesign(
         "This version does not have editable original-product layers. Generate a new design with product overlay enabled.",
     });
   return { variant, metadata };
+}
+
+export const creativeDraftSaveInput = organizationInput.extend({
+  setup: creativeSetupSchema,
+  briefId: z.number().int().positive().optional(),
+  expectedUpdatedAtMs: z.number().int().optional(),
+});
+type CreativeDraftSaveInput = z.infer<typeof creativeDraftSaveInput>;
+export type CreativeDraftSaveResult = { briefId: number; updatedAtMs: number };
+export function saveCreativeSetup(
+  userId: number,
+  input: CreativeDraftSaveInput
+): Promise<CreativeDraftSaveResult>;
+export function saveCreativeSetup<T>(
+  userId: number,
+  input: CreativeDraftSaveInput,
+  aroundSave: DraftSaveHook<CreativeDraftSaveResult, T>
+): Promise<T>;
+export async function saveCreativeSetup<T>(
+  userId: number,
+  input: CreativeDraftSaveInput,
+  aroundSave?: DraftSaveHook<CreativeDraftSaveResult, T>
+): Promise<T | CreativeDraftSaveResult> {
+  await requireOrganizationRole(userId, input.organizationId, [...editorRoles]);
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  return withOrganizationTransaction(db, input.organizationId, async tx => {
+    const save = async (): Promise<CreativeDraftSaveResult> => {
+      // loadInputs uses only database reads; this transaction supplies the same read interface.
+      await loadInputs(
+        tx as unknown as Parameters<typeof loadInputs>[0],
+        input.organizationId,
+        input.setup
+      );
+      if (input.setup.campaignPlanId) {
+        const [plan] = await tx
+          .select()
+          .from(campaignBriefs)
+          .where(
+            and(
+              eq(campaignBriefs.id, input.setup.campaignPlanId),
+              eq(campaignBriefs.organizationId, input.organizationId)
+            )
+          )
+          .limit(1);
+        if (!plan || plan.creativeSetup)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose a campaign plan in this workspace.",
+          });
+      }
+      const now = Math.max(Date.now(), (input.expectedUpdatedAtMs ?? 0) + 1);
+      const fields = {
+        name: input.setup.name,
+        creativeSetup: input.setup,
+        audience: "",
+        offer: input.setup.copy.subheadline,
+        channel:
+          input.setup.channels.length === 1
+            ? input.setup.channels[0]
+            : ("multi_channel" as const),
+        placements: input.setup.channels,
+        formats: input.setup.formatIds,
+        creativeDirection:
+          input.setup.basePrompt +
+          "\n\n" +
+          (input.setup.themePrompt ||
+            getCreativeTheme(input.setup.theme).direction) +
+          "\n\n" +
+          "Mood: " +
+          getCreativeMood(input.setup.mood).name +
+          " — " +
+          getCreativeMood(input.setup.mood).direction +
+          "\n\n" +
+          "Art style: " +
+          getCreativeArtStyle(input.setup.artStyle).name +
+          " — " +
+          getCreativeArtStyle(input.setup.artStyle).direction +
+          "\n\n" +
+          input.setup.extraDirection,
+        assetIds: input.setup.logoAssetId ? [input.setup.logoAssetId] : [],
+        productIds: input.setup.products.map(product => product.productId),
+        status: "draft" as const,
+        approvedAtMs: null,
+        approvedByUserId: null,
+        updatedAtMs: now,
+      };
+      let briefId = input.briefId;
+      if (briefId) {
+        if (input.expectedUpdatedAtMs === undefined)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Reload the saved setup before updating it.",
+          });
+        const changed = await tx
+          .update(campaignBriefs)
+          .set(fields)
+          .where(
+            and(
+              eq(campaignBriefs.id, briefId),
+              eq(campaignBriefs.organizationId, input.organizationId),
+              isNotNull(campaignBriefs.creativeSetup),
+              eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
+            )
+          )
+          .returning({ id: campaignBriefs.id });
+        if (!changed.length)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "This setup changed in another session. Reload it before saving.",
+          });
+      } else {
+        const inserted = await tx
+          .insert(campaignBriefs)
+          .values({
+            ...fields,
+            organizationId: input.organizationId,
+            createdByUserId: userId,
+            createdAtMs: now,
+          })
+          .returning({ insertId: campaignBriefs.id });
+        briefId = Number(inserted[0].insertId);
+      }
+      await appendActivity(
+        {
+          organizationId: input.organizationId,
+          actorUserId: userId,
+          action: "creative_setup.saved",
+          entityType: "campaign_brief",
+          entityId: briefId,
+          payload: {
+            name: input.setup.name,
+            theme: input.setup.theme,
+            mood: input.setup.mood,
+            artStyle: input.setup.artStyle,
+          },
+        },
+        tx
+      );
+
+      return { briefId, updatedAtMs: now };
+    };
+    return aroundSave ? aroundSave(tx, save) : save();
+  });
 }
 
 export const creativeBuilderRouter = router({
@@ -1513,135 +1668,8 @@ export const creativeBuilderRouter = router({
     }),
 
   save: protectedProcedure
-    .input(
-      organizationInput.extend({
-        setup: creativeSetupSchema,
-        briefId: z.number().int().positive().optional(),
-        expectedUpdatedAtMs: z.number().int().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...editorRoles,
-      ]);
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await loadInputs(db, input.organizationId, input.setup);
-      if (input.setup.campaignPlanId) {
-        const [plan] = await db
-          .select()
-          .from(campaignBriefs)
-          .where(
-            and(
-              eq(campaignBriefs.id, input.setup.campaignPlanId),
-              eq(campaignBriefs.organizationId, input.organizationId)
-            )
-          )
-          .limit(1);
-        if (!plan || plan.creativeSetup)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Choose a campaign plan in this workspace.",
-          });
-      }
-      const now = Date.now();
-      const fields = {
-        name: input.setup.name,
-        creativeSetup: input.setup,
-        audience: "",
-        offer: input.setup.copy.subheadline,
-        channel:
-          input.setup.channels.length === 1
-            ? input.setup.channels[0]
-            : ("multi_channel" as const),
-        placements: input.setup.channels,
-        formats: input.setup.formatIds,
-        creativeDirection:
-          input.setup.basePrompt +
-          "\n\n" +
-          (input.setup.themePrompt ||
-            getCreativeTheme(input.setup.theme).direction) +
-          "\n\n" +
-          "Mood: " +
-          getCreativeMood(input.setup.mood).name +
-          " — " +
-          getCreativeMood(input.setup.mood).direction +
-          "\n\n" +
-          "Art style: " +
-          getCreativeArtStyle(input.setup.artStyle).name +
-          " — " +
-          getCreativeArtStyle(input.setup.artStyle).direction +
-          "\n\n" +
-          input.setup.extraDirection,
-        assetIds: input.setup.logoAssetId ? [input.setup.logoAssetId] : [],
-        productIds: input.setup.products.map(product => product.productId),
-        status: "draft" as const,
-        approvedAtMs: null,
-        approvedByUserId: null,
-        updatedAtMs: now,
-      };
-      const briefId = await withOrganizationTransaction(
-        db,
-        input.organizationId,
-        async tx => {
-          let briefId = input.briefId;
-          if (briefId) {
-            if (input.expectedUpdatedAtMs === undefined)
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Reload the saved setup before updating it.",
-              });
-            const changed = await tx
-              .update(campaignBriefs)
-              .set(fields)
-              .where(
-                and(
-                  eq(campaignBriefs.id, briefId),
-                  eq(campaignBriefs.organizationId, input.organizationId),
-                  isNotNull(campaignBriefs.creativeSetup),
-                  eq(campaignBriefs.updatedAtMs, input.expectedUpdatedAtMs)
-                )
-              )
-              .returning({ id: campaignBriefs.id });
-            if (!changed.length)
-              throw new TRPCError({
-                code: "CONFLICT",
-                message:
-                  "This setup changed in another session. Reload it before saving.",
-              });
-          } else {
-            const inserted = await tx
-              .insert(campaignBriefs)
-              .values({
-                ...fields,
-                organizationId: input.organizationId,
-                createdByUserId: ctx.user.id,
-                createdAtMs: now,
-              })
-              .returning({ insertId: campaignBriefs.id });
-            briefId = Number(inserted[0].insertId);
-          }
-          await appendActivity(
-            {
-              organizationId: input.organizationId,
-              actorUserId: ctx.user.id,
-              action: "creative_setup.saved",
-              entityType: "campaign_brief",
-              entityId: briefId,
-              payload: {
-                name: input.setup.name,
-                theme: input.setup.theme,
-                mood: input.setup.mood,
-                artStyle: input.setup.artStyle,
-              },
-            },
-            tx
-          );
-          return briefId;
-        }
-      );
-      return { briefId, updatedAtMs: now };
-    }),
+    .input(creativeDraftSaveInput)
+    .mutation(({ ctx, input }) => saveCreativeSetup(ctx.user.id, input)),
 
   refreshCopy: protectedProcedure
     .input(organizationInput.extend({ setup: creativeSetupSchema }))

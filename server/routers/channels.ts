@@ -944,6 +944,172 @@ async function checkMetaDestinationBeforeDelivery(
   }
 }
 
+type PublicationSaveInput = z.infer<typeof publicationDraftSchema>;
+type SavedPublication = Awaited<ReturnType<typeof publicationById>>;
+type PublicationTransaction = Parameters<
+  Parameters<typeof withOrganizationTransaction>[2]
+>[0];
+export function savePublicationDraft(
+  userId: number,
+  input: PublicationSaveInput
+): Promise<SavedPublication>;
+export function savePublicationDraft<T>(
+  userId: number,
+  input: PublicationSaveInput,
+  aroundSave: (
+    tx: PublicationTransaction,
+    save: () => Promise<SavedPublication>
+  ) => Promise<T>
+): Promise<T>;
+export async function savePublicationDraft<T>(
+  userId: number,
+  input: PublicationSaveInput,
+  aroundSave?: (
+    tx: PublicationTransaction,
+    save: () => Promise<SavedPublication>
+  ) => Promise<T>
+): Promise<SavedPublication | T> {
+  await requireOrganizationRole(userId, input.organizationId, [...editors]);
+  const db = await libraryDatabase();
+  const normalizedContent = contentSchema.safeParse(
+    normalizeSocialPost(input.channel, input.assetKey, input.content)
+  );
+  if (!normalizedContent.success)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "The website link makes this caption too long. Shorten it to 5,000 characters before saving.",
+    });
+  return withOrganizationTransaction(db, input.organizationId, async tx => {
+    const save = async () => {
+      if (input.content.campaignPlanId) {
+        const [plan] = await tx
+          .select()
+          .from(campaignBriefs)
+          .where(
+            and(
+              eq(campaignBriefs.id, input.content.campaignPlanId),
+              eq(campaignBriefs.organizationId, input.organizationId)
+            )
+          )
+          .limit(1);
+        if (!plan || plan.creativeSetup)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose a campaign plan in this workspace.",
+          });
+      }
+      if (input.connectionId) {
+        const c = await getConnection(
+          tx,
+          input.organizationId,
+          input.connectionId,
+          input.channel
+        );
+        if (c.status !== "connected")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Choose a connected destination.",
+          });
+      }
+      const subheadlines: string[] = [];
+      const creativeSnapshots: import("../../shared/creativeIntelligence").CreativeIntelligence[] =
+        [];
+      const copyAssetKeys = Array.from(
+        new Set(
+          [
+            input.assetKey,
+            ...Object.values(input.content.placementAssetKeys ?? {}),
+            ...(input.content.carouselAssetKeys ?? []),
+          ].filter((key): key is string => !!key)
+        )
+      );
+      for (const copyAssetKey of copyAssetKeys) {
+        const asset = await readLibraryAsset(
+          tx,
+          input.organizationId,
+          copyAssetKey
+        );
+        if (asset.subheadline) subheadlines.push(asset.subheadline);
+        if (asset.intelligence) creativeSnapshots.push(asset.intelligence);
+        if (asset.state !== "approved" || asset.purpose !== "finished")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Only approved finished assets can be selected for publishing.",
+          });
+      }
+      const now = Date.now();
+      const values = {
+        channel: input.channel,
+        connectionId: input.connectionId,
+        assetKey: input.assetKey,
+        content: {
+          ...normalizedContent.data,
+          copyTags: publicationCopyTags(normalizedContent.data, subheadlines),
+        },
+        scheduledAtMs: input.scheduledAtMs,
+        timezone: input.timezone,
+        state: "draft" as const,
+        approvalHash: null,
+        approvedByUserId: null,
+        approvedAtMs: null,
+        error: null,
+        updatedAtMs: now,
+      };
+      if (input.revision === 0) {
+        const result = await tx
+          .insert(publications)
+          .values({
+            id: input.id,
+            organizationId: input.organizationId,
+            ...values,
+            createdByUserId: userId,
+            createdAtMs: now,
+          })
+          .onConflictDoNothing()
+          .returning({ id: publications.id });
+        if (!result.length)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This draft was already saved. Refresh before editing.",
+          });
+      } else {
+        const item = await publicationById(tx, input.organizationId, input.id);
+        assertRevision(item, input.revision);
+        if (!editablePublication(item.state))
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "This publication is locked. Resolve its delivery status or create a new draft.",
+          });
+        await tx
+          .update(publications)
+          .set({ ...values, revision: item.revision + 1 })
+          .where(eq(publications.id, item.id));
+      }
+      await appendActivity(
+        {
+          organizationId: input.organizationId,
+          actorUserId: userId,
+          action: "publication.draft_saved",
+          entityType: "publication",
+          entityId: input.id,
+          payload: {
+            scheduledAtMs: input.scheduledAtMs,
+            channel: input.channel,
+            revision: input.revision + 1,
+            creativeSnapshots,
+          },
+        },
+        tx
+      );
+      return publicationById(tx, input.organizationId, input.id);
+    };
+    return aroundSave ? aroundSave(tx, save) : save();
+  });
+}
+
 export const publishingRouter = router({
   list: protectedProcedure.input(scopeSchema).query(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId);
@@ -989,150 +1155,7 @@ export const publishingRouter = router({
   }),
   save: protectedProcedure
     .input(publicationDraftSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...editors,
-      ]);
-      const db = await libraryDatabase();
-      const normalizedContent = contentSchema.safeParse(
-        normalizeSocialPost(input.channel, input.assetKey, input.content)
-      );
-      if (!normalizedContent.success)
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "The website link makes this caption too long. Shorten it to 5,000 characters before saving.",
-        });
-      return withOrganizationTransaction(db, input.organizationId, async tx => {
-        if (input.content.campaignPlanId) {
-          const [plan] = await tx
-            .select()
-            .from(campaignBriefs)
-            .where(
-              and(
-                eq(campaignBriefs.id, input.content.campaignPlanId),
-                eq(campaignBriefs.organizationId, input.organizationId)
-              )
-            )
-            .limit(1);
-          if (!plan || plan.creativeSetup)
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Choose a campaign plan in this workspace.",
-            });
-        }
-        if (input.connectionId) {
-          const c = await getConnection(
-            tx,
-            input.organizationId,
-            input.connectionId,
-            input.channel
-          );
-          if (c.status !== "connected")
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: "Choose a connected destination.",
-            });
-        }
-        const subheadlines: string[] = [];
-        const creativeSnapshots: import("../../shared/creativeIntelligence").CreativeIntelligence[] =
-          [];
-        const copyAssetKeys = Array.from(
-          new Set(
-            [
-              input.assetKey,
-              ...Object.values(input.content.placementAssetKeys ?? {}),
-              ...(input.content.carouselAssetKeys ?? []),
-            ].filter((key): key is string => !!key)
-          )
-        );
-        for (const copyAssetKey of copyAssetKeys) {
-          const asset = await readLibraryAsset(
-            tx,
-            input.organizationId,
-            copyAssetKey
-          );
-          if (asset.subheadline) subheadlines.push(asset.subheadline);
-          if (asset.intelligence) creativeSnapshots.push(asset.intelligence);
-          if (asset.state !== "approved" || asset.purpose !== "finished")
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message:
-                "Only approved finished assets can be selected for publishing.",
-            });
-        }
-        const now = Date.now();
-        const values = {
-          channel: input.channel,
-          connectionId: input.connectionId,
-          assetKey: input.assetKey,
-          content: {
-            ...normalizedContent.data,
-            copyTags: publicationCopyTags(normalizedContent.data, subheadlines),
-          },
-          scheduledAtMs: input.scheduledAtMs,
-          timezone: input.timezone,
-          state: "draft" as const,
-          approvalHash: null,
-          approvedByUserId: null,
-          approvedAtMs: null,
-          error: null,
-          updatedAtMs: now,
-        };
-        if (input.revision === 0) {
-          const result = await tx
-            .insert(publications)
-            .values({
-              id: input.id,
-              organizationId: input.organizationId,
-              ...values,
-              createdByUserId: ctx.user.id,
-              createdAtMs: now,
-            })
-            .onConflictDoNothing()
-            .returning({ id: publications.id });
-          if (!result.length)
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "This draft was already saved. Refresh before editing.",
-            });
-        } else {
-          const item = await publicationById(
-            tx,
-            input.organizationId,
-            input.id
-          );
-          assertRevision(item, input.revision);
-          if (!editablePublication(item.state))
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message:
-                "This publication is locked. Resolve its delivery status or create a new draft.",
-            });
-          await tx
-            .update(publications)
-            .set({ ...values, revision: item.revision + 1 })
-            .where(eq(publications.id, item.id));
-        }
-        await appendActivity(
-          {
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            action: "publication.draft_saved",
-            entityType: "publication",
-            entityId: input.id,
-            payload: {
-              scheduledAtMs: input.scheduledAtMs,
-              channel: input.channel,
-              revision: input.revision + 1,
-              creativeSnapshots,
-            },
-          },
-          tx
-        );
-        return publicationById(tx, input.organizationId, input.id);
-      });
-    }),
+    .mutation(({ ctx, input }) => savePublicationDraft(ctx.user.id, input)),
   submit: protectedProcedure.input(version).mutation(async ({ ctx, input }) => {
     await requireOrganizationRole(ctx.user.id, input.organizationId, [
       ...editors,
