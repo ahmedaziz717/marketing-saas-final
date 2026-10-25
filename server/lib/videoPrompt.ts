@@ -10,6 +10,7 @@ import { requireLatestGptTextModel } from "./models";
 import { readGenerationSource } from "./creativeImages";
 import { resolveVideoReferences, validateVideoReferences } from "./videoJobs";
 import { productFactsDirection } from "../../shared/studioProductFacts";
+import { assertCategorySelection } from "./catalogCategories";
 import type { LibraryDatabase } from "./assetLibrary";
 import { previewStudioPage } from "./studioProductPage";
 import {
@@ -33,6 +34,10 @@ export async function draftVideoPrompt(
       prompt: "Draft from selected images",
     },
     "prompt"
+  );
+  assertCategorySelection(
+    references.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
+    setup.categoryHandling
   );
   const [brand] = await db
     .select()

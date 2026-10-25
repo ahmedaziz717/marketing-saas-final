@@ -570,6 +570,31 @@ describe("durable video generation", () => {
       .where(eq(products.id, productId));
   });
 
+  it("requires a Studio category choice before provider work while keeping shared App reference resolution compatible", async () => {
+    const settings = {
+      ...setup(),
+      categoryHandling: undefined,
+      imageKeys: [`product_image:${catalogImageId}`],
+    };
+    await expect(
+      owner.video.quote({ organizationId: org, setup: settings })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(
+      owner.video.draftPrompt({ organizationId: org, setup: settings })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(state.estimate).not.toHaveBeenCalled();
+    expect(state.llm).not.toHaveBeenCalled();
+    expect(
+      (await resolveVideoReferences(state.db, org, settings))[0].productFacts
+        ?.marketingCategory?.status
+    ).toBe("unmapped");
+    await owner.video.quote({
+      organizationId: org,
+      setup: { ...settings, categoryHandling: "neutral" },
+    });
+    expect(state.estimate).toHaveBeenCalledTimes(1);
+  });
+
   it("saves and sends an approved brand logo after subject images and before people", async () => {
     const settings = {
       ...setup(),

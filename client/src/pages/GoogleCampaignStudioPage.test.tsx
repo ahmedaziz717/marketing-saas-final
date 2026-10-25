@@ -35,6 +35,15 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    prompts: {
+      list: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+      change: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    },
+    catalog: {
+      overview: {
+        useQuery: () => ({ data: { products: [], hasMore: false } }),
+      },
+    },
     assetLibrary: {
       list: { useQuery: () => ({ data: api.library, refetch: vi.fn() }) },
       upload: { useMutation: () => ({ mutateAsync: api.mutate }) },
@@ -46,6 +55,9 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       campaigns: {
+        draftPmaxCopy: {
+          useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+        },
         inventory: {
           useQuery: (input: any) => {
             api.calls(input);

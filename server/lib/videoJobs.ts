@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { assertCategorySelection } from "./catalogCategories";
 import { readLifestylePortrait } from "./lifestylePeople";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -339,10 +338,6 @@ export async function resolveVideoReferences(
       message:
         "A product selected for advertising details is no longer among your references. Review Product details.",
     });
-  assertCategorySelection(
-    refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
-    setup.categoryHandling
-  );
   return ordered.map(key => refs.find(ref => ref.key === key)!);
 }
 export async function validateVideoReferences(

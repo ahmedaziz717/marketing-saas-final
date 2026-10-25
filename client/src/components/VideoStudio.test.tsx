@@ -43,7 +43,12 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/hooks/usePromptDefaults", async () => {
   const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
-  const data = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system" }));
+  const data = PROMPT_REGISTRY.map(p => ({
+    ...p,
+    value: p.baseline,
+    revision: 0,
+    source: "system",
+  }));
   return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), info: api.toast } }));
@@ -53,7 +58,9 @@ vi.mock("./LifestylePersonPicker", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    prompts: { change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
+    prompts: {
+      change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     models: {
       catalog: { useQuery: () => ({ data: [] }) },
       credits: { useQuery: () => ({ data: { textEstimate: 10 } }) },
@@ -119,7 +126,7 @@ afterEach(cleanup);
 function chooseProduct() {
   fireEvent.click(screen.getByRole("button", { name: "Add images" }));
   fireEvent.click(
-    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
+    screen.getByRole("checkbox", { name: /^Use 1 for Studio lamp/ })
   );
   fireEvent.click(screen.getByRole("button", { name: "Use selected images" }));
 }
@@ -224,23 +231,23 @@ it("enforces a combined reference limit across sources", () => {
   }
   render(<Picker />);
   fireEvent.click(
-    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
+    screen.getByRole("checkbox", { name: /^Use 1 for Studio lamp/ })
   );
   expect(screen.getByText("2 / 2 selected")).toBeTruthy();
   expect(
     (
-      screen.getByRole("button", {
-        name: "Use photo 2 for Studio lamp",
+      screen.getByRole("checkbox", {
+        name: /^Use 2 for Studio lamp/,
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
   fireEvent.click(
-    screen.getByRole("button", { name: "Use photo 1 for Studio lamp" })
+    screen.getByRole("checkbox", { name: /^Use 1 for Studio lamp/ })
   );
   expect(
     (
-      screen.getByRole("button", {
-        name: "Use photo 2 for Studio lamp",
+      screen.getByRole("checkbox", {
+        name: /^Use 2 for Studio lamp/,
       }) as HTMLButtonElement
     ).disabled
   ).toBe(false);
