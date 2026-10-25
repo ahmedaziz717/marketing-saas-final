@@ -44,23 +44,32 @@ export function ProductCategoryContext({
             choose neutral wording. Existing copy is preserved; regenerate and
             review it after changing categories.
           </p>
-          <label className="mt-2 flex gap-2">
-            <input
-              type="checkbox"
-              checked={handling === "neutral"}
-              onChange={e =>
-                onChange(e.target.checked ? "neutral" : "require_mapping")
-              }
-            />
-            Use neutral wording based only on supplied facts for this selection.
-          </label>
         </>
+      ) : handling === "neutral" ? (
+        <p className="text-xs text-muted-foreground">
+          Neutral wording is active: AI uses supplied facts without
+          category-specific audience or use-case guidance. Turn it off below to
+          use the confirmed category. Existing copy is preserved; regenerate and
+          review it after changing this choice.
+        </p>
       ) : (
         <p className="text-xs text-muted-foreground">
           Confirmed category guidance controls audience and use cases. Brand
           voice supplies style; it cannot change product identity. Review
           existing copy after category changes.
         </p>
+      )}
+      {(state.requiresChoice || handling === "neutral") && (
+        <label className="mt-2 flex gap-2">
+          <input
+            type="checkbox"
+            checked={handling === "neutral"}
+            onChange={e =>
+              onChange(e.target.checked ? "neutral" : "require_mapping")
+            }
+          />
+          Use neutral wording based only on supplied facts for this selection.
+        </label>
       )}
       <a
         className="mt-2 inline-block underline"
