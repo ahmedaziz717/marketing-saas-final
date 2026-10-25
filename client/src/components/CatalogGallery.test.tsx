@@ -8,6 +8,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CatalogGallery } from "./CatalogGallery";
+import {
+  galleryGroups,
+  type CatalogImageMedia,
+  type CatalogMediaGroupSummary,
+} from "@shared/catalogMedia";
 afterEach(cleanup);
 const images = [
   { id: 11, url: "/original-side.png" },
@@ -143,4 +148,131 @@ it("never invents Hero metadata and handles no images", () => {
   expect(
     screen.getByText("No gallery images have been imported.")
   ).toBeTruthy();
+});
+
+const groupedMedia = (
+  groupId: string,
+  position: number
+): CatalogImageMedia => ({
+  width: 1200,
+  height: 1200,
+  hasAlpha: true,
+  candidates: [],
+  selectedSourceUrl: "",
+  unavailableCandidates: 0,
+  references: [{ groupId, imageId: `view:${position}`, position }],
+});
+const systemGroup: CatalogMediaGroupSummary = {
+  id: "system",
+  name: "Product views",
+  role: "system",
+  eligible: true,
+  declaredImages: 2,
+  expectedCount: 2,
+};
+it("shows a legacy Hero alongside source-ordered system views without changing saved selections", () => {
+  const select = vi.fn();
+  const mixed = [
+    { id: 30, url: "/full-back.png", media: groupedMedia("system", 1) },
+    { id: 25, url: "/full-hero.png", isPrimary: 1 },
+    { id: 20, url: "/full-front.png", media: groupedMedia("system", 0) },
+  ];
+  const snapshot = JSON.stringify(mixed);
+  render(
+    <CatalogGallery
+      name="System"
+      images={mixed}
+      groups={[systemGroup]}
+      selectedIds={[30]}
+      onSelect={select}
+    />
+  );
+  expect(screen.queryByRole("combobox")).toBeNull();
+  const thumbnails = screen.getAllByRole("button", { name: /^Preview/ });
+  expect(thumbnails.map(button => button.getAttribute("aria-label"))).toEqual([
+    "Preview Hero for System",
+    "Preview 3 for System",
+    "Preview 2 for System",
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Next image" }));
+  expect(screen.getByAltText("System \u2014 3 preview").getAttribute("src")).toBe(
+    "/full-front.png"
+  );
+  expect(select).not.toHaveBeenCalled();
+  expect(
+    (screen.getByRole("checkbox", { name: /Use 2/ }) as HTMLInputElement)
+      .checked
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: /Use 3/ }));
+  expect(select).toHaveBeenCalledWith(20);
+  expect(JSON.stringify(mixed)).toBe(snapshot);
+});
+it("does not count a legacy Hero toward a missing source view or merge component roles", () => {
+  const groups: CatalogMediaGroupSummary[] = [
+    systemGroup,
+    {
+      id: "base",
+      name: "Base chassis",
+      role: "base_component",
+      eligible: true,
+      declaredImages: 1,
+    },
+    {
+      id: "option",
+      name: "White chassis",
+      role: "optional_component",
+      eligible: false,
+      declaredImages: 1,
+    },
+  ];
+  const mixed = [
+    { id: 25, url: "/hero.png", isPrimary: 1 },
+    { id: 20, url: "/front.png", media: groupedMedia("system", 0) },
+    { id: 40, url: "/base.png", media: groupedMedia("base", 0) },
+    { id: 50, url: "/option.png", media: groupedMedia("option", 0) },
+  ];
+  const presentation = galleryGroups(mixed, groups);
+  expect(
+    presentation.map(group => [group.id, group.images.map(photo => photo.id)])
+  ).toEqual([
+    ["system", [25, 20]],
+    ["base", [40]],
+    ["option", [50]],
+  ]);
+  expect(groups[0].declaredImages).toBe(2);
+  render(
+    <CatalogGallery
+      name="System"
+      images={mixed}
+      groups={groups}
+      onSelect={vi.fn()}
+    />
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "source reports 2 images"
+  );
+  fireEvent.change(screen.getByRole("combobox"), {
+    target: { value: "option" },
+  });
+  expect(
+    screen.queryByRole("button", { name: "Preview Hero for System" })
+  ).toBeNull();
+  expect((screen.getByRole("checkbox") as HTMLInputElement).disabled).toBe(
+    true
+  );
+});
+it("keeps a genuinely single imported Hero honest and does not merge into ineligible systems", () => {
+  const hero = [{ id: 25, url: "/hero.png", isPrimary: 1 }];
+  render(<CatalogGallery name="One photo" images={hero} onSelect={vi.fn()} />);
+  expect(screen.getAllByRole("button", { name: /^Preview/ })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Next image" })).toBeNull();
+  expect(
+    galleryGroups(hero, [{ ...systemGroup, eligible: false }]).map(group => [
+      group.id,
+      group.images.length,
+    ])
+  ).toEqual([
+    ["legacy", 1],
+    ["system", 0],
+  ]);
 });

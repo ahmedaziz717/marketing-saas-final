@@ -52,6 +52,29 @@
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
 }
+.wf-media-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+.wf-media-product-card {
+  min-width: 0;
+  align-self: start;
+  padding: 12px;
+  border: 1px solid var(--wm-line);
+  border-radius: 12px;
+  background: var(--wm-panel);
+}
+.wf-media-product-card.is-selected {
+  border-color: var(--wm-accent);
+}
+.wf-media-product-card h3 {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .wf-media-tile {
   position: relative;
   min-width: 0;

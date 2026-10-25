@@ -180,7 +180,7 @@ export function CatalogGallery({
           </p>
           {(!photos.length ||
             (group.expectedCount != null &&
-              photos.length < group.expectedCount)) && (
+              group.sourceImageCount < group.expectedCount)) && (
             <p role="status" className="text-xs">
               Gallery incomplete
               {group.expectedCount != null

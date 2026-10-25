@@ -1,3 +1,4 @@
+import { defaultCreativeSetup } from "../shared/creativeBuilder";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
@@ -65,6 +66,7 @@ import {
   brandKits,
   products,
   productImages,
+  productComponents,
 } from "../drizzle/schema";
 import { videoJobs, providerWorkers } from "../drizzle/videoSchema";
 import {
@@ -476,6 +478,224 @@ describe("durable video generation", () => {
       (await owner.video.catalogImages({ organizationId: org })).items
     ).toEqual([]);
     expect(job.credits).toBeGreaterThan(0);
+  });
+
+  it("shows pending component cards but rejects both pending images and their represented parent references", async () => {
+    const now = Date.now();
+    const group = {
+      id: "case:test",
+      name: "Chassis",
+      role: "optional_component" as const,
+      eligible: true,
+      declaredImages: 1,
+    };
+    const [component] = await state.db
+      .insert(products)
+      .values({
+        organizationId: org,
+        name: "Chassis option",
+        dedupeKey: "test-component",
+        productUrl: "https://example.test/case",
+        specifications: {},
+        status: "pending",
+        provenance: { "component.kind": "Chassis" },
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
+      .returning();
+    const [componentImage] = await state.db
+      .insert(productImages)
+      .values({
+        organizationId: org,
+        productId: component.id,
+        sourceUrl: "https://example.test/case.png",
+        url: "/case-original.png",
+        storageKey: "case-original",
+        isPrimary: 1,
+        createdAtMs: now,
+      })
+      .returning();
+    await state.db
+      .update(products)
+      .set({ mediaGroups: [group] })
+      .where(eq(products.id, productId));
+    const [nestedImage] = await state.db
+      .insert(productImages)
+      .values({
+        organizationId: org,
+        productId,
+        sourceUrl: "https://example.test/case.png",
+        url: "/parent-case-original.png",
+        storageKey: "parent-case-original",
+        createdAtMs: now,
+        media: {
+          width: 700,
+          height: 700,
+          hasAlpha: true,
+          candidates: [],
+          selectedSourceUrl: "https://example.test/case.png",
+          unavailableCandidates: 0,
+          references: [{ groupId: group.id, imageId: "front", position: 0 }],
+        },
+      })
+      .returning();
+    await state.db.insert(productComponents).values({
+      organizationId: org,
+      parentProductId: productId,
+      componentProductId: component.id,
+      groupId: group.id,
+      sourceCode: "case-code",
+      kind: "Chassis",
+      role: "optional_component",
+      amountMeaning: "unknown",
+      sourceHash: "test",
+      createdAtMs: now,
+    });
+    const options = await owner.creativeBuilder.options({
+      organizationId: org,
+    });
+    expect(options.products.find(p => p.id === component.id)).toMatchObject({
+      componentKind: "Chassis",
+      status: "pending",
+    });
+    expect(
+      options.products.find(p => p.id === productId)?.representedGroupIds
+    ).toEqual([group.id]);
+    await expect(
+      owner.creativeBuilder.quote({
+        organizationId: org,
+        setup: {
+          ...defaultCreativeSetup(),
+          products: [
+            {
+              productId,
+              imageId: nestedImage.id,
+              featuredSpecKeys: [],
+              includePrice: false,
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow(/unavailable/);
+    const choices = (await owner.video.catalogImages({ organizationId: org }))
+      .items;
+    expect(
+      choices.find(i => i.key === `product_image:${componentImage.id}`)
+    ).toMatchObject({
+      componentKind: "Chassis",
+      unavailableReason: expect.stringMatching(/Review needed/),
+    });
+    expect(
+      choices.find(i => i.key === `product_image:${catalogImageId}`)
+        ?.representedGroupIds
+    ).toEqual([group.id]);
+    const retained = (
+      await owner.video.catalogImages({
+        organizationId: org,
+        selectedOnly: true,
+        selectedKeys: [`product_image:${nestedImage.id}`],
+      })
+    ).items;
+    expect(retained[0]).toMatchObject({
+      key: `product_image:${nestedImage.id}`,
+      unavailableReason: expect.stringMatching(/separate component/),
+    });
+    for (const id of [componentImage.id, nestedImage.id])
+      await expect(
+        resolveVideoReferences(state.db, org, {
+          ...setup(),
+          imageKeys: [`product_image:${id}`],
+        })
+      ).rejects.toThrow(/unavailable/);
+    expect(
+      await resolveVideoReferences(state.db, org, {
+        ...setup(),
+        imageKeys: [`product_image:${catalogImageId}`],
+      })
+    ).toHaveLength(1);
+    expect(
+      (
+        await outsider.video.catalogImages({
+          organizationId: otherOrg,
+          selectedOnly: true,
+          selectedKeys: [
+            `product_image:${nestedImage.id}`,
+            `product_image:${componentImage.id}`,
+          ],
+        })
+      ).items
+    ).toEqual([]);
+    // A second, ineligible/unmapped reference must not turn the represented
+    // component's eligibility into approval of a different system role.
+    const withdrawn = {
+      ...group,
+      id: "withdrawn-system",
+      role: "system" as const,
+      eligible: false,
+    };
+    await state.db
+      .update(products)
+      .set({ mediaGroups: [group, withdrawn] })
+      .where(eq(products.id, productId));
+    await state.db
+      .update(productImages)
+      .set({
+        media: {
+          ...nestedImage.media,
+          references: [
+            ...nestedImage.media.references,
+            { groupId: withdrawn.id, imageId: "front", position: 0 },
+          ],
+        },
+      })
+      .where(eq(productImages.id, nestedImage.id));
+    await expect(
+      resolveVideoReferences(state.db, org, {
+        ...setup(),
+        imageKeys: [`product_image:${nestedImage.id}`],
+      })
+    ).rejects.toThrow(/unavailable/);
+    await expect(
+      owner.creativeBuilder.quote({
+        organizationId: org,
+        setup: {
+          ...defaultCreativeSetup(),
+          products: [
+            {
+              productId,
+              imageId: nestedImage.id,
+              featuredSpecKeys: [],
+              includePrice: false,
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow(/unavailable/);
+    // A genuinely approved system view sharing those bytes remains available.
+    await state.db
+      .update(products)
+      .set({ mediaGroups: [group, { ...withdrawn, eligible: true }] })
+      .where(eq(products.id, productId));
+    expect(
+      await resolveVideoReferences(state.db, org, {
+        ...setup(),
+        imageKeys: [`product_image:${nestedImage.id}`],
+      })
+    ).toHaveLength(1);
+    await state.db
+      .delete(productComponents)
+      .where(eq(productComponents.componentProductId, component.id));
+    await state.db
+      .delete(productImages)
+      .where(eq(productImages.id, componentImage.id));
+    await state.db
+      .delete(productImages)
+      .where(eq(productImages.id, nestedImage.id));
+    await state.db.delete(products).where(eq(products.id, component.id));
+    await state.db
+      .update(products)
+      .set({ mediaGroups: [] })
+      .where(eq(products.id, productId));
   });
 
   it("exposes selected product facts and carries them into the actual video request", async () => {

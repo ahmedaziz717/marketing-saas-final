@@ -1,3 +1,4 @@
+import { catalogCardGallery } from "../../shared/catalogMedia";
 import { productOverlayPreview } from "../lib/productOverlayPreview";
 import {
   readOverlaySources,
@@ -70,6 +71,7 @@ import {
   creativeJobs,
   creativeVariants,
   productImages,
+  productComponents,
   products,
 } from "../../drizzle/schema";
 import {
@@ -309,6 +311,27 @@ export async function loadInputs(
         )
       ).source
     : undefined;
+  const represented = ids.length
+    ? await db
+        .select()
+        .from(productComponents)
+        .where(
+          and(
+            eq(productComponents.organizationId, organizationId),
+            inArray(productComponents.parentProductId, ids)
+          )
+        )
+    : [];
+  const selectableImages = images.filter(
+    image =>
+      catalogCardGallery(
+        [image],
+        catalog.find(p => p.id === image.productId)?.mediaGroups,
+        represented
+          .filter(link => link.parentProductId === image.productId)
+          .map(link => link.groupId)
+      ).images.length > 0
+  );
   return {
     ...(enhancement ? { enhancement } : {}),
     references: [
@@ -323,7 +346,7 @@ export async function loadInputs(
       organizationId,
       setup,
       await attachMarketingCategories(db, organizationId, catalog),
-      images,
+      selectableImages,
       logos
     ),
   };
@@ -499,11 +522,17 @@ export async function runBuilderJob(
           | "source_resolution"
           | "alignment_unavailable"
           | undefined;
-        let automaticFailureDiagnostic: ProductOverlayFailureDiagnostic | undefined;
+        let automaticFailureDiagnostic:
+          | ProductOverlayFailureDiagnostic
+          | undefined;
         if (cutouts.length) {
-          let overlayStage: ProductOverlayFailureDiagnostic["stage"] = "source_read";
+          let overlayStage: ProductOverlayFailureDiagnostic["stage"] =
+            "source_read";
           try {
-            const design = Buffer.from(await storageGetBase64(image.storageKey), "base64");
+            const design = Buffer.from(
+              await storageGetBase64(image.storageKey),
+              "base64"
+            );
             overlayStage = "alignment";
             const finished = await automaticProductOverlay(
               design,
@@ -520,7 +549,10 @@ export async function runBuilderJob(
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
           } catch (error) {
-            automaticFailureDiagnostic = productOverlayFailureDiagnostic(error, overlayStage);
+            automaticFailureDiagnostic = productOverlayFailureDiagnostic(
+              error,
+              overlayStage
+            );
             automaticFailure =
               error instanceof ProductOverlayResolutionError
                 ? "source_resolution"
@@ -1491,6 +1523,16 @@ export const creativeBuilderRouter = router({
           )
           .orderBy(desc(brandAssets.createdAtMs)),
       ]);
+      const componentLinks = await db
+        .select()
+        .from(productComponents)
+        .where(eq(productComponents.organizationId, input.organizationId));
+      const visibleCatalog = [
+        ...approvedCatalog,
+        ...catalog.filter(
+          p => p.status !== "approved" && p.provenance?.["component.kind"]
+        ),
+      ];
       return {
         references: references.filter(
           r => r.metadata?.kind !== "lifestyle_person"
@@ -1499,11 +1541,15 @@ export const creativeBuilderRouter = router({
           await attachMarketingCategories(
             db,
             input.organizationId,
-            approvedCatalog
+            visibleCatalog
           )
         ).map(product => ({
           relatedSources: relatedCatalogSources(product, catalog),
           ...product,
+          componentKind: product.provenance?.["component.kind"] ?? null,
+          representedGroupIds: componentLinks
+            .filter(link => link.parentProductId === product.id)
+            .map(link => link.groupId),
           images: images.filter(image => image.productId === product.id),
         })),
         logos,

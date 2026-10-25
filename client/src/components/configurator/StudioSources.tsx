@@ -1,4 +1,4 @@
-import { catalogDefaultImage } from "@shared/catalogMedia";
+import { catalogCardGallery, catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "../CatalogGallery";
 import type {
   CatalogImageMedia,
@@ -35,6 +35,9 @@ import { StudioCard } from "./StudioCard";
 import { PageUrlSource } from "./PageUrlSource";
 
 type Product = {
+  status?: string;
+  componentKind?: string | null;
+  representedGroupIds?: string[];
   id: number;
   name: string;
   recordType?: string;
@@ -467,13 +470,20 @@ export function StudioSources({
                     .includes(search.toLowerCase())
                 )
                 .map(p => {
+                  const gallery = catalogCardGallery(
+                    p.images,
+                    p.mediaGroups,
+                    p.representedGroupIds
+                  );
+                  const unavailable =
+                    p.status != null && p.status !== "approved";
                   const primary =
-                    p.images.find(
+                    gallery.images.find(
                       photo =>
                         photo.isPrimary &&
                         catalogDefaultImage(photo, p.mediaGroups)
                     ) ??
-                    p.images.find(photo =>
+                    gallery.images.find(photo =>
                       catalogDefaultImage(photo, p.mediaGroups)
                     );
                   const selection = image.products.find(
@@ -484,7 +494,9 @@ export function StudioSources({
                       key={p.id}
                       title={p.name}
                       description={
-                        p.sku ||
+                        (p.componentKind
+                          ? `${p.componentKind} Option${unavailable ? " � Review needed in Catalog" : ""}`
+                          : p.sku) ||
                         (p.recordType === "service"
                           ? "Service"
                           : "Product catalog")
@@ -496,6 +508,7 @@ export function StudioSources({
                       contain
                       selected={!!selection}
                       disabled={
+                        (unavailable && !selection) ||
                         (!primary &&
                           !selection &&
                           p.recordType !== "service") ||
@@ -528,10 +541,25 @@ export function StudioSources({
                               : "Choose up to four views per product, twelve total."}{" "}
                             Preview without changing selection.
                           </p>
+                          {selection &&
+                            selectedProductImageIds(selection).some(
+                              id =>
+                                id != null &&
+                                !gallery.images.some(photo => photo.id === id)
+                            ) && (
+                              <p
+                                role="status"
+                                className="mb-2 text-xs text-amber-700"
+                              >
+                                A saved view now belongs to a separate component
+                                card. Your selection is retained; choose an
+                                approved component card before generating.
+                              </p>
+                            )}
                           <CatalogGallery
                             name={p.name}
-                            images={p.images}
-                            groups={p.mediaGroups}
+                            images={gallery.images}
+                            groups={gallery.groups}
                             selectedIds={
                               selection
                                 ? selectedProductImageIds(selection).filter(
@@ -540,6 +568,7 @@ export function StudioSources({
                                 : []
                             }
                             disabled={
+                              unavailable ||
                               creativeProductViewCount(image) >= 12 ||
                               (selection
                                 ? selectedProductImageIds(selection).length >=
