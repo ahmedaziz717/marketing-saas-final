@@ -1,3 +1,4 @@
+import { GalleryElementsFixture, galleryWorkflowChoices } from "./gallery-elements";
 import { componentCatalogFixture } from "./catalog-components";
 import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
 import { CatalogCategoryMapping } from "../../client/src/components/CatalogCategoryMapping";
@@ -411,6 +412,7 @@ function respond(path: string, input: any) {
       },
     ];
   if (path === "briefs.get") return respond("briefs.list", input)[0];
+  if (path === "workflows.mediaChoices" && which === "gallery-elements-app") return galleryWorkflowChoices();
   if (path === "video.options") return { ready: true, reason: null };
   if (path === "video.catalogImages") return { items: [], nextOffset: null };
   if (path === "video.list") return [...videoDrafts];
@@ -826,6 +828,7 @@ function respond(path: string, input: any) {
     };
   if (path === "catalogSources.galleryPilotProducts") return [{ id: 7, name: "Selected system", externalId: "system-a" }];
   if (path === "catalogSources.galleryPilotStatus") return null;
+  if (path === "catalogSources.galleryRecipeSettings") return { updatedAtMs: 1, autoSync: false, nextSyncAt: null, recipe: null, recipeOrigin: null, coverage: [{ id: 7, imageCount: 1, groupCount: 0 }] };
   if (path === "catalogSources.previewGalleryPilot") { mutations.push(path); return { token: { ciphertext: "fixture", iv: "iv", tag: "tag" }, productName: "Selected system", distinctImages: 183, cachedImages: 0, groups: Array(21).fill({}), groupsAdded: Array(21).fill("group"), groupsReplaced: [], maximumNewImages: 183, existingImagesReferenced: [], maximumImageAttempts: 549 }; }
   if (path === "catalogSources.queueGalleryPilot") { mutations.push(path); return { queued: true }; }
   if (path === "catalogSources.previewApi") {
@@ -1182,6 +1185,9 @@ const routeForPage: Record<string, string> = {
   "catalog-pilot": "/app/catalog-pilot-fixture",
   "catalog-components": "/app/catalog",
   "catalog-gallery": "/app/catalog-gallery-fixture",
+  "gallery-elements-image": "/app/gallery-elements-image",
+  "gallery-elements-video": "/app/gallery-elements-video",
+  "gallery-elements-app": "/app/gallery-elements-app",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",
   "workflow-density": "/app/workflow-density-fixture",
@@ -1453,6 +1459,7 @@ function AuthoringContextFixture() {
 }
 function RoutedPage() {
   const [path] = useLocation();
+  if (which.startsWith("gallery-elements-")) return <DashboardLayout><GalleryElementsFixture kind={which.slice("gallery-elements-".length) as any}/></DashboardLayout>;
   if (which === "authoring-context") return <AuthoringContextFixture />;
   if (which === "catalog-pilot") return <DashboardLayout><h1>Catalog gallery pilot</h1><CatalogGalleryPilot organizationId={1} sourceId={1} onQueued={async () => {}} /></DashboardLayout>;
   if (which === "catalog-gallery") return <DashboardLayout><CatalogGalleryFixture /></DashboardLayout>;
@@ -2313,6 +2320,23 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       layout();
       await click("Confirm this product only");
       check(mutations.includes("catalogSources.queueGalleryPilot"), "Explicit confirmation queues only the reviewed product");
+      layout();
+    }
+    if (which.startsWith("gallery-elements-")) {
+      check(document.querySelectorAll('button[aria-label^="Preview "][aria-label$=" for Complete system"]').length === 9, "All eight system originals and legacy Hero visible in one gallery");
+      check(!document.querySelector('select[aria-label="Gallery for Complete system"]'), "Represented chassis options are not nested in the parent gallery");
+      check(document.body.textContent?.includes("Chassis Option"), "Independent component card is labeled Chassis Option");
+      if (which !== "gallery-elements-app") check(document.body.textContent?.includes("Review needed"), "Pending component is visible but awaiting review");
+      const state = () => document.querySelector('[data-testid="gallery-selection"]')?.textContent;
+      const before = state();
+      document.querySelector<HTMLButtonElement>('button[aria-label="Preview 4 for Complete system"]')!.click();
+      await pause();
+      check(state() === before, "Browsing another angle leaves saved selection unchanged");
+      const select = document.querySelector<HTMLInputElement>('input[aria-label^="Use 4 for Complete system"]');
+      check(!!select, "Original gallery angle remains selectable");
+      select!.click();
+      await pause();
+      check(state() !== before, "Selecting angle updates exact saved reference");
       layout();
     }
     if (which === "catalog-gallery") {

@@ -11,6 +11,8 @@ import {
   type WorkflowMediaSelection,
 } from "@shared/workflowInputs";
 import { AssetUploadDialog } from "./AssetUploadDialog";
+import { CatalogGallery } from "./CatalogGallery";
+import { catalogCardGallery } from "@shared/catalogMedia";
 import {
   Dialog,
   DialogContent,
@@ -115,10 +117,16 @@ export function WorkflowMediaControl({
     p: NonNullable<typeof data>["products"][number],
     imageKey?: string
   ) => {
+    if (p.unavailableReason || field.locked) return;
     onChange(
       JSON.stringify(
         product?.id === p.id && selected
-          ? { ...selected, productId: p.id, imageKey }
+          ? {
+              ...selected,
+              ...(/^\d+$/.test(value) && !field.media ? content : {}),
+              productId: p.id,
+              imageKey,
+            }
           : {
               productId: p.id,
               imageKey,
@@ -202,6 +210,11 @@ export function WorkflowMediaControl({
           <div>
             <small>Selected {product ? "product" : "asset"}</small>
             <strong>{chosen.name}</strong>
+            {product?.unavailableReason && (
+              <p role="alert">
+                {product.unavailableReason} Your saved selection is retained.
+              </p>
+            )}
             {content && (
               <p>
                 {content.featuredSpecKeys.length
@@ -285,33 +298,80 @@ export function WorkflowMediaControl({
               }}
             />
           )}
-          <div className="wf-media-grid">
+          <div
+            className={
+              tab === "products" ? "wf-media-product-grid" : "wf-media-grid"
+            }
+          >
             {tab === "products"
               ? data?.products
                   .filter(p => data.pageIds.includes(p.id))
-                  .flatMap(p =>
-                    kind === "product"
-                      ? [
-                          tile(
-                            `product:${p.id}`,
-                            p.name,
-                            p.images[0]?.url,
-                            `${p.images.length} ${p.images.length === 1 ? "image" : "images"} · Catalog`,
-                            product?.id === p.id,
-                            () => selectProduct(p, p.images[0]?.key)
-                          ),
-                        ]
-                      : p.images.map((i, index) =>
-                          tile(
-                            i.key,
-                            p.name,
-                            i.url,
-                            `Product image ${index + 1}`,
-                            selected?.imageKey === i.key,
-                            () => selectProduct(p, i.key)
-                          )
-                        )
-                  )
+                  .map(p => {
+                    const gallery = catalogCardGallery(
+                      p.images,
+                      p.mediaGroups,
+                      p.representedGroupIds
+                    );
+                    return (
+                      <article
+                        key={p.id}
+                        aria-label={`Product ${p.name}`}
+                        className={`wf-media-product-card${product?.id === p.id ? " is-selected" : ""}`}
+                      >
+                        <h3>{p.name}</h3>
+                        {p.unavailableReason && (
+                          <p role="status">{p.unavailableReason}</p>
+                        )}
+                        {p.componentKind && (
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            {p.componentKind} Option
+                          </p>
+                        )}
+                        <CatalogGallery
+                          name={p.name}
+                          groups={gallery.groups}
+                          primaryId={p.primaryImageId}
+                          images={gallery.images.map(i => ({
+                            id: Number(i.key.split(":")[1]),
+                            url: i.url,
+                            isPrimary: i.isPrimary,
+                            media: i.media,
+                          }))}
+                          selected={
+                            selected?.imageKey?.startsWith("product_image:")
+                              ? Number(selected.imageKey.split(":")[1])
+                              : null
+                          }
+                          onSelect={
+                            field.locked || p.unavailableReason
+                              ? undefined
+                              : id => {
+                                  const image = p.images.find(
+                                    i => i.key === `product_image:${id}`
+                                  );
+                                  if (image) selectProduct(p, image.key);
+                                }
+                          }
+                        />
+                        {!!p.representedGroupIds?.length && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Component options have their own catalog cards. Only
+                            approved items can be used.
+                          </p>
+                        )}
+                        {kind === "product" && !p.images.length && (
+                          <button
+                            type="button"
+                            disabled={field.locked || !!p.unavailableReason}
+                            aria-pressed={product?.id === p.id}
+                            onClick={() => selectProduct(p)}
+                          >
+                            Select {p.name}
+                          </button>
+                        )}
+                      </article>
+                    );
+                  })
               : data?.assets
                   .filter(a =>
                     a.name.toLowerCase().includes(search.toLowerCase())
@@ -360,28 +420,12 @@ export function WorkflowMediaControl({
             </div>
           )}
           {product && selected && content && (
-            <fieldset disabled={field.locked} className="wf-media-content">
+            <fieldset
+              disabled={field.locked || !!product.unavailableReason}
+              className="wf-media-content"
+            >
               <legend>Product content</legend>
               <p>Choose what this workflow may feature in its output.</p>
-              {kind === "product" && product.images.length > 1 && (
-                <div
-                  className="wf-media-photos"
-                  role="group"
-                  aria-label="Product photo"
-                >
-                  {product.images.map((i, index) => (
-                    <button
-                      type="button"
-                      key={i.key}
-                      aria-label={`Use product photo ${index + 1}`}
-                      aria-pressed={selected.imageKey === i.key}
-                      onClick={() => changeProduct({ imageKey: i.key })}
-                    >
-                      <img src={i.url} alt={i.name} />
-                    </button>
-                  ))}
-                </div>
-              )}
               <h4>Bullets to feature</h4>
               {Object.entries(product.specifications)
                 .filter(([, v]) => v?.trim())

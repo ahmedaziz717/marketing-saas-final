@@ -76,3 +76,61 @@ it("does not confuse asset and catalog IDs", () => {
   expect(check.checked).toBe(false);
   expect(check.disabled).toBe(true);
 });
+
+it("presents pending chassis separately without selecting represented parent images", () => {
+  const toggle = vi.fn();
+  const group = {
+    id: "case",
+    name: "Case",
+    role: "optional_component" as const,
+    eligible: true,
+    declaredImages: 1,
+  };
+  const media = {
+    width: 700,
+    height: 700,
+    hasAlpha: true,
+    candidates: [],
+    selectedSourceUrl: "/case.png",
+    unavailableCandidates: 0,
+    references: [{ groupId: "case", imageId: "front", position: 0 }],
+  };
+  render(
+    <ProductPhotoGroups
+      choices={[
+        {
+          ...photo("product_image:1", 7, "/hero.png"),
+          isPrimary: true,
+          representedGroupIds: ["case"],
+          mediaGroups: [group],
+        },
+        {
+          ...photo("product_image:2", 7, "/case.png"),
+          media,
+          representedGroupIds: ["case"],
+          mediaGroups: [group],
+          unavailableReason: "Choose the separate component card.",
+        },
+        {
+          ...photo("product_image:3", 8, "/case.png"),
+          componentKind: "Chassis",
+          unavailableReason: "Review needed in Catalog before use.",
+        },
+      ]}
+      selected={["product_image:2"]}
+      limit={3}
+      onToggle={toggle}
+    />
+  );
+  expect(screen.getByText("Chassis Option")).toBeTruthy();
+  expect(screen.getByText("Review needed in Catalog before use.")).toBeTruthy();
+  expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+  expect(
+    (screen.getAllByRole("checkbox")[1] as HTMLInputElement).disabled
+  ).toBe(true);
+  expect(toggle).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove saved reference" })
+  );
+  expect(toggle).toHaveBeenCalledWith("product_image:2");
+});

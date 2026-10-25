@@ -173,14 +173,14 @@ export function CatalogGallery({
                 ? "Base component gallery"
                 : group.id === "legacy"
                   ? "Previously imported photos"
-                  : "System gallery"}
+                  : "Product gallery"}
             {group.referenceOnly &&
               "; reference photos - actual configuration may vary"}
             {!group.eligible && " · Not eligible for this system"}
           </p>
           {(!photos.length ||
             (group.expectedCount != null &&
-              photos.length < group.expectedCount)) && (
+              group.sourceImageCount < group.expectedCount)) && (
             <p role="status" className="text-xs">
               Gallery incomplete
               {group.expectedCount != null
