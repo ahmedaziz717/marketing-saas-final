@@ -18,7 +18,12 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { requireOrganizationRole } from "../lib/access";
 import { libraryDatabase } from "../lib/assetLibrary";
 import { appendActivity, withOrganizationTransaction } from "../lib/activity";
-import { creditState } from "../lib/aiMetering";
+import { aiScope, creditState } from "../lib/aiMetering";
+import {
+  authorizeMcpVideoEnqueue,
+  authorizeMcpVideoEnqueueInTransaction,
+  bindMcpVideoPolicy,
+} from "../lib/mcpVideoPolicy";
 import {
   getVideoJob,
   publicVideoJob,
@@ -92,6 +97,12 @@ export async function saveVideoSetup<T>(
       const now = Date.now();
       if (input.id) {
         const job = await getVideoJob(tx, input.organizationId, input.id);
+        if (job.mcpPolicy)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "This video is bound to an approved workflow. Review a new workflow run to change it.",
+          });
         if (job.status !== "draft" || job.revision !== input.revision)
           throw new TRPCError({
             code: "CONFLICT",
@@ -123,6 +134,165 @@ export async function saveVideoSetup<T>(
       return publicVideoJob(saved);
     };
     return aroundSave ? aroundSave(tx, save) : save();
+  });
+}
+
+export const videoGenerateInput = reference.extend({
+  revision: z.number().int().positive(),
+  quotedCredits: z.number().int().min(0),
+});
+export async function enqueueVideoGeneration(
+  userId: number,
+  input: z.infer<typeof videoGenerateInput>
+) {
+  await requireOrganizationRole(userId, input.organizationId, [...studioRoles]);
+  const db = await libraryDatabase();
+  const initial = await getVideoJob(db, input.organizationId, input.id);
+
+  const approvedContext = await authorizeMcpVideoEnqueue(db, initial, userId);
+  if (initial.status !== "draft") return publicVideoJob(initial);
+  if (!(await videoReadiness(db)).ready)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Video generation is awaiting administrator setup. Your draft has been saved.",
+    });
+  const refs = await resolveVideoReferences(
+    db,
+    input.organizationId,
+    initial.setup
+  );
+  assertCategorySelection(
+    refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
+    initial.setup.categoryHandling
+  );
+  const prepare = () =>
+    quotedVideoRequest(db, input.organizationId, initial.setup, refs);
+  const { request, rate, quote } = approvedContext
+    ? await aiScope.run(
+        {
+          organizationId: input.organizationId,
+          actorUserId: userId,
+          operation: "workflow.generate_video",
+          resolvedPromptDefaults: Promise.resolve(approvedContext.prompts),
+        },
+        prepare
+      )
+    : await prepare();
+  return withOrganizationTransaction(db, input.organizationId, async tx => {
+    const job = await getVideoJob(tx, input.organizationId, input.id);
+
+    await authorizeMcpVideoEnqueueInTransaction(tx, job, userId);
+    if (job.status !== "draft") return publicVideoJob(job);
+    if (job.revision !== input.revision || job.revision !== initial.revision)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message:
+          "The draft changed. Review it and request a new credit estimate.",
+      });
+    const [kit] = await tx
+      .select({ id: brandKits.id })
+      .from(brandKits)
+      .where(eq(brandKits.organizationId, input.organizationId));
+    if (!kit)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Finish workspace setup before generating videos.",
+      });
+    const active = await tx
+      .select({ id: videoJobs.id })
+      .from(videoJobs)
+      .where(
+        and(
+          eq(videoJobs.organizationId, input.organizationId),
+          inArray(videoJobs.status, [...activeVideoStatuses, "attention"])
+        )
+      );
+    if (active.length >= 3)
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message:
+          "This workspace already has three video requests in progress. Wait for one to finish.",
+      });
+    await validateVideoReferences(tx, { ...job, references: refs });
+    if (quote.credits !== input.quotedCredits)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message:
+          "The credit price changed. Review the updated estimate before generating.",
+      });
+    const mcpPolicy = job.mcpPolicy
+      ? await bindMcpVideoPolicy(tx, job, {
+          references: refs,
+          requestBody: request,
+          credits: quote.credits,
+          rateSnapshot: rate,
+        })
+      : null;
+    const period = utcCreditMonth(),
+      credit = await creditState(tx, input.organizationId, period),
+      now = Date.now();
+    if (credit.account?.aiPaused)
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "AI generation is paused for this workspace.",
+      });
+    if (credit.account?.enforceCredits && credit.remaining < quote.credits)
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `This video needs ${quote.credits} AI credits; ${Math.max(0, credit.remaining)} remain.`,
+      });
+    await tx.insert(aiUsage).values({
+      id: job.id,
+      organizationId: input.organizationId,
+      actorUserId: userId,
+      provider: "higgsfield",
+      model: videoModelKey(job.setup),
+      kind: "video",
+      operation: `video.${job.setup.mode}`,
+      status: "pending",
+      credits: quote.credits,
+      period,
+      rateSnapshot: rate,
+      createdAtMs: now,
+    });
+    await tx.insert(creditLedger).values({
+      id: job.id,
+      organizationId: input.organizationId,
+      actorUserId: userId,
+      period,
+      amount: -quote.credits,
+      reason: "Reserved: video generation",
+      createdAtMs: now,
+    });
+    const [saved] = await tx
+      .update(videoJobs)
+      .set({
+        status: "queued",
+        mcpPolicy,
+        actorUserId: userId,
+        endpoint: videoEndpoint(job.setup),
+        requestBody: request,
+        requestPreparedAtMs: now,
+        references: refs,
+        credits: quote.credits,
+        revision: job.revision + 1,
+        updatedAtMs: now,
+      })
+      .where(eq(videoJobs.id, job.id))
+      .returning();
+    await appendActivity(
+      {
+        organizationId: input.organizationId,
+        actorUserId: userId,
+        action: "video.queued",
+        entityType: "video_job",
+        entityId: job.id,
+        payload: { mode: job.setup.mode, credits: quote.credits },
+      },
+      tx
+    );
+    return publicVideoJob(saved);
   });
 }
 
@@ -226,150 +396,8 @@ export const videoRouter = router({
       return { credits: quote.credits, durationSeconds: quote.durationSeconds };
     }),
   generate: protectedProcedure
-    .input(
-      reference.extend({
-        revision: z.number().int().positive(),
-        quotedCredits: z.number().int().min(0),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      await requireOrganizationRole(ctx.user.id, input.organizationId, [
-        ...studioRoles,
-      ]);
-      const db = await libraryDatabase();
-      const initial = await getVideoJob(db, input.organizationId, input.id);
-
-      if (initial.status !== "draft") return publicVideoJob(initial);
-      if (!(await videoReadiness(db)).ready)
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "Video generation is awaiting administrator setup. Your draft has been saved.",
-        });
-      const refs = await resolveVideoReferences(
-        db,
-        input.organizationId,
-        initial.setup
-      );
-      assertCategorySelection(
-        refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
-        initial.setup.categoryHandling
-      );
-      const { request, rate, quote } = await quotedVideoRequest(
-        db,
-        input.organizationId,
-        initial.setup,
-        refs
-      );
-      return withOrganizationTransaction(db, input.organizationId, async tx => {
-        const job = await getVideoJob(tx, input.organizationId, input.id);
-
-        if (job.status !== "draft") return publicVideoJob(job);
-        if (
-          job.revision !== input.revision ||
-          job.revision !== initial.revision
-        )
-          throw new TRPCError({
-            code: "CONFLICT",
-            message:
-              "The draft changed. Review it and request a new credit estimate.",
-          });
-        const [kit] = await tx
-          .select({ id: brandKits.id })
-          .from(brandKits)
-          .where(eq(brandKits.organizationId, input.organizationId));
-        if (!kit)
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Finish workspace setup before generating videos.",
-          });
-        const active = await tx
-          .select({ id: videoJobs.id })
-          .from(videoJobs)
-          .where(
-            and(
-              eq(videoJobs.organizationId, input.organizationId),
-              inArray(videoJobs.status, [...activeVideoStatuses, "attention"])
-            )
-          );
-        if (active.length >= 3)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message:
-              "This workspace already has three video requests in progress. Wait for one to finish.",
-          });
-        await validateVideoReferences(tx, { ...job, references: refs });
-        if (quote.credits !== input.quotedCredits)
-          throw new TRPCError({
-            code: "CONFLICT",
-            message:
-              "The credit price changed. Review the updated estimate before generating.",
-          });
-        const period = utcCreditMonth(),
-          credit = await creditState(tx, input.organizationId, period),
-          now = Date.now();
-        if (credit.account?.aiPaused)
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "AI generation is paused for this workspace.",
-          });
-        if (credit.account?.enforceCredits && credit.remaining < quote.credits)
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: `This video needs ${quote.credits} AI credits; ${Math.max(0, credit.remaining)} remain.`,
-          });
-        await tx.insert(aiUsage).values({
-          id: job.id,
-          organizationId: input.organizationId,
-          actorUserId: ctx.user.id,
-          provider: "higgsfield",
-          model: videoModelKey(job.setup),
-          kind: "video",
-          operation: `video.${job.setup.mode}`,
-          status: "pending",
-          credits: quote.credits,
-          period,
-          rateSnapshot: rate,
-          createdAtMs: now,
-        });
-        await tx.insert(creditLedger).values({
-          id: job.id,
-          organizationId: input.organizationId,
-          actorUserId: ctx.user.id,
-          period,
-          amount: -quote.credits,
-          reason: "Reserved: video generation",
-          createdAtMs: now,
-        });
-        const [saved] = await tx
-          .update(videoJobs)
-          .set({
-            status: "queued",
-            actorUserId: ctx.user.id,
-            endpoint: videoEndpoint(job.setup),
-            requestBody: request,
-            requestPreparedAtMs: now,
-            references: refs,
-            credits: quote.credits,
-            revision: job.revision + 1,
-            updatedAtMs: now,
-          })
-          .where(eq(videoJobs.id, job.id))
-          .returning();
-        await appendActivity(
-          {
-            organizationId: input.organizationId,
-            actorUserId: ctx.user.id,
-            action: "video.queued",
-            entityType: "video_job",
-            entityId: job.id,
-            payload: { mode: job.setup.mode, credits: quote.credits },
-          },
-          tx
-        );
-        return publicVideoJob(saved);
-      });
-    }),
+    .input(videoGenerateInput)
+    .mutation(({ ctx, input }) => enqueueVideoGeneration(ctx.user.id, input)),
   cancel: protectedProcedure
     .input(reference)
     .mutation(async ({ ctx, input }) => {

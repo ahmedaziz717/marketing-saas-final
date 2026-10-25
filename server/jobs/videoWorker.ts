@@ -1,3 +1,7 @@
+import {
+  guardMcpVideoSubmission,
+  mcpVideoRateHash,
+} from "../lib/mcpVideoPolicy";
 import { prepareVideoRequest } from "../lib/videoRequest";
 import { providerRequestRate } from "../lib/providerQuote";
 import { videoPricingContext } from "../lib/seedancePricing";
@@ -246,7 +250,12 @@ async function saveOutput(db: LibraryDatabase, job: VideoJob) {
         metadata: {
           ...info,
           campaignPlanId: job.setup.campaignPlanId,
-          direction: { ...job.setup.direction, duration: job.setup.duration, sound: job.setup.sound, learningOrigin: job.setup.learningOrigin },
+          direction: {
+            ...job.setup.direction,
+            duration: job.setup.duration,
+            sound: job.setup.sound,
+            learningOrigin: job.setup.learningOrigin,
+          },
           learningOrigin: job.setup.learningOrigin,
           generatedVideo: {
             jobId: job.id,
@@ -373,6 +382,7 @@ export async function processNextVideoJob(db: LibraryDatabase) {
     }
     if (job.status === "queued") {
       try {
+        await guardMcpVideoSubmission(db, job);
         await requireOrganizationRole(job.actorUserId, job.organizationId, [
           ...studioRoles,
         ]);
@@ -419,7 +429,11 @@ export async function processNextVideoJob(db: LibraryDatabase) {
           job.references,
           currentRate
         ).credits;
-        if (currentCredits !== job.credits)
+        if (
+          currentCredits !== job.credits ||
+          (job.mcpPolicy &&
+            job.mcpPolicy.rateHash !== mcpVideoRateHash(currentRate))
+        )
           throw new Error("Credit price changed");
         await db
           .update(aiUsage)
@@ -445,9 +459,21 @@ export async function processNextVideoJob(db: LibraryDatabase) {
       });
       return true;
     }
-    if (job.status === "submitting") {
+    if (
+      job.status === "submitting" &&
+      !(job.mcpPolicy && job.providerRequestId)
+    ) {
+      if (job.mcpPolicy && job.attempts && !job.providerRequestId) {
+        await release(db, job, {
+          status: "attention",
+          error:
+            "Provider acceptance is uncertain. Credits remain reserved; no automatic resubmission was made.",
+        });
+        return true;
+      }
       if (!job.attempts) {
         try {
+          await guardMcpVideoSubmission(db, job);
           await requireOrganizationRole(job.actorUserId, job.organizationId, [
             ...studioRoles,
           ]);
@@ -458,6 +484,28 @@ export async function processNextVideoJob(db: LibraryDatabase) {
             people: job.setup.people ?? [],
           });
           await validateVideoReferences(db, job);
+          if (job.mcpPolicy) {
+            const [usage] = await db
+              .select()
+              .from(aiUsage)
+              .where(eq(aiUsage.id, job.id));
+            if (!usage?.rateSnapshot || !job.endpoint || !job.requestBody)
+              throw new Error("Approved pricing snapshot unavailable");
+            const rate = await providerRequestRate(
+              usage.rateSnapshot,
+              job.endpoint,
+              job.requestBody,
+              videoPricingContext(job.setup, job.references)
+            );
+            if (
+              videoQuote(job.setup, job.references, rate).credits !==
+                job.credits ||
+              mcpVideoRateHash(rate) !== job.mcpPolicy.rateHash
+            )
+              throw new Error("Approved video price changed before submission");
+            // Recheck live authorization after the read-only provider quote.
+            await guardMcpVideoSubmission(db, job);
+          }
         } catch {
           await terminal(
             db,

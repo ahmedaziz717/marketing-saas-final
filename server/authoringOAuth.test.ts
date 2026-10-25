@@ -237,6 +237,7 @@ it("requires explicit ongoing HTTP consent and advertises separately consented s
     "creatives:draft",
     "campaigns:draft",
     "workflows:execute",
+    "creatives:generate_video",
     "brand:configure",
     "catalog:configure",
   ]);
@@ -640,6 +641,75 @@ it("withholds configuration grants from creators and revokes mixed grants on adm
   // Restoring the role cannot silently reactivate a previously revoked grant.
   expect(await oauth.verify(verifyGrant.result.access_token)).toBeNull();
   expect(await oauth.verify(refreshGrant.result.access_token)).toBeNull();
+});
+it("requires explicit video-generation consent and cannot add it through an existing execution refresh", async () => {
+  const oldScope = "workflows:read workflows:execute";
+  const videoScope = oldScope + " creatives:generate_video";
+  const legacy = await grant(oldScope, true);
+  const identity = (await oauth.verify(legacy.result.access_token))!;
+  await expect(
+    workflowAuthoring(
+      userId,
+      connectionGuard(
+        userId,
+        identity.connectionId,
+        config.resource,
+        "creatives:generate_video"
+      )
+    ).discover({ organizationId })
+  ).rejects.toThrow();
+  await expect(
+    oauth.exchange({
+      ...refreshInput(legacy.result.refresh_token!),
+      scope: videoScope,
+    })
+  ).rejects.toThrow();
+  expect((await oauth.verify(legacy.result.access_token))?.scopes).toEqual(
+    oldScope.split(" ")
+  );
+  const renewed = await oauth.exchange(
+    refreshInput(legacy.result.refresh_token!)
+  );
+  expect(renewed.scope).toBe(oldScope);
+  for (const requested of [
+    "workflows:read workflows:draft",
+    oldScope,
+    videoScope,
+  ]) {
+    const response = await http(
+      "/mcp/oauth/authorize?" + new URLSearchParams(authorization(requested))
+    );
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(
+      html.includes("prepare video generation from stored workspace media")
+    ).toBe(requested === videoScope);
+    if (requested === videoScope) {
+      expect(html).toContain(
+        "only with workflows:execute and a separate exact run and credit-budget approval"
+      );
+      expect(html).toContain(
+        "Video outputs remain pending; publishing and schedules are excluded."
+      );
+      expect(html).toContain("exact separately approved per-run budget");
+    }
+  }
+  const fresh = await grant(videoScope, true);
+  const freshIdentity = (await oauth.verify(fresh.result.access_token))!;
+  await expect(
+    workflowAuthoring(
+      userId,
+      connectionGuard(
+        userId,
+        freshIdentity.connectionId,
+        config.resource,
+        "creatives:generate_video"
+      )
+    ).discover({ organizationId })
+  ).resolves.toBeDefined();
+  expect(
+    (await oauth.exchange(refreshInput(fresh.result.refresh_token!))).scope
+  ).toBe(videoScope);
 });
 it("commits family revocation on replay, including a consumed credential older than one rotation", async () => {
   const { result } = await grant(undefined, true);

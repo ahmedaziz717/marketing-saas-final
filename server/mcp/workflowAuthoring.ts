@@ -71,6 +71,7 @@ export type McpCapability =
   | "creatives:draft"
   | "campaigns:draft"
   | "workflows:execute"
+  | "creatives:generate_video"
   | "brand:configure"
   | "catalog:configure";
 export type AuthoringMcpConfig = {
@@ -144,9 +145,17 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
         schema: S,
         action: (input: z.infer<S>) => Promise<unknown>,
         write = false,
-        requiredScope = write ? "workflows:draft" : "workflows:read",
+        requiredScope: string | string[] = write
+          ? "workflows:draft"
+          : "workflows:read",
         openWorld = false
       ) {
+        const requiredScopes = Array.from(
+          new Set([
+            "workflows:read",
+            ...(Array.isArray(requiredScope) ? requiredScope : [requiredScope]),
+          ])
+        );
         // Zod 4.1 and the SDK use different JSON Schema typings; runtime validation
         // still happens through the shared Zod schema immediately before dispatch.
         server.registerTool(
@@ -169,16 +178,15 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
               securitySchemes: [
                 {
                   type: "oauth2",
-                  scopes:
-                    requiredScope === "workflows:read"
-                      ? [requiredScope]
-                      : ["workflows:read", requiredScope],
+                  scopes: requiredScopes,
                 },
               ],
             },
           },
           async input => {
-            if (!authInfo!.scopes.includes(requiredScope))
+            if (
+              !requiredScopes.every(scope => authInfo!.scopes.includes(scope))
+            )
               return {
                 isError: true,
                 content: [
@@ -189,7 +197,7 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
                 ],
                 _meta: {
                   "mcp/www_authenticate": [
-                    `Bearer resource_metadata="${metadataUrl}", error="insufficient_scope", scope="${requiredScope === "workflows:read" ? requiredScope : `workflows:read ${requiredScope}`}"`,
+                    `Bearer resource_metadata="${metadataUrl}", error="insufficient_scope", scope="${requiredScopes.join(" ")}"`,
                   ],
                 },
               };
@@ -443,6 +451,25 @@ export function createAuthoringMcp(config?: AuthoringMcpConfig) {
         },
         true,
         "workflows:execute",
+        true
+      );
+      tool(
+        "prepare_video_content_run",
+        "Prepare a content-only workflow with video generation from stored workspace image references. Requires separate video permission and exact in-app run/budget approval. May prepare media; spends no generation credits. Runtime inputs never modify the saved App. Generated upstream images and source-video editing are not supported by this bounded path.",
+        executionPrepareInput,
+        async input => {
+          const { reviewConfig: _reviewConfig, ...plan } =
+            await execution().prepare(input);
+          const reviewUrl = new URL("/mcp/run-review", config.resource);
+          reviewUrl.searchParams.set(
+            "organizationId",
+            String(input.organizationId)
+          );
+          reviewUrl.searchParams.set("requestId", input.requestId);
+          return { ...plan, reviewUrl: reviewUrl.href };
+        },
+        true,
+        ["workflows:execute", "creatives:generate_video"],
         true
       );
       tool(

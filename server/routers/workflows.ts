@@ -1,3 +1,5 @@
+import { workflowRunInputSchema as runInput } from "../../shared/workflowRunInput";
+import { resolveRunnableWorkflow as runnable } from "../lib/workflowRunInput";
 import { workflowMediaChoices } from "../lib/workflowMedia";
 import { workflowImageReferences } from "../lib/creativeWorkflows";
 import { readGenerationSource } from "../lib/creativeImages";
@@ -48,71 +50,6 @@ import {
 } from "../lib/creativeWorkflows";
 const scope = z.object({ organizationId: z.number().int().positive() });
 const reference = scope.extend({ id: z.string().uuid() });
-const runInput = reference.extend({
-  appVersionId: z.string().uuid().optional(),
-  inputs: z
-    .array(
-      z.object({
-        id: z.string().max(80),
-        text: z.string().max(10000).optional(),
-        value: z.string().max(10000).optional(),
-        imageKey: z
-          .string()
-          .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
-          .optional(),
-      })
-    )
-    .max(40)
-    .optional(),
-  revision: z.number().int().positive(),
-  target: z.string().max(80).optional(),
-});
-async function runnable(
-  db: Awaited<ReturnType<typeof libraryDatabase>>,
-  input: z.infer<typeof runInput>
-) {
-  const workflow = await getWorkflow(db, input.organizationId, input.id);
-  const app = input.appVersionId
-    ? await getWorkflowApp(db, input.organizationId, input.appVersionId)
-    : null;
-  if (app && app.workflowId !== workflow.id)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Choose the matching workflow for this App.",
-    });
-  const graph = structuredClone(app?.graph ?? workflow.graph);
-  for (const field of input.inputs ?? []) {
-    const node = graph.nodes.find(n => n.id === field.id);
-    if (!node || !["text", "image", "app_input"].includes(node.type))
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Only declared App inputs can be changed.",
-      });
-    if (node.config.field) {
-      if (!node.config.field.locked && field.value !== undefined)
-        node.config.fieldValue = field.value;
-      else if (
-        !node.config.field.locked &&
-        node.type === "image" &&
-        field.imageKey
-      )
-        node.config.fieldValue = field.imageKey;
-      continue;
-    }
-    if (node.type === "image" && field.imageKey)
-      node.config.imageKey = field.imageKey;
-    else if (
-      ["text", "app_input"].includes(node.type) &&
-      field.text !== undefined
-    )
-      node.config.text = field.text;
-  }
-  return {
-    ...workflow,
-    graph,
-    revision: app ? input.revision : workflow.revision,
-  };
-}
 export const workflowsRouter = router({
   mediaChoices: protectedProcedure
     .input(

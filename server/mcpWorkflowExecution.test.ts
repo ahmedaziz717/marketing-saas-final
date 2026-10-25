@@ -21,6 +21,21 @@ vi.mock("./_core/llm", () => ({
   listLLMModels: vi.fn(),
 }));
 vi.mock("./lib/openaiSunburst", () => ({ generateSunburstImage: state.model }));
+vi.mock("./lib/videoPricing", () => ({
+  quotedVideoRequest: vi.fn(async () => ({
+    request: { prompt: "Reviewed video" },
+    rate: { credits: 5 },
+    quote: { credits: 5 },
+  })),
+}));
+vi.mock("./lib/videoJobs", async original => ({
+  ...(await original<typeof import("./lib/videoJobs")>()),
+  videoReadiness: async () => ({ ready: true }),
+  resolveVideoReferences: async () => [],
+}));
+import { videoJobs } from "../drizzle/videoSchema";
+import { aiUsage, creditLedger } from "../drizzle/platformSchema";
+import { defaultVideoSetup } from "../shared/videoCreation";
 import {
   activityEvents,
   users,
@@ -102,14 +117,195 @@ beforeAll(async () => {
       graph.nodes.map((n: any) => [n.id, { status: "pending" }])
     ),
     creditsByNode: Object.fromEntries(
-      graph.nodes.map((n: any) => [n.id, n.type === "assistant" ? 5 : 0])
+      graph.nodes.map((n: any) => [
+        n.id,
+        ["assistant", "generate_video"].includes(n.type) ? 5 : 0,
+      ])
     ),
     references: [],
-    credits: graph.nodes.some((n: any) => n.type === "assistant") ? 5 : 0,
+    credits: graph.nodes.some((n: any) =>
+      ["assistant", "generate_video"].includes(n.type)
+    )
+      ? 5
+      : 0,
   }));
 });
 afterAll(async () => {
   await engine?.close();
+});
+it("binds runtime inputs to the reviewed request without changing the saved workflow", async () => {
+  const raw = await input("text");
+  const service = mcpWorkflowExecution(identity);
+  const request = {
+    ...raw,
+    inputs: [{ id: "step", text: "Selected product brief" }],
+  };
+  const plan = await service.prepare(request);
+  expect(plan.reviewConfig.nodes[0].config.text).toBe("Selected product brief");
+  const [stored] = await state.db
+    .select()
+    .from(creativeWorkflows)
+    .where(eq(creativeWorkflows.id, raw.id));
+  expect(stored.graph.nodes[0].config.text).not.toBe("Selected product brief");
+  expect(await service.prepare(request)).toEqual(plan);
+  await expect(
+    service.prepare({ ...request, inputs: [{ id: "step", text: "Changed" }] })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+});
+it("requires a distinct video grant before preparation and at later approval", async () => {
+  const raw = await input("generate_video");
+  const service = mcpWorkflowExecution(identity);
+  const before = state.prepare.mock.calls.length;
+  await expect(service.prepare(raw)).rejects.toThrow(
+    "creatives:generate_video"
+  );
+  expect(state.prepare.mock.calls.length).toBe(before);
+  await state.db
+    .update(authoringOAuthGrants)
+    .set({ scope: "workflows:read workflows:execute creatives:generate_video" })
+    .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  try {
+    const plan = await service.prepare(raw);
+    expect(plan.reviewConfig.nodes[0].type).toBe("generate_video");
+    await state.db
+      .update(authoringOAuthGrants)
+      .set({ scope: "workflows:read workflows:execute" })
+      .where(eq(authoringOAuthGrants.id, identity.connectionId));
+    await expect(
+      approveMcpWorkflowExecution(identity.userId, {
+        organizationId: raw.organizationId,
+        requestId: raw.requestId,
+        hash: plan.hash,
+        maxCredits: plan.maxCredits,
+      })
+    ).rejects.toThrow("creatives:generate_video");
+    await expect(service.prepare(raw)).rejects.toThrow(
+      "creatives:generate_video"
+    );
+  } finally {
+    await state.db
+      .update(authoringOAuthGrants)
+      .set({ scope: "workflows:read workflows:execute" })
+      .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  }
+});
+it("rejects generated upstream media before preparing a video run", async () => {
+  const raw = await input("generate_video");
+  const video = newWorkflowNode("generate_video", "step");
+  const image = newWorkflowNode("generate_image", "generated");
+  await state.db
+    .update(creativeWorkflows)
+    .set({
+      graph: {
+        nodes: [image, video],
+        edges: [
+          {
+            id: "generated-video",
+            source: image.id,
+            target: video.id,
+            port: "image",
+          },
+        ],
+      },
+    })
+    .where(eq(creativeWorkflows.id, raw.id));
+  const before = state.prepare.mock.calls.length;
+  await expect(mcpWorkflowExecution(identity).prepare(raw)).rejects.toThrow(
+    "stored media"
+  );
+  expect(state.prepare.mock.calls.length).toBe(before);
+});
+it("runs an approved video parent through a bound child and reserves only once", async () => {
+  const [kit] = await state.db
+    .insert(brandKits)
+    .values({
+      organizationId: identity.organizationId,
+      name: "Video fixture",
+      colors: [],
+      fonts: [],
+      updatedByUserId: identity.userId,
+      updatedAtMs: 1,
+    })
+    .returning();
+  const raw = await input("generate_video");
+  const node = newWorkflowNode("generate_video", "step");
+  node.config.modelId = defaultVideoSetup.modelId;
+  node.config.text = "A truthful product video";
+  await state.db
+    .update(creativeWorkflows)
+    .set({ graph: { nodes: [node], edges: [] } })
+    .where(eq(creativeWorkflows.id, raw.id));
+  await state.db
+    .update(authoringOAuthGrants)
+    .set({ scope: "workflows:read workflows:execute creatives:generate_video" })
+    .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  const service = mcpWorkflowExecution(identity);
+  try {
+    const plan = await service.prepare(raw);
+    await approveMcpWorkflowExecution(identity.userId, {
+      organizationId: raw.organizationId,
+      requestId: raw.requestId,
+      hash: plan.hash,
+      maxCredits: plan.maxCredits,
+    });
+    await service.execute({
+      organizationId: raw.organizationId,
+      requestId: raw.requestId,
+      hash: plan.hash,
+    });
+    await processNextWorkflowRun(state.db);
+    const [run] = await state.db
+      .select()
+      .from(creativeWorkflowRuns)
+      .where(eq(creativeWorkflowRuns.id, raw.requestId));
+    const childId = run.steps.step.videoJobId;
+    expect(childId).toBeTruthy();
+    const [draft] = await state.db
+      .select()
+      .from(videoJobs)
+      .where(eq(videoJobs.id, childId));
+    expect(draft.mcpPolicy).toMatchObject({
+      state: "draft",
+      parentRunId: raw.requestId,
+      credits: 5,
+    });
+    await state.db
+      .update(creativeWorkflowRuns)
+      .set({ leaseUntilMs: 0 })
+      .where(eq(creativeWorkflowRuns.id, raw.requestId));
+    await processNextWorkflowRun(state.db);
+    await state.db
+      .update(creativeWorkflowRuns)
+      .set({ leaseUntilMs: 0 })
+      .where(eq(creativeWorkflowRuns.id, raw.requestId));
+    await processNextWorkflowRun(state.db);
+    const [child] = await state.db
+      .select()
+      .from(videoJobs)
+      .where(eq(videoJobs.id, childId));
+    expect(child.status).toBe("queued");
+    expect(child.mcpPolicy.state).toBe("bound");
+    expect(
+      await state.db.select().from(aiUsage).where(eq(aiUsage.id, childId))
+    ).toHaveLength(1);
+    expect(
+      await state.db
+        .select()
+        .from(creditLedger)
+        .where(eq(creditLedger.id, childId))
+    ).toHaveLength(1);
+    expect(state.model).not.toHaveBeenCalled();
+    await service.stop({
+      organizationId: raw.organizationId,
+      requestId: raw.requestId,
+    });
+  } finally {
+    await state.db.delete(brandKits).where(eq(brandKits.id, kit.id));
+    await state.db
+      .update(authoringOAuthGrants)
+      .set({ scope: "workflows:read workflows:execute" })
+      .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  }
 });
 async function input(type = "assistant") {
   const id = randomUUID(),

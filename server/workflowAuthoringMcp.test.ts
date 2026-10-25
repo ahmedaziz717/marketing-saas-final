@@ -169,6 +169,7 @@ it("serves SDK tool discovery over Streamable HTTP with only draft capabilities"
     "save_category_settings",
     "assign_product_category",
     "prepare_content_run",
+    "prepare_video_content_run",
     "execute_approved_content_run",
     "read_content_run",
     "stop_content_run",
@@ -374,6 +375,87 @@ it("returns a same-origin budget review link without leaking private review cont
   await adapter.close();
 });
 
+it("requires every advertised video permission, preserves old grants and forwards bounded runtime inputs", async () => {
+  const required = [
+    "workflows:read",
+    "workflows:execute",
+    "creatives:generate_video",
+  ];
+  let scopes = ["workflows:read", "workflows:draft"];
+  const adapter = createAuthoringMcp({
+    ...config,
+    verifyAccessToken: async () => ({
+      userId: 42,
+      organizationId: 7,
+      connectionId: "11111111-1111-4111-8111-111111111111",
+      clientId: "test",
+      scopes,
+    }),
+  });
+  state.prepare.mockClear();
+  state.execute.mockClear();
+  state.prepare.mockResolvedValue({
+    hash: "b".repeat(64),
+    credits: 20,
+    maxCredits: 25,
+    reviewConfig: { private: "PRIVATE_VIDEO_INPUT" },
+  });
+  const listed = await message(await adapter.fetch(request("test")));
+  const tool = listed.result.tools.find(
+    (t: any) => t.name === "prepare_video_content_run"
+  );
+  expect(tool._meta.securitySchemes).toEqual([
+    { type: "oauth2", scopes: required },
+  ]);
+  expect(tool.annotations).toMatchObject({
+    readOnlyHint: false,
+    openWorldHint: true,
+  });
+  const input = {
+    organizationId: 7,
+    id: "22222222-2222-4222-8222-222222222222",
+    revision: 1,
+    requestId: "33333333-3333-4333-8333-333333333333",
+    maxCredits: 25,
+    inputs: [
+      { id: "photo", imageKey: "product_image:732" },
+      { id: "brief", text: "Video draft" },
+    ],
+  };
+  const call = {
+    jsonrpc: "2.0",
+    id: 25,
+    method: "tools/call",
+    params: { name: "prepare_video_content_run", arguments: input },
+  };
+  for (const insufficient of [
+    ["workflows:read", "workflows:draft"],
+    ["workflows:read", "workflows:execute"],
+    ["workflows:read", "creatives:generate_video"],
+  ]) {
+    scopes = insufficient;
+    const denied = await message(await adapter.fetch(request("test", call)));
+    expect(denied.result.isError).toBe(true);
+    expect(denied.result._meta["mcp/www_authenticate"][0]).toContain(
+      `scope="${required.join(" ")}"`
+    );
+    expect(state.prepare).not.toHaveBeenCalled();
+  }
+  scopes = required.slice(1);
+  expect((await adapter.fetch(request("test", call))).status).toBe(403);
+  scopes = required;
+  const allowed = await message(await adapter.fetch(request("test", call)));
+  expect(allowed.result.isError).not.toBe(true);
+  expect(state.prepare).toHaveBeenCalledTimes(1);
+  expect(state.prepare).toHaveBeenCalledWith(input);
+  const result = JSON.parse(allowed.result.content[0].text);
+  expect(new URL(result.reviewUrl).origin).toBe(
+    new URL(config.resource).origin
+  );
+  expect(allowed.result.content[0].text).not.toContain("PRIVATE_VIDEO_INPUT");
+  expect(state.execute).not.toHaveBeenCalled();
+  await adapter.close();
+});
 it("accepts exactly the advertised write scopes and rejects draft-only grants", async () => {
   const adapter = createAuthoringMcp(config);
   const listed = await message(await adapter.fetch(request(await token())));

@@ -1047,9 +1047,14 @@ it("validates typed App choices, preserves locked defaults and snapshots system 
     appVersionId: app.id,
     inputs: [{ id: graph.nodes[0].id, value: "forged-option" }],
   };
-  const quote = await owner.quote(input);
-  await owner.run({
+  await expect(owner.quote(input)).rejects.toThrow(/locked/);
+  const acceptedInput = {
     ...input,
+    inputs: [{ id: graph.nodes[0].id, value: theme.id }],
+  };
+  const quote = await owner.quote(acceptedInput);
+  await owner.run({
+    ...acceptedInput,
     requestId: randomUUID(),
     quotedCredits: quote.credits,
   });

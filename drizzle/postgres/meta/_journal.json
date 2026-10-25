@@ -190,6 +190,13 @@
       "when": 1792890000002,
       "tag": "0026_catalog_components",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792890000003,
+      "tag": "0027_mcp_video_policy",
+      "breakpoints": true
     }
   ]
 }

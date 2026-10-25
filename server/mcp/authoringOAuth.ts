@@ -27,6 +27,7 @@ export const mcpScopes = [
   "creatives:draft",
   "campaigns:draft",
   "workflows:execute",
+  "creatives:generate_video",
   "brand:configure",
   "catalog:configure",
 ] as const;
