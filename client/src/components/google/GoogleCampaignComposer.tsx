@@ -5,6 +5,7 @@ import {
   type GoogleCreativeFormat,
 } from "./GoogleCreativeFormat";
 import { AdEditor, AssetEditor } from "./GoogleAdEditor";
+import { GooglePmaxAi } from "./GooglePmaxAi";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
 import { GoogleChangeSummary } from "./GoogleChangeSummary";
@@ -106,6 +107,7 @@ export function GoogleCampaignComposer({
     [draft, setDraft] = useState<GoogleCampaignDraft | null>(null),
     [error, setError] = useState(""),
     [confirmed, setConfirmed] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<z.infer<
     typeof googleDraftSchema
   > | null>(null);
@@ -193,6 +195,7 @@ export function GoogleCampaignComposer({
   );
   const edit = (next: GoogleChange) => {
     setChange(next);
+    setShowValidation(false);
     setConfirmed(false);
     setError("");
   };
@@ -365,12 +368,8 @@ export function GoogleCampaignComposer({
   async function saveDraft() {
     const parsed = googleChangeSchema.safeParse(change);
     if (!parsed.success) {
-      setError(
-        parsed.error.issues
-          .map(i => `${i.path.join(" · ")}: ${i.message}`)
-          .slice(0, 8)
-          .join("\n")
-      );
+      setShowValidation(true);
+      setError("Complete the required fields below before Google validation.");
       return null;
     }
     try {
@@ -430,6 +429,33 @@ export function GoogleCampaignComposer({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Publishing could not finish.");
     }
+  }
+  const localValidation = showValidation
+    ? googleChangeSchema.safeParse(change)
+    : null;
+  const fieldIssues =
+    localValidation && !localValidation.success
+      ? localValidation.error.issues
+      : [];
+  function goToIssue(path: PropertyKey[]) {
+    const key = path.join(".");
+    const target = key.startsWith("ad.")
+      ? ["ad.name", "ad.finalUrl", "ad.assets"].some(p => key.startsWith(p))
+        ? "creative"
+        : "copy"
+      : ["locationIds", "languageIds", "keywords"].some(p => key.startsWith(p))
+        ? "targeting"
+        : change.kind.startsWith("asset_group")
+          ? "creative"
+          : "settings";
+    setSection(target);
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(
+          `[data-google-field="${path.slice(0, 2).join(".")}"]`
+        )
+        ?.focus()
+    );
   }
   return (
     <div className="google-campaign-studio">
@@ -930,6 +956,28 @@ export function GoogleCampaignComposer({
                     onChange={ad => edit({ ...change, ad })}
                   />
                 )}
+                {(change.kind === "asset_group_assets" ||
+                  change.kind === "asset_group_create") && (
+                  <GooglePmaxAi
+                    key={`${connectionId}:${campaignId}:${change.kind}:${"assetGroupId" in change ? change.assetGroupId : "new"}`}
+                    organizationId={organizationId}
+                    onAdd={asset => {
+                      const list =
+                        change.kind === "asset_group_assets"
+                          ? change.add
+                          : change.assets;
+                      if (
+                        list.some(
+                          a => JSON.stringify(a) === JSON.stringify(asset)
+                        )
+                      )
+                        return;
+                      if (change.kind === "asset_group_assets")
+                        edit({ ...change, add: [...list, asset] });
+                      else edit({ ...change, assets: [...list, asset] });
+                    }}
+                  />
+                )}
                 {change.kind === "campaign_update" && (
                   <p>
                     Choose an existing ad group or asset group in Campaign to
@@ -1203,6 +1251,32 @@ export function GoogleCampaignComposer({
                   </>
                 )}
               </>
+            )}
+            {fieldIssues.length > 0 && (
+              <div role="alert">
+                <h3>Required fields</h3>
+                <ul>
+                  {fieldIssues.map((issue, index) => (
+                    <li key={index}>
+                      <Button
+                        variant="link"
+                        onClick={() => goToIssue(issue.path)}
+                      >
+                        {issue.path
+                          .join(" / ")
+                          .replaceAll(
+                            "ad / name",
+                            creativeType === "PERFORMANCE_MAX"
+                              ? "Asset group name"
+                              : "Ad name"
+                          )
+                          .replaceAll("ad /", "Copy /") || "Campaign settings"}
+                        : {issue.message}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {error && (
               <p className="google-error" role="alert">

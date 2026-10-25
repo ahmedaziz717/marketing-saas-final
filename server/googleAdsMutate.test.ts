@@ -85,3 +85,35 @@ it("never retries an ambiguous publication and redacts raw provider messages", a
     uncertain: false,
   });
 });
+
+it("reports mutation failures as safe validation diagnostics, not OAuth connection failures", async () => {
+  request.mockResolvedValueOnce(
+    Response.json(
+      {
+        partialFailureError: {
+          message: "private payload",
+          details: [
+            {
+              errors: [
+                {
+                  errorCode: { assetError: "ASPECT_RATIO_NOT_ALLOWED" },
+                  message: "private image URL",
+                  trigger: "private-token",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      { headers: { "request-id": "fixture-request" } }
+    )
+  );
+  await expect(
+    mutateGoogleAds("token", "2222222222", operations, true)
+  ).rejects.toMatchObject({
+    message:
+      "Google validation failed: ASPECT_RATIO_NOT_ALLOWED. Request ID: fixture-request.",
+    uncertain: false,
+  });
+  expect(request).toHaveBeenCalledTimes(1);
+});

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { GooglePmaxAi } from "./GooglePmaxAi";
+import { addPmaxSuggestion } from "./GooglePmaxDraft";
 import { Link, useSearch } from "wouter";
 import {
   Image,
@@ -533,6 +535,7 @@ export function AdEditor({
             title={type === "PERFORMANCE_MAX" ? "Asset group name" : "Ad name"}
           >
             <input
+              data-google-field="ad.name"
               value={ad.name}
               onChange={e => patch({ name: e.target.value })}
             />
@@ -541,6 +544,7 @@ export function AdEditor({
             <Field title="Landing page">
               <input
                 type="url"
+                data-google-field="ad.finalUrl"
                 value={ad.finalUrl}
                 placeholder="https://"
                 onChange={e => patch({ finalUrl: e.target.value })}
@@ -551,11 +555,50 @@ export function AdEditor({
       )}
       {part === "copy" && (
         <>
+          {type === "PERFORMANCE_MAX" && (
+            <>
+              <p aria-live="polite">
+                Headlines: {ad.headlines.filter(v => v.trim()).length}/3
+                required (15 maximum). Descriptions:{" "}
+                {ad.descriptions.filter(v => v.trim()).length}/2 required (5
+                maximum). Long headlines:{" "}
+                {(ad.longHeadline?.trim() ? 1 : 0) +
+                  ad.assets.filter(a => a.field === "LONG_HEADLINE").length}
+                /1 required (5 maximum).
+              </p>
+              <GooglePmaxAi
+                organizationId={organizationId}
+                onAdd={asset => onChange(addPmaxSuggestion(ad, asset))}
+              />
+            </>
+          )}
+          {type !== "SHOPPING" && (
+            <div aria-live="polite">
+              {(
+                [
+                  ["Headlines", ad.headlines, 30],
+                  ["Descriptions", ad.descriptions, 90],
+                ] as const
+              ).flatMap(([name, values, limit]) =>
+                values.flatMap((text, index) =>
+                  text.length > limit
+                    ? [
+                        <p role="alert" key={name + index}>
+                          {name} line {index + 1}: {text.length}/{limit}{" "}
+                          characters. Shorten by {text.length - limit}.
+                        </p>,
+                      ]
+                    : []
+                )
+              )}
+            </div>
+          )}
           {type !== "SHOPPING" && (
             <>
               <Field title="Headlines · one per line · 30 characters each">
                 <textarea
                   rows={4}
+                  data-google-field="ad.headlines"
                   value={ad.headlines.join("\n")}
                   onChange={e =>
                     patch({ headlines: e.target.value.split("\n") })
@@ -565,6 +608,7 @@ export function AdEditor({
               <Field title="Descriptions · one per line · 90 characters each">
                 <textarea
                   rows={3}
+                  data-google-field="ad.descriptions"
                   value={ad.descriptions.join("\n")}
                   onChange={e =>
                     patch({ descriptions: e.target.value.split("\n") })
@@ -577,8 +621,38 @@ export function AdEditor({
             <Field title="Long headline · up to 90 characters">
               <input
                 maxLength={90}
+                data-google-field="ad.longHeadline"
                 value={ad.longHeadline ?? ""}
                 onChange={e => patch({ longHeadline: e.target.value })}
+              />
+            </Field>
+          )}
+          {type === "PERFORMANCE_MAX" && (
+            <Field title="Additional long headlines — one per line, up to 90 characters each (5 total)">
+              <textarea
+                value={ad.assets
+                  .filter(
+                    a => a.field === "LONG_HEADLINE" && a.source.kind === "text"
+                  )
+                  .map(a => (a.source.kind === "text" ? a.source.text : ""))
+                  .join("\n")}
+                onChange={e =>
+                  patch({
+                    assets: [
+                      ...ad.assets.filter(
+                        a =>
+                          a.field !== "LONG_HEADLINE" ||
+                          a.source.kind !== "text"
+                      ),
+                      ...(e.target.value
+                        ? e.target.value.split("\n").map(text => ({
+                            field: "LONG_HEADLINE" as const,
+                            source: { kind: "text" as const, text },
+                          }))
+                        : []),
+                    ],
+                  })
+                }
               />
             </Field>
           )}
@@ -586,6 +660,7 @@ export function AdEditor({
             <Field title="Business name · up to 25 characters">
               <input
                 maxLength={25}
+                data-google-field="ad.businessName"
                 value={ad.businessName ?? ""}
                 onChange={e => patch({ businessName: e.target.value })}
               />
