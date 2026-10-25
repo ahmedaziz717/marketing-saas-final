@@ -1,5 +1,6 @@
 import { googleCustomerIdSchema } from "../../shared/googleAds";
 import { GoogleAdsError, googleConfig } from "./googleAdsApi";
+import { googleAdsFailureMessage } from "./googleAdsDiagnostics";
 
 /** Internal only: UI requests are compiled from GoogleChange, never raw operations. */
 export type GoogleOperation = Record<
@@ -70,17 +71,8 @@ export async function mutateGoogleAds(
   }
   if (response.status === 401) throw new GoogleAdsError("expired");
   if (!response.ok || body.partialFailureError) {
-    const codes: string[] = (body.error?.details ?? [])
-      .flatMap((d: any) =>
-        (d.errors ?? []).flatMap((e: any) => Object.values(e.errorCode ?? {}))
-      )
-      .filter(
-        (c: unknown): c is string =>
-          typeof c === "string" && /^[A-Z][A-Z0-9_]{0,99}$/.test(c)
-      );
-    const safeCodes = Array.from(new Set(codes)).slice(0, 5).join(", ");
     throw new GoogleMutationError(
-      `Google ${validateOnly ? "validation" : "publishing"} failed${safeCodes ? `: ${safeCodes}` : ". Check account access and campaign settings"}.`,
+      googleAdsFailureMessage(validateOnly ? "validation" : "publishing", body, response.headers.get("request-id")),
       !validateOnly && response.status >= 500
     );
   }

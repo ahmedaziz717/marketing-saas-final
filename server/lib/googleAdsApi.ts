@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { googleAdsFailureMessage } from "./googleAdsDiagnostics";
 import {
   googleAccountSchema,
   googleCustomerIdSchema,
@@ -71,7 +72,7 @@ const tokenResponse = z.object({
 
 // Fixed Google endpoints, no caller-supplied URLs; never propagate upstream text,
 // request bodies, auth codes, or tokens into client errors or server logs.
-async function googleJson(url: string, init: RequestInit) {
+async function googleJson(url: string, init: RequestInit, adsRequest = false) {
   try {
     const response = await fetch(url, {
       ...init,
@@ -104,6 +105,11 @@ async function googleJson(url: string, init: RequestInit) {
       if (response.status === 429 || code === "RESOURCE_EXHAUSTED")
         throw new GoogleAdsError("quota");
       if (response.status === 403) throw new GoogleAdsError("permission");
+      if (adsRequest) {
+        const error = new GoogleAdsError("request");
+        error.message = googleAdsFailureMessage("account query", body, response.headers.get("request-id"));
+        throw error;
+      }
       throw new GoogleAdsError("connection");
     }
     return body;
@@ -203,7 +209,8 @@ async function adsRead(
             }),
           }
         : {}),
-    }
+    },
+    true
   );
 }
 export async function googleAdsRows(

@@ -231,8 +231,11 @@ async function prepare(
       if (!groups.length)
         fail("Asset group not found in the selected campaign.");
       const links = await read(
-        `SELECT asset_group_asset.resource_name, asset_group_asset.field_type, asset.id FROM asset_group_asset WHERE campaign.id = ${change.campaignId} AND asset_group.id = ${change.assetGroupId} AND asset_group_asset.status != 'REMOVED' ORDER BY asset_group_asset.resource_name`
+        `SELECT asset_group_asset.resource_name, asset_group_asset.field_type, asset.id FROM asset_group_asset WHERE campaign.id = ${change.campaignId} AND asset_group.id = ${change.assetGroupId} AND asset_group_asset.status != 'REMOVED'`
       );
+      // Google marks this resource name as non-sortable in GAQL. Canonicalize
+      // locally so equivalent provider ordering cannot invalidate reviewed hashes.
+      links.sort((a, b) => String(a.assetGroupAsset.resourceName).localeCompare(String(b.assetGroupAsset.resourceName)));
       for (const remove of change.kind === "asset_group_assets"
         ? change.remove
         : [])

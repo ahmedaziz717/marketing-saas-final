@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GOOGLE_ADS_SCOPE,
+  googleAdsRows,
   discoverGoogleAccounts,
   exchangeGoogleCode,
   googleOAuthConfigured,
@@ -10,6 +11,16 @@ import {
 } from "./lib/googleAdsApi";
 
 const request = vi.fn();
+it("reports GAQL rejection as an account query failure, with a safe request ID", async () => {
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ error: {
+    message: "private-query-token", details: [{ errors: [{ errorCode: {
+      queryError: "PROHIBITED_FIELD_IN_ORDER_BY_CLAUSE",
+    } }] }],
+  } }), { status: 400, headers: { "request-id": "req-safe-123" } }));
+  await expect(googleAdsRows("token", "2222222222", "SELECT asset.id FROM asset", "1111111111"))
+    .rejects.toMatchObject({ reason: "request", message: "Google account query failed: PROHIBITED_FIELD_IN_ORDER_BY_CLAUSE. Request ID: req-safe-123." });
+  expect(request.mock.calls[0][1].headers["login-customer-id"]).toBe("1111111111");
+});
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 const grant = (): GoogleGrant => ({

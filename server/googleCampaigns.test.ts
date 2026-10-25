@@ -309,6 +309,29 @@ it("saves and validates without delivery, then publishes exactly once and record
   );
   expect(JSON.stringify(events)).not.toContain("private-access");
 });
+it("validates existing PMax group changes without unsortable GAQL and keeps stable review identity", async () => {
+  let reverse = false;
+  f.read.mockImplementation(async (_token, _customer, query: string) => {
+    expect(query).not.toMatch(/ORDER BY asset_group_asset\.resource_name/);
+    if (query.includes("FROM asset_group_asset")) {
+      const links = ["42", "43"].map(id => ({ asset: { id }, assetGroupAsset: {
+        resourceName: `customers/2222222222/assetGroupAssets/22~${id}~HEADLINE`, fieldType: "HEADLINE",
+      } }));
+      return reverse ? links.reverse() : links;
+    }
+    if (query.includes("FROM asset_group ")) return [{ assetGroup: { id: "22", name: "Group", status: "ENABLED" } }];
+    const value = snapshot();
+    value.campaign.advertisingChannelType = "PERFORMANCE_MAX";
+    return [value];
+  });
+  const validated = await reviewed({ kind: "asset_group_assets", campaignId: "11", assetGroupId: "22", add: [], remove: [{ assetId: "42", field: "HEADLINE" }] });
+  reverse = true;
+  const again = await validateGoogleDraft(owner, { organizationId: org, id: validated.id, revision: validated.revision });
+  expect(again.reviewHash).toBe(validated.reviewHash);
+  expect(f.mutate.mock.calls).toHaveLength(2);
+  expect(f.mutate.mock.calls.every(call => call[3] === true)).toBe(true);
+  expect(f.mutate.mock.calls[0][2]).toEqual([{ assetGroupAssetOperation: { remove: "customers/2222222222/assetGroupAssets/22~42~HEADLINE" } }]);
+});
 it("rejects foreign workspace drafts, foreign accounts and creator publishing", async () => {
   const draft = await reviewed();
   await expect(getGoogleDraft(f.db, org2, draft.id)).rejects.toMatchObject({
