@@ -495,7 +495,7 @@ export function StudioSources({
                       title={p.name}
                       description={
                         (p.componentKind
-                          ? `${p.componentKind} Option${unavailable ? " � Review needed in Catalog" : ""}`
+                          ? `${p.componentKind} Option${unavailable ? " - Review needed in Catalog" : ""}`
                           : p.sku) ||
                         (p.recordType === "service"
                           ? "Service"

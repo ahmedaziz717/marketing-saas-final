@@ -173,7 +173,7 @@ export function CatalogGallery({
                 ? "Base component gallery"
                 : group.id === "legacy"
                   ? "Previously imported photos"
-                  : "System gallery"}
+                  : "Product gallery"}
             {group.referenceOnly &&
               "; reference photos - actual configuration may vary"}
             {!group.eligible && " · Not eligible for this system"}

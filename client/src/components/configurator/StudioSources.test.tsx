@@ -172,7 +172,7 @@ it("keeps represented component photos off parent cards, shows pending independe
     />
   );
   expect(
-    screen.getByText("Chassis Option � Review needed in Catalog")
+    screen.getByText("Chassis Option - Review needed in Catalog")
   ).toBeTruthy();
   expect(
     screen
@@ -186,4 +186,5 @@ it("keeps represented component photos off parent cards, shows pending independe
     screen.getByText(/A saved view now belongs to a separate component/)
   ).toBeTruthy();
   expect(latest.products[0].imageId).toBe(2);
+  expect(screen.queryByText("System gallery")).toBeNull();
 });

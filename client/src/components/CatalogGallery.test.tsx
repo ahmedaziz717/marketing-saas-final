@@ -195,9 +195,9 @@ it("shows a legacy Hero alongside source-ordered system views without changing s
     "Preview 2 for System",
   ]);
   fireEvent.click(screen.getByRole("button", { name: "Next image" }));
-  expect(screen.getByAltText("System \u2014 3 preview").getAttribute("src")).toBe(
-    "/full-front.png"
-  );
+  expect(
+    screen.getByAltText("System \u2014 3 preview").getAttribute("src")
+  ).toBe("/full-front.png");
   expect(select).not.toHaveBeenCalled();
   expect(
     (screen.getByRole("checkbox", { name: /Use 2/ }) as HTMLInputElement)
@@ -275,4 +275,35 @@ it("keeps a genuinely single imported Hero honest and does not merge into inelig
     ["legacy", 1],
     ["system", 0],
   ]);
+});
+
+it("uses a generic product label for primary source galleries, including standalone components", () => {
+  const groups: CatalogMediaGroupSummary[] = [
+    {
+      id: "component",
+      name: "Chassis originals",
+      role: "system",
+      eligible: true,
+      declaredImages: 1,
+    },
+  ];
+  const media: CatalogImageMedia = {
+    width: 700,
+    height: 700,
+    hasAlpha: true,
+    candidates: [],
+    selectedSourceUrl: "/original.png",
+    unavailableCandidates: 0,
+    references: [{ groupId: "component", imageId: "front", position: 0 }],
+  };
+  render(
+    <CatalogGallery
+      name="Chassis Option"
+      images={[{ id: 1, url: "/original.png", isPrimary: 1, media }]}
+      groups={groups}
+    />
+  );
+  expect(screen.getByText("Product gallery")).toBeTruthy();
+  expect(screen.queryByText("System gallery")).toBeNull();
+  expect(groups[0].role).toBe("system");
 });
