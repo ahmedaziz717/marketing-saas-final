@@ -202,6 +202,7 @@ export const authoringOAuthRequests = appSchema
       () => organizations.id
     ),
     consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
+    ongoing: integer("ongoing").notNull().default(0),
   })
   .enableRLS();
 export const authoringOAuthGrants = appSchema
@@ -220,5 +221,17 @@ export const authoringOAuthGrants = appSchema
     createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
     expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
     revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
+    refreshExpiresAtMs: bigint("refreshExpiresAtMs", { mode: "number" }),
+  })
+  .enableRLS();
+
+// Keep consumed hashes for replay detection for the entire connection lifetime.
+export const authoringOAuthRefreshTokens = appSchema
+  .table("authoring_oauth_refresh_tokens", {
+    tokenHash: varchar("tokenHash", { length: 64 }).primaryKey(),
+    connectionId: varchar("connectionId", { length: 36 })
+      .notNull()
+      .references(() => authoringOAuthGrants.id, { onDelete: "cascade" }),
+    consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
   })
   .enableRLS();

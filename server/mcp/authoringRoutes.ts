@@ -171,7 +171,7 @@ export function registerAuthoringMcp(
       authorization_endpoint: config.origin + "/mcp/oauth/authorize",
       token_endpoint: config.origin + "/mcp/oauth/token",
       response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
       token_endpoint_auth_methods_supported: ["none"],
       code_challenge_methods_supported: ["S256"],
       scopes_supported: mcpScopes,
@@ -208,7 +208,7 @@ export function registerAuthoringMcp(
       page(
         res,
         "Connect workflow authoring",
-        `<p>Signed in as ${escape(user.email || user.name || "your EvokeLoop account")}</p><p>Client: ${escape(config.clientId)}</p><p>This connection expires after 30 minutes. It can read drafts and App contracts${request.scope.includes("workflows:draft") ? ", propose changes and request draft review" : ""}. Applying requires a separate confirmation on EvokeLoop. It cannot run, publish, schedule, post or spend generation credits.</p><form method="post">${hidden("nonce", request.nonce)}<label>Workspace <select name="organizationId">${workspaces.map(w => `<option value="${w.id}">${escape(w.name)}</option>`).join("")}</select></label><p>Requested permissions: ${escape(request.scope)}</p><button name="decision" value="allow">Allow this workspace connection</button> <button name="decision" value="deny">Deny</button></form><p><a href="/app">Cancel</a> · <a href="/mcp/connections">Manage connections</a></p>`,
+        `<p>Signed in as ${escape(user.email || user.name || "your EvokeLoop account")}</p><p>Client: ${escape(config.clientId)}</p><p>Access tokens expire after 30 minutes. Ongoing access renews automatically until revoked or 30 days pass without a successful renewal. It can read drafts and App contracts${request.scope.includes("workflows:draft") ? ", propose changes and request draft review" : ""}. Applying requires a separate confirmation on EvokeLoop. It cannot run, publish, schedule, post or spend generation credits.</p><form method="post">${hidden("nonce", request.nonce)}<label>Workspace <select name="organizationId">${workspaces.map(w => `<option value="${w.id}">${escape(w.name)}</option>`).join("")}</select></label><p>Requested permissions: ${escape(request.scope)}</p><label>Duration <select name="duration"><option value="session">30 minutes only</option><option value="ongoing">Ongoing, revocable (30-day inactivity limit)</option></select></label><button name="decision" value="allow">Allow this workspace connection</button> <button name="decision" value="deny">Deny</button></form><p><a href="/app">Cancel</a> · <a href="/mcp/connections">Manage connections</a></p>`,
         config.redirectUris.map(uri => new URL(uri).origin)
       );
     })
@@ -229,6 +229,7 @@ export function registerAuthoringMcp(
           nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
           organizationId: z.coerce.number().int().positive(),
           decision: z.enum(["allow", "deny"]).default("allow"),
+          duration: z.enum(["session", "ongoing"]).default("session"),
         })
         .strict()
         .parse(req.body);
@@ -236,7 +237,12 @@ export function registerAuthoringMcp(
         303,
         input.decision === "deny"
           ? await oauth.deny(user.id, input.nonce)
-          : await oauth.consent(user.id, input.nonce, input.organizationId)
+          : await oauth.consent(
+              user.id,
+              input.nonce,
+              input.organizationId,
+              input.duration === "ongoing"
+            )
       );
     })
   );
@@ -264,7 +270,7 @@ export function registerAuthoringMcp(
         rows
           .map(
             row =>
-              `<section><p>Workspace ${row.organizationId} · ${escape(row.scope)} · ${row.revokedAtMs ? "Revoked" : row.expiresAtMs <= Date.now() ? "Expired" : "Expires " + escape(new Date(row.expiresAtMs).toISOString())}</p>${!row.revokedAtMs && row.expiresAtMs > Date.now() ? `<form method="post">${hidden("id", row.id)}<button>Revoke connection</button></form>` : ""}</section>`
+              `<section><p>Workspace ${row.organizationId} · ${escape(row.scope)} · ${row.revokedAtMs ? "Revoked" : (row.refreshExpiresAtMs ?? row.expiresAtMs) <= Date.now() ? "Expired" : (row.refreshExpiresAtMs ? "Ongoing; renewal expires " : "Expires ") + escape(new Date(row.refreshExpiresAtMs ?? row.expiresAtMs).toISOString())}</p>${!row.revokedAtMs && (row.refreshExpiresAtMs ?? row.expiresAtMs) > Date.now() ? `<form method="post">${hidden("id", row.id)}<button>Revoke connection</button></form>` : ""}</section>`
           )
           .join("") || "<p>No connections.</p>"
       );

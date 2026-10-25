@@ -162,6 +162,13 @@
       "when": 1792852252233,
       "tag": "0022_catalog_media_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792886922994,
+      "tag": "0023_authoring_refresh",
+      "breakpoints": true
     }
   ]
 }

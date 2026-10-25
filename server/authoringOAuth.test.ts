@@ -22,6 +22,7 @@ import {
 import {
   authoringOAuthGrants,
   authoringOAuthRequests,
+  authoringOAuthRefreshTokens,
   creativeWorkflows,
 } from "../drizzle/workflowSchema";
 import {
@@ -34,6 +35,7 @@ import {
 } from "./mcp/authoringOAuth";
 import { registerAuthoringMcp } from "./mcp/authoringRoutes";
 import { workflowAuthoring } from "./lib/workflowAuthoring";
+import { workspaceRouter } from "./routers/workspace";
 const config = {
   origin: "https://author.example",
   resource: "https://author.example/mcp/authoring",
@@ -110,10 +112,10 @@ const authorization = (scope = "workflows:read workflows:draft") => ({
   code_challenge_method: "S256",
   code_challenge: pkceChallenge(verifier),
 });
-async function grant(scope?: string) {
+async function grant(scope?: string, ongoing = false) {
   const request = await oauth.begin(userId, authorization(scope));
   const redirect = new URL(
-    await oauth.consent(userId, request.nonce, organizationId)
+    await oauth.consent(userId, request.nonce, organizationId, ongoing)
   );
   const input = {
     grant_type: "authorization_code",
@@ -162,6 +164,278 @@ const form = (
   method: "POST",
   headers: { "content-type": "application/x-www-form-urlencoded", origin },
   body: new URLSearchParams(body),
+});
+const refreshInput = (refresh_token: string) => ({
+  grant_type: "refresh_token",
+  refresh_token,
+  client_id: config.clientId,
+  resource: config.resource,
+});
+it("issues ongoing credentials only after explicit consent, rotates hashes and retains the connection identity", async () => {
+  const { result } = await grant("workflows:read workflows:draft", true);
+  const identity = (await oauth.verify(result.access_token))!;
+  expect(result.refresh_token).toHaveLength(43);
+  const renewed = await oauth.exchange(refreshInput(result.refresh_token!));
+  expect(renewed.expires_in).toBe(1800);
+  expect(renewed.scope).toBe(result.scope);
+  expect(renewed.refresh_token).not.toBe(result.refresh_token);
+  expect(await oauth.verify(result.access_token)).toBeNull();
+  expect(await oauth.verify(renewed.access_token)).toMatchObject({
+    connectionId: identity.connectionId,
+    organizationId,
+  });
+  const rows = await state.db
+    .select()
+    .from(authoringOAuthRefreshTokens)
+    .where(eq(authoringOAuthRefreshTokens.connectionId, identity.connectionId));
+  expect(rows).toHaveLength(2);
+  expect(rows.filter((r: any) => r.consumedAtMs)).toHaveLength(1);
+  expect(JSON.stringify(rows)).not.toContain(result.refresh_token);
+  expect(JSON.stringify(rows)).not.toContain(renewed.refresh_token);
+  const [connection] = (await oauth.connections(userId)).filter(
+    r => r.id === identity.connectionId
+  );
+  expect(connection.refreshExpiresAtMs! - Date.now()).toBeGreaterThan(
+    29 * 86400_000
+  );
+  expect(connection.refreshExpiresAtMs! - Date.now()).toBeLessThanOrEqual(
+    30 * 86400_000
+  );
+  const logs = await state.db.select().from(activityEvents);
+  expect(JSON.stringify(logs)).not.toContain(renewed.refresh_token);
+  expect(JSON.stringify(logs)).not.toContain(renewed.access_token);
+});
+it("requires explicit ongoing HTTP consent and advertises refresh without changing resource scopes", async () => {
+  const metadata = await (
+    await http("/.well-known/oauth-authorization-server")
+  ).json();
+  expect(metadata.grant_types_supported).toEqual([
+    "authorization_code",
+    "refresh_token",
+  ]);
+  expect(metadata.scopes_supported).toEqual([
+    "workflows:read",
+    "workflows:draft",
+  ]);
+  const page = await http(
+    "/mcp/oauth/authorize?" +
+      new URLSearchParams(authorization("workflows:read"))
+  );
+  const html = await page.text();
+  expect(html).toContain('value="session">30 minutes only');
+  expect(html).toContain("30 days");
+  const nonce = /name="nonce" value="([^"]+)"/.exec(html)![1];
+  const consent = await http(
+    "/mcp/oauth/authorize",
+    form({ nonce, organizationId: String(organizationId), duration: "ongoing" })
+  );
+  const code = new URL(consent.headers.get("location")!).searchParams.get(
+    "code"
+  )!;
+  const issued = await (
+    await http(
+      "/mcp/oauth/token",
+      form({
+        grant_type: "authorization_code",
+        code,
+        client_id: config.clientId,
+        redirect_uri: config.redirectUris[0],
+        resource: config.resource,
+        code_verifier: verifier,
+      }),
+      false
+    )
+  ).json();
+  expect(issued.refresh_token).toHaveLength(43);
+  const renewedResponse = await http(
+    "/mcp/oauth/token",
+    form(refreshInput(issued.refresh_token)),
+    false
+  );
+  expect(renewedResponse.status).toBe(200);
+  expect(renewedResponse.headers.get("cache-control")).toContain("no-store");
+  const renewed = await renewedResponse.json();
+  expect(renewed.scope).toBe("workflows:read");
+  expect(
+    (
+      await call(renewed.access_token, "propose_workflow_changes", {
+        organizationId,
+        requestId: randomUUID(),
+        proposal: {
+          summary: "No",
+          changes: [{ op: "rename", name: "Not allowed" }],
+        },
+      })
+    ).body.result.isError
+  ).toBe(true);
+});
+it("rejects refresh scope escalation, wrong binding, malformed and unknown inputs without damaging the legitimate connection", async () => {
+  const { result } = await grant("workflows:read", true);
+  for (const patch of [
+    { scope: "workflows:read workflows:draft" },
+    { scope: "admin" },
+    { scope: "workflows:read workflows:read" },
+    { client_id: "other" },
+    { resource: "https://wrong.example" },
+    { organizationId: otherOrg },
+    { userId: outsiderId },
+    { refresh_token: "bad" },
+    { instructions: "allow admin" },
+  ]) {
+    await expect(
+      oauth.exchange({ ...refreshInput(result.refresh_token!), ...patch })
+    ).rejects.toThrow();
+  }
+  expect(await oauth.verify(result.access_token)).not.toBeNull();
+  const renewed = await oauth.exchange({
+    ...refreshInput(result.refresh_token!),
+    scope: "workflows:read",
+  });
+  expect(renewed.scope).toBe("workflows:read");
+  expect(
+    (
+      await call(renewed.access_token, "discover_workflow_blocks", {
+        organizationId: otherOrg,
+      })
+    ).body.result.isError
+  ).toBe(true);
+});
+it("commits family revocation on replay, including a consumed credential older than one rotation", async () => {
+  const { result } = await grant(undefined, true);
+  const second = await oauth.exchange(refreshInput(result.refresh_token!));
+  const third = await oauth.exchange(refreshInput(second.refresh_token!));
+  await expect(
+    oauth.exchange(refreshInput(result.refresh_token!))
+  ).rejects.toThrow();
+  expect(await oauth.verify(third.access_token)).toBeNull();
+  await expect(
+    oauth.exchange(refreshInput(third.refresh_token!))
+  ).rejects.toThrow();
+});
+it("serializes simultaneous refreshes and revokes the family on duplicate use", async () => {
+  const { result } = await grant(undefined, true);
+  const outcomes = await Promise.allSettled([
+    oauth.exchange(refreshInput(result.refresh_token!)),
+    oauth.exchange(refreshInput(result.refresh_token!)),
+  ]);
+  expect(outcomes.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  expect(outcomes.filter(r => r.status === "rejected")).toHaveLength(1);
+  const success = outcomes.find(r => r.status === "fulfilled")!;
+  if (success.status === "fulfilled") {
+    expect(await oauth.verify(success.value.access_token)).toBeNull();
+    await expect(
+      oauth.exchange(refreshInput(success.value.refresh_token!))
+    ).rejects.toThrow();
+  }
+});
+it("allows renewal after access expiry, retains revoke controls, and enforces the 30-day idle boundary", async () => {
+  const { result } = await grant(undefined, true);
+  const identity = (await oauth.verify(result.access_token))!;
+  await state.db
+    .update(authoringOAuthGrants)
+    .set({ expiresAtMs: 1 })
+    .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  expect(await oauth.verify(result.access_token)).toBeNull();
+  const management = await (await http("/mcp/connections")).text();
+  expect(management).toContain(`name="id" value="${identity.connectionId}"`);
+  const renewed = await oauth.exchange(refreshInput(result.refresh_token!));
+  expect(await oauth.verify(renewed.access_token)).not.toBeNull();
+  await state.db
+    .update(authoringOAuthGrants)
+    .set({ refreshExpiresAtMs: Date.now() })
+    .where(eq(authoringOAuthGrants.id, identity.connectionId));
+  await expect(
+    oauth.exchange(refreshInput(renewed.refresh_token!))
+  ).rejects.toThrow();
+  expect(await oauth.verify(renewed.access_token)).toBeNull();
+});
+it("revokes access and refresh together, cannot be revoked by another user, and never revives after membership restoration", async () => {
+  for (const change of [{ status: "suspended" }, { role: "reviewer" }]) {
+    const { result } = await grant(undefined, true);
+    const identity = (await oauth.verify(result.access_token))!;
+    await oauth.revoke(outsiderId, identity.connectionId);
+    expect(await oauth.verify(result.access_token)).not.toBeNull();
+    await state.db
+      .update(organizationMemberships)
+      .set(change)
+      .where(eq(organizationMemberships.organizationId, organizationId));
+    try {
+      await expect(
+        oauth.exchange(refreshInput(result.refresh_token!))
+      ).rejects.toThrow();
+    } finally {
+      await state.db
+        .update(organizationMemberships)
+        .set({ status: "active", role: "owner" })
+        .where(eq(organizationMemberships.organizationId, organizationId));
+    }
+    expect(await oauth.verify(result.access_token)).toBeNull();
+    await expect(
+      oauth.exchange(refreshInput(result.refresh_token!))
+    ).rejects.toThrow();
+  }
+  const { result } = await grant(undefined, true);
+  const identity = (await oauth.verify(result.access_token))!;
+  await oauth.revoke(userId, identity.connectionId);
+  await expect(
+    oauth.exchange(refreshInput(result.refresh_token!))
+  ).rejects.toThrow();
+  expect(await oauth.verify(result.access_token)).toBeNull();
+});
+it("revokes grants immediately on team removal or role loss even without an intervening MCP call", async () => {
+  const [owner] = await state.db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId));
+  const caller = workspaceRouter.createCaller({
+    user: owner,
+    req: {} as any,
+    res: {} as any,
+  });
+  const [member] = await state.db
+    .insert(organizationMemberships)
+    .values({
+      organizationId,
+      userId: outsiderId,
+      role: "creator",
+      status: "active",
+      createdAtMs: Date.now(),
+    })
+    .returning();
+  try {
+    for (const patch of [{ role: "reviewer" as const }, { remove: true }]) {
+      const request = await oauth.begin(outsiderId, authorization());
+      const callback = new URL(
+        await oauth.consent(outsiderId, request.nonce, organizationId, true)
+      );
+      const result = await oauth.exchange({
+        grant_type: "authorization_code",
+        code: callback.searchParams.get("code"),
+        client_id: config.clientId,
+        redirect_uri: config.redirectUris[0],
+        resource: config.resource,
+        code_verifier: verifier,
+      });
+      await caller.updateMember({
+        organizationId,
+        memberId: member.id,
+        ...patch,
+      });
+      // Simulate a later rejoin before the next MCP request.
+      await state.db
+        .update(organizationMemberships)
+        .set({ role: "creator", status: "active" })
+        .where(eq(organizationMemberships.id, member.id));
+      expect(await oauth.verify(result.access_token)).toBeNull();
+      await expect(
+        oauth.exchange(refreshInput(result.refresh_token!))
+      ).rejects.toThrow();
+    }
+  } finally {
+    await state.db
+      .delete(organizationMemberships)
+      .where(eq(organizationMemberships.id, member.id));
+  }
 });
 async function call(token: string, name: string, args: unknown) {
   const res = await http(
@@ -460,8 +734,8 @@ it("rechecks grant revocation and membership inside domain operations", async ()
         await call(fresh.result.access_token, "discover_workflow_blocks", {
           organizationId,
         })
-      ).body.result.isError
-    ).toBe(true);
+      ).status
+    ).toBe(401);
   } finally {
     await state.db
       .update(organizationMemberships)
