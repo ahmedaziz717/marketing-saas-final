@@ -563,12 +563,9 @@ it("returns bounded result DTOs without provider errors, signed URLs or storage 
       error: `Provider payload ${secret}`,
       steps: {
         step: {
-          status: "failed",
+          status: "completed",
           error: `Authorization ${secret}`,
           waitingReason: secret,
-        },
-        result: {
-          status: "completed",
           outputs: [
             { type: "text", text: "Usable generated copy" },
             {
@@ -588,10 +585,6 @@ it("returns bounded result DTOs without provider errors, signed URLs or storage 
           ],
         },
       },
-      graph: {
-        ...run.graph,
-        nodes: [...run.graph.nodes, newWorkflowNode("output", "result")],
-      },
     })
     .where(eq(creativeWorkflowRuns.id, run.id));
   const status = await service.status({
@@ -604,19 +597,121 @@ it("returns bounded result DTOs without provider errors, signed URLs or storage 
   expect(JSON.stringify(status)).toContain('"url":null');
   expect(status).not.toHaveProperty("graph");
 });
-it("binds active Brand Kit and effective prompt values to review and rechecks before dispatch", async () => {
+it("cannot read or stop an unrelated same-user business run through a prepared UUID collision", async () => {
+  const raw = await input("text"),
+    service = mcpWorkflowExecution(identity),
+    plan = await service.prepare(raw);
+  const business = await input("deliver_publication");
+  const [workflow] = await state.db
+    .select()
+    .from(creativeWorkflows)
+    .where(eq(creativeWorkflows.id, business.id));
+  const unrelated = {
+    id: raw.requestId,
+    organizationId: identity.organizationId,
+    actorUserId: identity.userId,
+    workflowId: business.id,
+    graph: workflow.graph,
+    steps: { step: { status: "running", error: "UNRELATED_BUSINESS_SECRET" } },
+    references: [],
+    creditsByNode: { step: 0 },
+    status: "running",
+    createdAtMs: Date.now(),
+    updatedAtMs: Date.now(),
+  };
+  await state.db.insert(creativeWorkflowRuns).values(unrelated);
+  const ref = {
+    organizationId: identity.organizationId,
+    requestId: raw.requestId,
+  };
+  expect(await service.status(ref)).toEqual({
+    id: raw.requestId,
+    status: "awaiting_approval",
+  });
+  await expect(service.stop(ref)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await approveMcpWorkflowExecution(identity.userId, {
+    ...ref,
+    hash: plan.hash,
+    maxCredits: plan.maxCredits,
+  });
+  await expect(
+    service.execute({ ...ref, hash: plan.hash })
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  const [unchanged] = await state.db
+    .select()
+    .from(creativeWorkflowRuns)
+    .where(eq(creativeWorkflowRuns.id, raw.requestId));
+  expect(unchanged).toMatchObject({
+    stopRequested: 0,
+    status: "running",
+    workflowId: business.id,
+    updatedAtMs: unrelated.updatedAtMs,
+  });
+  expect(
+    await state.db
+      .select()
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.correlationId, raw.requestId),
+          eq(activityEvents.action, "mcp.execution.stop_requested")
+        )
+      )
+  ).toHaveLength(0);
+  const colliding = await input("text");
   await state.db
-    .insert(brandKits)
-    .values({
-      organizationId: identity.organizationId,
-      name: "Reviewed brand",
-      voice: "Original voice",
-      colors: ["#ffffff"],
-      fonts: [],
-      status: "active",
-      updatedByUserId: identity.userId,
-      updatedAtMs: Date.now(),
-    });
+    .insert(creativeWorkflowRuns)
+    .values({ ...unrelated, id: colliding.requestId });
+  const calls = state.prepare.mock.calls.length;
+  await expect(service.prepare(colliding)).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: "Request ID is unavailable. Use a new request ID.",
+  });
+  expect(state.prepare.mock.calls.length).toBe(calls);
+  await state.db
+    .update(creativeWorkflowRuns)
+    .set({ status: "completed" })
+    .where(eq(creativeWorkflowRuns.workflowId, business.id));
+});
+it("refuses status, stop and execution replay when queued run identity no longer matches its receipt", async () => {
+  const { raw, run, service, plan } = await queued(),
+    other = await input("text");
+  await state.db
+    .update(creativeWorkflowRuns)
+    .set({ workflowId: other.id })
+    .where(eq(creativeWorkflowRuns.id, run.id));
+  const ref = {
+    organizationId: identity.organizationId,
+    requestId: raw.requestId,
+  };
+  await expect(service.status(ref)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  await expect(service.stop(ref)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(
+    service.execute({ ...ref, hash: plan.hash })
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  const [unchanged] = await state.db
+    .select()
+    .from(creativeWorkflowRuns)
+    .where(eq(creativeWorkflowRuns.id, run.id));
+  expect(unchanged.stopRequested).toBe(0);
+  await state.db
+    .update(creativeWorkflowRuns)
+    .set({ status: "completed" })
+    .where(eq(creativeWorkflowRuns.id, run.id));
+});
+it("binds active Brand Kit and effective prompt values to review and rechecks before dispatch", async () => {
+  await state.db.insert(brandKits).values({
+    organizationId: identity.organizationId,
+    name: "Reviewed brand",
+    voice: "Original voice",
+    colors: ["#ffffff"],
+    fonts: [],
+    status: "active",
+    updatedByUserId: identity.userId,
+    updatedAtMs: Date.now(),
+  });
   const raw = await input(),
     service = mcpWorkflowExecution(identity),
     plan = await service.prepare(raw);

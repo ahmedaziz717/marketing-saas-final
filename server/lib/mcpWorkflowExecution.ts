@@ -471,6 +471,58 @@ function planFrom(
     fail("Run request unavailable for this connection.", "NOT_FOUND");
   return plan;
 }
+async function assertUnusedRunId(tx: Tx, requestId: string) {
+  const [existing] = await tx
+    .select({ id: creativeWorkflowRuns.id })
+    .from(creativeWorkflowRuns)
+    .where(eq(creativeWorkflowRuns.id, requestId))
+    .limit(1);
+  // IDs are globally unique. Do not reveal the colliding run's workspace,
+  // actor, workflow or state, including for another tenant's UUID.
+  if (existing)
+    fail("Request ID is unavailable. Use a new request ID.", "CONFLICT");
+}
+async function queuedRun(tx: Tx, identity: McpExecutionIdentity, plan: Plan) {
+  const receipt = await event(tx, identity, plan.input.requestId, QUEUED);
+  if (!receipt) return undefined;
+  const policy = receipt.payload;
+  const result = policy?.result as { id?: string; status?: string } | undefined;
+  if (
+    !policy ||
+    stableHash(policy.identity) !== stableHash(identity) ||
+    policy.hash !== plan.hash ||
+    receipt.entityId !== plan.input.requestId ||
+    result?.id !== plan.input.requestId ||
+    typeof result.status !== "string" ||
+    policy.graphHash !== stableHash(plan.prepared.graph) ||
+    policy.referencesHash !== stableHash(plan.prepared.references) ||
+    policy.maxCredits !== plan.input.maxCredits ||
+    stableHash(policy.context) !== stableHash(plan.context) ||
+    stableHash(policy.creditsByNode) !== stableHash(plan.prepared.creditsByNode)
+  )
+    fail("Queued run unavailable for this connection.", "NOT_FOUND");
+  const [run] = await tx
+    .select()
+    .from(creativeWorkflowRuns)
+    .where(
+      and(
+        eq(creativeWorkflowRuns.id, plan.input.requestId),
+        eq(creativeWorkflowRuns.organizationId, identity.organizationId),
+        eq(creativeWorkflowRuns.actorUserId, identity.userId),
+        eq(creativeWorkflowRuns.workflowId, plan.input.id)
+      )
+    )
+    .limit(1);
+  if (
+    !run ||
+    run.appVersionId !== (plan.input.appVersionId ?? null) ||
+    policy.graphHash !== stableHash(run.graph) ||
+    policy.referencesHash !== stableHash(run.references) ||
+    stableHash(policy.creditsByNode) !== stableHash(run.creditsByNode)
+  )
+    fail("Queued run unavailable for this connection.", "NOT_FOUND");
+  return { run, result: { id: result.id, status: result.status } };
+}
 async function currentGraph(
   db: DB | Tx,
   input: z.infer<typeof executionPrepareInput>
@@ -510,8 +562,11 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
             const plan = planFrom(old, identity);
             if (plan.requestHash !== requestHash)
               fail("Request ID reused with different inputs.", "CONFLICT");
+            if (!(await queuedRun(tx, identity, plan)))
+              await assertUnusedRunId(tx, input.requestId);
             return { plan };
           }
+          await assertUnusedRunId(tx, input.requestId);
           return { graph: await currentGraph(tx, input) };
         }
       );
@@ -533,8 +588,11 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
           const plan = planFrom(old, identity);
           if (plan.requestHash !== requestHash)
             fail("Request ID reused.", "CONFLICT");
+          if (!(await queuedRun(tx, identity, plan)))
+            await assertUnusedRunId(tx, input.requestId);
           return publicPlan(plan);
         }
+        await assertUnusedRunId(tx, input.requestId);
         if (
           stableHash(await currentGraph(tx, input)) !== stableHash(first.graph)
         )
@@ -582,9 +640,9 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
           identity
         );
         if (plan.hash !== input.hash) fail("Run snapshot changed.", "CONFLICT");
-        const receipt = await event(tx, identity, input.requestId, QUEUED);
-        if (receipt)
-          return receipt.payload!.result as { id: string; status: string };
+        const completed = await queuedRun(tx, identity, plan);
+        if (completed) return completed.result;
+        await assertUnusedRunId(tx, input.requestId);
         const approval = await event(tx, identity, input.requestId, APPROVED);
         if (
           !approval ||
@@ -674,22 +732,13 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
         db = await database();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         await authorize(tx, identity, input.organizationId);
-        planFrom(
+        const plan = planFrom(
           await event(tx, identity, input.requestId, PREPARED),
           identity
         );
-        const [run] = await tx
-          .select()
-          .from(creativeWorkflowRuns)
-          .where(
-            and(
-              eq(creativeWorkflowRuns.id, input.requestId),
-              eq(creativeWorkflowRuns.organizationId, input.organizationId),
-              eq(creativeWorkflowRuns.actorUserId, identity.userId)
-            )
-          );
-        return run
-          ? publicExecutionStatus(run)
+        const completed = await queuedRun(tx, identity, plan);
+        return completed
+          ? publicExecutionStatus(completed.run)
           : { id: input.requestId, status: "awaiting_approval" };
       });
     },
@@ -698,10 +747,12 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
         db = await database();
       return withOrganizationTransaction(db, input.organizationId, async tx => {
         await authorize(tx, identity, input.organizationId);
-        planFrom(
+        const plan = planFrom(
           await event(tx, identity, input.requestId, PREPARED),
           identity
         );
+        if (!(await queuedRun(tx, identity, plan)))
+          fail("Queued run unavailable for this connection.", "NOT_FOUND");
         if (
           await event(
             tx,
@@ -719,6 +770,7 @@ export function mcpWorkflowExecution(identity: McpExecutionIdentity) {
               eq(creativeWorkflowRuns.id, input.requestId),
               eq(creativeWorkflowRuns.organizationId, input.organizationId),
               eq(creativeWorkflowRuns.actorUserId, identity.userId),
+              eq(creativeWorkflowRuns.workflowId, plan.input.id),
               eq(creativeWorkflowRuns.stopRequested, 0),
               inArray(creativeWorkflowRuns.status, ["queued", "running"])
             )
