@@ -2,7 +2,7 @@ import { fetchCatalogImage } from "../lib/catalogImages";
 import { readApiProductDetails } from "../lib/apiProductDetails";
 import { discoverOfferings } from "../lib/marketingDrafts";
 import { brandKits, products, productImages } from "../../drizzle/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { catalogSources } from "../../drizzle/schema";
@@ -83,7 +83,6 @@ export const catalogSourcesRouter = router({
       const coverage = await db
         .select({
           id: products.id,
-          imageCount: sql<number>`(select count(*)::int from ${productImages} where ${productImages.productId} = ${products.id} and ${productImages.organizationId} = ${input.organizationId} and coalesce((${productImages.media}->>'retired')::boolean, false) = false)`,
           groupCount: sql<number>`coalesce(json_array_length(${products.mediaGroups}), 0)`,
         })
         .from(products)
@@ -96,6 +95,30 @@ export const catalogSourcesRouter = router({
         )
         .orderBy(products.id)
         .limit(500);
+      // Keep aggregation separate: raw correlated columns in a single-table
+      // Drizzle selection lose qualification and can bind to the inner table.
+      const counts = coverage.length
+        ? await db
+            .select({
+              productId: productImages.productId,
+              imageCount: sql<number>`count(*)::int`,
+            })
+            .from(productImages)
+            .where(
+              and(
+                eq(productImages.organizationId, input.organizationId),
+                inArray(
+                  productImages.productId,
+                  coverage.map(product => product.id)
+                ),
+                sql`coalesce((${productImages.media}->>'retired')::boolean, false) = false`
+              )
+            )
+            .groupBy(productImages.productId)
+        : [];
+      const countByProduct = new Map(
+        counts.map(row => [row.productId, row.imageCount])
+      );
       return {
         updatedAtMs: source.updatedAtMs,
         autoSync: !!source.autoSync,
@@ -110,7 +133,10 @@ export const catalogSourcesRouter = router({
           : previous.success
             ? ("last_repair" as const)
             : null,
-        coverage,
+        coverage: coverage.map(product => ({
+          ...product,
+          imageCount: countByProduct.get(product.id) ?? 0,
+        })),
       };
     }),
   saveGalleryRecipe: protectedProcedure

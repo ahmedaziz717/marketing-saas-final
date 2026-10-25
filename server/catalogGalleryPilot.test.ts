@@ -502,8 +502,8 @@ it("saves only an owned fresh reviewed recipe, preserving lifecycle, credentials
     .where(eq(catalogSources.id, 880));
   const settings = await caller.galleryRecipeSettings(scope);
   expect(settings.recipeOrigin).toBe("last_repair");
-  // The fixture's identical pixels deduplicate to one stored image row.
-  expect(settings.coverage.find(p => p.id === 881)?.imageCount).toBe(1);
+  // The existing primary plus deduplicated imported gallery are two stored rows.
+  expect(settings.coverage.find(p => p.id === 881)?.imageCount).toBe(2);
   await expect(outsider.galleryRecipeSettings(scope)).rejects.toMatchObject({
     code: "FORBIDDEN",
   });
@@ -594,4 +594,83 @@ it("saves only an owned fresh reviewed recipe, preserving lifecycle, credentials
   await expect(caller.saveGalleryRecipe(input)).rejects.toMatchObject({
     code: "CONFLICT",
   });
+});
+it("counts each source product's active images independently with different row IDs and tenant isolation", async () => {
+  await state.db
+    .insert(organizations)
+    .values({
+      id: 882,
+      name: "Other coverage",
+      slug: "other-coverage",
+      createdByUserId: 880,
+      createdAtMs: 1,
+    });
+  const seed = {
+    productUrl: "https://shop.example/coverage",
+    organizationId: 880,
+    sourceId: 880,
+    status: "approved",
+    specifications: {},
+    provenance: {},
+    createdAtMs: 1,
+    updatedAtMs: 1,
+  };
+  await state.db.insert(products).values([
+    {
+      ...seed,
+      id: 9101,
+      externalId: "coverage-a",
+      name: "Two photos",
+      dedupeKey: "coverage-a",
+    },
+    {
+      ...seed,
+      id: 9102,
+      externalId: "coverage-b",
+      name: "One photo",
+      dedupeKey: "coverage-b",
+    },
+    {
+      ...seed,
+      id: 9103,
+      externalId: "coverage-c",
+      name: "No photos",
+      dedupeKey: "coverage-c",
+    },
+    {
+      ...seed,
+      id: 9104,
+      sourceId: null,
+      externalId: "coverage-other-source",
+      name: "Unrelated",
+      dedupeKey: "coverage-other-source",
+    },
+  ]);
+  const photo = {
+    organizationId: 880,
+    url: "https://images.example/photo.png",
+    sourceUrl: "https://images.example/photo.png",
+    storageKey: "coverage-photo",
+    isPrimary: 0,
+    createdAtMs: 1,
+  };
+  await state.db.insert(productImages).values([
+    { ...photo, id: 9201, productId: 9101 },
+    { ...photo, id: 9202, productId: 9101 },
+    {
+      ...photo,
+      id: 9203,
+      productId: 9101,
+      media: { retired: true, references: [] },
+    },
+    { ...photo, id: 9204, productId: 9102 },
+    // Deliberately inconsistent foreign-tenant ownership must not count.
+    { ...photo, id: 9205, organizationId: 882, productId: 9101 },
+    { ...photo, id: 9206, productId: 9104 },
+  ]);
+  const result = await caller.galleryRecipeSettings(scope);
+  expect(result.coverage.find(p => p.id === 9101)?.imageCount).toBe(2);
+  expect(result.coverage.find(p => p.id === 9102)?.imageCount).toBe(1);
+  expect(result.coverage.find(p => p.id === 9103)?.imageCount).toBe(0);
+  expect(result.coverage.some(p => p.id === 9104)).toBe(false);
 });
