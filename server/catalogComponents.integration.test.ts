@@ -19,7 +19,10 @@ import {
   createCatalogComponents,
 } from "./lib/catalogComponents";
 import { catalogRouter } from "./routers/catalog";
-import { catalogCardGallery } from "../shared/catalogMedia";
+import {
+  catalogCardGallery,
+  catalogImageEligible,
+} from "../shared/catalogMedia";
 import { selectProductFacts } from "./lib/productFacts";
 const engine = new PGlite();
 const group = (id: string, amount: string) => ({
@@ -292,4 +295,258 @@ it("rejects incomplete/thumbnail galleries and revoked membership, and handles c
   await expect(
     createCatalogComponents(1, first.id, plan.hash, 1)
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
+});
+it("refreshes repaired originals in place and retires removed views without deleting their rows", async () => {
+  await state.db.insert(organizationMemberships).values({
+    organizationId: 1,
+    userId: 1,
+    role: "owner",
+    status: "active",
+    createdAtMs: 1,
+  });
+  const preview = await previewCatalogComponents(state.db, 1, first.id);
+  const {
+    componentIds: [componentId],
+  } = await createCatalogComponents(1, first.id, preview.hash, 1);
+  const [oldFront] = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.productId, componentId));
+  const parentImages = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.productId, first.id));
+  const original = parentImages[0];
+  // Source importer transfers the logical view to a new original row.
+  await state.db
+    .update(productImages)
+    .set({ media: { ...original.media, retired: true } })
+    .where(eq(productImages.id, original.id));
+  const { id: omitted, ...sourceImage } = original;
+  const [repaired, rear] = await state.db
+    .insert(productImages)
+    .values([
+      {
+        ...sourceImage,
+        sourceUrl: "https://images.test/repaired.png",
+        storageKey: "org1/repaired.png",
+        url: "https://images.test/repaired-stored.png",
+        media: {
+          ...original.media,
+          width: 900,
+          height: 900,
+          retired: false,
+          selectedSourceUrl: "https://images.test/repaired.png",
+        },
+      },
+      {
+        ...sourceImage,
+        sourceUrl: "https://images.test/rear.png",
+        storageKey: "org1/rear.png",
+        url: "https://images.test/rear-stored.png",
+        media: {
+          ...original.media,
+          references: [{ groupId: "option-1", imageId: "rear", position: 1 }],
+        },
+      },
+    ])
+    .returning();
+  await state.db
+    .update(products)
+    .set({
+      mediaGroups: [
+        {
+          ...group("option-1", "50"),
+          declaredImages: 2,
+          imageIds: ["front", "rear"],
+        },
+      ],
+    })
+    .where(eq(products.id, first.id));
+  const changed = await previewCatalogComponents(state.db, 1, first.id);
+  await createCatalogComponents(1, first.id, changed.hash, 1);
+  const [frontAfter] = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.id, oldFront.id));
+  expect(frontAfter).toMatchObject({
+    id: oldFront.id,
+    storageKey: repaired.storageKey,
+    sourceUrl: repaired.sourceUrl,
+    url: repaired.url,
+    isPrimary: 1,
+    media: { width: 900, height: 900, retired: false },
+  });
+  const rows = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.productId, componentId));
+  const removed = rows.find(
+    (i: any) => i.media.references[0].imageId === "rear"
+  )!;
+  expect(rows).toHaveLength(2);
+  // A removed primary must move to an active original without deleting its row.
+  await state.db
+    .update(productImages)
+    .set({ isPrimary: 0 })
+    .where(eq(productImages.id, oldFront.id));
+  await state.db
+    .update(productImages)
+    .set({ isPrimary: 1 })
+    .where(eq(productImages.id, removed.id));
+  await state.db
+    .update(productImages)
+    .set({ media: { ...rear.media, retired: true } })
+    .where(eq(productImages.id, rear.id));
+  await state.db
+    .update(products)
+    .set({ mediaGroups: [group("option-1", "50")] })
+    .where(eq(products.id, first.id));
+  const removal = await previewCatalogComponents(state.db, 1, first.id);
+  await createCatalogComponents(1, first.id, removal.hash, 1);
+  const [historical] = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.id, removed.id));
+  expect(historical).toMatchObject({
+    id: removed.id,
+    url: removed.url,
+    isPrimary: 0,
+    media: { retired: true },
+  });
+  const [component] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, componentId));
+  expect(component.mediaGroups[0]).toMatchObject({
+    declaredImages: 1,
+    imageIds: ["front"],
+  });
+  expect(catalogImageEligible(historical, component.mediaGroups)).toBe(false);
+  const [currentFront] = await state.db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.id, oldFront.id));
+  expect(currentFront.isPrimary).toBe(1);
+  expect(catalogImageEligible(currentFront, component.mediaGroups)).toBe(true);
+  const updatedAt = component.updatedAtMs;
+  await createCatalogComponents(1, first.id, removal.hash, 1);
+  expect(
+    (
+      await state.db.select().from(products).where(eq(products.id, componentId))
+    )[0].updatedAtMs
+  ).toBe(updatedAt);
+  expect(
+    await state.db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, componentId))
+  ).toHaveLength(2);
+  // A restored logical view reuses the historical row ID instead of duplicating it.
+  await state.db
+    .update(productImages)
+    .set({ media: { ...rear.media, retired: false } })
+    .where(eq(productImages.id, rear.id));
+  await state.db
+    .update(products)
+    .set({
+      mediaGroups: [
+        {
+          ...group("option-1", "50"),
+          declaredImages: 2,
+          imageIds: ["front", "rear"],
+        },
+      ],
+    })
+    .where(eq(products.id, first.id));
+  const restored = await previewCatalogComponents(state.db, 1, first.id);
+  await createCatalogComponents(1, first.id, restored.hash, 1);
+  expect(
+    (
+      await state.db
+        .select()
+        .from(productImages)
+        .where(eq(productImages.id, removed.id))
+    )[0].media.retired
+  ).toBe(false);
+});
+it("corrects source-owned kind/specifications and relationship role while preserving manual labels", async () => {
+  for (const [parent, id, amount] of [
+    [first, "option-1", "50"],
+    [second, "option-2", "75"],
+  ] as const) {
+    const g = group(id, amount);
+    await state.db
+      .update(products)
+      .set({
+        mediaGroups: [
+          { ...g, component: { ...g.component, kind: "Component" } },
+        ],
+      })
+      .where(eq(products.id, parent.id));
+  }
+  let preview = await previewCatalogComponents(state.db, 1, first.id);
+  const {
+    componentIds: [id],
+  } = await createCatalogComponents(1, first.id, preview.hash, 1);
+  let [component] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, id));
+  expect(component.provenance["component.kind"]).toBe("Component");
+  expect(component.specifications["Component type"]).toBe("Component");
+  expect(component.name).toBe("My manual chassis label");
+  for (const [parent, groupId, amount] of [
+    [first, "option-1", "50"],
+    [second, "option-2", "75"],
+  ] as const) {
+    await state.db
+      .update(products)
+      .set({
+        mediaGroups: [
+          {
+            ...group(groupId, amount),
+            name: "Corrected source enclosure",
+            role: "base_component",
+          },
+        ],
+      })
+      .where(eq(products.id, parent.id));
+  }
+  preview = await previewCatalogComponents(state.db, 1, first.id);
+  await createCatalogComponents(1, first.id, preview.hash, 1);
+  [component] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, id));
+  expect(component.name).toBe("My manual chassis label");
+  expect(component.provenance).toMatchObject({
+    name: "user:1",
+    "component.kind": "Chassis",
+  });
+  expect(component.specifications["Component type"]).toBe("Chassis");
+  expect(
+    selectProductFacts(component, {
+      productId: id,
+      featuredSpecKeys: [],
+      includePrice: false,
+    }).componentIdentity?.kind
+  ).toBe("Chassis");
+  const links = await state.db
+    .select()
+    .from(productComponents)
+    .where(eq(productComponents.componentProductId, id));
+  expect(
+    links.every((l: any) => l.kind === "Chassis" && l.role === "base_component")
+  ).toBe(true);
+  // Source-owned labels follow correction when there is no manual override.
+  const { name: manualName, ...sourceProvenance } = component.provenance;
+  await state.db
+    .update(products)
+    .set({ provenance: sourceProvenance })
+    .where(eq(products.id, id));
+  await createCatalogComponents(1, first.id, preview.hash, 1);
+  expect(
+    (await state.db.select().from(products).where(eq(products.id, id)))[0].name
+  ).toBe("Chassis: Corrected source enclosure");
 });

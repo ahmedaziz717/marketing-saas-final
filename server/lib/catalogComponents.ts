@@ -309,6 +309,29 @@ export async function createCatalogComponents(
             updatedAtMs: Date.now(),
           })
           .returning();
+      const sourceIdentity = {
+        name: component.provenance.name?.startsWith("user:")
+          ? component.name
+          : `${c.kind}: ${c.name}`.slice(0, 300),
+        description: component.provenance.description?.startsWith("user:")
+          ? component.description
+          : `${c.kind} component only. Not a complete system. Compatible system relationships do not imply included hardware or a standalone sale price.`,
+        specifications: {
+          ...component.specifications,
+          "Component type": c.kind,
+          "Source component code": c.code,
+        },
+        provenance: {
+          ...component.provenance,
+          "component.sourceCode": c.code,
+          "component.kind": c.kind,
+        },
+      };
+      const identityChanged = Object.entries(sourceIdentity).some(
+        ([key, value]) =>
+          stableHash(value) !==
+          stableHash(component[key as keyof typeof component])
+      );
       ids.push(component.id);
       const current = await tx
         .select()
@@ -319,55 +342,129 @@ export async function createCatalogComponents(
             eq(productImages.productId, component.id)
           )
         );
-      const added: typeof current = [];
-      for (const view of c.views) {
-        if (
-          current.some(i =>
-            i.media?.references.some(
-              r => r.groupId === "component" && r.imageId === view.viewId
-            )
+      const active: typeof current = [];
+      let imagesChanged = false;
+      for (const [position, view] of c.views.map(
+        (view, position) => [position, view] as const
+      )) {
+        const existing = current.find(i =>
+          i.media?.references.some(
+            r => r.groupId === "component" && r.imageId === view.viewId
           )
+        );
+        const image = view.image;
+        const values = {
+          sourceUrl: image.sourceUrl,
+          storageKey: image.storageKey,
+          url: image.url,
+          altText: image.altText,
+          media: {
+            ...image.media!,
+            retired: false,
+            references: [
+              { groupId: "component", imageId: view.viewId, position },
+            ],
+          },
+        };
+        if (existing) {
+          // Stable catalog row IDs preserve saved image selections across same-view source repairs.
+          if (
+            stableHash({
+              sourceUrl: existing.sourceUrl,
+              storageKey: existing.storageKey,
+              url: existing.url,
+              altText: existing.altText,
+              media: existing.media,
+            }) !== stableHash(values)
+          ) {
+            await tx
+              .update(productImages)
+              .set(values)
+              .where(
+                and(
+                  eq(productImages.organizationId, organizationId),
+                  eq(productImages.id, existing.id)
+                )
+              );
+            imagesChanged = true;
+          }
+          active.push({ ...existing, ...values });
+        } else {
+          const [saved] = await tx
+            .insert(productImages)
+            .values({
+              ...values,
+              organizationId,
+              productId: component.id,
+              isPrimary: 0,
+              createdAtMs: Date.now(),
+            })
+            .returning();
+          active.push(saved);
+          imagesChanged = true;
+        }
+      }
+      const activeIds = new Set(active.map(i => i.id));
+      for (const old of current) {
+        if (
+          !old.media?.references.some(r => r.groupId === "component") ||
+          activeIds.has(old.id)
         )
           continue;
-        const { id: _id, ...image } = view.image;
-        const [saved] = await tx
-          .insert(productImages)
-          .values({
-            ...image,
-            productId: component.id,
-            isPrimary: current.length + added.length === 0 ? 1 : 0,
-            media: {
-              ...image.media!,
-              references: [
-                {
-                  groupId: "component",
-                  imageId: view.viewId,
-                  position: current.length + added.length,
-                },
-              ],
-            },
-            createdAtMs: Date.now(),
-          })
-          .returning();
-        added.push(saved);
+        if (!old.media.retired || old.isPrimary) {
+          await tx
+            .update(productImages)
+            .set({ media: { ...old.media, retired: true }, isPrimary: 0 })
+            .where(
+              and(
+                eq(productImages.organizationId, organizationId),
+                eq(productImages.id, old.id)
+              )
+            );
+          imagesChanged = true;
+        }
       }
-      if (added.length) {
-        const all = [...current, ...added];
+      // Preserve an existing active/manual primary. If its view was removed, choose a current original.
+      const primary = current.find(
+        i =>
+          i.isPrimary &&
+          !i.media?.retired &&
+          (!i.media?.references.some(r => r.groupId === "component") ||
+            activeIds.has(i.id))
+      );
+      if (!primary && active.length) {
+        await tx
+          .update(productImages)
+          .set({ isPrimary: 1 })
+          .where(
+            and(
+              eq(productImages.organizationId, organizationId),
+              eq(productImages.id, active[0].id)
+            )
+          );
+        imagesChanged = true;
+      }
+      const mediaGroups = [
+        ...(component.mediaGroups ?? []).filter(g => g.id !== "component"),
+        {
+          id: "component",
+          name: `${c.kind} original views`,
+          role: "system" as const,
+          eligible: true,
+          declaredImages: c.views.length,
+          imageIds: c.views.map(v => v.viewId),
+        },
+      ];
+      if (
+        identityChanged ||
+        imagesChanged ||
+        stableHash(mediaGroups) !== stableHash(component.mediaGroups)
+      ) {
         await tx
           .update(products)
           .set({
-            mediaGroups: [
-              {
-                id: "component",
-                name: `${c.kind} original views`,
-                role: "system",
-                eligible: true,
-                declaredImages: all.length,
-                imageIds: all.flatMap(i =>
-                  i.media!.references.map(r => r.imageId)
-                ),
-              },
-            ],
+            ...sourceIdentity,
+            mediaGroups,
             updatedAtMs: Math.max(Date.now(), component.updatedAtMs + 1),
           })
           .where(
@@ -401,6 +498,9 @@ export async function createCatalogComponents(
             ],
             set: {
               componentProductId: component.id,
+              sourceCode: c.code,
+              kind: c.kind,
+              role: link.group.role,
               optionAmount: link.group.component!.optionAmount ?? null,
               amountMeaning: link.group.component!.amountMeaning,
               sourceHash: componentGroupHash(link.group),

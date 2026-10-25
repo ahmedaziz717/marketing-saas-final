@@ -57,3 +57,15 @@ and 375px: no duplicate nested gallery, component-only labels, intentional detai
 no horizontal overflow. Synthetic SVG artwork is fixture-only, not a source photo.
 Use the authoring fixture on localhost with page=catalog-components. The page is
 also included in the Chrome matrix. Full CI must pass on the final head.
+
+## Refresh reconciliation
+
+Reviewed same-view repairs update URL, storage and measured metadata on the existing
+component image row, preserving saved selection IDs. Removed logical views are
+retired, not deleted; only current view IDs populate the active gallery. A removed
+primary falls back to a current original. Returning views reactivate their existing
+rows. Historical removed selections remain stored but must be reselected before
+new generation; they are never silently replaced with another angle. Source-owned
+kind/specifications/provenance and compatibility kind/role refresh together. Manual
+labels/descriptions and unrelated specifications remain intact. No-op review retries
+do not advance the component revision.
