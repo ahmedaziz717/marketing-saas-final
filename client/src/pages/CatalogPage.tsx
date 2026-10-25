@@ -1,4 +1,5 @@
-import { catalogDefaultImage } from "@shared/catalogMedia";
+import { CatalogComponentCards } from "@/components/CatalogComponentCards";
+import { catalogCardGallery, catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "@/components/CatalogGallery";
 import {
   CatalogCategoryMapping,
@@ -548,6 +549,11 @@ function CatalogContent() {
             const facts = structuredCatalogFacts(product);
             const reviewNotices = catalogReviewNotices(product);
             const sourceChanges = catalogRefreshChanges(product.provenance);
+            const cardGallery = catalogCardGallery(
+              product.images,
+              product.mediaGroups,
+              product.representedGroupIds
+            );
             const approvalAction = getCatalogApprovalAction(product.status);
             const approvalPending =
               review.isPending && review.variables?.productId === product.id;
@@ -596,7 +602,9 @@ function CatalogContent() {
                         </h2>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {product.category || "Uncategorized"} ·{" "}
-                          {offeringLabel(product)}
+                          {product.provenance?.["component.kind"]
+                            ? `${product.provenance["component.kind"]} component`
+                            : offeringLabel(product)}
                           {product.variantCount > 1
                             ? ` · ${product.variantCount} variants`
                             : ""}
@@ -623,16 +631,22 @@ function CatalogContent() {
                   />
                   <details className="mb-4 rounded-lg border p-3">
                     <summary className="cursor-pointer text-sm font-medium">
-                      Image galleries ({product.images.length})
+                      Image galleries ({cardGallery.images.length})
                     </summary>
                     <div className="mt-3">
                       <CatalogGallery
                         name={product.name}
-                        images={product.images}
-                        groups={product.mediaGroups}
+                        images={cardGallery.images}
+                        groups={cardGallery.groups}
                       />
                     </div>
                   </details>
+                  <CatalogComponentCards
+                    organizationId={organizationId!}
+                    product={product}
+                    canEdit={canEditCategories}
+                    onSaved={() => void refresh()}
+                  />
                   {!!reviewNotices.length && (
                     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                       <p className="font-medium">Imported for review</p>
@@ -647,6 +661,9 @@ function CatalogContent() {
                     <ApiProductDetails
                       organizationId={organizationId!}
                       productId={product.id}
+                      representedCodes={(product.componentLinks ?? [])
+                        .filter(l => l.parentProductId === product.id)
+                        .map(l => l.sourceCode)}
                     />
                   )}
                   {sourceChanges && product.status === "pending" && (

@@ -474,6 +474,22 @@ export const products = appSchema.table(
   })
 );
 
+/** Explicit catalog component compatibility; never a standalone sale price. */
+export const productComponents = appSchema.table("product_components", {
+  id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+  organizationId: integer("organizationId").notNull().references(() => organizations.id),
+  parentProductId: integer("parentProductId").notNull().references(() => products.id, { onDelete: "cascade" }),
+  componentProductId: integer("componentProductId").notNull().references(() => products.id, { onDelete: "cascade" }),
+  groupId: varchar("groupId", { length: 180 }).notNull(),
+  sourceCode: varchar("sourceCode", { length: 180 }).notNull(),
+  kind: varchar("kind", { length: 120 }).notNull(),
+  role: varchar("role", { length: 30 }).notNull(),
+  optionAmount: varchar("optionAmount", { length: 80 }),
+  amountMeaning: varchar("amountMeaning", { length: 30 }).notNull(),
+  sourceHash: varchar("sourceHash", { length: 64 }).notNull(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+}, table => ({ unique: uniqueIndex("product_component_parent_group_unique").on(table.organizationId, table.parentProductId, table.groupId) }));
+
 export const productVariants = appSchema.table(
   "product_variants",
   {

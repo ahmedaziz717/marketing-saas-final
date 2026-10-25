@@ -17,6 +17,14 @@ export const catalogMediaGroupSchema = z.object({
   eligible: z.boolean().default(true),
   referenceOnly: z.boolean().optional(),
   expectedCount: z.number().int().min(0).max(1000).optional(),
+  component: z
+    .object({
+      sourceCode: z.string().trim().min(1).max(180),
+      kind: z.string().trim().min(1).max(120),
+      optionAmount: z.string().max(80).optional(),
+      amountMeaning: z.enum(["unknown", "upgrade_delta"]).default("unknown"),
+    })
+    .optional(),
   images: z
     .array(
       z.object({
@@ -55,7 +63,12 @@ export function catalogImageEligible(
   if (image.media?.retired) return false;
   if (!image.media?.references.length) return true;
   return image.media.references.some(ref =>
-    groups?.some(group => group.id === ref.groupId && group.eligible && (!group.imageIds || group.imageIds.includes(ref.imageId)))
+    groups?.some(
+      group =>
+        group.id === ref.groupId &&
+        group.eligible &&
+        (!group.imageIds || group.imageIds.includes(ref.imageId))
+    )
   );
 }
 export function catalogDefaultImage(
@@ -67,7 +80,10 @@ export function catalogDefaultImage(
   return image.media.references.some(ref =>
     groups?.some(
       group =>
-        group.id === ref.groupId && group.eligible && group.role === "system" && (!group.imageIds || group.imageIds.includes(ref.imageId))
+        group.id === ref.groupId &&
+        group.eligible &&
+        group.role === "system" &&
+        (!group.imageIds || group.imageIds.includes(ref.imageId))
     )
   );
 }
@@ -80,21 +96,48 @@ export function galleryGroups<
     ...group,
     images: images
       .filter(image =>
-        image.media?.references.some(ref => ref.groupId === group.id && (!group.imageIds || group.imageIds.includes(ref.imageId)))
+        image.media?.references.some(
+          ref =>
+            ref.groupId === group.id &&
+            (!group.imageIds || group.imageIds.includes(ref.imageId))
+        )
       )
       .sort(
         (a, b) =>
-          (a.media?.references.find(ref => ref.groupId === group.id && (!group.imageIds || group.imageIds.includes(ref.imageId)))
-            ?.position ?? 0) -
-          (b.media?.references.find(ref => ref.groupId === group.id && (!group.imageIds || group.imageIds.includes(ref.imageId)))
-            ?.position ?? 0)
+          (a.media?.references.find(
+            ref =>
+              ref.groupId === group.id &&
+              (!group.imageIds || group.imageIds.includes(ref.imageId))
+          )?.position ?? 0) -
+          (b.media?.references.find(
+            ref =>
+              ref.groupId === group.id &&
+              (!group.imageIds || group.imageIds.includes(ref.imageId))
+          )?.position ?? 0)
       ),
   }));
   for (const group of result)
     for (const image of group.images) known.add(String(image.id));
-  const legacy = images.filter(image => !known.has(String(image.id)) && !image.media?.retired && !image.media?.references.length);
-  const retired = images.filter(image => !known.has(String(image.id)) && (image.media?.retired || !!image.media?.references.length));
-  if (retired.length) result.push({ id: "retired", name: "Previously imported option views", role: "optional_component", eligible: false, declaredImages: retired.length, images: retired });
+  const legacy = images.filter(
+    image =>
+      !known.has(String(image.id)) &&
+      !image.media?.retired &&
+      !image.media?.references.length
+  );
+  const retired = images.filter(
+    image =>
+      !known.has(String(image.id)) &&
+      (image.media?.retired || !!image.media?.references.length)
+  );
+  if (retired.length)
+    result.push({
+      id: "retired",
+      name: "Previously imported option views",
+      role: "optional_component",
+      eligible: false,
+      declaredImages: retired.length,
+      images: retired,
+    });
   if (legacy.length)
     result.unshift({
       id: "legacy",
@@ -105,4 +148,23 @@ export function galleryGroups<
       images: legacy,
     });
   return result;
+}
+
+/** Catalog-only presentation. Never alter stored galleries or generation selections. */
+export function catalogCardGallery<
+  T extends { media?: CatalogImageMedia | null },
+>(
+  images: T[],
+  groups: CatalogMediaGroupSummary[] | null | undefined,
+  representedGroupIds: string[] = []
+) {
+  const represented = new Set(representedGroupIds);
+  return {
+    groups: groups?.filter(g => !represented.has(g.id)),
+    images: images.filter(
+      image =>
+        !image.media?.references.length ||
+        image.media.references.some(r => !represented.has(r.groupId))
+    ),
+  };
 }

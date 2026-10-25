@@ -1,3 +1,4 @@
+import { componentIdentityContext } from "../../shared/studioProductFacts";
 import { TRPCError } from "@trpc/server";
 import { structuredCatalogFacts } from "../../shared/catalogFacts";
 import type {
@@ -51,8 +52,11 @@ export function selectProductFacts(
     sku: product.sku,
     description: product.description,
     category: product.category,
-    ...(product.marketingCategory ? { marketingCategory: product.marketingCategory } : {}),
+    ...(product.marketingCategory
+      ? { marketingCategory: product.marketingCategory }
+      : {}),
     recordType: product.recordType,
+    ...componentIdentityContext(product),
     serviceDetails: product.serviceDetails,
     specifications,
     features,

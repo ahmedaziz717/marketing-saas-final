@@ -1,3 +1,4 @@
+import { componentCatalogFixture } from "./catalog-components";
 import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
 import { CatalogCategoryMapping } from "../../client/src/components/CatalogCategoryMapping";
 import { ProductCategoryContext } from "../../client/src/components/ProductCategoryContext";
@@ -440,7 +441,7 @@ function respond(path: string, input: any) {
   }
   if (path === "creatives.overview") return { jobs: [] };
   if (path === "brand.assets") return [];
-  if (path === "catalog.overview") return { products: [] };
+  if (path === "catalog.overview") return which === "catalog-components" ? componentCatalogFixture() : { products: [] };
   if (path === "publishing.get") return posts.find(p => p.id === input.id);
   if (path === "creativeBuilder.people") return [];
   if (path === "creativeBuilder.options")
@@ -1179,6 +1180,7 @@ const routeForPage: Record<string, string> = {
   "enhance-image": "/app/enhance-fixture",
   "report-layout": "/app/release-fixture",
   "catalog-pilot": "/app/catalog-pilot-fixture",
+  "catalog-components": "/app/catalog",
   "catalog-gallery": "/app/catalog-gallery-fixture",
   "product-facts": "/app/release-fixture",
   "workflow-library": "/app/creatives/workflows",

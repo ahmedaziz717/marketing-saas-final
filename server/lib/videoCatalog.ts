@@ -1,3 +1,4 @@
+import { componentIdentityContext } from "../../shared/studioProductFacts";
 import { catalogImageEligible } from "../../shared/catalogMedia";
 import { attachMarketingCategories } from "./catalogCategories";
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
@@ -34,6 +35,7 @@ function productFacts(row: Row) {
     description: p.description,
     category: p.category,
     recordType: p.recordType,
+    ...componentIdentityContext(p),
     specifications: p.specifications,
     // Empty migration defaults must not invalidate already queued catalog references.
     ...(p.features?.length ? { features: p.features } : {}),
