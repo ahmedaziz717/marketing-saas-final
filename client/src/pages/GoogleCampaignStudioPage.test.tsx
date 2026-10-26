@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
   calls: vi.fn(),
   mutate: vi.fn(),
   videoUpload: vi.fn(),
+  validate: vi.fn(),
+  publish: vi.fn(),
   inventory: {} as any,
   library: [] as any[],
   resources: [] as any[],
@@ -71,8 +73,8 @@ vi.mock("@/lib/trpc", () => ({
         },
         uploadVideo: { useMutation: () => ({ mutateAsync: api.videoUpload }) },
         save: { useMutation: () => ({ mutateAsync: api.mutate }) },
-        validate: { useMutation: () => ({ mutateAsync: api.mutate }) },
-        publish: { useMutation: () => ({ mutateAsync: api.mutate }) },
+        validate: { useMutation: () => ({ mutateAsync: api.validate }) },
+        publish: { useMutation: () => ({ mutateAsync: api.publish }) },
       },
     },
   },
@@ -281,6 +283,7 @@ it("adds images and videos to the selected existing asset group without changing
   expect(
     screen.queryByRole("button", { name: "Select Approved image" })
   ).toBeNull();
+  click("Select Google Ads Library");
   click("Select Google video");
   expect(screen.getByText(/Approved image/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
@@ -291,8 +294,13 @@ it("adds images and videos to the selected existing asset group without changing
     revision: 1,
     state: "draft",
   }));
+  api.validate.mockImplementation(async input => ({
+    ...input,
+    change: api.mutate.mock.calls.at(-1)![0].change,
+    state: "validated",
+    reviewHash: "hash",
+  }));
   click("Review change →");
-  click("Save draft");
   await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
   expect(api.mutate).toHaveBeenCalledWith({
     organizationId: 1,
@@ -336,7 +344,7 @@ it("validates YouTube entries and keeps video/text sources separate", () => {
     })
   ).toBeNull();
 });
-it.each(["DISPLAY", "DEMAND_GEN", "SEARCH"])(
+it.each(["DISPLAY", "DEMAND_GEN"])(
   "only offers implemented %s formats for an existing ad group",
   type => {
     existingCampaign(type);
@@ -484,4 +492,258 @@ it("keeps missing saved Google drafts unavailable instead of submitting local co
   expect(JSON.parse(localStorage.getItem(key)!).value.draftId).toBe(
     "deleted-draft"
   );
+});
+
+it("filters existing destinations by supported media and clears the old selection", () => {
+  api.inventory.campaigns = [
+    "SEARCH",
+    "SHOPPING",
+    "VIDEO",
+    "APP",
+    "DISPLAY",
+    "DEMAND_GEN",
+    "PERFORMANCE_MAX",
+    "UNKNOWN",
+  ].map((type, index) => ({
+    campaign: {
+      id: String(index + 1),
+      name: `${type} campaign`,
+      advertisingChannelType: type,
+      status: "ENABLED",
+    },
+    campaignBudget: {},
+  }));
+  setup();
+  for (const type of ["DISPLAY", "DEMAND_GEN", "PERFORMANCE_MAX"])
+    expect(
+      screen.getByRole("button", { name: new RegExp(`^${type} campaign`) })
+    ).toBeTruthy();
+  for (const type of ["SEARCH", "SHOPPING", "VIDEO", "APP", "UNKNOWN"])
+    expect(
+      screen.queryByRole("button", { name: new RegExp(`^${type} campaign`) })
+    ).toBeNull();
+  click(/^DISPLAY campaign/);
+  expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
+  section("Review & activate");
+  expect(
+    screen.queryByRole("button", { name: "Publish reviewed changes" })
+  ).toBeNull();
+  section("Destination");
+  click("Open Campaign category");
+  fireEvent.change(screen.getByLabelText("Creative to add"), {
+    target: { value: "video" },
+  });
+  expect(
+    screen.queryByRole("button", { name: /^DISPLAY campaign/ })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /^DEMAND_GEN campaign/ })
+  ).toBeNull();
+  expect(
+    screen.getByRole("button", { name: /^PERFORMANCE_MAX campaign/ })
+  ).toBeTruthy();
+  expect(screen.queryByText("Edit name, status & budget")).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it("opens approved Creative Studio outputs directly from the Creative step", () => {
+  existingCampaign();
+  section("Destination");
+  click("Open Campaign category");
+  click(/^Existing campaign /);
+  api.library.push({
+    key: "creative:55",
+    name: "Approved Studio creative",
+    mediaType: "image",
+    state: "approved",
+    url: "https://example.com/studio.png",
+    width: 1200,
+    height: 628,
+  });
+  section("Creative");
+  click("Select Existing group");
+  expect(
+    screen
+      .getByRole("button", { name: "Select EvokeLoop Library" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  click("Select Approved Studio creative");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Approved Studio creative" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(api.publish).not.toHaveBeenCalled();
+});
+it("checks automatically and only publishes after explicit approval", async () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: "review",
+    validatedAtMs: Date.now(),
+  }));
+  click("Review change →");
+  expect(
+    screen.queryByRole("button", { name: "Validate with Google" })
+  ).toBeNull();
+  await waitFor(() =>
+    expect(
+      screen.getByText("Compatibility checked. Ready for your review.")
+    ).toBeTruthy()
+  );
+  expect(api.validate).toHaveBeenCalledTimes(1);
+  expect(api.publish).not.toHaveBeenCalled();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Publish reviewed changes",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  fireEvent.click(
+    screen.getByLabelText(
+      "I approve the settings, creative and budget shown above."
+    )
+  );
+  api.publish.mockResolvedValue({
+    ...saved,
+    state: "published",
+    result: { resources: [] },
+  });
+  click("Publish reviewed changes");
+  await waitFor(() =>
+    expect(api.publish).toHaveBeenCalledWith({
+      organizationId: 1,
+      id: "draft",
+      revision: 1,
+      reviewHash: "review",
+      confirm: true,
+    })
+  );
+});
+it("keeps provider failures visible and retries the saved draft without publishing", async () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockRejectedValueOnce(new Error("Landscape image too small"));
+  click("Review change →");
+  await waitFor(() =>
+    expect(screen.getByText("Landscape image too small")).toBeTruthy()
+  );
+  expect(
+    screen.queryByRole("button", { name: "Publish reviewed changes" })
+  ).toBeNull();
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: "review",
+  }));
+  click("Retry check");
+  await waitFor(() =>
+    expect(
+      screen.getByText("Compatibility checked. Ready for your review.")
+    ).toBeTruthy()
+  );
+  expect(api.mutate).toHaveBeenCalledTimes(1);
+  expect(api.publish).not.toHaveBeenCalled();
+});
+it("ignores a late check after switching accounts or leaving review", async () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  let saved: any;
+  let finish: (value: any) => void = () => {};
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockImplementation(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      })
+  );
+  click("Review change →");
+  await waitFor(() => expect(api.validate).toHaveBeenCalled());
+  section("Destination");
+  click("Open Campaign category");
+  fireEvent.change(screen.getByLabelText("Creative to add"), {
+    target: { value: "video" },
+  });
+  finish({ ...saved, state: "validated", reviewHash: "stale" });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(screen.queryByText(/Saved revision/)).toBeNull();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("carries an approved Creative Studio image into its selected asset group", () => {
+  existingCampaign();
+  cleanup();
+  localStorage.clear();
+  api.library.push({
+    key: "creative:55",
+    name: "Studio square",
+    mediaType: "image",
+    state: "approved",
+    url: "https://example.com/square.png",
+    width: 1080,
+    height: 1080,
+  });
+  setup("?connectionId=google&asset=creative%3A55");
+  click(/^Existing campaign /);
+  section("Creative");
+  click("Select Existing group");
+  expect((screen.getByLabelText("Placement") as HTMLSelectElement).value).toBe(
+    "SQUARE_MARKETING_IMAGE"
+  );
+  expect(
+    screen
+      .getByRole("button", { name: "Select Studio square" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it("keeps a Creative Studio video in the EvokeLoop picker and filters its destination", () => {
+  existingCampaign();
+  cleanup();
+  localStorage.clear();
+  setup("?connectionId=google&asset=asset%3A3");
+  expect(
+    (screen.getByLabelText("Creative to add") as HTMLSelectElement).value
+  ).toBe("video");
+  click(/^Existing campaign /);
+  section("Creative");
+  click("Select Existing group");
+  expect(
+    screen
+      .getByRole("button", { name: "Select EvokeLoop Library" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Library video" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(api.videoUpload).not.toHaveBeenCalled();
+});
+it("shows incomplete details without submitting a Google check", async () => {
+  existingCampaign();
+  click("Select Images");
+  click("Review change →");
+  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.validate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
 });

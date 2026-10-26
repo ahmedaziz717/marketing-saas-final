@@ -273,9 +273,9 @@ const googleCampaignRows = [
   {
     campaign: {
       id: "13",
-      name: "Paused Search",
+      name: "Paused Display",
       status: "PAUSED",
-      advertisingChannelType: "SEARCH",
+      advertisingChannelType: "DISPLAY",
     },
     campaignBudget: { amountMicros: "10000000", period: "DAILY" },
   },
@@ -2097,8 +2097,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       await click("Select Demo Google Ads");
       if (innerWidth <= 700) await click("Open Campaign category");
       check(
-        document.querySelectorAll(".google-campaign-list button").length === 2,
-        "Inactive Google campaigns are off by default"
+        document.querySelectorAll(".google-campaign-list button").length === 1,
+        "Only active image-compatible Google campaigns appear"
       );
       const inactive = Array.from(
         document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
@@ -2109,8 +2109,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       inactive.click();
       await pause();
       check(
-        document.querySelectorAll(".google-campaign-list button").length === 3,
-        "Inactive campaign opt-in includes paused campaigns"
+        document.querySelectorAll(".google-campaign-list button").length === 2,
+        "Inactive opt-in retains creative compatibility"
       );
       if (which === "google-campaigns") {
         await clickPrefix("Active PMax");
@@ -2118,7 +2118,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.body.textContent?.includes("Core products"),
           "Existing asset groups are available"
         );
-        await click("Add images, videos & text");
+        await studioSection("Creative");
+        await click("Select Core products");
+        check(!!document.querySelector('[aria-label="Select EvokeLoop Library"]'), "Creative step opens the library after choosing its group");
+        await click("Choose another asset type");
         check(
           !!document.querySelector('[aria-label="Select Images"]') &&
             !!document.querySelector('[aria-label="Select Videos"]'),

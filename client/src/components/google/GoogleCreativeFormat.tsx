@@ -33,7 +33,8 @@ export function googleCreativeFormats(
   brandAssets = true
 ): GoogleCreativeFormat[] {
   if (type === "SEARCH") return ["text"];
-  if (type === "SHOPPING") return [];
+  if (!["PERFORMANCE_MAX", "DISPLAY", "DEMAND_GEN", "APP"].includes(type))
+    return [];
   const result: GoogleCreativeFormat[] = ["image"];
   if (["PERFORMANCE_MAX", "APP"].includes(type)) result.push("video");
   if (type === "PERFORMANCE_MAX") result.push("text");
@@ -43,6 +44,18 @@ export function googleCreativeFormats(
   )
     result.push("logo");
   return result;
+}
+
+// Existing destinations must support an operation implemented by this Studio.
+// App creation is supported, but adding to existing App/legacy Video groups is not.
+export function googleExistingMediaCampaign(
+  type: string,
+  media: "image" | "video"
+) {
+  return (
+    ["PERFORMANCE_MAX", "DISPLAY", "DEMAND_GEN"].includes(type) &&
+    googleCreativeFormats(type).includes(media)
+  );
 }
 export function googleAssetFormat(
   field: GoogleAssetInput["field"]

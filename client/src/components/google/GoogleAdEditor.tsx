@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GooglePmaxAi } from "./GooglePmaxAi";
 import { addPmaxSuggestion } from "./GooglePmaxDraft";
 import { Link, useSearch } from "wouter";
@@ -122,7 +122,7 @@ export function AssetEditor({
   const media = googleAssetFormat(activeField);
   const [source, setSource] = useState<
     "library" | "upload" | "existing" | "youtube" | "text"
-  >(media === "video" ? "existing" : media === "text" ? "text" : "library");
+  >(media === "text" ? "text" : "library");
   const [value, setValue] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -131,6 +131,38 @@ export function AssetEditor({
   );
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const entryKey = new URLSearchParams(useSearch()).get("asset");
+  const entryApplied = useRef(false);
+  useEffect(() => {
+    if (entryApplied.current || !library.data || !entryKey || media !== "image")
+      return;
+    const entry = library.data.find(
+      row =>
+        row.key === entryKey &&
+        row.state === "approved" &&
+        row.mediaType === "image"
+    );
+    if (!entry) return;
+    entryApplied.current = true;
+    const ratio =
+      entry.width && entry.height ? entry.width / entry.height : null;
+    const placement =
+      ratio && Math.abs(ratio - 1) < 0.02
+        ? "SQUARE_MARKETING_IMAGE"
+        : ratio && Math.abs(ratio - 0.8) < 0.02
+          ? "PORTRAIT_MARKETING_IMAGE"
+          : "MARKETING_IMAGE";
+    if (!fields.includes(placement)) return;
+    setField(placement);
+    const candidate: GoogleAssetInput = {
+      field: placement,
+      source: { kind: "library", key: entry.key },
+    };
+    if (
+      !assets.some(asset => JSON.stringify(asset) === JSON.stringify(candidate))
+    )
+      onChange([...assets, candidate]);
+  }, [library.data, entryKey, media]);
   const images =
     library.data?.filter(
       a =>
@@ -333,6 +365,24 @@ export function AssetEditor({
               {(activeSource === "library"
                 ? library.isLoading
                 : remote.isLoading) && <p role="status">Loading assets…</p>}
+              {(activeSource === "library" ? library.error : remote.error) && (
+                <p role="alert">
+                  {
+                    (activeSource === "library" ? library.error : remote.error)
+                      ?.message
+                  }
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      void (activeSource === "library"
+                        ? library.refetch()
+                        : remote.refetch())
+                    }
+                  >
+                    Retry loading assets
+                  </Button>
+                </p>
+              )}
               <div className="cfg-card-grid google-asset-picker">
                 {items.slice(offset, offset + 12).map(item => {
                   const candidate: GoogleAssetInput = {

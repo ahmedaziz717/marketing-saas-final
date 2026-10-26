@@ -2,6 +2,7 @@ import {
   GoogleFormatPicker,
   googleCreativeFormats,
   googleFormatLabel,
+  googleExistingMediaCampaign,
   type GoogleCreativeFormat,
 } from "./GoogleCreativeFormat";
 import { AdEditor, AssetEditor } from "./GoogleAdEditor";
@@ -9,7 +10,7 @@ import { GooglePmaxAi } from "./GooglePmaxAi";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
 import { GoogleChangeSummary } from "./GoogleChangeSummary";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useSearch } from "wouter";
 import { ClipboardCheck, Images, Radio, Settings2, Type } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +53,8 @@ const googleDraftSchema = z.object({
   chosen: z.string().max(128),
   mode: z.enum(["existing", "new", "drafts"]),
   format: z.enum(["image", "video", "text", "logo"]),
+  campaignMedia: z.enum(["image", "video"]).default("image"),
+  editingSettings: z.boolean().default(false),
   includeInactive: z.boolean(),
   campaignId: z.string().max(128),
   change: draftShapeSchema(googleChangeSchema),
@@ -97,10 +100,30 @@ export function GoogleCampaignComposer({
   const [section, setSection] = useState(
       params.get("connectionId") ? "campaign" : "account"
     ),
-    [mode, setMode] = useState<"existing" | "new" | "drafts">(
-      params.has("asset") ? "new" : "existing"
-    );
+    [mode, setMode] = useState<"existing" | "new" | "drafts">("existing");
   const [format, setFormat] = useState<GoogleCreativeFormat>("image");
+  const [campaignMedia, setCampaignMedia] = useState<"image" | "video">(
+    "image"
+  );
+  const [checking, setChecking] = useState(false);
+  const [editingSettings, setEditingSettings] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const entryAssets = trpc.assetLibrary.list.useQuery(
+    { organizationId },
+    { enabled: params.has("asset") }
+  );
+  const entryApplied = useRef(false);
+  useEffect(() => {
+    if (entryApplied.current || !entryAssets.data || !params.has("asset"))
+      return;
+    entryApplied.current = true;
+    const asset = entryAssets.data.find(row => row.key === params.get("asset"));
+    if (asset?.state === "approved" && asset.mediaType === "video") {
+      setCampaignMedia("video");
+      setFormat("video");
+    }
+  }, [entryAssets.data]);
   const [includeInactive, setIncludeInactive] = useState(false),
     [campaignId, setCampaignId] = useState("");
   const [change, setChange] = useState<GoogleChange>(newCampaign),
@@ -123,6 +146,8 @@ export function GoogleCampaignComposer({
       chosen,
       mode,
       format,
+      campaignMedia,
+      editingSettings,
       includeInactive,
       campaignId,
       change,
@@ -134,6 +159,8 @@ export function GoogleCampaignComposer({
       setChosen(value.chosen);
       setMode(value.mode);
       setFormat(value.format);
+      setCampaignMedia(value.campaignMedia);
+      setEditingSettings(value.editingSettings);
       setIncludeInactive(value.includeInactive);
       setCampaignId(value.campaignId);
       if (value.draftId) setPendingRestore(value);
@@ -179,17 +206,34 @@ export function GoogleCampaignComposer({
     validate = trpc.googleAds.campaigns.validate.useMutation(),
     publish = trpc.googleAds.campaigns.publish.useMutation();
   const busy =
+    checking ||
     save.isPending ||
     validate.isPending ||
     publish.isPending ||
     !!pendingRestore;
+  const eligibleCampaigns =
+    list.data?.campaigns.filter(r =>
+      googleExistingMediaCampaign(
+        r.campaign.advertisingChannelType,
+        campaignMedia
+      )
+    ) ?? [];
   const current = detail.data?.campaigns.find(
-    r => String(r.campaign.id) === campaignId
+    r =>
+      String(r.campaign.id) === campaignId &&
+      (mode !== "existing" ||
+        googleExistingMediaCampaign(
+          r.campaign.advertisingChannelType,
+          campaignMedia
+        ))
   );
   const locked =
     !!draft && ["publishing", "published", "uncertain"].includes(draft.state);
+  const normalizedChange = googleChangeSchema.safeParse(change);
   const dirty =
-    !draft || JSON.stringify(draft.change) !== JSON.stringify(change);
+    !draft ||
+    !normalizedChange.success ||
+    JSON.stringify(draft.change) !== JSON.stringify(normalizedChange.data);
   const canPublish = ["owner", "admin", "publisher"].includes(
     membership?.role ?? ""
   );
@@ -200,10 +244,14 @@ export function GoogleCampaignComposer({
     setError("");
   };
   const begin = (next: GoogleChange, target = "settings") => {
+    setCheckAttempt(value => value + 1);
     edit(next);
+    setEditingSettings(
+      next.kind === "campaign_update" && target === "settings"
+    );
     setPendingRestore(null);
     setDraft(null);
-    setFormat("image");
+    setFormat(campaignMedia);
     setSection(target);
   };
   const hasAd = "ad" in change;
@@ -315,7 +363,7 @@ export function GoogleCampaignComposer({
             },
           ]
         : []),
-      ...(["campaign_create", "campaign_update"].includes(change.kind)
+      ...(change.kind === "campaign_create" || editingSettings
         ? [
             {
               id: "delivery",
@@ -351,63 +399,110 @@ export function GoogleCampaignComposer({
       {
         id: "review",
         title: "Review & activate",
-        subtitle: "Validate & publish",
+        subtitle: "Review & publish",
         icon: ClipboardCheck,
         categories: [
           {
             id: "review",
             title: "Review change",
             value: draft?.state ?? "Unsaved draft",
-            disabled: !connection,
-            reason: "Choose an account first",
+            disabled:
+              !connection ||
+              (change.kind === "campaign_update" && !editingSettings),
+            reason: !connection
+              ? "Choose an account first"
+              : "Choose a group and creative first",
           },
         ],
       },
     ],
   });
-  async function saveDraft() {
-    const parsed = googleChangeSchema.safeParse(change);
-    if (!parsed.success) {
-      setShowValidation(true);
-      setError("Complete the required fields below before Google validation.");
-      return null;
-    }
-    try {
-      const row = await save.mutateAsync({
-        ...scope,
-        ...(draft ? { id: draft.id, revision: draft.revision } : {}),
-        change: parsed.data,
-      });
-      setDraft(row);
-      setChange(row.change);
+  const reviewInput = JSON.stringify({ organizationId, connectionId, change });
+  const latestReview = useRef(reviewInput);
+  latestReview.current = reviewInput;
+  // Save and validate only when reviewing a complete draft. Never publish here.
+  useEffect(() => {
+    if (
+      section !== "review" ||
+      !connectionId ||
+      pendingRestore ||
+      locked ||
+      (change.kind === "campaign_update" && !editingSettings)
+    )
+      return;
+    let cancelled = false;
+    let refresh: ReturnType<typeof setTimeout> | undefined;
+    const stillCurrent = () =>
+      !cancelled && latestReview.current === reviewInput;
+    const timer = setTimeout(async () => {
+      const parsed = googleChangeSchema.safeParse(change);
       setConfirmed(false);
+      setCheckFailed(false);
       setError("");
-      void drafts.refetch();
-      return row;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save draft.");
-      return null;
-    }
-  }
-  async function checkDraft() {
-    const row = dirty ? await saveDraft() : draft;
-    if (!row) return;
-    try {
-      const result = await validate.mutateAsync({
-        organizationId,
-        id: row.id,
-        revision: row.revision,
-      });
-      setDraft(result);
-      setError("");
-      setConfirmed(false);
-      toast.success(
-        "Google validated this change. Review it before publishing."
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Validation failed.");
-    }
-  }
+      if (!parsed.success) {
+        setShowValidation(true);
+        return;
+      }
+      if (
+        mode === "existing" &&
+        change.kind !== "campaign_create" &&
+        !current
+      ) {
+        setError(
+          "Choose a compatible campaign in Destination before continuing."
+        );
+        return;
+      }
+      setChecking(true);
+      let row = draft;
+      try {
+        if (dirty) {
+          row = await save.mutateAsync({
+            ...scope,
+            ...(draft ? { id: draft.id, revision: draft.revision } : {}),
+            change: parsed.data,
+          });
+        }
+        if (!row || !stillCurrent()) return;
+        // Keep the saved revision on provider failure so retry updates the same draft.
+        setDraft(row);
+        const result = await validate.mutateAsync({
+          organizationId,
+          id: row.id,
+          revision: row.revision,
+        });
+        if (!stillCurrent()) return;
+        setDraft(result);
+        setShowValidation(false);
+        void drafts.refetch();
+        // Recheck before the server's 15-minute review window expires.
+        refresh = setTimeout(() => {
+          if (stillCurrent()) {
+            setConfirmed(false);
+            setCheckAttempt(value => value + 1);
+          }
+        }, 14 * 60_000);
+      } catch (e) {
+        if (stillCurrent()) {
+          setCheckFailed(true);
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Could not check this change with Google."
+          );
+        }
+      } finally {
+        if (stillCurrent()) setChecking(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      clearTimeout(refresh);
+      setChecking(false);
+    };
+    // Draft state and mutation handles change during the check, but do not restart it.
+  }, [section, reviewInput, checkAttempt, !!pendingRestore, locked]);
   async function deliver() {
     if (!draft?.reviewHash || dirty || !confirmed) return;
     try {
@@ -648,6 +743,27 @@ export function GoogleCampaignComposer({
                 )}
                 {mode === "existing" && (
                   <>
+                    <Field title="Creative to add">
+                      <select
+                        value={campaignMedia}
+                        onChange={event => {
+                          const media = event.target.value as "image" | "video";
+                          setCampaignMedia(media);
+                          setFormat(media);
+                          setCampaignId("");
+                          setDraft(null);
+                          setPendingRestore(null);
+                          edit(newCampaign());
+                        }}
+                      >
+                        <option value="image">Images</option>
+                        <option value="video">Videos</option>
+                      </select>
+                    </Field>
+                    <p>
+                      Only campaigns that support this creative in Activation
+                      Studio are shown.
+                    </p>
                     <label>
                       <input
                         type="checkbox"
@@ -666,7 +782,7 @@ export function GoogleCampaignComposer({
                       </p>
                     )}
                     <div className="google-campaign-list">
-                      {list.data?.campaigns.map(r => (
+                      {eligibleCampaigns.map(r => (
                         <button
                           key={r.campaign.id}
                           className={
@@ -696,15 +812,17 @@ export function GoogleCampaignComposer({
                             {label(r.campaign.advertisingChannelType)} ·{" "}
                             {label(r.campaign.status)} ·{" "}
                             {Number(r.campaignBudget.amountMicros ?? 0) / 1e6}{" "}
-                            {list.data.currency}/day
+                            {list.data?.currency}/day
                           </span>
                         </button>
                       ))}
                     </div>
-                    {list.data && !list.data.campaigns.length && (
+                    {list.data && !eligibleCampaigns.length && (
                       <p>
-                        No {includeInactive ? "available" : "active"} campaigns.
-                        Include inactive campaigns or create a new one.
+                        No {includeInactive ? "available" : "active"} campaigns
+                        support adding{" "}
+                        {campaignMedia === "image" ? "images" : "videos"} here.
+                        Include inactive campaigns or choose another media type.
                       </p>
                     )}
                     {detail.isFetching && campaignId && (
@@ -878,7 +996,11 @@ export function GoogleCampaignComposer({
                         onClick={() => {
                           setPendingRestore(null);
                           setDraft(d);
+                          setCheckAttempt(value => value + 1);
                           setChange(d.change);
+                          setEditingSettings(
+                            d.change.kind === "campaign_update"
+                          );
                           setConfirmed(false);
                           setSection("review");
                           if (d.change.kind !== "campaign_create")
@@ -979,10 +1101,70 @@ export function GoogleCampaignComposer({
                   />
                 )}
                 {change.kind === "campaign_update" && (
-                  <p>
-                    Choose an existing ad group or asset group in Campaign to
-                    manage its creative.
-                  </p>
+                  <>
+                    <h2>
+                      {current?.campaign.advertisingChannelType ===
+                      "PERFORMANCE_MAX"
+                        ? "Choose an asset group"
+                        : "Choose an ad group"}
+                    </h2>
+                    <p>
+                      Choose where to add your creative, then browse EvokeLoop
+                      Library, upload files, or reuse Google assets.
+                    </p>
+                    {detail.isFetching && <p role="status">Loading groups…</p>}
+                    {detail.error && <p role="alert">{detail.error.message}</p>}
+                    <div className="cfg-card-grid">
+                      {current &&
+                        detail.data?.groups.map(row => {
+                          const group = row.assetGroup ?? row.adGroup;
+                          return (
+                            <StudioCard
+                              key={group.id}
+                              title={group.name}
+                              description={label(group.status ?? "UNKNOWN")}
+                              selected={false}
+                              onSelect={() =>
+                                begin(
+                                  row.assetGroup
+                                    ? {
+                                        kind: "asset_group_assets",
+                                        campaignId,
+                                        assetGroupId: String(group.id),
+                                        add: [],
+                                        remove: [],
+                                      }
+                                    : {
+                                        kind: "ad_create",
+                                        campaignId,
+                                        adGroupId: String(group.id),
+                                        type: current.campaign
+                                          .advertisingChannelType as
+                                          | "DISPLAY"
+                                          | "DEMAND_GEN",
+                                        ad: { ...emptyAd(), name: group.name },
+                                      },
+                                  "creative"
+                                )
+                              }
+                            />
+                          );
+                        })}
+                    </div>
+                    {!detail.isFetching &&
+                      current &&
+                      !detail.data?.groups.length && (
+                        <p>
+                          No available groups. Choose another campaign or create
+                          a group in Google Ads.
+                        </p>
+                      )}
+                    {!current && (
+                      <Button onClick={() => setSection("campaign")}>
+                        Choose a compatible campaign
+                      </Button>
+                    )}
+                  </>
                 )}
                 {(change.kind === "asset_group_create" ||
                   change.kind === "asset_group_update") && (
@@ -1139,9 +1321,9 @@ export function GoogleCampaignComposer({
                 </p>
                 <GoogleChangeSummary change={change} />
                 <p>
-                  Google validation checks this account’s current requirements.
-                  Publishing submits the reviewed change to Google; approval and
-                  delivery are controlled by Google Ads.
+                  Compatibility is checked automatically against this account’s
+                  requirements. Publishing submits the reviewed change to
+                  Google; approval and delivery are controlled by Google Ads.
                 </p>
                 {draft?.state === "published" ? (
                   <div role="status">
@@ -1167,13 +1349,6 @@ export function GoogleCampaignComposer({
                   <>
                     <div className="google-actions">
                       <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => void saveDraft()}
-                      >
-                        Save draft
-                      </Button>
-                      <Button
                         variant="ghost"
                         disabled={
                           save.isPending ||
@@ -1197,57 +1372,72 @@ export function GoogleCampaignComposer({
                       >
                         Reset setup
                       </Button>
-                      <Button disabled={busy} onClick={() => void checkDraft()}>
-                        {validate.isPending
-                          ? "Validating…"
-                          : "Validate with Google"}
-                      </Button>
-                    </div>
-                    {draft?.state === "validated" && !dirty && (
-                      <>
-                        <p role="status">
-                          Validated · revision {draft.revision}. Review expires
-                          after 15 minutes.
-                        </p>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={confirmed}
-                            onChange={e => setConfirmed(e.target.checked)}
-                          />{" "}
-                          I approve the settings, creative and budget shown
-                          above.
-                        </label>
+                      {checkFailed && (
                         <Button
-                          disabled={
-                            busy ||
-                            !confirmed ||
-                            !canPublish ||
-                            !connections.data?.livePublishingEnabled
-                          }
-                          onClick={() => void deliver()}
+                          disabled={busy}
+                          onClick={() => setCheckAttempt(value => value + 1)}
                         >
-                          {publish.isPending
-                            ? "Publishing…"
-                            : change.kind === "campaign_create"
-                              ? "Publish campaign to Google Ads"
-                              : "Publish reviewed changes"}
+                          Retry check
                         </Button>
-                        {!connections.data?.livePublishingEnabled && (
-                          <p>
-                            Live advertising changes are disabled in this
-                            environment. Drafts can still be saved and
-                            validated.
+                      )}
+                    </div>
+                    <p role="status">
+                      {checking
+                        ? "Saving and checking compatibility with Google…"
+                        : checkFailed
+                          ? "Compatibility could not be confirmed. Check the issue below."
+                          : draft?.state === "validated" && !dirty
+                            ? "Compatibility checked. Ready for your review."
+                            : "Your draft is saved and checked automatically when its required details are complete."}
+                    </p>
+                    {draft?.state === "validated" &&
+                      !dirty &&
+                      !checking &&
+                      !checkFailed && (
+                        <>
+                          <p role="status">
+                            Draft saved. Compatibility checks refresh
+                            automatically.
                           </p>
-                        )}
-                        {!canPublish && (
-                          <p>
-                            A workspace publisher, admin or owner must approve
-                            publishing.
-                          </p>
-                        )}
-                      </>
-                    )}
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={confirmed}
+                              onChange={e => setConfirmed(e.target.checked)}
+                            />{" "}
+                            I approve the settings, creative and budget shown
+                            above.
+                          </label>
+                          <Button
+                            disabled={
+                              busy ||
+                              !confirmed ||
+                              !canPublish ||
+                              !connections.data?.livePublishingEnabled
+                            }
+                            onClick={() => void deliver()}
+                          >
+                            {publish.isPending
+                              ? "Publishing…"
+                              : change.kind === "campaign_create"
+                                ? "Publish campaign to Google Ads"
+                                : "Publish reviewed changes"}
+                          </Button>
+                          {!connections.data?.livePublishingEnabled && (
+                            <p>
+                              Live advertising changes are disabled in this
+                              environment. Drafts can still be saved and
+                              validated.
+                            </p>
+                          )}
+                          {!canPublish && (
+                            <p>
+                              A workspace publisher, admin or owner must approve
+                              publishing.
+                            </p>
+                          )}
+                        </>
+                      )}
                   </>
                 )}
               </>
@@ -1284,6 +1474,7 @@ export function GoogleCampaignComposer({
               </p>
             )}
             {!!connection &&
+              !(section === "creative" && change.kind === "campaign_update") &&
               !["review", "campaign", "channel", "account"].includes(
                 section
               ) && (
