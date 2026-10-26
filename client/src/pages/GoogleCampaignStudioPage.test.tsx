@@ -19,6 +19,8 @@ const api = vi.hoisted(() => ({
   videoUpload: vi.fn(),
   validate: vi.fn(),
   publish: vi.fn(),
+  generateCopy: vi.fn(),
+  prompts: [] as any[],
   inventory: {} as any,
   library: [] as any[],
   resources: [] as any[],
@@ -39,7 +41,7 @@ vi.mock("@/hooks/useWorkspace", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     prompts: {
-      list: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+      list: { useQuery: () => ({ data: api.prompts, refetch: vi.fn() }) },
       change: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     },
     catalog: {
@@ -67,7 +69,10 @@ vi.mock("@/lib/trpc", () => ({
           }),
         },
         draftPmaxCopy: {
-          useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+          useMutation: () => ({
+            mutateAsync: api.generateCopy,
+            isPending: false,
+          }),
         },
         inventory: {
           useQuery: (input: any) => {
@@ -111,6 +116,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   api.accounts = [account];
+  api.prompts = [];
   api.library = [];
   api.resources = [];
   api.drafts = [];
@@ -838,6 +844,104 @@ it("requires explicit image replacement at capacity, and cancelling keeps all ex
   await waitFor(() =>
     expect(screen.getByText(/Image capacity reached/)).toBeTruthy()
   );
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("generates copy for a full existing group and saves only the explicitly chosen text replacement", async () => {
+  existingCampaign();
+  api.prompts = [
+    { id: "google.pmax.copy", value: "Brand prompt", revision: 1 },
+  ];
+  api.inventory.assets = [
+    ...Array.from({ length: 15 }, (_, index) => ({
+      field: "HEADLINE",
+      text: `Existing headline ${index}`,
+    })),
+    ...Array.from({ length: 5 }, (_, index) => ({
+      field: "LONG_HEADLINE",
+      text: `Existing long headline ${index}`,
+    })),
+    ...Array.from({ length: 5 }, (_, index) => ({
+      field: "DESCRIPTION",
+      text: `Existing description ${index}`,
+    })),
+  ].map((item, index) => ({
+    assetGroup: { id: "22" },
+    asset: { id: String(100 + index), textAsset: { text: item.text } },
+    assetGroupAsset: {
+      fieldType: item.field,
+      resourceName: `text-link-${index}`,
+    },
+  }));
+  api.generateCopy.mockResolvedValue({
+    headlines: ["New AI headline"],
+    longHeadlines: [],
+    descriptions: [],
+  });
+  click("Select Approved image");
+  click("Continue to Copy →");
+  expect(
+    (screen.getByText("Create suggestions with AI") as HTMLButtonElement)
+      .disabled
+  ).toBe(false);
+  click("Create suggestions with AI");
+  const suggestion = await screen.findByDisplayValue("New AI headline");
+  expect(api.generateCopy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      selectedAssets: [
+        {
+          field: "MARKETING_IMAGE",
+          source: { kind: "library", key: "asset:1" },
+        },
+      ],
+      copyRequest: expect.objectContaining({
+        counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
+      }),
+    })
+  );
+  const row = within(
+    suggestion.closest(".google-copy-suggestion") as HTMLElement
+  );
+  const option = row.getByRole("option", {
+    name: "Google: Existing headline 0",
+  }) as HTMLOptionElement;
+  fireEvent.change(row.getByRole("combobox"), {
+    target: { value: option.value },
+  });
+  expect(api.mutate).not.toHaveBeenCalled();
+  fireEvent.click(row.getByText("Replace selected text in draft"));
+  expect(api.publish).not.toHaveBeenCalled();
+  // Revisiting the creative picker must not silently undo the text replacement.
+  section("Creative");
+  click("Select Approved image");
+  click("Select Approved image");
+  click("Continue to Copy →");
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: "review",
+    validatedAtMs: Date.now(),
+  }));
+  click("Review change →");
+  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
+  expect(saved.change).toEqual({
+    kind: "asset_group_assets",
+    campaignId: "11",
+    assetGroupId: "22",
+    add: [
+      { field: "HEADLINE", source: { kind: "text", text: "New AI headline" } },
+      { field: "MARKETING_IMAGE", source: { kind: "library", key: "asset:1" } },
+    ],
+    remove: [{ assetId: "100", field: "HEADLINE" }],
+  });
+  expect(
+    screen.getByText("Selected headline to replace: Existing headline 0")
+  ).toBeTruthy();
   expect(api.publish).not.toHaveBeenCalled();
 });
 it("submits only once for repeated activation clicks while a request is pending", async () => {

@@ -19,6 +19,8 @@ export function GooglePmaxAi({
   assets = [],
   occupiedFields = [],
   existingCopy = emptyGoogleCopy(),
+  replacementOptions = [],
+  onReplace,
   onAdd,
   onApply,
 }: {
@@ -27,6 +29,12 @@ export function GooglePmaxAi({
   assets?: GoogleAssetInput[];
   occupiedFields?: string[];
   existingCopy?: GoogleCopySet;
+  replacementOptions?: Array<{
+    id: string;
+    field: GoogleCopyField;
+    label: string;
+  }>;
+  onReplace?: (id: string, asset: GoogleAssetInput) => void;
   onAdd: (asset: GoogleAssetInput) => void;
   onApply?: (assets: GoogleAssetInput[]) => void;
 }) {
@@ -45,6 +53,9 @@ export function GooglePmaxAi({
   const [override, setOverride] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [suggestions, setSuggestions] = useState<GoogleCopySet | null>(null);
+  const [replacementTargets, setReplacementTargets] = useState<
+    Record<string, string>
+  >({});
   const [counts, setCounts] = useState({
     headlines: 15,
     longHeadlines: 5,
@@ -69,11 +80,15 @@ export function GooglePmaxAi({
   currentContext.current = contextKey;
   useEffect(() => {
     setSuggestions(null);
+    setReplacementTargets({});
     setNotice("");
   }, [contextKey]);
   const remaining = remainingGoogleCopy(occupiedFields);
   const requested = Object.fromEntries(
-    googleCopyFields.map(key => [key, Math.min(counts[key], remaining[key])])
+    googleCopyFields.map(key => [
+      key,
+      Math.min(counts[key], googleCopySpecs[key].maximum),
+    ])
   ) as typeof counts;
   const isDuplicate = (key: GoogleCopyField, text: string) =>
     existingCopy[key].some(
@@ -112,7 +127,10 @@ export function GooglePmaxAi({
               }
             : previous
         );
-      else setSuggestions(result);
+      else {
+        setSuggestions(result);
+        setReplacementTargets({});
+      }
     } catch (error) {
       if (currentContext.current === snapshot)
         setNotice(
@@ -201,14 +219,11 @@ export function GooglePmaxAi({
       </p>
       <div className="google-form-grid">
         {googleCopyFields.map(key => (
-          <Field
-            key={key}
-            title={`${googleCopySpecs[key].label} to generate · ${remaining[key]} slots available`}
-          >
+          <Field key={key} title={`${googleCopySpecs[key].label} to generate`}>
             <input
               type="number"
               min={0}
-              max={remaining[key]}
+              max={googleCopySpecs[key].maximum}
               value={requested[key]}
               onChange={e =>
                 setCounts(v => ({
@@ -216,7 +231,7 @@ export function GooglePmaxAi({
                   [key]: Math.max(
                     0,
                     Math.min(
-                      remaining[key],
+                      googleCopySpecs[key].maximum,
                       Math.trunc(Number(e.target.value) || 0)
                     )
                   ),
@@ -225,11 +240,19 @@ export function GooglePmaxAi({
             />
             <small>
               {googleCopySpecs[key].characters} characters each ·{" "}
-              {googleCopySpecs[key].maximum} maximum per group
+              {googleCopySpecs[key].maximum} suggestions maximum per run
             </small>
+            <small>{remaining[key]} slots available to add to this group</small>
           </Field>
         ))}
       </div>
+      {googleCopyFields.some(key => remaining[key] === 0) && (
+        <p role="status">
+          Some text slots are full. You can still generate alternatives. To use
+          one, choose the text to replace below and add that replacement to your
+          draft. Google changes only after you review and activate the draft.
+        </p>
+      )}
       <details>
         <summary>Product facts and additional direction</summary>
         <Field title="Find approved products (optional)">
@@ -393,8 +416,74 @@ export function GooglePmaxAi({
                   }
                   onClick={() => onAdd(assetFor(key, text))}
                 >
-                  {isDuplicate(key, text) ? "Already in draft" : "Add to draft"}
+                  {isDuplicate(key, text)
+                    ? "Already in draft"
+                    : !remaining[key]
+                      ? "All slots occupied"
+                      : "Add to draft"}
                 </Button>
+                {onReplace &&
+                  replacementOptions.some(option => option.field === key) && (
+                    <div>
+                      <Field
+                        title={`Text to replace with ${googleCopySpecs[key].label.toLowerCase()} suggestion ${index + 1}`}
+                      >
+                        <select
+                          value={replacementTargets[`${key}:${index}`] ?? ""}
+                          disabled={generate.isPending}
+                          onChange={e =>
+                            setReplacementTargets(previous => ({
+                              ...previous,
+                              [`${key}:${index}`]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Choose text to replace</option>
+                          {replacementOptions
+                            .filter(option => option.field === key)
+                            .map(option => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Button
+                        variant="outline"
+                        disabled={
+                          generate.isPending ||
+                          !text.trim() ||
+                          text.length > googleCopySpecs[key].characters ||
+                          isDuplicate(key, text) ||
+                          !replacementOptions.some(
+                            option =>
+                              option.field === key &&
+                              option.id ===
+                                replacementTargets[`${key}:${index}`]
+                          )
+                        }
+                        onClick={() => {
+                          const id = replacementTargets[`${key}:${index}`];
+                          if (
+                            !replacementOptions.some(
+                              option => option.field === key && option.id === id
+                            )
+                          )
+                            return;
+                          onReplace(id, assetFor(key, text));
+                          setReplacementTargets(previous => ({
+                            ...previous,
+                            [`${key}:${index}`]: "",
+                          }));
+                          setNotice(
+                            "Replacement added to this draft. Review it before activating."
+                          );
+                        }}
+                      >
+                        Replace selected text in draft
+                      </Button>
+                    </div>
+                  )}
                 <Button
                   variant="ghost"
                   disabled={generate.isPending}

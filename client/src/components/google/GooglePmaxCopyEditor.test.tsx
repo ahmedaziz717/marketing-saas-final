@@ -147,3 +147,71 @@ it("enforces 15/5/5 retained limits and allows editing/removing only draft entri
   expect(onChange).toHaveBeenLastCalledWith([]);
   expect(existing).toHaveLength(24);
 });
+
+it("replaces only the explicitly selected draft text and rejects stale or mismatched targets", () => {
+  const onChange = vi.fn();
+  const media: GoogleAssetInput = {
+    field: "MARKETING_IMAGE",
+    source: { kind: "library", key: "asset:1" },
+  };
+  const assets = [
+    media,
+    text("HEADLINE", "Original"),
+    text("DESCRIPTION", "Keep description"),
+  ];
+  const { rerender } = render(
+    <GooglePmaxCopyEditor
+      organizationId={7}
+      connectionId="connection"
+      assets={assets}
+      onChange={onChange}
+    />
+  );
+  const id = f.ai.replacementOptions.find(
+    (option: any) => option.field === "headlines"
+  ).id;
+  f.ai.onReplace(id, text("DESCRIPTION", "Wrong field"));
+  expect(onChange).not.toHaveBeenCalled();
+  f.ai.onReplace(id, text("HEADLINE", "New headline"));
+  expect(onChange).toHaveBeenCalledWith([
+    media,
+    text("HEADLINE", "New headline"),
+    assets[2],
+  ]);
+  onChange.mockClear();
+  rerender(
+    <GooglePmaxCopyEditor
+      organizationId={7}
+      connectionId="connection"
+      assets={[media, text("HEADLINE", "Edited since selection")]}
+      onChange={onChange}
+    />
+  );
+  f.ai.onReplace(id, text("HEADLINE", "Stale replacement"));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it("replaces retained Google copy only through the explicit association callback", () => {
+  const onChange = vi.fn(),
+    onReplaceExisting = vi.fn();
+  render(
+    <GooglePmaxCopyEditor
+      organizationId={7}
+      connectionId="connection"
+      assets={[]}
+      existing={[{ assetId: "123", field: "HEADLINE", text: "Retained" }]}
+      onChange={onChange}
+      onReplaceExisting={onReplaceExisting}
+    />
+  );
+  const id = f.ai.replacementOptions[0].id;
+  f.ai.onReplace(id, text("HEADLINE", "retained"));
+  f.ai.onReplace(id, text("HEADLINE", "x".repeat(31)));
+  expect(onReplaceExisting).not.toHaveBeenCalled();
+  f.ai.onReplace(id, text("HEADLINE", "New headline"));
+  expect(onReplaceExisting).toHaveBeenCalledWith(
+    { assetId: "123", field: "HEADLINE" },
+    text("HEADLINE", "New headline")
+  );
+  expect(onChange).not.toHaveBeenCalled();
+});

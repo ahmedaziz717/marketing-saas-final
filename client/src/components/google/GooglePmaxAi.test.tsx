@@ -230,35 +230,120 @@ it("edits suggestions before explicit acceptance and regenerates only one sugges
   );
 });
 
-it("uses remaining retained capacity and disables generation when all slots are full", () => {
+it("generates alternatives at full capacity without adding or replacing existing copy", async () => {
   const occupied = [
     ...Array(14).fill("HEADLINE"),
     ...Array(4).fill("LONG_HEADLINE"),
     ...Array(5).fill("DESCRIPTION"),
   ];
+  const add = vi.fn(),
+    apply = vi.fn();
   const { rerender } = render(
     <GooglePmaxAi
       organizationId={7}
       occupiedFields={occupied}
-      onAdd={vi.fn()}
+      onAdd={add}
+      onApply={apply}
     />
   );
   expect(
     (screen.getAllByRole("spinbutton") as HTMLInputElement[]).map(i =>
       Number(i.value)
     )
-  ).toEqual([1, 1, 0]);
+  ).toEqual([15, 5, 5]);
   rerender(
     <GooglePmaxAi
       organizationId={7}
       occupiedFields={[...occupied, "HEADLINE", "LONG_HEADLINE"]}
-      onAdd={vi.fn()}
+      onAdd={add}
+      onApply={apply}
     />
   );
   expect(
     (screen.getByText("Create suggestions with AI") as HTMLButtonElement)
       .disabled
+  ).toBe(false);
+  fireEvent.click(screen.getByText("Create suggestions with AI"));
+  await screen.findByDisplayValue("New headline");
+  expect(f.generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      copyRequest: expect.objectContaining({
+        counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
+      }),
+    })
+  );
+  expect(
+    screen
+      .getAllByText("All slots occupied")
+      .every(button => (button as HTMLButtonElement).disabled)
   ).toBe(true);
+  fireEvent.click(screen.getByText("Add all valid suggestions to draft"));
+  expect(add).not.toHaveBeenCalled();
+  expect(apply).not.toHaveBeenCalled();
+});
+
+it("requires choosing and explicitly accepting a same-field replacement", async () => {
+  const replace = vi.fn(),
+    add = vi.fn();
+  const { rerender } = render(
+    <GooglePmaxAi
+      organizationId={7}
+      onAdd={add}
+      onReplace={replace}
+      replacementOptions={[
+        {
+          id: "headline-1",
+          field: "headlines",
+          label: "Google: Original headline",
+        },
+        {
+          id: "description-1",
+          field: "descriptions",
+          label: "Google: Original description",
+        },
+      ]}
+    />
+  );
+  fireEvent.click(screen.getByText("Create suggestions with AI"));
+  const suggestion = await screen.findByDisplayValue("New headline");
+  const row = within(
+    suggestion.closest(".google-copy-suggestion") as HTMLElement
+  );
+  const button = row.getByText(
+    "Replace selected text in draft"
+  ) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(row.queryByText("Google: Original description")).toBeNull();
+  fireEvent.change(row.getByRole("combobox"), {
+    target: { value: "headline-1" },
+  });
+  expect(replace).not.toHaveBeenCalled();
+  fireEvent.click(button);
+  expect(replace).toHaveBeenCalledWith("headline-1", {
+    field: "HEADLINE",
+    source: { kind: "text", text: "New headline" },
+  });
+  expect(add).not.toHaveBeenCalled();
+  fireEvent.change(row.getByRole("combobox"), {
+    target: { value: "headline-1" },
+  });
+  rerender(
+    <GooglePmaxAi
+      organizationId={7}
+      onAdd={add}
+      onReplace={replace}
+      replacementOptions={[
+        {
+          id: "headline-2",
+          field: "headlines",
+          label: "Google: Changed headline",
+        },
+      ]}
+    />
+  );
+  expect(button.disabled).toBe(true);
+  fireEvent.click(button);
+  expect(replace).toHaveBeenCalledTimes(1);
 });
 
 it("discards an in-flight suggestion response after selected creative changes", async () => {

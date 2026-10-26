@@ -1266,10 +1266,31 @@ export function GoogleCampaignComposer({
                                     )
                                 )
                                 .map(row => ({
+                                  assetId: String(row.asset.id),
                                   field: row.assetGroupAsset.fieldType,
                                   text: row.asset.textAsset?.text,
                                 }))
                             : []
+                        }
+                        onReplaceExisting={
+                          change.kind === "asset_group_assets"
+                            ? (target, replacement) => {
+                                if (
+                                  target.field !== replacement.field ||
+                                  change.remove.some(
+                                    r =>
+                                      r.assetId === target.assetId &&
+                                      r.field === target.field
+                                  )
+                                )
+                                  return;
+                                edit({
+                                  ...change,
+                                  add: [...change.add, replacement],
+                                  remove: [...change.remove, target],
+                                });
+                              }
+                            : undefined
                         }
                         onChange={assets =>
                           change.kind === "asset_group_assets"
@@ -1422,7 +1443,19 @@ export function GoogleCampaignComposer({
                           brandAssets={
                             !current?.campaign.brandGuidelinesEnabled
                           }
-                          onChange={add => edit({ ...change, add, remove: [] })}
+                          onChange={add =>
+                            edit({
+                              ...change,
+                              add,
+                              remove: change.remove.filter(r =>
+                                [
+                                  "HEADLINE",
+                                  "LONG_HEADLINE",
+                                  "DESCRIPTION",
+                                ].includes(r.field)
+                              ),
+                            })
+                          }
                         />
                         <GoogleAssetMetricsProvider
                           {...scope}
