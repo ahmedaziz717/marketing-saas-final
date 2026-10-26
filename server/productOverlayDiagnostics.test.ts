@@ -82,3 +82,40 @@ it("keeps provider errors and internal storage details out of persisted diagnost
     )
   ).toEqual({ stage: "render", reason: "source_resolution" });
 });
+
+it.each([
+  [{ ...base, confidence: 0.7 }, "low_confidence"],
+  [{ ...base, sameAngle: false }, "camera_angle"],
+  [{ ...base, width: 600 }, "aspect_mismatch"],
+  [{ ...base, left: 900 }, "invalid_geometry"],
+] as const)(
+  "explicit suggestions use the same rejection guards as automatic finishing: %s",
+  async (box, reason) => {
+    const { suggestProductPlacement } = await import("./lib/productOverlay");
+    mocks.invoke.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ products: [box] }) } }],
+    });
+    const png = await sharp({
+      create: { width: 1000, height: 1000, channels: 4, background: "blue" },
+    })
+      .png()
+      .toBuffer();
+    await expect(
+      suggestProductPlacement(
+        png,
+        [
+          {
+            png,
+            width: 400,
+            height: 800,
+            sourceKey: "private",
+            sha256: "hash",
+          },
+        ],
+        { width: 1000, height: 1000 }
+      )
+    ).rejects.toMatchObject({
+      diagnostic: expect.objectContaining({ reason }),
+    });
+  }
+);
