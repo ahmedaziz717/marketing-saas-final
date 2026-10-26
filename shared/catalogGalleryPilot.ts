@@ -5,6 +5,9 @@ export const galleryPilotRecipeSchema = z
   .object({
     detailUrlTemplate: apiCatalogMappingSchema.shape.detailUrlTemplate.unwrap(),
     mediaGroupsFromDetails: z.literal(true).optional(),
+    // Keep relative first-frame aliases tied to the reviewed image directory.
+    // The normal importer still applies public-network/redirect image validation.
+    imageBaseUrl: apiCatalogMappingSchema.shape.imageBaseUrl,
     detailRootPath: apiCatalogMappingSchema.shape.detailRootPath,
     detailIdentityPath: z
       .string()

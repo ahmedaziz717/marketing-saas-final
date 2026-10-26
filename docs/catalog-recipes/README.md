@@ -68,3 +68,16 @@ products can be reviewed separately after the first result; full-catalog request
 and storage bounds are not inferred from one sample.
 
 A completed pilot restores the source lifecycle and job owner. Paused/error sources are never reactivated. If automatic work is overdue when a previously connected source finishes, the source is held paused and the UI requires an explicit source resume; automatic-sync flags and schedule timestamps are retained. This prevents completion from launching an incidental full-source import.
+
+### Kit gallery and first-frame identity
+
+`clx-kit-gallery.json` is also accepted by the one-product pilot when its identity
+field is `code`. Keep both `imageBaseUrl` and `firstImageResolutionPaths`: together
+they resolve the existing thumbnail as an explicit alias of gallery view 1. The
+importer compares decoded resolution and upgrades that logical catalog photo
+without changing its ID/primary selection; remaining views are added. Existing
+stored bytes and approved creatives are not overwritten. Do not drop the alias
+merely to make a recipe validate: that would add duplicate photos instead of
+repairing the selected logical source. Pilot preview must reference the expected
+existing image before confirmation. The displayed maximum-new-row count is a
+conservative upper bound, not a prediction of alias reuse.

@@ -245,6 +245,15 @@ it("explains a recorded resolution failure without starting another paid alignme
   expect(
     screen.getByText(/sharper source or accepted enlargement/)
   ).toBeTruthy();
+  expect(screen.getByText(/complete design is unchanged/)).toBeTruthy();
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
   expect(calls.align).not.toHaveBeenCalled();
   expect(calls.save).not.toHaveBeenCalled();
 });
