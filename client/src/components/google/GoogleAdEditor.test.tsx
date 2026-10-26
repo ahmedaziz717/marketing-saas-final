@@ -53,6 +53,8 @@ it("shows approved generated creatives independently of Google account resource 
     {
       key: "creative:99",
       name: "Approved generated creative",
+      width: 1200,
+      height: 628,
       state: "approved",
       mediaType: "image",
       channel: "meta_ads",
@@ -190,4 +192,262 @@ it("resets paging across asset types and sources without dropping selected draft
       .getAttribute("aria-pressed")
   ).toBe("true");
   expect(props.onChange).not.toHaveBeenCalled();
+});
+
+it("detects each image independently instead of tagging square images as landscape", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Square",
+      state: "approved",
+      mediaType: "image",
+      width: 1080,
+      height: 1080,
+    },
+    {
+      key: "creative:96",
+      name: "Portrait",
+      state: "approved",
+      mediaType: "image",
+      width: 960,
+      height: 1200,
+    },
+  ];
+  const onChange = vi.fn();
+  const props = {
+    organizationId: 1,
+    connectionId: "google",
+    format: "image" as const,
+    onChange,
+  };
+  const view = render(<AssetEditor {...props} assets={[]} />);
+  click("Select Square");
+  expect(onChange.mock.calls[0][0][0].field).toBe("SQUARE_MARKETING_IMAGE");
+  view.rerender(<AssetEditor {...props} assets={onChange.mock.calls[0][0]} />);
+  click("Select Portrait");
+  expect(onChange.mock.calls[1][0].map((a: any) => a.field)).toEqual([
+    "SQUARE_MARKETING_IMAGE",
+    "PORTRAIT_MARKETING_IMAGE",
+  ]);
+  click("Select Square");
+  expect(onChange.mock.calls[2][0]).toEqual([]);
+});
+it("does not guess unknown dimensions, and uses loaded full image dimensions when available", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Unknown",
+      state: "approved",
+      mediaType: "image",
+      url: "https://example.com/image.png",
+    },
+  ];
+  const onChange = vi.fn();
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={[]}
+      onChange={onChange}
+    />
+  );
+  click("Select Unknown");
+  expect(onChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Dimensions unavailable"
+  );
+  const image = screen.getByAltText("Unknown");
+  Object.defineProperties(image, {
+    naturalWidth: { value: 1080 },
+    naturalHeight: { value: 1080 },
+  });
+  fireEvent.load(image);
+  click("Select Unknown");
+  expect(onChange.mock.calls[0][0][0].field).toBe("SQUARE_MARKETING_IMAGE");
+});
+it("keeps logos explicit and blocks a known incompatible manual image placement", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Square",
+      state: "approved",
+      mediaType: "image",
+      width: 1080,
+      height: 1080,
+    },
+  ];
+  const onChange = vi.fn();
+  const view = render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={[]}
+      onChange={onChange}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole("radio", { name: "Landscape image · 1.91:1" })
+  );
+  click("Select Square");
+  expect(onChange).not.toHaveBeenCalled();
+  view.rerender(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="logo"
+      assets={[]}
+      onChange={onChange}
+    />
+  );
+  expect(
+    screen.queryByRole("radio", { name: "Automatic image size · recommended" })
+  ).toBeNull();
+  click("Select Square");
+  expect(onChange.mock.calls[0][0][0].field).toBe("LOGO");
+});
+it("offers an explicit correction for a legacy square image saved as landscape", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Square",
+      state: "approved",
+      mediaType: "image",
+      width: 1080,
+      height: 1080,
+    },
+  ];
+  const onChange = vi.fn();
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={[
+        {
+          field: "MARKETING_IMAGE",
+          source: { kind: "library", key: "creative:95" },
+        },
+      ]}
+      onChange={onChange}
+    />
+  );
+  expect(onChange).not.toHaveBeenCalled();
+  click("Use detected Square image · 1:1");
+  expect(onChange.mock.calls[0][0][0].field).toBe("SQUARE_MARKETING_IMAGE");
+});
+
+it("shows the twenty-image selection limit without blocking removal or replacement review", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Square",
+      state: "approved",
+      mediaType: "image",
+      width: 1080,
+      height: 1080,
+    },
+  ];
+  const onChange = vi.fn();
+  const selected = Array.from({ length: 20 }, (_, i) => ({
+    field: "SQUARE_MARKETING_IMAGE" as const,
+    source: { kind: "library" as const, key: `creative:${i + 1}` },
+  }));
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={selected}
+      onChange={onChange}
+    />
+  );
+  expect(screen.getByText(/20\/20 images selected/)).toBeTruthy();
+  click("Select Square");
+  expect(onChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain("up to 20 images");
+  fireEvent.click(screen.getByLabelText("Remove selected asset 1"));
+  expect(onChange.mock.calls[0][0]).toHaveLength(19);
+});
+
+it("deduplicates an explicit correction when the square placement is already selected", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Square",
+      state: "approved",
+      mediaType: "image",
+      width: 1080,
+      height: 1080,
+    },
+  ];
+  const onChange = vi.fn();
+  const source = { kind: "library" as const, key: "creative:95" };
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={[
+        { field: "MARKETING_IMAGE", source },
+        { field: "SQUARE_MARKETING_IMAGE", source },
+      ]}
+      onChange={onChange}
+    />
+  );
+  click("Use detected Square image · 1:1");
+  expect(onChange).toHaveBeenCalledWith([
+    { field: "SQUARE_MARKETING_IMAGE", source },
+  ]);
+});
+it("a late image load never silently changes a saved selection", () => {
+  api.library = [
+    {
+      key: "creative:95",
+      name: "Unknown",
+      state: "approved",
+      mediaType: "image",
+      url: "https://example.com/image.png",
+    },
+  ];
+  const onChange = vi.fn();
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      format="image"
+      assets={[
+        {
+          field: "MARKETING_IMAGE",
+          source: { kind: "library", key: "creative:95" },
+        },
+      ]}
+      onChange={onChange}
+    />
+  );
+  const image = screen.getByAltText("Unknown");
+  Object.defineProperties(image, {
+    naturalWidth: { value: 1080 },
+    naturalHeight: { value: 1080 },
+  });
+  fireEvent.load(image);
+  expect(onChange).not.toHaveBeenCalled();
+  expect(
+    screen.getByLabelText("Remove selected asset 1").closest("li")?.textContent
+  ).toContain("Landscape image · 1.91:1");
+});
+
+it("does not impose Performance Max asset-group messaging on display ads", () => {
+  render(
+    <AssetEditor
+      organizationId={1}
+      connectionId="google"
+      adType="DISPLAY"
+      format="image"
+      assets={[]}
+      onChange={vi.fn()}
+    />
+  );
+  expect(screen.queryByText(/images selected for this draft/)).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { GoogleAssetMetrics } from "./GoogleAssetMetrics";
 import { Button } from "@/components/ui/button";
 import {
   pmaxImageCapacity,
@@ -51,6 +52,14 @@ export function GoogleAssetReplacement({
           ? "This saved draft explicitly removes the associations listed below. All other images, text, logos, videos and campaign settings stay unchanged. Cancel removals to keep everything."
           : "Adding creative keeps existing images, text, logos, videos and campaign settings unless you explicitly select replacements. Nothing is removed automatically."}
       </p>
+      {full.length > 0 && (
+        <p>
+          You can replace an image with a different size. The new image must
+          meet Google’s specifications, and the group must retain at least one
+          landscape and one square image. Unavailable choices protect that
+          required coverage.
+        </p>
+      )}
       {full.map(c => (
         <p key={c.field} role="status">
           {label(c.field)}: {c.current}/{c.max} slots used. Choose{" "}
@@ -62,7 +71,7 @@ export function GoogleAssetReplacement({
             : "Replacement choices ready for review."}
         </p>
       ))}
-      {full.length > 0 && (
+      {group.length > 0 && (
         <div className="google-current-assets">
           {group
             .filter(a =>
@@ -77,7 +86,7 @@ export function GoogleAssetReplacement({
               const selectedCount = change.remove.filter(r =>
                 pmaxMarketingImageFields.includes(r.field)
               ).length;
-              const required = full[0].replacementsNeeded;
+              const required = full[0]?.replacementsNeeded ?? 0;
               return (
                 <label key={a.assetGroupAsset.resourceName}>
                   {a.asset.imageAsset?.fullSize?.url && (
@@ -86,37 +95,43 @@ export function GoogleAssetReplacement({
                       alt={a.asset.name || `Image ${id}`}
                     />
                   )}
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    disabled={
-                      disabled ||
-                      (!selected &&
-                        (selectedCount >= required ||
-                          !pmaxCanReplaceImage(
-                            { assetId: id, field },
-                            group.map(a => ({
-                              assetId: String(a.asset.id),
-                              field: a.assetGroupAsset.fieldType,
-                            })),
-                            change.add,
-                            change.remove
-                          )))
-                    }
-                    onChange={e =>
-                      onChange({
-                        ...change,
-                        remove: e.target.checked
-                          ? [...change.remove, { assetId: id, field }]
-                          : change.remove.filter(
-                              r => !(r.assetId === id && r.field === field)
-                            ),
-                      })
-                    }
-                  />
+                  {full.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={
+                        disabled ||
+                        (!selected &&
+                          (selectedCount >= required ||
+                            !pmaxCanReplaceImage(
+                              { assetId: id, field },
+                              group.map(a => ({
+                                assetId: String(a.asset.id),
+                                field: a.assetGroupAsset.fieldType,
+                              })),
+                              change.add,
+                              change.remove
+                            )))
+                      }
+                      onChange={e =>
+                        onChange({
+                          ...change,
+                          remove: e.target.checked
+                            ? [...change.remove, { assetId: id, field }]
+                            : change.remove.filter(
+                                r => !(r.assetId === id && r.field === field)
+                              ),
+                        })
+                      }
+                    />
+                  )}
                   <span>
-                    Replace {a.asset.name || `image ${id}`} · {label(field)}
+                    {full.length > 0 ? "Replace " : ""}
+                    {a.asset.name || `image ${id}`} · {label(field)}
                   </span>
+                  <GoogleAssetMetrics
+                    resourceName={a.assetGroupAsset.resourceName}
+                  />
                 </label>
               );
             })}

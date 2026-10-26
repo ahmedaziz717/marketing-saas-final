@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { GooglePmaxAi } from "./GooglePmaxAi";
-import { addPmaxSuggestion } from "./GooglePmaxDraft";
+import {
+  googleImageMatches,
+  googleMarketingImagePlacement,
+} from "@shared/googleImagePlacement";
+import { GooglePmaxCopyEditor } from "./GooglePmaxCopyEditor";
 import { Link, useSearch } from "wouter";
 import {
   Image,
@@ -20,6 +23,8 @@ import { AssetUploadDialog } from "@/components/AssetUploadDialog";
 import { mayCreateAssets } from "@shared/assetWorkflow";
 import {
   googleAssetFieldSchema,
+  pmaxMarketingImageFields,
+  pmaxMarketingImageMaximum,
   googleAssetInputSchema,
   type GoogleAssetInput,
   type GoogleAdContent,
@@ -104,6 +109,7 @@ export function AssetEditor({
   format?: GoogleCreativeFormat;
 }) {
   const { membership } = useWorkspace();
+  const isPmax = !adType || adType === "PERFORMANCE_MAX";
   // The EvokeLoop library belongs to the workspace, not the selected Google account.
   // Refresh when returning from Creative Studio so newly approved outputs appear.
   const library = trpc.assetLibrary.list.useQuery(
@@ -122,6 +128,8 @@ export function AssetEditor({
   const [field, setField] = useState<GoogleAssetInput["field"]>(fields[0]);
   const activeField = fields.includes(field) ? field : fields[0];
   const media = googleAssetFormat(activeField);
+  const [automaticPlacement, setAutomaticPlacement] = useState(true);
+  const automatic = media === "image" && automaticPlacement;
   const [source, setSource] = useState<
     "library" | "upload" | "existing" | "youtube" | "text"
   >(media === "text" ? "text" : "library");
@@ -137,6 +145,9 @@ export function AssetEditor({
   );
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [loadedDimensions, setLoadedDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
   const entryKey = new URLSearchParams(useSearch()).get("asset");
   const entryApplied = useRef(false);
   useEffect(() => {
@@ -150,24 +161,32 @@ export function AssetEditor({
     );
     if (!entry) return;
     entryApplied.current = true;
-    const ratio =
-      entry.width && entry.height ? entry.width / entry.height : null;
-    const placement =
-      ratio && Math.abs(ratio - 1) < 0.02
-        ? "SQUARE_MARKETING_IMAGE"
-        : ratio && Math.abs(ratio - 0.8) < 0.02
-          ? "PORTRAIT_MARKETING_IMAGE"
-          : "MARKETING_IMAGE";
-    if (!fields.includes(placement)) return;
-    setField(placement);
+    const placement = googleMarketingImagePlacement(entry.width, entry.height);
+    if (!placement || !fields.includes(placement)) {
+      setNotice(
+        "This image needs a compatible placement. Choose a Google-supported image size or select its placement explicitly when dimensions are unavailable."
+      );
+      return;
+    }
     const candidate: GoogleAssetInput = {
       field: placement,
       source: { kind: "library", key: entry.key },
     };
     if (
       !assets.some(asset => JSON.stringify(asset) === JSON.stringify(candidate))
-    )
+    ) {
+      if (
+        isPmax &&
+        assets.filter(a => pmaxMarketingImageFields.includes(a.field)).length >=
+          pmaxMarketingImageMaximum
+      ) {
+        setNotice(
+          "Select up to 20 images for one asset group. Remove a selected image before adding another."
+        );
+        return;
+      }
       onChange([...assets, candidate]);
+    }
   }, [library.data, entryKey, media]);
   const images =
     library.data?.filter(
@@ -251,6 +270,9 @@ export function AssetEditor({
     setSearch("");
     setError("");
   }, [organizationId, connectionId, activeSource, media]);
+  const selectedImageCount = assets.filter(a =>
+    pmaxMarketingImageFields.includes(a.field)
+  ).length;
   const selected = (candidate: GoogleAssetInput) =>
     assets.some(a => JSON.stringify(a) === JSON.stringify(candidate));
   function add(candidate: GoogleAssetInput, toggle = false) {
@@ -267,6 +289,16 @@ export function AssetEditor({
       else setError("This asset is already selected for that placement.");
       return;
     }
+    if (
+      isPmax &&
+      pmaxMarketingImageFields.includes(parsed.data.field) &&
+      selectedImageCount >= pmaxMarketingImageMaximum
+    ) {
+      setError(
+        "Select up to 20 images for one asset group. Remove a selected image before adding another."
+      );
+      return;
+    }
     onChange([...assets, parsed.data]);
     setValue("");
     setError("");
@@ -280,6 +312,8 @@ export function AssetEditor({
           url: a.url,
           video: a.mediaType === "video",
           description: `${a.width ?? "?"} × ${a.height ?? "?"}`,
+          width: a.width,
+          height: a.height,
         }))
       : matchingRemote.map(a => ({
           id: a.id,
@@ -287,6 +321,8 @@ export function AssetEditor({
           url: "url" in a && typeof a.url === "string" ? a.url : undefined,
           video: false,
           description: label(a.type),
+          width: "width" in a ? Number(a.width) || undefined : undefined,
+          height: "height" in a ? Number(a.height) || undefined : undefined,
         }))
   ).filter(a => !query || a.name.toLowerCase().includes(query));
   // A refresh or asset-type change can shrink the results while a later page is open.
@@ -300,6 +336,12 @@ export function AssetEditor({
   return (
     <div className="google-assets">
       <h3>Asset source</h3>
+      {media === "image" && isPmax && (
+        <p role="status">
+          {selectedImageCount}/20 images selected for this draft. Existing group
+          capacity is checked separately before review.
+        </p>
+      )}
       <div className="cfg-card-grid google-source-picker">
         {sources.map(({ id, title, description, icon: Icon }) => (
           <StudioCard
@@ -357,12 +399,19 @@ export function AssetEditor({
               <VisualSelect
                 density="compact"
                 aria-label="Placement"
-                value={activeField}
+                value={automatic ? "AUTO_IMAGE" : activeField}
                 onChange={e => {
-                  setField(e.target.value as typeof field);
+                  setAutomaticPlacement(e.target.value === "AUTO_IMAGE");
+                  if (e.target.value !== "AUTO_IMAGE")
+                    setField(e.target.value as typeof field);
                   setError("");
                 }}
               >
+                {media === "image" && (
+                  <option value="AUTO_IMAGE">
+                    Automatic image size · recommended
+                  </option>
+                )}
                 {fields.map(f => (
                   <option key={f} value={f}>
                     {fieldNames[f] || label(f)}
@@ -426,8 +475,36 @@ export function AssetEditor({
               )}
               <div className="cfg-card-grid google-asset-picker">
                 {items.slice(pageOffset, pageOffset + 12).map(item => {
+                  const dimensions =
+                    item.width && item.height
+                      ? item
+                      : loadedDimensions[
+                          `${activeSource}:${item.id}:${item.url}`
+                        ];
+                  const inferred = googleMarketingImagePlacement(
+                    dimensions?.width,
+                    dimensions?.height
+                  );
+                  const placement = automatic ? inferred : activeField;
+                  const supported =
+                    media !== "image" ||
+                    (!!placement &&
+                      fields.includes(placement) &&
+                      (!dimensions?.width ||
+                        !dimensions?.height ||
+                        googleImageMatches(
+                          placement,
+                          dimensions?.width,
+                          dimensions?.height
+                        )));
+                  const placementIssue =
+                    media !== "image" || supported
+                      ? ""
+                      : !dimensions?.width || !dimensions?.height
+                        ? "Dimensions unavailable. Select a placement explicitly; review will verify the image."
+                        : "This image does not meet the selected Google size. Use automatic size or a compatible image.";
                   const candidate: GoogleAssetInput = {
-                    field: activeField,
+                    field: placement ?? activeField,
                     source:
                       activeSource === "library"
                         ? { kind: "library", key: item.id }
@@ -437,12 +514,35 @@ export function AssetEditor({
                     <StudioCard
                       key={item.id}
                       title={item.name}
-                      description={item.description}
+                      description={`${item.description}${supported && media === "image" && placement ? " · " + fieldNames[placement] : ""}${placementIssue ? " · " + placementIssue : ""}`}
                       image={item.video ? undefined : item.url}
                       contain
                       media={
                         item.video ? (
                           <video src={item.url} muted preload="metadata" />
+                        ) : item.url && media === "image" ? (
+                          <img
+                            src={item.url}
+                            alt={item.name}
+                            loading="lazy"
+                            onLoad={event => {
+                              const image = event.currentTarget;
+                              const key = `${activeSource}:${item.id}:${item.url}`;
+                              if (image.naturalWidth && image.naturalHeight)
+                                setLoadedDimensions(previous =>
+                                  previous[key]?.width === image.naturalWidth &&
+                                  previous[key]?.height === image.naturalHeight
+                                    ? previous
+                                    : {
+                                        ...previous,
+                                        [key]: {
+                                          width: image.naturalWidth,
+                                          height: image.naturalHeight,
+                                        },
+                                      }
+                                );
+                            }}
+                          />
                         ) : !item.url ? (
                           <div className="activation-channel-art">
                             {media === "video" ? (
@@ -463,7 +563,9 @@ export function AssetEditor({
                       onSelect={() =>
                         item.video
                           ? setSelectedVideo(item.id)
-                          : add(candidate, true)
+                          : supported
+                            ? add(candidate, true)
+                            : setError(placementIssue)
                       }
                     />
                   );
@@ -561,31 +663,76 @@ export function AssetEditor({
         <>
           <h3>Selected for this draft · {assets.length}</h3>
           <ul className="google-asset-list">
-            {assets.map((a, i) => (
-              <li key={i}>
-                <span>
-                  <strong>{fieldNames[a.field] || label(a.field)}</strong> ·{" "}
-                  {a.source.kind === "text"
-                    ? a.source.text
-                    : a.source.kind === "library"
-                      ? (library.data?.find(
-                          l => l.key === (a.source as { key: string }).key
-                        )?.name ?? a.source.key)
-                      : a.source.kind === "existing"
-                        ? (remote.data?.find(
-                            r => r.id === (a.source as { id: string }).id
-                          )?.name ?? `Google asset ${a.source.id}`)
-                        : `YouTube ${a.source.videoId}`}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Remove selected asset ${i + 1}`}
-                  onClick={() => onChange(assets.filter((_, j) => j !== i))}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
+            {assets.map((a, i) => {
+              const item =
+                a.source.kind === "library"
+                  ? library.data?.find(
+                      row => row.key === (a.source as { key: string }).key
+                    )
+                  : undefined;
+              const corrected =
+                item && googleMarketingImagePlacement(item.width, item.height);
+              const canCorrect =
+                corrected &&
+                corrected !== a.field &&
+                fields.includes(corrected) &&
+                [
+                  "MARKETING_IMAGE",
+                  "SQUARE_MARKETING_IMAGE",
+                  "PORTRAIT_MARKETING_IMAGE",
+                ].includes(a.field);
+              return (
+                <li key={i}>
+                  <span>
+                    <strong>{fieldNames[a.field] || label(a.field)}</strong> ·{" "}
+                    {a.source.kind === "text"
+                      ? a.source.text
+                      : a.source.kind === "library"
+                        ? (library.data?.find(
+                            l => l.key === (a.source as { key: string }).key
+                          )?.name ?? a.source.key)
+                        : a.source.kind === "existing"
+                          ? (remote.data?.find(
+                              r => r.id === (a.source as { id: string }).id
+                            )?.name ?? `Google asset ${a.source.id}`)
+                          : `YouTube ${a.source.videoId}`}
+                  </span>
+                  {canCorrect && (
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() =>
+                        onChange(
+                          assets
+                            .map((asset, index) =>
+                              index === i
+                                ? { ...asset, field: corrected! }
+                                : asset
+                            )
+                            .filter(
+                              (asset, index, all) =>
+                                all.findIndex(
+                                  other =>
+                                    JSON.stringify(other) ===
+                                    JSON.stringify(asset)
+                                ) === index
+                            )
+                        )
+                      }
+                    >
+                      Use detected {fieldNames[corrected!]}
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Remove selected asset ${i + 1}`}
+                    onClick={() => onChange(assets.filter((_, j) => j !== i))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
@@ -652,13 +799,66 @@ export function AdEditor({
                   ad.assets.filter(a => a.field === "LONG_HEADLINE").length}
                 /1 required (5 maximum).
               </p>
-              <GooglePmaxAi
+              <GooglePmaxCopyEditor
                 organizationId={organizationId}
-                onAdd={asset => onChange(addPmaxSuggestion(ad, asset))}
+                connectionId={connectionId}
+                assets={[
+                  ...ad.assets,
+                  ...ad.headlines.map(text => ({
+                    field: "HEADLINE" as const,
+                    source: { kind: "text" as const, text },
+                  })),
+                  ...ad.descriptions.map(text => ({
+                    field: "DESCRIPTION" as const,
+                    source: { kind: "text" as const, text },
+                  })),
+                  ...(ad.longHeadline !== undefined
+                    ? [
+                        {
+                          field: "LONG_HEADLINE" as const,
+                          source: {
+                            kind: "text" as const,
+                            text: ad.longHeadline,
+                          },
+                        },
+                      ]
+                    : []),
+                ]}
+                onChange={items => {
+                  const texts = (field: string) =>
+                    items
+                      .filter(
+                        a => a.field === field && a.source.kind === "text"
+                      )
+                      .map(a =>
+                        a.source.kind === "text" ? a.source.text : ""
+                      );
+                  const longs = texts("LONG_HEADLINE");
+                  onChange({
+                    ...ad,
+                    headlines: texts("HEADLINE"),
+                    descriptions: texts("DESCRIPTION"),
+                    longHeadline: longs[0] ?? undefined,
+                    assets: [
+                      ...items.filter(
+                        a =>
+                          ![
+                            "HEADLINE",
+                            "LONG_HEADLINE",
+                            "DESCRIPTION",
+                          ].includes(a.field) || a.source.kind !== "text"
+                      ),
+                      ...longs.slice(1).map(text => ({
+                        field: "LONG_HEADLINE" as const,
+                        source: { kind: "text" as const, text },
+                      })),
+                    ],
+                  });
+                }}
               />
             </>
           )}
-          {type !== "SHOPPING" && (
+          {!["SHOPPING", "PERFORMANCE_MAX"].includes(type) && (
             <div aria-live="polite">
               {(
                 [
@@ -679,7 +879,7 @@ export function AdEditor({
               )}
             </div>
           )}
-          {type !== "SHOPPING" && (
+          {!["SHOPPING", "PERFORMANCE_MAX"].includes(type) && (
             <>
               <Field title="Headlines · one per line · 30 characters each">
                 <textarea
@@ -703,42 +903,13 @@ export function AdEditor({
               </Field>
             </>
           )}
-          {["DISPLAY", "PERFORMANCE_MAX"].includes(type) && (
+          {type === "DISPLAY" && (
             <Field title="Long headline · up to 90 characters">
               <input
                 maxLength={90}
                 data-google-field="ad.longHeadline"
                 value={ad.longHeadline ?? ""}
                 onChange={e => patch({ longHeadline: e.target.value })}
-              />
-            </Field>
-          )}
-          {type === "PERFORMANCE_MAX" && (
-            <Field title="Additional long headlines — one per line, up to 90 characters each (5 total)">
-              <textarea
-                value={ad.assets
-                  .filter(
-                    a => a.field === "LONG_HEADLINE" && a.source.kind === "text"
-                  )
-                  .map(a => (a.source.kind === "text" ? a.source.text : ""))
-                  .join("\n")}
-                onChange={e =>
-                  patch({
-                    assets: [
-                      ...ad.assets.filter(
-                        a =>
-                          a.field !== "LONG_HEADLINE" ||
-                          a.source.kind !== "text"
-                      ),
-                      ...(e.target.value
-                        ? e.target.value.split("\n").map(text => ({
-                            field: "LONG_HEADLINE" as const,
-                            source: { kind: "text" as const, text },
-                          }))
-                        : []),
-                    ],
-                  })
-                }
               />
             </Field>
           )}

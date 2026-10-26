@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   originalProductSelections,
+  nativeProductStartingLayer,
   resizeProductLayer,
   resizeProductLayerFromCorner,
 } from "../shared/productOverlay";
@@ -99,4 +100,19 @@ it("retains the unambiguous legacy single-view recovery", () => {
       requestedSetup: { products: [product] } as any,
     })
   ).toEqual([product]);
+});
+
+it("does not enlarge the actual 145 by 215 thumbnail cutout when starting manual placement", () => {
+  expect(
+    nativeProductStartingLayer(
+      { sourceWidth: 145, sourceHeight: 215 },
+      { width: 1080, height: 1080 }
+    )
+  ).toEqual({ left: 467, top: 432, width: 145, height: 215 });
+  expect(
+    nativeProductStartingLayer(
+      { sourceWidth: 2000, sourceHeight: 3000 },
+      { width: 1080, height: 1080 }
+    )
+  ).toEqual({ left: 180, top: 0, width: 720, height: 1080 });
 });

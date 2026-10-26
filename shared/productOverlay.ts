@@ -58,6 +58,27 @@ export const productOverlayPlacementSchema = z.object({
 export type ProductOverlayPlacement = z.infer<
   typeof productOverlayPlacementSchema
 >;
+
+/** An unmeasured manual starting layer is never silently enlarged or presented
+ * as a match. The user positions it explicitly against the full design. */
+export function nativeProductStartingLayer(
+  source: { sourceWidth: number; sourceHeight: number },
+  canvas: { width: number; height: number }
+): ProductOverlayPlacement {
+  const scale = Math.min(
+    1,
+    canvas.width / source.sourceWidth,
+    canvas.height / source.sourceHeight
+  );
+  const width = Math.max(1, Math.floor(source.sourceWidth * scale));
+  const height = Math.max(1, Math.floor(source.sourceHeight * scale));
+  return {
+    left: Math.floor((canvas.width - width) / 2),
+    top: Math.floor((canvas.height - height) / 2),
+    width,
+    height,
+  };
+}
 export const productOverlayReplacementsSchema = z
   .array(
     z.object({

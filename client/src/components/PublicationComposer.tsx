@@ -1,6 +1,7 @@
 import "@/styles/publicationReview.css";
 import { PartnerLogo } from "./PartnerLogo";
 import { VisualSelect } from "@/components/choices/VisualSelect";
+import { resolveDestinationSelection } from "@shared/destinationSelection";
 import { metaWebsiteCallToActions } from "@shared/metaCallToAction";
 import { scrollStudioChoices } from "./configurator/studioNavigation";
 import { ActivationComposerStudio } from "./activation/ActivationComposerStudio";
@@ -319,10 +320,27 @@ export function PublicationComposer({
   const connectedAccounts = (connections.data?.items ?? []).filter(
     c => c.channel === channel && c.status === "connected" && !c.expired
   );
-  const selectedAccountUnavailable =
-    !!connectionId &&
-    !!connections.data &&
-    !connectedAccounts.some(c => c.id === connectionId);
+  const accountSelection = resolveDestinationSelection(
+    connectedAccounts.filter(c => c.details.capabilities.includes("publish")),
+    connectionId,
+    {
+      loading:
+        connections.isLoading || connections.isFetching || !connections.data,
+      error: !!connections.error,
+    }
+  );
+  useEffect(() => {
+    if (accountSelection.autoSelectId) {
+      // A restored local draft may have queued its explicit destination first.
+      setConnection(previous => previous || accountSelection.autoSelectId!);
+    }
+  }, [accountSelection.autoSelectId]);
+  const selectedAccountUnavailable = accountSelection.status === "unavailable";
+  function chooseConnection(id: string) {
+    if (id === connectionId) return;
+    setConnection(id);
+    setContent(previous => ({ ...previous, metaCampaignId: "", adSetId: "" }));
+  }
   const assets = trpc.assetLibrary.list.useQuery(scope, {
     enabled: !!organizationId,
   });
@@ -490,6 +508,14 @@ export function PublicationComposer({
         ? "Wait for your selected media to finish loading."
         : "Choose an approved photo or video, or remove the current selection.";
   }
+  if (
+    channel === "facebook" &&
+    ["loading", "error"].includes(accountSelection.status)
+  )
+    socialErrors.destination =
+      accountSelection.status === "error"
+        ? "Retry loading connected accounts before continuing."
+        : "Wait for connected accounts to finish loading.";
   const readinessErrors = { ...socialErrors };
   if (channel === "meta_ads") {
     if (
@@ -533,6 +559,14 @@ export function PublicationComposer({
     if (studio && next && canPublish && liveDelivery === undefined) return;
     nextAction.current = next;
     setActivationError("");
+    if (next && ["loading", "error"].includes(accountSelection.status)) {
+      setShowErrors(true);
+      goToStep("setup", "account");
+      setActivationError(
+        "Wait for connected accounts to load successfully before continuing."
+      );
+      return;
+    }
     try {
       if (studio && next && channel === "meta_ads") {
         const account = connectedAccounts.find(c => c.id === connectionId);
@@ -676,11 +710,17 @@ export function PublicationComposer({
         entry={validationEntry ?? studioEntry}
         active={studioActive}
         accounts={connectedAccounts}
-        connectionsLoading={connections.isLoading}
+        connectionsLoading={
+          !!(
+            connections.isLoading ||
+            connections.isFetching ||
+            !connections.data
+          )
+        }
         connectionsError={!!connections.error}
         retryConnections={() => void connections.refetch()}
         connectionId={connectionId}
-        setConnection={setConnection}
+        setConnection={chooseConnection}
         assets={assets.data ?? []}
         assetsLoading={assets.isLoading}
         assetsError={!!assets.error}
@@ -952,67 +992,24 @@ export function PublicationComposer({
                   )}
                   <div
                     className={
-                      channel === "meta_ads" && !studio
+                      channel === "meta_ads"
                         ? "space-y-2"
                         : "sm:col-span-2 space-y-2"
                     }
                   >
-                    <Label htmlFor={fieldId("pub-destination")}>
-                      {channel === "facebook" ? "Social account" : "Ad account"}
-                    </Label>
-                    {channel === "facebook" && (
-                      <p className="text-xs text-muted-foreground">
-                        Required to publish. You can save a draft before
-                        choosing an account.
+                    {accountSelection.status === "single" && (
+                      <p className="text-sm" role="status">
+                        Destination:{" "}
+                        <strong>{accountSelection.onlyOption?.name}</strong>
                       </p>
                     )}
-                    {studio ? (
-                      <div
-                        id={fieldId("pub-destination")}
-                        className="cfg-card-grid activation-account-grid"
-                        tabIndex={-1}
-                      >
-                        {connections.isLoading && (
-                          <p role="status">Loading connected accounts…</p>
-                        )}
-                        {connectedAccounts.map(c => (
-                          <StudioCard
-                            key={c.id}
-                            title={c.name}
-                            description={
-                              c.details.pageName
-                                ? `${c.details.pageName} · ${c.details.currency || channelNames[channel]}`
-                                : channelNames[channel]
-                            }
-                            badge={
-                              c.details.capabilities.includes("publish")
-                                ? "Connected"
-                                : "Read only"
-                            }
-                            selected={connectionId === c.id}
-                            disabled={
-                              !c.details.capabilities.includes("publish")
-                            }
-                            media={
-                              <div className="activation-choice-symbol">
-                                <Building2 size={38} />
-                                <span>{c.name.slice(0, 2).toUpperCase()}</span>
-                              </div>
-                            }
-                            onSelect={() => {
-                              if (connectionId === c.id) return;
-                              setConnection(c.id);
-                              setContent(c => ({
-                                ...c,
-                                adSetId: "",
-                                metaCampaignId: "",
-                              }));
-                            }}
-                          />
-                        ))}
-                      </div>
-                    ) : (
+                    {accountSelection.showPicker && (
                       <>
+                        <Label htmlFor={fieldId("pub-destination")}>
+                          {channel === "facebook"
+                            ? "Social account"
+                            : "Ad account"}
+                        </Label>
                         <VisualSelect
                           id={fieldId("pub-destination")}
                           className={channelInput}
@@ -1020,72 +1017,76 @@ export function PublicationComposer({
                           aria-invalid={
                             showErrors && !!socialErrors.destination
                           }
-                          disabled={connections.isLoading}
-                          onChange={e => {
-                            setConnection(e.target.value);
-                            setContent(c => ({
-                              ...c,
-                              adSetId: "",
-                              metaCampaignId: "",
-                            }));
-                          }}
+                          onChange={e => chooseConnection(e.target.value)}
                         >
-                          <option value="">
-                            {connections.isLoading
-                              ? "Loading connected accounts…"
-                              : "Select a connected account"}
-                          </option>
+                          <option value="">Select a connected account</option>
                           {selectedAccountUnavailable && (
                             <option value={connectionId} disabled>
                               Previously selected account (unavailable)
                             </option>
                           )}
-                          {connectedAccounts.map(c => (
+                          {accountSelection.eligible.map(c => (
                             <option key={c.id} value={c.id}>
-                              {c.name} ·{" "}
-                              {c.channel === "google_ads"
-                                ? "Google Ads"
-                                : channelNames[c.channel]}
-                              {c.details.capabilities.includes("publish")
-                                ? ""
-                                : " (read only)"}
+                              {c.name} · {channelNames[channel]}
                             </option>
                           ))}
                         </VisualSelect>
                       </>
                     )}
-                    {connections.error ? (
-                      <p role="alert" className="mt-2 text-sm">
+                    {accountSelection.status === "loading" && (
+                      <p role="status">Loading connected accounts…</p>
+                    )}
+                    {accountSelection.status === "error" && (
+                      <p role="alert">
                         Connected accounts could not be loaded.{" "}
-                        <button
+                        <Button
                           type="button"
-                          className="text-primary underline"
+                          variant="outline"
                           onClick={() => void connections.refetch()}
                         >
-                          Try again
-                        </button>
-                      </p>
-                    ) : !connections.isLoading && !connectedAccounts.length ? (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {channel === "facebook"
-                          ? "No Facebook Pages are connected for social publishing."
-                          : "No Meta ad accounts are connected."}{" "}
-                        Connect an account in Integrations. You can still save a
-                        draft.
-                      </p>
-                    ) : null}
-                    {selectedAccountUnavailable && (
-                      <p role="alert" className="mt-2 text-sm">
-                        Reconnect the previous account, choose another, or clear
-                        the selection to save your draft without an account.
+                          Retry loading accounts
+                        </Button>
                       </p>
                     )}
-                    <Link
-                      href="/app/settings/integrations"
-                      className="mt-1 inline-block text-xs text-primary"
-                    >
-                      Manage connections
-                    </Link>
+                    {(accountSelection.status === "empty" ||
+                      (selectedAccountUnavailable &&
+                        !accountSelection.eligible.length)) && (
+                      <p className="text-sm text-muted-foreground">
+                        No connected{" "}
+                        {channel === "facebook"
+                          ? "Facebook Pages"
+                          : "Meta ad accounts"}{" "}
+                        with publishing permission are available. Connect an
+                        account in Integrations. You can still save a draft.
+                      </p>
+                    )}
+                    {selectedAccountUnavailable && (
+                      <p role="alert" className="text-sm">
+                        The previous account is unavailable. It has not been
+                        replaced automatically. Reconnect it or choose another
+                        account.
+                      </p>
+                    )}
+                    {selectedAccountUnavailable &&
+                      accountSelection.onlyOption && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            chooseConnection(accountSelection.onlyOption!.id)
+                          }
+                        >
+                          Use {accountSelection.onlyOption.name} instead
+                        </Button>
+                      )}
+                    {accountSelection.status !== "single" && (
+                      <Link
+                        href="/app/settings/integrations"
+                        className="mt-1 inline-block text-xs text-primary"
+                      >
+                        Manage connections
+                      </Link>
+                    )}
                     {showErrors && socialErrors.destination && (
                       <p role="alert" className="text-sm text-destructive">
                         {socialErrors.destination}

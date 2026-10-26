@@ -618,6 +618,22 @@ function respond(path: string, input: any) {
     googleActivationDraft = { ...googleActivationDraft, state: "published", result: { resources: ["synthetic-asset-group-link"] } };
     return googleActivationDraft;
   }
+  if (path === "googleAds.campaigns.assetMetrics")
+    return {
+      status: "available",
+      since: "2026-09-26",
+      until: "2026-10-25",
+      timezone: "America/New_York",
+      days: input.days ?? 30,
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        resourceName: `customers/2222222222/assetGroupAssets/21~${100 + index}~${index === 19 ? "SQUARE_MARKETING_IMAGE" : "MARKETING_IMAGE"}`,
+        impressions: 1000 + index * 100,
+        clicks: 25 + index,
+        ctr: (25 + index) / (1000 + index * 100),
+        conversions: 3 + index / 10,
+        conversionRate: 0.12,
+      })),
+    };
   if (path === "googleAds.campaigns.resources")
     return input.kind === "assets"
       ? [
@@ -625,6 +641,8 @@ function respond(path: string, input: any) {
             id: "41",
             name: "Google product image",
             type: "IMAGE",
+            width: 600,
+            height: 314,
             url:
               "data:image/svg+xml," +
               encodeURIComponent(
@@ -2130,8 +2148,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           ?.textContent?.includes("Activation Studio"),
         "Google is inside Activation Studio"
       );
-      await click("Open Account category");
-      await click("Select Demo Google Ads");
+      check(!document.querySelector('[aria-label="Select Demo Google Ads"]'), "The sole connected Google account does not require a redundant selection");
       if (innerWidth <= 700) await click("Open Campaign category");
       check(
         document.querySelectorAll(".google-campaign-list button").length === 1,
@@ -2158,7 +2175,6 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         await studioSection("Creative");
         await click("Select Core products");
         check(!!document.querySelector('[aria-label="Select EvokeLoop Library"]'), "Creative step opens the library after choosing its group");
-        await click("Choose another asset type");
         check(
           !!document.querySelector('[aria-label="Select Images"]') &&
             !!document.querySelector('[aria-label="Select Videos"]'),
@@ -2188,7 +2204,6 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           !!document.querySelector('.google-field input[type="search"]'),
           "Google library supports visual browsing and search"
         );
-        await click("Choose another asset type");
         await click("Select Images");
         await click("Select Google Ads Library");
         check(
@@ -2218,6 +2233,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           choices().find(input => input.parentElement?.textContent?.includes("Only square image"))?.disabled === true,
           "Image replacement protects the last required square image"
         );
+        check(!!document.querySelector('select[aria-label="Asset performance period"]') && !!document.querySelector('[aria-label="Asset performance"]'), "Existing asset choices include scoped synthetic performance metrics");
         const firstChoice = choices().find(input => !input.disabled)!;
         firstChoice.click();
         await pause();
@@ -2238,6 +2254,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         check(mutations.length === 0, "Browsing and cancelling replacement choices performs no activation or draft mutations");
         choices().find(input => !input.disabled)!.click();
         await pause();
+        await click("Continue to Copy →");
+        check(!!document.querySelector('[aria-label="Headlines draft editor"]'), "Copy has separate editable Google text roles before review");
         await click("Review change →");
         for (let attempt = 0; attempt < 30 && googleActivationDraft?.state !== "validated"; attempt++) await pause();
         await pause();
@@ -3575,7 +3593,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         !!document.querySelector('[aria-label="Activation sections"]'),
         "Legacy ad link opens Activation Studio"
       );
-      await click("Select Demo ad account");
+      check(
+        !button("Select Demo ad account") &&
+          document.body.textContent?.includes("Demo ad account"),
+        "Sole eligible ad account is selected without a picker"
+      );
       await click("Campaign & ad set");
       check(
         document.querySelector<HTMLSelectElement>(
@@ -3738,11 +3760,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           "Switching campaigns clears the previous ad set"
         );
         await select("#pub-adset", "11");
-        await click("Ad account");
+        await click("Ad details");
         check(
-          button("Select Demo ad account")?.getAttribute("aria-pressed") ===
-            "true",
-          "Campaign setup preserves the selected ad account"
+          !button("Select Demo ad account") &&
+            document.body.textContent?.includes("Demo ad account"),
+          "Campaign setup preserves the sole selected ad account"
         );
         await click("Campaign & ad set");
         check(
@@ -3754,7 +3776,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       }
     }
     if (which === "studio-ad-copy") {
-      await click("Select Demo ad account");
+      check(
+        !button("Select Demo ad account") &&
+          document.body.textContent?.includes("Demo ad account"),
+        "Sole eligible ad account is selected without a picker"
+      );
       await studioSection("Copy");
       await click("Brief");
       await fillControl(
@@ -3883,7 +3909,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           : !button("Select Demo Facebook Page"),
         "Account tiles match the channel"
       );
-      await click(`Select ${accountName}`);
+      if (social) await click(`Select ${accountName}`);
+      else check(
+        !button(`Select ${accountName}`) && document.body.textContent?.includes(accountName),
+        "Sole ad destination is selected without a picker"
+      );
       await studioSection("Copy");
       await click("Compose");
       await fillControl(
@@ -3944,7 +3974,9 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which === "studio-post-empty") {
       check(
-        document.body.textContent?.includes("No connected accounts available."),
+        document.body.textContent?.includes(
+          "No connected accounts with publishing permission are available."
+        ),
         "Missing social connection is explained"
       );
       check(

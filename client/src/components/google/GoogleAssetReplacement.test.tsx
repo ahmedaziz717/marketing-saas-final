@@ -149,3 +149,50 @@ it("describes a legacy removal-only draft honestly and lets the user cancel it",
   fireEvent.click(screen.getByRole("button", { name: /Cancel removals/ }));
   expect(onChange.mock.calls[0][0].remove).toEqual([]);
 });
+
+it("allows a square addition to replace landscape or portrait while preserving minimum coverage", () => {
+  const mixed = assets(18).concat([
+    {
+      ...assets(1)[0],
+      asset: { ...assets(1)[0].asset, id: "square", name: "Only square" },
+      assetGroupAsset: {
+        resourceName: "square",
+        fieldType: "SQUARE_MARKETING_IMAGE",
+      },
+    },
+    {
+      ...assets(1)[0],
+      asset: { ...assets(1)[0].asset, id: "portrait", name: "Portrait" },
+      assetGroupAsset: {
+        resourceName: "portrait",
+        fieldType: "PORTRAIT_MARKETING_IMAGE",
+      },
+    },
+  ]);
+  const onChange = vi.fn();
+  render(
+    <GoogleAssetReplacement
+      change={{
+        ...change,
+        add: [
+          {
+            field: "SQUARE_MARKETING_IMAGE",
+            source: { kind: "library", key: "creative:95" },
+          },
+        ],
+      }}
+      assets={mixed}
+      onChange={onChange}
+    />
+  );
+  expect(
+    (screen.getByLabelText(/Replace Only square/) as HTMLInputElement).disabled
+  ).toBe(false);
+  expect(
+    (screen.getByLabelText(/Replace Photo 1 ·/) as HTMLInputElement).disabled
+  ).toBe(false);
+  fireEvent.click(screen.getByLabelText(/Replace Portrait/));
+  expect(onChange.mock.calls[0][0].remove).toEqual([
+    { assetId: "portrait", field: "PORTRAIT_MARKETING_IMAGE" },
+  ]);
+});
