@@ -103,6 +103,7 @@ export type ProductOverlayFailureDiagnostic = {
     | "low_confidence"
     | "camera_angle"
     | "aspect_mismatch"
+    | "size_mismatch"
     | "invalid_geometry"
     | "invalid_response"
     | "provider_unavailable"
@@ -115,6 +116,7 @@ export type ProductOverlayFailureDiagnostic = {
   confidence?: number;
   sameAngle?: boolean;
   aspectDifference?: number;
+  measurement?: ProductAlignmentMeasurement;
 };
 export type ProductOverlayMetadata = {
   method: "editable_original_v3";
@@ -224,4 +226,99 @@ export function manuallyAppliedProductOverlay(
     automaticFailureDiagnostic: undefined,
     layers,
   };
+}
+
+export type ProductAlignmentMeasurement = {
+  normalizedBounds: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  detectedBounds: { left: number; top: number; width: number; height: number };
+  renderedBounds?: { left: number; top: number; width: number; height: number };
+  aspectDifference: number;
+  sizeMode: "preserve" | "fit";
+};
+
+/** One full-canvas mapping shared by automatic finishing and explicit suggestions.
+ * Never silently stretch, clip, move a detection to fit, or resize an accepted layer. */
+export function resolveProductAlignment(
+  box: ProductAlignmentMeasurement["normalizedBounds"],
+  source: { width: number; height: number },
+  canvas: { width: number; height: number },
+  preserveSize?: Pick<ProductOverlayPlacement, "width" | "height">
+): {
+  placement?: ProductOverlayPlacement;
+  measurement: ProductAlignmentMeasurement;
+  reason?: "aspect_mismatch" | "invalid_geometry" | "size_mismatch";
+} {
+  const detectedBounds = {
+    left: (box.left * canvas.width) / 1000,
+    top: (box.top * canvas.height) / 1000,
+    width: (box.width * canvas.width) / 1000,
+    height: (box.height * canvas.height) / 1000,
+  };
+  const aspect = source.width / source.height;
+  const measurement: ProductAlignmentMeasurement = {
+    normalizedBounds: {
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      height: box.height,
+    },
+    detectedBounds,
+    aspectDifference: Math.abs(
+      detectedBounds.width / detectedBounds.height / aspect - 1
+    ),
+    sizeMode: preserveSize ? "preserve" : "fit",
+  };
+  if (
+    !Number.isFinite(measurement.aspectDifference) ||
+    box.left < 0 ||
+    box.top < 0 ||
+    box.width <= 0 ||
+    box.height <= 0 ||
+    box.left + box.width > 1000 ||
+    box.top + box.height > 1000
+  )
+    return { measurement, reason: "invalid_geometry" };
+  if (measurement.aspectDifference > 0.15)
+    return { measurement, reason: "aspect_mismatch" };
+  const width =
+    preserveSize?.width ??
+    Math.round(Math.max(detectedBounds.width, detectedBounds.height * aspect));
+  const height = preserveSize?.height ?? Math.round(width / aspect);
+  if (
+    preserveSize &&
+    (Math.abs(height - width / aspect) > 1 ||
+      width + 1 < detectedBounds.width ||
+      height + 1 < detectedBounds.height)
+  )
+    return { measurement, reason: "size_mismatch" };
+  // Retain legacy aspect-preserving cover geometry; use the unrounded cover width
+  // for its center so rounding does not move historical verified placements.
+  const centerWidth = preserveSize
+    ? width
+    : Math.max(detectedBounds.width, detectedBounds.height * aspect);
+  const centerHeight = preserveSize ? height : centerWidth / aspect;
+  const placement: ProductOverlayPlacement = {
+    width,
+    ...(preserveSize ? { height } : {}),
+    left: Math.round(
+      detectedBounds.left + detectedBounds.width / 2 - centerWidth / 2
+    ),
+    top: Math.round(
+      detectedBounds.top + detectedBounds.height / 2 - centerHeight / 2
+    ),
+  };
+  measurement.renderedBounds = { ...placement, height };
+  if (
+    placement.left < 0 ||
+    placement.top < 0 ||
+    placement.left + width > canvas.width ||
+    placement.top + height > canvas.height
+  )
+    return { measurement, reason: "invalid_geometry" };
+  return { placement, measurement };
 }

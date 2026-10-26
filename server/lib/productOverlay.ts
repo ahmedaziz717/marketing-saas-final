@@ -2,6 +2,7 @@ import { systemPromptContract } from "../../shared/promptContracts";
 import sharp from "sharp";
 import {
   constrainProductLayer,
+  resolveProductAlignment,
   type ProductOverlayPlacement,
   type ProductOverlayFailureDiagnostic,
 } from "../../shared/productOverlay";
@@ -71,8 +72,14 @@ export async function suggestProductPlacement(
   design: Buffer,
   sources: ProductCutout[],
   canvas: { width: number; height: number },
-  automatic = false
+  automatic = false,
+  preserveSizes?: ProductOverlayPlacement[]
 ) {
+  if (preserveSizes && preserveSizes.length !== sources.length)
+    throw new ProductOverlayFailureError(
+      "The current product sizes are unavailable. Reopen the editor before suggesting placement.",
+      { stage: "alignment", reason: "invalid_geometry" }
+    );
   const first = await sharp(design, { limitInputPixels: 16_000_000 })
     .resize({
       width: 1400,
@@ -153,8 +160,7 @@ export async function suggestProductPlacement(
       { stage: "alignment", reason: "invalid_response" }
     );
   }
-  for (let i = 0; i < parsed.products.length; i++) {
-    const box = parsed.products[i];
+  const measurements = parsed.products.map((box, i) => {
     const metrics = {
       stage: "alignment" as const,
       layerIndex: i,
@@ -162,67 +168,39 @@ export async function suggestProductPlacement(
       sameAngle: box.sameAngle,
     };
     const reason =
-      box.confidence < (automatic ? 0.85 : 0.65)
+      box.confidence < 0.85
         ? "low_confidence"
-        : automatic && !box.sameAngle
+        : !box.sameAngle
           ? "camera_angle"
-          : box.left + box.width > 1000 || box.top + box.height > 1000
-            ? "invalid_geometry"
-            : undefined;
+          : undefined;
     if (reason)
       throw new ProductOverlayFailureError(
-        "The product position is uncertain. Keep the original design and align the layer manually.",
+        "The product position or camera view is uncertain. Keep the original design and align the layer manually.",
         { ...metrics, reason }
       );
-    if (automatic) {
-      const measuredAspect =
-        (box.width * canvas.width) / (box.height * canvas.height);
-      const aspectDifference = Math.abs(
-        measuredAspect / (sources[i].width / sources[i].height) - 1
+    const result = resolveProductAlignment(
+      box,
+      sources[i],
+      canvas,
+      preserveSizes?.[i]
+    );
+    if (result.reason)
+      throw new ProductOverlayFailureError(
+        result.reason === "size_mismatch"
+          ? "The detected product cannot be covered at the current size without distortion. Your size and position are unchanged; adjust manually or explicitly allow size changes."
+          : "The detected product does not match the original cutout safely. Your placement is unchanged; compare the original design and align manually.",
+        {
+          ...metrics,
+          reason: result.reason,
+          aspectDifference: result.measurement.aspectDifference,
+          measurement: result.measurement,
+        }
       );
-      if (aspectDifference > 0.15)
-        throw new ProductOverlayFailureError(
-          "The product view does not match the original cutout closely enough for automatic placement.",
-          { ...metrics, reason: "aspect_mismatch", aspectDifference }
-        );
-    }
-  }
+    return result;
+  });
   return {
-    layers: parsed.products.map((box, i) => {
-      const aspect = sources[i].width / sources[i].height;
-      const width = Math.max(
-        (box.width * canvas.width) / 1000,
-        ((box.height * canvas.height) / 1000) * aspect
-      );
-      const desired: ProductOverlayPlacement = {
-        width: Math.round(width),
-        left: Math.round(
-          ((box.left + box.width / 2) * canvas.width) / 1000 - width / 2
-        ),
-        top: Math.round(
-          ((box.top + box.height / 2) * canvas.height) / 1000 -
-            width / aspect / 2
-        ),
-      };
-      // Cover the detected footprint with the original proportions. Stretching to
-      // the model's rectangle changes the physical product and can make it narrower.
-      const constrained = constrainProductLayer(desired, aspect, canvas);
-      if (
-        automatic &&
-        Object.keys(desired).some(
-          key =>
-            Math.abs(
-              (desired[key as keyof typeof desired] ?? 0) -
-                (constrained[key as keyof typeof constrained] ?? 0)
-            ) > 1
-        )
-      )
-        throw new ProductOverlayFailureError(
-          "Automatic product placement would clip or shift the original product.",
-          { stage: "alignment", reason: "invalid_geometry", layerIndex: i }
-        );
-      return constrained;
-    }),
+    layers: measurements.map(result => result.placement!),
+    measurements: measurements.map(result => result.measurement),
     sameAngle: parsed.products.every(p => p.sameAngle),
   };
 }

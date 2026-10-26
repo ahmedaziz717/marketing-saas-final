@@ -310,6 +310,9 @@ it("separates unsaved alignment from saved state and resets without spending cre
     ).checked
   ).toBe(false);
   expect(calls.align).toHaveBeenCalledTimes(1);
+  expect(calls.align).toHaveBeenCalledWith(
+    expect.objectContaining({ preserveSizes: undefined })
+  );
   expect(calls.save).not.toHaveBeenCalled();
 });
 
@@ -514,4 +517,62 @@ it("restores source proportions for a legacy stretched layer as an unsaved corre
   expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
   expect(calls.save).not.toHaveBeenCalled();
   expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("suggests position only by default for an accepted size and retains placement on rejection", async () => {
+  calls.applied = true;
+  calls.layerHeight = 800;
+  calls.align.mockRejectedValue(
+    new Error("Current size cannot cover the detected product")
+  );
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() =>
+    expect(calls.align).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preserveSizes: [{ left: 100, top: 100, width: 400, height: 800 }],
+      })
+    )
+  );
+  await screen.findByText("Current size cannot cover the detected product");
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(screen.getByAltText("Original product 1").style.top).toBe("10%");
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("allows size-and-position fitting only after explicit size-preservation opt-out", async () => {
+  calls.applied = true;
+  calls.align.mockResolvedValue({
+    sameAngle: true,
+    layers: [{ left: 200, top: 200, width: 300 }],
+  });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(
+    screen.getByLabelText("Keep current size; suggest position only")
+  );
+  expect(
+    screen.getByText(/Size and position: fit the original proportionally/)
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() =>
+    expect(calls.align).toHaveBeenCalledWith(
+      expect.objectContaining({ preserveSizes: undefined })
+    )
+  );
+  await waitFor(() =>
+    expect(screen.getByAltText("Original product 1").style.width).toBe("30%")
+  );
+  expect(calls.save).not.toHaveBeenCalled();
 });

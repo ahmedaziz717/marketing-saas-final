@@ -1158,6 +1158,7 @@ export const creativeBuilderRouter = router({
       organizationInput.extend({
         variantId: z.number().int().positive(),
         replacements: productOverlayReplacementsSchema,
+        preserveSizes: z.array(productOverlayPlacementSchema).min(1).max(3).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1183,7 +1184,9 @@ export const creativeBuilderRouter = router({
           "base64"
         ),
         sources,
-        variant.renderMetadata!
+        variant.renderMetadata!,
+        false,
+        input.preserveSizes
       );
     }),
   saveProductOverlay: protectedProcedure

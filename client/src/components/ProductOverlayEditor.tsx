@@ -15,6 +15,7 @@ import {
   nativeProductStartingLayer,
   resizeProductLayer,
   resizeProductLayerFromCorner,
+  type ProductAlignmentMeasurement,
   type ProductResizeCorner,
   type ProductOverlayPlacement,
   type ProductOverlayReplacement,
@@ -88,6 +89,10 @@ function OverlayControls({
   const align = trpc.creativeBuilder.alignProductOverlay.useMutation();
   const [allowUpscale, setAllowUpscale] = useState(false);
   const [notice, setNotice] = useState("");
+  const [preserveAlignmentSize, setPreserveAlignmentSize] = useState(true);
+  const [alignmentMeasurements, setAlignmentMeasurements] = useState<
+    ProductAlignmentMeasurement[]
+  >([]);
   const [designReady, setDesignReady] = useState(false);
   const [designFailed, setDesignFailed] = useState(false);
   const [placements, setPlacements] = useState<
@@ -188,6 +193,7 @@ function OverlayControls({
     setOriginal(false);
     setAllowUpscale(false);
     setNotice("");
+    setAlignmentMeasurements([]);
     setPlacements(
       layers.map((layer, i) =>
         i === index
@@ -511,12 +517,29 @@ function OverlayControls({
               setPlacements(null);
               setOriginal(false);
               setNotice("");
+              setAlignmentMeasurements([]);
               setError("");
             }}
           >
             Preview replacement
           </Button>
         </details>
+        {placementReady && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={preserveAlignmentSize}
+              onChange={event => setPreserveAlignmentSize(event.target.checked)}
+              disabled={align.isPending || save.isPending}
+            />
+            Keep current size; suggest position only
+          </label>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {placementReady && preserveAlignmentSize
+            ? "Position only: your current width and height will not change. An incompatible match leaves the layer unchanged."
+            : "Size and position: fit the original proportionally to the detected product. Review the unsaved result; a suggestion is not a verified match."}
+        </p>
         <Button
           variant="outline"
           className="w-full flex-wrap gap-1"
@@ -524,13 +547,17 @@ function OverlayControls({
           onClick={async () => {
             setError("");
             setNotice("");
+            setAlignmentMeasurements([]);
             try {
               const result = await align.mutateAsync({
                 organizationId,
                 variantId,
                 replacements,
+                preserveSizes:
+                  preserveAlignmentSize && placementReady ? layers : undefined,
               });
               setAllowUpscale(false);
+              setAlignmentMeasurements(result.measurements ?? []);
               setPlacements(result.layers);
               setOriginal(false);
               setNotice(
@@ -551,6 +578,25 @@ function OverlayControls({
             operation="creativeBuilder.alignProductOverlay"
           />
         </Button>
+        {alignmentMeasurements.length > 0 && (
+          <details className="text-xs">
+            <summary>Alignment measurements (full canvas pixels)</summary>
+            {alignmentMeasurements.map((measurement, index) => (
+              <p key={index}>
+                Product {index + 1}: detected x
+                {Math.round(measurement.detectedBounds.left)}, y
+                {Math.round(measurement.detectedBounds.top)},{" "}
+                {Math.round(measurement.detectedBounds.width)} ×{" "}
+                {Math.round(measurement.detectedBounds.height)}.
+                {measurement.renderedBounds &&
+                  ` Suggested x${measurement.renderedBounds.left}, y${measurement.renderedBounds.top}, ${measurement.renderedBounds.width} × ${measurement.renderedBounds.height}.`}
+                {measurement.sizeMode === "preserve"
+                  ? " Current size retained."
+                  : " Size fitted proportionally; inspect all edges before saving."}
+              </p>
+            ))}
+          </details>
+        )}
         {notice && (
           <p role="status" className="text-sm">
             {notice}
@@ -756,6 +802,7 @@ function OverlayControls({
             setSourceChoice("");
             setSameView(false);
             setNotice("");
+            setAlignmentMeasurements([]);
             setError("");
             setAllowUpscale(false);
             setOriginal(false);

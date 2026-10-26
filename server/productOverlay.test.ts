@@ -71,7 +71,7 @@ it("recomposes from the full design without changing pixels outside the product 
   ).rejects.toThrow(/within/);
 });
 
-it("uses measured target bounds instead of a fixed small box and flags a different angle", async () => {
+it("uses measured target bounds instead of a fixed small box", async () => {
   mocked.invoke.mockResolvedValue({
     choices: [
       {
@@ -84,7 +84,7 @@ it("uses measured target bounds instead of a fixed small box and flags a differe
                 width: 400,
                 height: 800,
                 confidence: 0.95,
-                sameAngle: false,
+                sameAngle: true,
               },
             ],
           }),
@@ -97,7 +97,10 @@ it("uses measured target bounds instead of a fixed small box and flags a differe
       width: 200,
       height: 200,
     })
-  ).toEqual({ layers: [{ left: 100, top: 20, width: 80 }], sameAngle: false });
+  ).toMatchObject({
+    layers: [{ left: 100, top: 20, width: 80 }],
+    sameAngle: true,
+  });
   // The provider rejects JSON mode before generation unless a message explicitly
   // asks for JSON. Exercise the real request contract, not just its mocked reply.
   const request = mocked.invoke.mock.calls.at(-1)![0];
