@@ -541,7 +541,7 @@ export function StudioSources({
                               Available for image drafting. Catalog review is still pending; check product facts before publishing.
                             </p>
                           )}
-                          {!primary && p.recordType !== "service" && (
+                          {!gallery.images.length && p.recordType !== "service" && (
                             <p role="status" className="mb-2 text-xs text-muted-foreground">
                               Add a usable product photo in Catalog to create an image of this product.
                             </p>
@@ -563,7 +563,7 @@ export function StudioSources({
                                 className="mb-2 text-xs text-amber-700"
                               >
                                 A saved view now belongs to a separate component
-                                card. Your selection is retained; choose an
+                                card. Your selection is retained; choose a
                                 component card before generating.
                               </p>
                             )}
