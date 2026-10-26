@@ -251,3 +251,45 @@ it("rolls back approvals if the audit record cannot be saved", async () => {
     );
   }
 });
+
+it("filters stock consistently across pages, counts and bulk review without treating missing stock as available", async () => {
+  const seeded = await add([
+    ...Array.from({ length: 65 }, (_, i) => ({
+      availability:
+        i % 2 ? "In stock · 4 available" : "https://schema.org/InStock",
+    })),
+    { availability: null, specifications: { "Stock Status": "in_stock" } },
+    {
+      availability: "Out of stock",
+      specifications: { Availability: "InStock" },
+    },
+    { availability: "out_of_stock" },
+    { availability: "https://schema.org/OutOfStock" },
+    { availability: null },
+    { availability: "Preorder" },
+    { availability: "Backorder" },
+    { availability: "In stock", organizationId: otherOrganizationId },
+  ]);
+  const filter = { kind: "products" as const, stock: "in_stock" as const };
+  const first = await owner.overview({ organizationId, ...filter });
+  const second = await owner.overview({
+    organizationId,
+    ...filter,
+    offset: 60,
+  });
+  expect(first.total).toBe(66);
+  expect(first.products).toHaveLength(60);
+  expect(second.products).toHaveLength(6);
+  expect(
+    new Set([...first.products, ...second.products].map(p => p.id))
+  ).toEqual(new Set(seeded.slice(0, 66).map((p: any) => p.id)));
+  expect(
+    (await owner.overview({ organizationId, stock: "out_of_stock" })).total
+  ).toBe(3);
+  expect(
+    await owner.bulkReview({ organizationId, filter, decision: "approved" })
+  ).toEqual({ updated: 66 });
+  const rows = await state.db.select().from(products);
+  expect(rows.filter((p: any) => p.status === "approved")).toHaveLength(66);
+  expect(rows.filter((p: any) => p.status === "pending")).toHaveLength(7);
+});

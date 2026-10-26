@@ -1,3 +1,4 @@
+import { inStockPattern, outOfStockPattern } from "../../shared/catalogFacts";
 import {
   previewCatalogComponents,
   createCatalogComponents,
@@ -42,6 +43,7 @@ const organizationInput = z.object({
   organizationId: z.number().int().positive(),
 });
 const catalogFilters = z.object({
+  stock: z.enum(["all", "in_stock", "out_of_stock"]).default("all"),
   search: z.string().max(300).default(""),
   kind: z.enum(["all", "products", "services"]).default("all"),
   status: z.enum(["all", "pending", "approved", "rejected"]).default("all"),
@@ -66,8 +68,16 @@ function catalogWhere(
       and m->>'sourceCategory' = trim(${products.category}) limit 1) end`;
   const confirmedCategory = sql`exists (select 1 from ${catalogCategorySettings}, json_array_elements(${catalogCategorySettings.settings}->'categories') c
     where ${catalogCategorySettings.organizationId} = ${products.organizationId} and c->>'id' = (${categoryId}))`;
+  const stockValue = sql`regexp_replace(lower(btrim(coalesce(nullif(btrim(${products.availability}), ''),
+    (select value from json_each_text(${products.specifications}) where lower(btrim(key)) in ('availability', 'stock status', 'stock_status') limit 1),
+    ''))), '^https?://schema[.]org/', '')`;
   return and(
     eq(products.organizationId, organizationId),
+    filter.stock === "in_stock"
+      ? sql`${stockValue} ~ ${inStockPattern}`
+      : filter.stock === "out_of_stock"
+        ? sql`${stockValue} ~ ${outOfStockPattern}`
+        : undefined,
     filter.marketingCategory === "unmapped"
       ? sql`not (${confirmedCategory})`
       : filter.marketingCategory !== "all"

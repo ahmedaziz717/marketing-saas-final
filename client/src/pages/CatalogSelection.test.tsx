@@ -164,6 +164,7 @@ it("offers all matching entries across pages and resets selection when filters c
       marketingCategory: "all",
       sourceId: undefined,
       status: "all",
+      stock: "all",
     },
   });
   fireEvent.change(screen.getByRole("textbox", { name: "Search catalog" }), {
@@ -224,4 +225,17 @@ it("disables selection during review and for roles without review access", () =>
   selectPage();
   expect(state.mutate).not.toHaveBeenCalled();
   expect(screen.getByRole("status").textContent).toBe("0 selected");
+});
+
+it("clears selection when stock changes and sends the stock filter with all-matching review", () => {
+  setup();
+  selectPage();
+  fireEvent.click(screen.getByRole("radio", { name: "In stock" }));
+  expect(screen.queryByRole("button", { name: /^Approve \d/ })).toBeNull();
+  selectPage();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select all 125 matching entries" })
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Approve 125" }));
+  expect(state.mutate.mock.calls.at(-1)?.[0].filter.stock).toBe("in_stock");
 });

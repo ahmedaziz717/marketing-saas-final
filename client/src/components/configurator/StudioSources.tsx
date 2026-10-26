@@ -1,3 +1,4 @@
+import { catalogStockStatus } from "@shared/catalogFacts";
 import { canDraftCatalogImage } from "@shared/catalogReadiness";
 import { catalogCardGallery, catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "../CatalogGallery";
@@ -37,6 +38,8 @@ import { PageUrlSource } from "./PageUrlSource";
 
 type Product = {
   status?: string;
+  availability?: string | null;
+  specifications?: Record<string, string> | null;
   componentKind?: string | null;
   representedGroupIds?: string[];
   id: number;
@@ -109,6 +112,12 @@ export function StudioSources({
     writeStudioDraft(draftKey ? `${draftKey}:tab` : null, tab);
   }, [draftKey, tab]);
   const isImage = kind === "image";
+  const [stock, setStock] = useState("all");
+  const visibleProducts = products.filter(
+    p =>
+      (p.name + (p.sku ?? "")).toLowerCase().includes(search.toLowerCase()) &&
+      (stock === "all" || catalogStockStatus(p) === stock)
+  );
   const referenceLimit = isImage
     ? 9
     : 30 -
@@ -462,140 +471,161 @@ export function StudioSources({
               </VisualSelect>
             </ChoiceField>
           )}
+          {isImage && (
+            <ChoiceField className="cfg-field">
+              <span>Stock availability</span>
+              <VisualSelect
+                density="compact"
+                aria-label="Stock availability"
+                value={stock}
+                onValueChange={setStock}
+              >
+                <option value="all">All availability</option>
+                <option value="in_stock">In stock</option>
+                <option value="out_of_stock">Out of stock</option>
+              </VisualSelect>
+              <small>
+                Filters the choices; already selected products stay in your
+                draft.
+              </small>
+            </ChoiceField>
+          )}
           <div className="cfg-card-grid">
             {isImage ? (
-              products
-                .filter(p =>
-                  (p.name + (p.sku ?? ""))
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
-                )
-                .map(p => {
-                  const gallery = catalogCardGallery(
-                    p.images,
-                    p.mediaGroups,
-                    p.representedGroupIds
-                  );
-                  const unavailable =
-                    p.status != null && !canDraftCatalogImage(p.status);
-                  const primary =
-                    gallery.images.find(
-                      photo =>
-                        photo.isPrimary &&
-                        catalogDefaultImage(photo, p.mediaGroups)
-                    ) ??
-                    gallery.images.find(photo =>
+              visibleProducts.map(p => {
+                const gallery = catalogCardGallery(
+                  p.images,
+                  p.mediaGroups,
+                  p.representedGroupIds
+                );
+                const unavailable =
+                  p.status != null && !canDraftCatalogImage(p.status);
+                const primary =
+                  gallery.images.find(
+                    photo =>
+                      photo.isPrimary &&
                       catalogDefaultImage(photo, p.mediaGroups)
-                    );
-                  const selection = image.products.find(
-                    i => i.productId === p.id
+                  ) ??
+                  gallery.images.find(photo =>
+                    catalogDefaultImage(photo, p.mediaGroups)
                   );
-                  return (
-                    <StudioCard
-                      key={p.id}
-                      title={p.name}
-                      description={
-                        (p.componentKind
-                          ? `${p.componentKind} Option${p.status === "pending" ? " - Pending review; available for drafting" : unavailable ? " - Unavailable" : ""}`
-                          : p.sku) ||
-                        (p.recordType === "service"
-                          ? "Service"
-                          : "Product catalog")
-                      }
-                      image={
-                        p.images.find(i => i.id === selection?.imageId)?.url ??
-                        primary?.url
-                      }
-                      contain
-                      selected={!!selection}
-                      disabled={
-                        (unavailable && !selection) ||
-                        (!primary &&
-                          !selection &&
-                          p.recordType !== "service") ||
-                        (!selection &&
-                          (image.productMode === "together"
-                            ? image.products.length >= 3
-                            : creativeProductViewCount(image) >= 12))
-                      }
-                      onSelect={() =>
-                        updateImage({
-                          promotionMode: "offerings",
-                          products: selection
-                            ? image.products.filter(i => i.productId !== p.id)
-                            : [
-                                ...image.products,
-                                {
-                                  productId: p.id,
-                                  imageId: primary?.id ?? null,
-                                  featuredSpecKeys: [],
-                                  includePrice: false,
-                                },
-                              ],
-                        })
-                      }
-                      gallery={
-                        <>
-                          {p.status === "pending" && (
-                            <p role="status" className="mb-2 text-xs text-muted-foreground">
-                              Available for image drafting. Catalog review is still pending; check product facts before publishing.
-                            </p>
-                          )}
-                          {!gallery.images.length && p.recordType !== "service" && (
-                            <p role="status" className="mb-2 text-xs text-muted-foreground">
-                              Add a usable product photo in Catalog to create an image of this product.
-                            </p>
-                          )}
-                          <p className="mb-2 text-xs text-muted-foreground">
-                            {image.productMode === "together"
-                              ? "Choose one view per product."
-                              : "Choose up to four views per product, twelve total."}{" "}
-                            Preview without changing selection.
+                const selection = image.products.find(
+                  i => i.productId === p.id
+                );
+                return (
+                  <StudioCard
+                    key={p.id}
+                    title={p.name}
+                    description={
+                      (p.componentKind
+                        ? `${p.componentKind} Option${p.status === "pending" ? " - Pending review; available for drafting" : unavailable ? " - Unavailable" : ""}`
+                        : p.sku) ||
+                      (p.recordType === "service"
+                        ? "Service"
+                        : "Product catalog")
+                    }
+                    image={
+                      p.images.find(i => i.id === selection?.imageId)?.url ??
+                      primary?.url
+                    }
+                    contain
+                    selected={!!selection}
+                    disabled={
+                      (unavailable && !selection) ||
+                      (!primary && !selection && p.recordType !== "service") ||
+                      (!selection &&
+                        (image.productMode === "together"
+                          ? image.products.length >= 3
+                          : creativeProductViewCount(image) >= 12))
+                    }
+                    onSelect={() =>
+                      updateImage({
+                        promotionMode: "offerings",
+                        products: selection
+                          ? image.products.filter(i => i.productId !== p.id)
+                          : [
+                              ...image.products,
+                              {
+                                productId: p.id,
+                                imageId: primary?.id ?? null,
+                                featuredSpecKeys: [],
+                                includePrice: false,
+                              },
+                            ],
+                      })
+                    }
+                    gallery={
+                      <>
+                        {p.status === "pending" && (
+                          <p
+                            role="status"
+                            className="mb-2 text-xs text-muted-foreground"
+                          >
+                            Available for image drafting. Catalog review is
+                            still pending; check product facts before
+                            publishing.
                           </p>
-                          {selection &&
-                            selectedProductImageIds(selection).some(
-                              id =>
-                                id != null &&
-                                !gallery.images.some(photo => photo.id === id)
-                            ) && (
-                              <p
-                                role="status"
-                                className="mb-2 text-xs text-amber-700"
-                              >
-                                A saved view now belongs to a separate component
-                                card. Your selection is retained; choose a
-                                component card before generating.
-                              </p>
-                            )}
-                          <CatalogGallery
-                            name={p.name}
-                            images={gallery.images}
-                            groups={gallery.groups}
-                            selectedIds={
-                              selection
-                                ? selectedProductImageIds(selection).filter(
-                                    (id): id is number => id != null
-                                  )
-                                : []
-                            }
-                            disabled={
-                              unavailable ||
-                              creativeProductViewCount(image) >= 12 ||
-                              (selection
-                                ? selectedProductImageIds(selection).length >=
-                                  (image.productMode === "together" ? 1 : 4)
-                                : image.productMode === "together" &&
-                                  image.products.length >= 3)
-                            }
-                            onSelect={imageId =>
-                              toggleProductImage(p.id, imageId)
-                            }
-                          />
-                        </>
-                      }
-                    />
-                  );
-                })
+                        )}
+                        {!gallery.images.length &&
+                          p.recordType !== "service" && (
+                            <p
+                              role="status"
+                              className="mb-2 text-xs text-muted-foreground"
+                            >
+                              Add a usable product photo in Catalog to create an
+                              image of this product.
+                            </p>
+                          )}
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          {image.productMode === "together"
+                            ? "Choose one view per product."
+                            : "Choose up to four views per product, twelve total."}{" "}
+                          Preview without changing selection.
+                        </p>
+                        {selection &&
+                          selectedProductImageIds(selection).some(
+                            id =>
+                              id != null &&
+                              !gallery.images.some(photo => photo.id === id)
+                          ) && (
+                            <p
+                              role="status"
+                              className="mb-2 text-xs text-amber-700"
+                            >
+                              A saved view now belongs to a separate component
+                              card. Your selection is retained; choose a
+                              component card before generating.
+                            </p>
+                          )}
+                        <CatalogGallery
+                          name={p.name}
+                          images={gallery.images}
+                          groups={gallery.groups}
+                          selectedIds={
+                            selection
+                              ? selectedProductImageIds(selection).filter(
+                                  (id): id is number => id != null
+                                )
+                              : []
+                          }
+                          disabled={
+                            unavailable ||
+                            creativeProductViewCount(image) >= 12 ||
+                            (selection
+                              ? selectedProductImageIds(selection).length >=
+                                (image.productMode === "together" ? 1 : 4)
+                              : image.productMode === "together" &&
+                                image.products.length >= 3)
+                          }
+                          onSelect={imageId =>
+                            toggleProductImage(p.id, imageId)
+                          }
+                        />
+                      </>
+                    }
+                  />
+                );
+              })
             ) : (
               <div className="col-span-full">
                 <ProductPhotoGroups
@@ -632,10 +662,12 @@ export function StudioSources({
               </button>
             </div>
           )}
-          {(isImage ? !products.length : catalog.data?.items.length === 0) && (
+          {(isImage
+            ? !visibleProducts.length
+            : catalog.data?.items.length === 0) && (
             <p className="cfg-empty">
-              No catalog products available yet. Add one using Product page URL, or
-              choose an image asset.
+              No catalog products match this view. Adjust the filters, add a
+              product using Product page URL, or choose an image asset.
             </p>
           )}
         </>

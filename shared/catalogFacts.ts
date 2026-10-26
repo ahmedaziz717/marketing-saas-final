@@ -143,3 +143,19 @@ export function specificationsFromLines(value: string) {
       .map(row => [row.name.trim(), row.value.trim()])
   );
 }
+
+// Shared by browser filters and the SQL catalog filter. Match explicit stock
+// states only; missing inventory, preorder and backorder are not in stock.
+export const inStockPattern = "^in[ _-]*stock([ ]*·.*)?$";
+export const outOfStockPattern = "^out[ _-]*of[ _-]*stock([ ]*·.*)?$";
+export function catalogStockStatus(
+  product: Parameters<typeof structuredCatalogFacts>[0]
+) {
+  const value = structuredCatalogFacts(product)
+    .availability.trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/schema\.org\//, "");
+  if (new RegExp(inStockPattern).test(value)) return "in_stock";
+  if (new RegExp(outOfStockPattern).test(value)) return "out_of_stock";
+  return "other";
+}
