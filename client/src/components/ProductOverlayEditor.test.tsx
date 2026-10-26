@@ -13,6 +13,7 @@ const calls = vi.hoisted(() => ({
   refetch: vi.fn(),
   sourceWidth: 600,
   layerCount: 1,
+  layerHeight: undefined as number | undefined,
   applied: true,
   automaticFailure: undefined as "source_resolution" | undefined,
   sources: [] as any[],
@@ -40,6 +41,7 @@ vi.mock("@/lib/trpc", () => ({
                 left: 100,
                 top: 100,
                 width: 400,
+                height: calls.layerHeight,
                 sourceWidth: calls.sourceWidth,
                 sourceHeight: calls.sourceWidth * 2,
                 aspect: 0.5,
@@ -83,6 +85,7 @@ afterEach(cleanup);
 beforeEach(() => {
   calls.sourceWidth = 600;
   calls.layerCount = 1;
+  calls.layerHeight = undefined;
   calls.applied = true;
   calls.automaticFailure = undefined;
   calls.sources = [];
@@ -333,7 +336,7 @@ it("requires explicit acceptance when a manual placement exceeds the measured so
   expect(save.disabled).toBe(true);
   expect(calls.save).not.toHaveBeenCalled();
 });
-it("allows accepted enlargement of a verified replacement and saves independent height", async () => {
+it("allows accepted enlargement of a verified replacement and keeps width and height proportional", async () => {
   calls.sourceWidth = 300;
   calls.sources = [
     {
@@ -380,10 +383,105 @@ it("allows accepted enlargement of a verified replacement and saves independent 
     expect(calls.save).toHaveBeenCalledWith(
       expect.objectContaining({
         allowUpscale: true,
-        layers: [{ left: 100, top: 100, width: 400, height: 700 }],
+        layers: [{ left: 100, top: 100, width: 350, height: 700 }],
         replacements: [expect.objectContaining({ key: "asset:9" })],
       })
     )
   );
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("resizes from a corner in full canvas coordinates on a scaled preview, then saves the same geometry", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  calls.save.mockResolvedValue({ key: "creative:3" });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  const canvas = screen.getByLabelText("Product placement canvas");
+  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+    width: 500,
+    height: 500,
+    left: 0,
+    top: 0,
+    right: 500,
+    bottom: 500,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const corner = screen.getByRole("button", {
+    name: "Resize product from se corner",
+  });
+  Object.defineProperty(corner, "setPointerCapture", { value: vi.fn() });
+  fireEvent.pointerDown(corner, { clientX: 250, clientY: 450, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 275, clientY: 500, pointerId: 1 });
+  fireEvent.pointerUp(canvas);
+  expect(screen.getByAltText("Original product 1").style.width).toBe("45%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("90%");
+  // A new gesture starts from the new layer, never a stale initial rectangle.
+  fireEvent.pointerDown(corner, { clientX: 275, clientY: 500, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 225, clientY: 400, pointerId: 2 });
+  fireEvent.pointerCancel(canvas);
+  fireEvent.pointerMove(canvas, { clientX: 400, clientY: 400, pointerId: 2 });
+  expect(screen.getByAltText("Original product 1").style.width).toBe("35%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("70%");
+  fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+  await waitFor(() =>
+    expect(calls.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layers: [{ left: 100, top: 100, width: 350, height: 700 }],
+      })
+    )
+  );
+  vi.unstubAllGlobals();
+});
+
+it("offers keyboard resizing and links numeric width to height without stretching", () => {
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.change(screen.getByLabelText("width in pixels"), {
+    target: { value: "300" },
+  });
+  expect(screen.getByAltText("Original product 1").style.height).toBe("60%");
+  fireEvent.keyDown(
+    screen.getByRole("button", { name: "Resize product from se corner" }),
+    { key: "ArrowDown", shiftKey: true }
+  );
+  expect(screen.getByLabelText("width in pixels")).toHaveProperty(
+    "value",
+    "304"
+  );
+  expect(screen.getByLabelText("height in pixels")).toHaveProperty(
+    "value",
+    "608"
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("restores source proportions for a legacy stretched layer as an unsaved correction", () => {
+  calls.layerHeight = 600;
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("80%");
+  expect(screen.getByAltText("Original product 1").style.objectFit).toBe(
+    "contain"
+  );
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect(calls.save).not.toHaveBeenCalled();
   expect(calls.align).not.toHaveBeenCalled();
 });

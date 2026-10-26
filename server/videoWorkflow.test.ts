@@ -468,6 +468,23 @@ describe("durable video generation", () => {
       .update(products)
       .set({ status: "pending" })
       .where(eq(products.id, productId));
+    expect(await resolveVideoReferences(state.db, org, settings)).toHaveLength(
+      2
+    );
+    const pendingChoices = await owner.video.catalogImages({
+      organizationId: org,
+    });
+    expect(
+      pendingChoices.items.find(
+        item => item.key === `product_image:${catalogImageId}`
+      )
+    ).toMatchObject({
+      reviewNotice: expect.stringMatching(/Draft use allowed/),
+    });
+    await state.db
+      .update(products)
+      .set({ status: "rejected" })
+      .where(eq(products.id, productId));
     await expect(
       validateVideoReferences(state.db, {
         organizationId: org,
@@ -480,7 +497,7 @@ describe("durable video generation", () => {
     expect(job.credits).toBeGreaterThan(0);
   });
 
-  it("shows pending component cards but rejects both pending images and their represented parent references", async () => {
+  it("allows pending component drafts without approving records and rejects represented parent references", async () => {
     const now = Date.now();
     const group = {
       id: "case:test",
@@ -583,7 +600,7 @@ describe("durable video generation", () => {
       choices.find(i => i.key === `product_image:${componentImage.id}`)
     ).toMatchObject({
       componentKind: "Chassis",
-      unavailableReason: expect.stringMatching(/Review needed/),
+      reviewNotice: expect.stringMatching(/Draft use allowed/),
     });
     expect(
       choices.find(i => i.key === `product_image:${catalogImageId}`)
@@ -600,13 +617,26 @@ describe("durable video generation", () => {
       key: `product_image:${nestedImage.id}`,
       unavailableReason: expect.stringMatching(/separate component/),
     });
-    for (const id of [componentImage.id, nestedImage.id])
-      await expect(
-        resolveVideoReferences(state.db, org, {
-          ...setup(),
-          imageKeys: [`product_image:${id}`],
-        })
-      ).rejects.toThrow(/unavailable/);
+    expect(
+      await resolveVideoReferences(state.db, org, {
+        ...setup(),
+        imageKeys: [`product_image:${componentImage.id}`],
+      })
+    ).toHaveLength(1);
+    expect(
+      (
+        await state.db
+          .select()
+          .from(products)
+          .where(eq(products.id, component.id))
+      )[0].status
+    ).toBe("pending");
+    await expect(
+      resolveVideoReferences(state.db, org, {
+        ...setup(),
+        imageKeys: [`product_image:${nestedImage.id}`],
+      })
+    ).rejects.toThrow(/unavailable/);
     expect(
       await resolveVideoReferences(state.db, org, {
         ...setup(),

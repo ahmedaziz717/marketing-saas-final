@@ -4,7 +4,13 @@ import {
 } from "@shared/googleCampaigns";
 import { label } from "./GoogleCampaignFields";
 
-export function GoogleChangeSummary({ change }: { change: GoogleChange }) {
+export function GoogleChangeSummary({
+  change,
+  libraryAssets = [],
+}: {
+  change: GoogleChange;
+  libraryAssets?: { key: string; name: string }[];
+}) {
   return (
     <div className="google-review">
       <dl>
@@ -166,7 +172,10 @@ export function GoogleChangeSummary({ change }: { change: GoogleChange }) {
           {a.source.kind === "text"
             ? a.source.text
             : a.source.kind === "library"
-              ? a.source.key
+              ? libraryAssets.find(
+                  item =>
+                    a.source.kind === "library" && item.key === a.source.key
+                )?.name || a.source.key
               : a.source.kind === "existing"
                 ? `Google asset ${a.source.id}`
                 : `YouTube ${a.source.videoId}`}

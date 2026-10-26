@@ -629,15 +629,36 @@ it.each([
           : { stage: "alignment", reason: "invalid_response" },
       });
       if (matched && lowResolution) {
-        // Preserve the measured independent height across resolution failure and recovery.
-        if (stretch) {
-          const expectedHeight = Math.round(Math.round(300 * variant.renderMetadata.width / variant.renderMetadata.height * 0.65) * variant.renderMetadata.height / 1000);
-          expect(preservation.layers[0].height).toBe(expectedHeight);
-          expect(preservation.layers[0].height).not.toBe(Math.round(preservation.layers[0].width * 0.6));
-        }
-        // Keep the confident model match, not the generic editor fallback box.
-        expect(Math.abs(preservation.layers[0].left - variant.renderMetadata.width * 0.4)).toBeLessThanOrEqual(1);
-        expect(Math.abs(preservation.layers[0].width - variant.renderMetadata.width * 0.3)).toBeLessThanOrEqual(1);
+        // Retain the confidently detected footprint across resolution failure,
+        // covering it proportionally rather than preserving a distorted height.
+        const canvas = variant.renderMetadata;
+        const targetWidth = 0.3 * canvas.width;
+        const targetHeight =
+          (Math.round(
+            ((300 * canvas.width) / canvas.height) * (stretch ? 0.65 : 0.6)
+          ) *
+            canvas.height) /
+          1000;
+        const layer = preservation.layers[0];
+        expect(Math.abs(layer.height - layer.width * 0.6)).toBeLessThanOrEqual(
+          0.5
+        );
+        expect(layer.width).toBeGreaterThanOrEqual(Math.round(targetWidth));
+        expect(layer.height).toBeGreaterThanOrEqual(
+          Math.round(targetHeight) - 1
+        );
+        expect(
+          Math.abs(layer.left + layer.width / 2 - canvas.width * 0.55)
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(
+            layer.top +
+              layer.height / 2 -
+              (canvas.height * 0.4 + targetHeight / 2)
+          )
+        ).toBeLessThanOrEqual(1);
+        if (stretch)
+          expect(layer.width).toBeGreaterThan(Math.round(targetWidth));
       }
       expect(preservation.designStorageKey).toContain("original-logo-");
       if (applied)

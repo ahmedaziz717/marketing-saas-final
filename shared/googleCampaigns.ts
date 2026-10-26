@@ -349,7 +349,7 @@ export type GoogleCampaignCreate = z.infer<typeof googleCampaignCreateSchema>;
 export type GoogleAdContent = z.infer<typeof googleAdContentSchema>;
 
 // Official requirements: https://developers.google.com/google-ads/api/performance-max/asset-requirements
-// Checked 2026-10-25. Existing groups are assessed after additions AND removals.
+// Checked 2026-10-26. API limits are per asset field; Google validates the full operation.
 export const pmaxAssetLimits: Record<
   string,
   { label: string; min: number; max: number }
@@ -367,6 +367,13 @@ export const pmaxAssetLimits: Record<
     min: 1,
     max: 20,
   },
+  PORTRAIT_MARKETING_IMAGE: {
+    label: "portrait images (at least 480 × 600)",
+    min: 0,
+    max: 20,
+  },
+  LANDSCAPE_LOGO: { label: "landscape logos", min: 0, max: 20 },
+  YOUTUBE_VIDEO: { label: "videos", min: 0, max: 15 },
   LOGO: { label: "square logos (at least 128 × 128)", min: 1, max: 5 },
   BUSINESS_NAME: { label: "business name", min: 1, max: 1 },
 };
@@ -386,4 +393,107 @@ export function pmaxMissingAssets(
           : null;
     return message ? [{ field, message }] : [];
   });
+}
+
+// Existing groups can contain provider-created or legacy assets beyond today's
+// creation limits. Do not demand unrelated removals for an additive edit.
+// Google's validate-only request remains authoritative for the complete group.
+export const pmaxMarketingImageFields = [
+  "MARKETING_IMAGE",
+  "SQUARE_MARKETING_IMAGE",
+  "PORTRAIT_MARKETING_IMAGE",
+];
+export const pmaxMarketingImageMaximum = 20;
+// Combined-image limit: https://support.google.com/google-ads/answer/10724748
+export function pmaxChangedAssetIssues(
+  fields: string[],
+  changedFields: string[],
+  brandGuidelinesEnabled = false
+) {
+  const changed = new Set(changedFields);
+  const issues = pmaxMissingAssets(fields, brandGuidelinesEnabled).filter(
+    issue => changed.has(issue.field)
+  );
+  const images = fields.filter(f =>
+    pmaxMarketingImageFields.includes(f)
+  ).length;
+  if (
+    changedFields.some(f => pmaxMarketingImageFields.includes(f)) &&
+    images > pmaxMarketingImageMaximum &&
+    !issues.some(i => pmaxMarketingImageFields.includes(i.field))
+  )
+    issues.push({
+      field: "MARKETING_IMAGE",
+      message: `Image capacity reached (maximum ${pmaxMarketingImageMaximum}). Choose ${images - pmaxMarketingImageMaximum} existing image(s) to replace, or remove new selections. Existing assets are kept until you confirm.`,
+    });
+  return issues;
+}
+
+export type PmaxAssetLink = { assetId: string; field: string };
+export function pmaxImageCapacity(
+  existing: PmaxAssetLink[],
+  add: GoogleAssetInput[],
+  remove: PmaxAssetLink[] = []
+) {
+  if (!add.some(a => pmaxMarketingImageFields.includes(a.field))) return [];
+  const linked = existing.filter(a =>
+    pmaxMarketingImageFields.includes(a.field)
+  );
+  const retained = linked.filter(
+    a => !remove.some(r => r.assetId === a.assetId && r.field === a.field)
+  );
+  const additions = add.filter(
+    a =>
+      pmaxMarketingImageFields.includes(a.field) &&
+      !(
+        a.source.kind === "existing" &&
+        retained.some(
+          r =>
+            r.assetId === (a.source as { id: string }).id && r.field === a.field
+        )
+      )
+  );
+  return [
+    {
+      field: "MARKETING_IMAGES",
+      max: pmaxMarketingImageMaximum,
+      current: linked.length,
+      added: additions.length,
+      replacementsNeeded: Math.max(
+        0,
+        linked.length + additions.length - pmaxMarketingImageMaximum
+      ),
+      remaining: Math.max(
+        0,
+        retained.length + additions.length - pmaxMarketingImageMaximum
+      ),
+    },
+  ];
+}
+export function pmaxCanReplaceImage(
+  candidate: PmaxAssetLink,
+  existing: PmaxAssetLink[],
+  add: GoogleAssetInput[],
+  remove: PmaxAssetLink[]
+) {
+  if (!pmaxMarketingImageFields.includes(candidate.field)) return false;
+  const retained = existing.filter(
+    a =>
+      !(a.assetId === candidate.assetId && a.field === candidate.field) &&
+      !remove.some(r => r.assetId === a.assetId && r.field === a.field)
+  );
+  const additions = add.filter(
+    a =>
+      !(
+        a.source.kind === "existing" &&
+        retained.some(
+          r =>
+            r.assetId === (a.source as { id: string }).id && r.field === a.field
+        )
+      )
+  );
+  const count =
+    retained.filter(a => a.field === candidate.field).length +
+    additions.filter(a => a.field === candidate.field).length;
+  return count >= (pmaxAssetLimits[candidate.field]?.min ?? 0);
 }

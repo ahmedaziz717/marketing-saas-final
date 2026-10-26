@@ -1,3 +1,4 @@
+import { artStyleInfluenceSchema } from "./artStyleInfluence";
 import { learningOriginSchema } from "./learningHandoff";
 import {
   findLifestylePerson,
@@ -378,7 +379,7 @@ export const creativeSetupSchema = z
           imageIds: z
             .array(z.number().int().positive())
             .min(1)
-            .max(4)
+            .max(12)
             .optional(),
           featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
           includePrice: z.boolean().default(false),
@@ -434,6 +435,7 @@ export const creativeSetupSchema = z
         "premium",
       ])
       .default("clean"),
+    artStyleInfluence: artStyleInfluenceSchema.optional(),
     artStyle: z
       .enum([
         "realistic",
@@ -636,6 +638,7 @@ export function defaultCreativeSetup(
     shot: "product",
     mood: "clean",
     artStyle: "realistic",
+    artStyleInfluence: "balanced",
     placement: "auto",
     logoAssetId: null,
     extraDirection: "",

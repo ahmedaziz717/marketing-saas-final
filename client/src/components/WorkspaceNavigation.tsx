@@ -51,6 +51,7 @@ export type WorkspaceNavItem = {
     | "Settings";
   aliases?: string[];
   roadmap?: boolean;
+  opensDirectory?: boolean;
 };
 export const workspaceNavigation: WorkspaceNavItem[] = [
   { icon: House, label: "Home", path: "/app" },
@@ -133,24 +134,24 @@ export const workspaceNavigation: WorkspaceNavItem[] = [
     icon: LayoutGrid,
     label: "Apps",
     path: "/app/apps",
+    opensDirectory: true,
     children: [
-      { label: "All Apps", path: "/app/apps", exact: true },
-      { label: "Creative Apps", path: "/app/creatives", exact: true },
-      { label: "Activation Apps", path: "/app/activate/apps" },
-      { label: "Measurement Apps", path: "/app/measure/apps" },
-      { label: "Optimization Apps", path: "/app/optimize/apps" },
+      { label: "Create Apps", path: "/app/creatives", exact: true },
+      { label: "Activate Apps", path: "/app/activate/apps" },
+      { label: "Measure Apps", path: "/app/measure/apps" },
+      { label: "Optimize Apps", path: "/app/optimize/apps" },
     ],
   },
   {
     icon: Workflow,
     label: "Workflows",
     path: "/app/workflows",
+    opensDirectory: true,
     children: [
-      { label: "All Workflows", path: "/app/workflows", exact: true },
-      { label: "Creative Workflows", path: "/app/creatives/workflows" },
-      { label: "Activation Workflows", path: "/app/activate/workflows" },
-      { label: "Measurement Workflows", path: "/app/measure/workflows" },
-      { label: "Optimization Workflows", path: "/app/optimize/workflows" },
+      { label: "Create Workflows", path: "/app/creatives/workflows" },
+      { label: "Activate Workflows", path: "/app/activate/workflows" },
+      { label: "Measure Workflows", path: "/app/measure/workflows" },
+      { label: "Optimize Workflows", path: "/app/optimize/workflows" },
     ],
   },
   {
@@ -270,17 +271,28 @@ export function WorkspaceNavigation({
 }: {
   items?: WorkspaceNavItem[];
 }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const search = useSearch();
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const prefix = useId();
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
-  // Opening a page never changes the rail or reopens a submenu.
+  // Directory buttons open their landing page and four choices together.
+  // Other navigation (including Back/Forward) still dismisses open submenus.
+  const pendingDirectory = useRef<string | null>(null);
   useEffect(() => {
-    setOpenGroup(null);
+    const directory = pendingDirectory.current;
+    pendingDirectory.current = null;
+    setOpenGroup(directory === location ? directory : null);
   }, [location, search, collapsed, isMobile]);
+  const openItem = (item: WorkspaceNavItem) => {
+    setOpenGroup(item.path);
+    if (item.opensDirectory && location !== item.path) {
+      pendingDirectory.current = item.path;
+      setLocation(item.path);
+    }
+  };
   const navigate = () => {
     setOpenGroup(null);
     if (isMobile) setOpenMobile(false);
@@ -356,7 +368,14 @@ export function WorkspaceNavigation({
               onClick={
                 collapsed
                   ? undefined
-                  : () => setOpenGroup(expanded ? null : item.path)
+                  : () => {
+                      if (
+                        expanded &&
+                        (!item.opensDirectory || location === item.path)
+                      )
+                        setOpenGroup(null);
+                      else openItem(item);
+                    }
               }
             >
               {contents}
@@ -382,11 +401,13 @@ export function WorkspaceNavigation({
               ) : collapsed ? (
                 <Popover
                   open={expanded}
-                  onOpenChange={open =>
-                    setOpenGroup(current =>
-                      open ? item.path : current === item.path ? null : current
-                    )
-                  }
+                  onOpenChange={open => {
+                    if (open) openItem(item);
+                    else
+                      setOpenGroup(current =>
+                        current === item.path ? null : current
+                      );
+                  }}
                 >
                   <PopoverTrigger asChild>{trigger}</PopoverTrigger>
                   <PopoverContent

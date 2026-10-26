@@ -1,3 +1,4 @@
+import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import {
   CREATIVE_ART_STYLES,
@@ -54,6 +55,11 @@ export function VideoCreativeDirection({
           value={direction.artStyle}
           options={CREATIVE_ART_STYLES}
           onChange={artStyle => update({ artStyle })}
+          disabled={disabled}
+        />
+        <ArtStyleInfluenceControl
+          value={direction.artStyleInfluence}
+          onChange={artStyleInfluence => update({ artStyleInfluence })}
           disabled={disabled}
         />
         <ChoiceField className="text-sm font-medium">

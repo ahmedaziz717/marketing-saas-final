@@ -250,6 +250,8 @@ const fixtureAdsets: any[] = [
 ];
 const mutations: string[] = [];
 (window as any).__fixtureMutations = mutations;
+let googleActivationDraft: any = null;
+const googleActivationApprovals: any[] = [];
 const googleFixtureId = "55555555-5555-4555-8555-555555555555";
 const googleCampaignRows = [
   {
@@ -598,7 +600,24 @@ function respond(path: string, input: any) {
   }
 
   if (path === "catalogSources.list" && which.startsWith("google-")) return [];
-  if (path === "googleAds.campaigns.drafts") return [];
+  if (path === "googleAds.campaigns.drafts") return googleActivationDraft ? [googleActivationDraft] : [];
+  // Synthetic transport only: these responses never reach Google or application APIs.
+  if (path === "googleAds.campaigns.save") {
+    mutations.push(path);
+    googleActivationDraft = { ...input, id: "77777777-7777-4777-8777-777777777777", revision: (googleActivationDraft?.revision ?? 0) + 1, state: "draft" };
+    return googleActivationDraft;
+  }
+  if (path === "googleAds.campaigns.validate") {
+    mutations.push(path);
+    googleActivationDraft = { ...googleActivationDraft, state: "validated", reviewHash: "synthetic-review", validatedAtMs: Date.now() };
+    return googleActivationDraft;
+  }
+  if (path === "googleAds.campaigns.publish") {
+    mutations.push(path);
+    googleActivationApprovals.push(input);
+    googleActivationDraft = { ...googleActivationDraft, state: "published", result: { resources: ["synthetic-asset-group-link"] } };
+    return googleActivationDraft;
+  }
   if (path === "googleAds.campaigns.resources")
     return input.kind === "assets"
       ? [
@@ -648,6 +667,16 @@ function respond(path: string, input: any) {
                   textAsset: { text: "Shop the collection" },
                 },
               },
+              // Fill the image group without touching its unrelated headline.
+              ...Array.from({ length: 20 }, (_, index) => ({
+                assetGroup: { id: "21" },
+                assetGroupAsset: {
+                  resourceName: `customers/2222222222/assetGroupAssets/21~${100 + index}~${index === 19 ? "SQUARE_MARKETING_IMAGE" : "MARKETING_IMAGE"}`,
+                  fieldType: index === 19 ? "SQUARE_MARKETING_IMAGE" : "MARKETING_IMAGE",
+                  status: "ENABLED",
+                },
+                asset: { id: String(100 + index), name: index === 19 ? "Only square image" : `Current image ${index + 1}` },
+              })),
             ]
           : [],
       ads: [],
@@ -2172,9 +2201,63 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           !document.querySelector('[aria-label="Select Google product video"]'),
           "Google library filters to the selected format"
         );
+        const replacements = () => document.querySelector<HTMLElement>('[aria-label="Existing assets and replacements"]')!;
         check(
-          document.body.textContent?.includes("Shop the collection"),
-          "Existing Google assets can be selected for replacement"
+          replacements().textContent?.includes("Existing assets are kept") &&
+            !replacements().querySelector('input[type="checkbox"]') &&
+            !replacements().textContent?.includes("Shop the collection"),
+          "Browsing image additions keeps existing assets and never offers unrelated headline removal"
+        );
+        await click("Select Google product image");
+        const choices = () => Array.from(replacements().querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+        check(
+          replacements().textContent?.includes("Choose images to replace") && choices().length === 20 && choices().every(input => !input.checked),
+          "A full image group offers explicit replacement choices without selecting any automatically"
+        );
+        check(
+          choices().find(input => input.parentElement?.textContent?.includes("Only square image"))?.disabled === true,
+          "Image replacement protects the last required square image"
+        );
+        const firstChoice = choices().find(input => !input.disabled)!;
+        firstChoice.click();
+        await pause();
+        check(
+          choices().filter(input => input.checked).length === 1 &&
+            replacements().textContent?.includes("Replacement choices ready for review") &&
+            choices().filter(input => !input.checked).every(input => input.disabled),
+          "Only the deliberately chosen image is queued for replacement"
+        );
+        await click("Cancel replacements · keep all existing assets");
+        check(
+          choices().every(input => !input.checked) &&
+            replacements().textContent?.includes("1 replacement choices still needed") &&
+            document.querySelector('[aria-label="Select Google product image"]')?.getAttribute("aria-pressed") === "true" &&
+            !replacements().textContent?.includes("Shop the collection"),
+          "Cancelling replacements keeps the new image selection but clears every removal without touching text assets"
+        );
+        check(mutations.length === 0, "Browsing and cancelling replacement choices performs no activation or draft mutations");
+        choices().find(input => !input.disabled)!.click();
+        await pause();
+        await click("Review change →");
+        for (let attempt = 0; attempt < 30 && googleActivationDraft?.state !== "validated"; attempt++) await pause();
+        await pause();
+        const activateReplacement = button("Confirm replacement & activate")!;
+        check(
+          googleActivationDraft?.state === "validated" && !!activateReplacement && activateReplacement.disabled &&
+            googleActivationApprovals.length === 0 &&
+            JSON.stringify(googleActivationDraft.change.remove) === JSON.stringify([{ assetId: "100", field: "MARKETING_IMAGE" }]) &&
+            googleActivationDraft.change.add.length === 1 && googleActivationDraft.change.add[0].source.id === "41",
+          "Automatic review prepares only the selected image replacement and cannot activate before confirmation"
+        );
+        const approval = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find(input => input.parentElement?.textContent?.includes("I confirm the new creative and only the replacements listed above"))!;
+        check(!!approval && !approval.checked, "Replacement requires a fresh explicit confirmation");
+        approval.click();
+        await pause();
+        await click("Confirm replacement & activate");
+        check(
+          googleActivationApprovals.length === 1 && googleActivationApprovals[0].confirm === true &&
+            document.body.textContent?.includes("Google confirmed your creative update"),
+          "Explicit confirmation and activation produce exactly one synthetic submission and a clear success result"
         );
       } else {
         await click("New campaign");
@@ -2190,8 +2273,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         );
       }
       check(
-        mutations.length === 0,
-        "Browsing campaign controls never launches ads"
+        which === "google-campaigns"
+          ? mutations.filter(path => path === "googleAds.campaigns.publish").length === 1 && mutations.every(path => ["googleAds.campaigns.save", "googleAds.campaigns.validate", "googleAds.campaigns.publish"].includes(path))
+          : mutations.length === 0,
+        "Only the explicitly confirmed synthetic Google activation submits a change"
       );
       layout();
     }
@@ -4205,6 +4290,73 @@ async function navigationChecks(ten: boolean) {
   );
   overview.click();
   await pause();
+  for (const label of ["Apps", "Workflows"]) {
+    await openDrawer();
+    parent(label).click();
+    await pause();
+    check(
+      document.querySelector("h1")?.textContent === label,
+      `${label} parent opens its directory directly`
+    );
+    const links = Array.from(
+      children(label).querySelectorAll<HTMLAnchorElement>("a")
+    );
+    const tiles = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(".tools-directory-card")
+    );
+    check(
+      links.length === 4 && tiles.length === 4,
+      `${label} has exactly four menu choices and tiles`
+    );
+    check(
+      links.every(
+        (link, index) =>
+          link.getAttribute("href") === tiles[index].getAttribute("href")
+      ),
+      `${label} menu choices match the category tiles`
+    );
+    check(
+      !children(label).textContent?.includes(`All ${label}`),
+      `${label} has no redundant All entry`
+    );
+    if (!mobile) {
+      const trigger = parent(label);
+      links[0].focus();
+      links[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
+      await pause();
+      check(
+        trigger.getAttribute("aria-expanded") === "false" &&
+          document.activeElement === trigger,
+        `${label} flyout Escape restores focus without leaving the directory`
+      );
+      check(
+        document.querySelectorAll(".tools-directory-card").length === 4,
+        "Closing flyout retains directory tiles"
+      );
+      trigger.click();
+      await pause();
+    }
+    children(label).querySelector<HTMLAnchorElement>("a")!.click();
+    await pause();
+    if (mobile)
+      check(
+        !document.querySelector('[data-mobile="true"]'),
+        "Category selection closes mobile drawer"
+      );
+    else
+      check(
+        parent(label).getAttribute("aria-expanded") === "false",
+        "Category selection dismisses submenu"
+      );
+    fixtureRouter.navigate(`/app/${label.toLowerCase()}`);
+    await pause();
+    check(
+      document.querySelectorAll(".tools-directory-card").length === 4,
+      "Returning restores directory tiles"
+    );
+  }
   layout();
   fixtureRouter.navigate("/app/advertising/meta");
   await pause();

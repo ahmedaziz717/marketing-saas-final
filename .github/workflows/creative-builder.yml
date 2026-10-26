@@ -59,6 +59,8 @@ jobs:
           retention-days: 7
       - name: Check dialog layout and approval controls in Chrome
         run: node scripts/check-dialog-layout.mjs
+      - name: Check additive Google image flow in Chrome
+        run: LAYOUT_PAGES=google-campaigns node scripts/check-channel-layout.mjs
       - name: Check channel pages and publishing workflow in Chrome
         run: node scripts/check-channel-layout.mjs
       - name: Check public website without authentication or JavaScript

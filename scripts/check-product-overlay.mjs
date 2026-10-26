@@ -286,6 +286,61 @@ try {
       ),
       initial.left
     );
+    // Resize through a real pointer on the scaled canvas, not synthetic input values.
+    const handle = await evaluate(
+      `(()=>{const h=document.querySelector('[aria-label="Resize product from nw corner"]');const r=h.getBoundingClientRect();const p=document.querySelector('img[alt="Original product 1"]');return {x:r.x+r.width/2,y:r.y+r.height/2,width:parseFloat(p.style.width)};})()`
+    );
+    if (item.mobile) {
+      await page("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: handle.x, y: handle.y }],
+      });
+      await page("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: handle.x + 12, y: handle.y + 18 }],
+      });
+      await page("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+    } else {
+      await page("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x: handle.x,
+        y: handle.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await page("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: handle.x + 12,
+        y: handle.y + 18,
+        button: "left",
+        buttons: 1,
+      });
+      await page("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x: handle.x + 12,
+        y: handle.y + 18,
+        button: "left",
+        clickCount: 1,
+      });
+    }
+    await pause(50);
+    const resized = await evaluate(
+      `(()=>{const p=document.querySelector('img[alt="Original product 1"]');return {width:parseFloat(p.style.width),height:parseFloat(p.style.height)};})()`
+    );
+    assert.notEqual(
+      resized.width,
+      handle.width,
+      "corner did not resize product"
+    );
+    assert.ok(
+      Math.abs(resized.width / resized.height - 384 / 568) < 0.003,
+      "corner resize distorted source proportions"
+    );
+    await click("Reset placement");
+    await pause(40);
     await evaluate(
       `Array.from(document.querySelectorAll('label')).find(l=>l.textContent.includes('Compare with original design')).querySelector('input').click()`
     );
@@ -351,7 +406,7 @@ try {
       ...calls,
     });
     console.log(
-      `PASS ${name}: visible, draggable, resettable; independent height; consent retained; no paid/save calls`
+      `PASS ${name}: visible, draggable, resettable; proportional mouse/touch resizing; consent retained; no paid/save calls`
     );
   }
   await writeFile(

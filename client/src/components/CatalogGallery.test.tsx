@@ -106,7 +106,9 @@ it("preserves group warnings, eligibility, details and empty galleries in a comp
       onSelect={vi.fn()}
     />
   );
-  expect(screen.getByRole("status").textContent).toContain("source reports 8");
+  expect(screen.getByText(/Gallery incomplete/).textContent).toContain(
+    "source reports 8"
+  );
   fireEvent.change(screen.getByRole("combobox"), {
     target: { value: "option" },
   });
@@ -248,7 +250,7 @@ it("does not count a legacy Hero toward a missing source view or merge component
       onSelect={vi.fn()}
     />
   );
-  expect(screen.getByRole("status").textContent).toContain(
+  expect(screen.getByText(/Gallery incomplete/).textContent).toContain(
     "source reports 2 images"
   );
   fireEvent.change(screen.getByRole("combobox"), {
@@ -306,4 +308,27 @@ it("uses a generic product label for primary source galleries, including standal
   expect(screen.getByText("Product gallery")).toBeTruthy();
   expect(screen.queryByText("System gallery")).toBeNull();
   expect(groups[0].role).toBe("system");
+});
+
+it("shows generation selection independently from the browsed preview without hiding choices in a horizontal strip", () => {
+  render(
+    <CatalogGallery
+      name="System"
+      images={images}
+      selectedIds={[11]}
+      onSelect={vi.fn()}
+    />
+  );
+  expect(screen.getByText(/1 selected for generation/)).toBeTruthy();
+  expect(screen.getByText("Selected")).toBeTruthy();
+  const thumbnails = screen.getByLabelText("Image thumbnails");
+  expect(thumbnails.className).toContain("grid");
+  expect(thumbnails.className).not.toContain("overflow-x-auto");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Preview Hero for System" })
+  );
+  expect(
+    (screen.getByRole("checkbox", { name: /Use 2/ }) as HTMLInputElement)
+      .checked
+  ).toBe(true);
 });

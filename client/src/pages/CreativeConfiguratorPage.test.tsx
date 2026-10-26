@@ -1466,6 +1466,7 @@ it.each(["image", "video"] as const)(
       name: "Image continuity",
       mood: "warm",
       artStyle: "editorial",
+      artStyleInfluence: "strong",
       shot: "lifestyle",
       placement: "left",
       extraDirection: "Keep a quiet background",
@@ -1492,6 +1493,7 @@ it.each(["image", "video"] as const)(
         ...config.video.direction,
         mood: "warm",
         artStyle: "cinematic",
+        artStyleInfluence: "subtle",
         extraDirection: "Slow camera movement",
       },
     });
@@ -1511,6 +1513,7 @@ it.each(["image", "video"] as const)(
       expect(actual).toMatchObject({
         mood: "warm",
         artStyle: "editorial",
+        artStyleInfluence: "strong",
         shot: "lifestyle",
         placement: "left",
         extraDirection: "Keep a quiet background",
@@ -1531,6 +1534,7 @@ it.each(["image", "video"] as const)(
         direction: {
           mood: "warm",
           artStyle: "cinematic",
+          artStyleInfluence: "subtle",
           extraDirection: "Slow camera movement",
         },
       });

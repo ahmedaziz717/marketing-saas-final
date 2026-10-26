@@ -114,7 +114,8 @@ it("presents pending chassis separately without selecting represented parent ima
         {
           ...photo("product_image:3", 8, "/case.png"),
           componentKind: "Chassis",
-          unavailableReason: "Review needed in Catalog before use.",
+          reviewNotice:
+            "Draft use allowed. Review product facts before publishing.",
         },
       ]}
       selected={["product_image:2"]}
@@ -123,11 +124,15 @@ it("presents pending chassis separately without selecting represented parent ima
     />
   );
   expect(screen.getByText("Chassis Option")).toBeTruthy();
-  expect(screen.getByText("Review needed in Catalog before use.")).toBeTruthy();
+  expect(
+    screen.getByText(
+      "Draft use allowed. Review product facts before publishing."
+    )
+  ).toBeTruthy();
   expect(screen.getAllByRole("checkbox")).toHaveLength(2);
   expect(
     (screen.getAllByRole("checkbox")[1] as HTMLInputElement).disabled
-  ).toBe(true);
+  ).toBe(false);
   expect(toggle).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole("button", { name: "Remove saved reference" })

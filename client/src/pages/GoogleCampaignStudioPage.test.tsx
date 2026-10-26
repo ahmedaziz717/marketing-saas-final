@@ -339,9 +339,12 @@ it("validates YouTube entries and keeps video/text sources separate", () => {
   click("Select Text");
   expect(screen.getByLabelText("Text")).toBeTruthy();
   expect(
-    within(screen.getByLabelText("Placement")).queryByRole("option", {
-      name: "Youtube Video",
-    })
+    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
+      "radio",
+      {
+        name: "Video",
+      }
+    )
   ).toBeNull();
 });
 it.each(["DISPLAY", "DEMAND_GEN"])(
@@ -359,9 +362,12 @@ it("keeps campaign-level brand assets out of the asset-group picker", () => {
   expect(screen.queryByRole("button", { name: "Select Logos" })).toBeNull();
   click("Select Text");
   expect(
-    within(screen.getByLabelText("Placement")).queryByRole("option", {
-      name: /Business/,
-    })
+    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
+      "radio",
+      {
+        name: /Business/,
+      }
+    )
   ).toBeNull();
 });
 
@@ -603,13 +609,13 @@ it("checks automatically and only publishes after explicit approval", async () =
   expect(
     (
       screen.getByRole("button", {
-        name: "Publish reviewed changes",
+        name: "Add creative to asset group",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
   fireEvent.click(
     screen.getByLabelText(
-      "I approve the settings, creative and budget shown above."
+      "I confirm adding this creative to the asset group shown above. Existing assets and budget stay unchanged."
     )
   );
   api.publish.mockResolvedValue({
@@ -617,7 +623,7 @@ it("checks automatically and only publishes after explicit approval", async () =
     state: "published",
     result: { resources: [] },
   });
-  click("Publish reviewed changes");
+  click("Add creative to asset group");
   await waitFor(() =>
     expect(api.publish).toHaveBeenCalledWith({
       organizationId: 1,
@@ -705,9 +711,11 @@ it("carries an approved Creative Studio image into its selected asset group", ()
   click(/^Existing campaign /);
   section("Creative");
   click("Select Existing group");
-  expect((screen.getByLabelText("Placement") as HTMLSelectElement).value).toBe(
-    "SQUARE_MARKETING_IMAGE"
-  );
+  expect(
+    within(screen.getByRole("radiogroup", { name: "Placement" }))
+      .getByRole("radio", { name: "Square image · 1:1" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
   expect(
     screen
       .getByRole("button", { name: "Select Studio square" })
@@ -746,4 +754,115 @@ it("shows incomplete details without submitting a Google check", async () => {
   expect(api.mutate).not.toHaveBeenCalled();
   expect(api.validate).not.toHaveBeenCalled();
   expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("shows a contextual activation action and preview before checks finish without publishing", () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  click("Review change →");
+  expect(screen.getByAltText("To add: Approved image")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Add creative to asset group",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(
+    screen.getByText(/Compatibility checks do not activate anything/)
+  ).toBeTruthy();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+it("requires explicit image replacement at capacity, and cancelling keeps all existing images", async () => {
+  existingCampaign();
+  api.inventory.assets = Array.from({ length: 20 }, (_, index) => ({
+    assetGroup: { id: "22" },
+    asset: {
+      id: String(100 + index),
+      name: `Existing image ${index}`,
+      imageAsset: { fullSize: { url: "https://example.com/existing.png" } },
+    },
+    assetGroupAsset: {
+      fieldType: "MARKETING_IMAGE",
+      resourceName: `link-${index}`,
+    },
+  }));
+  click("Select Images");
+  click("Select Approved image");
+  expect(screen.getByText("Choose images to replace")).toBeTruthy();
+  click("Review change →");
+  await waitFor(() =>
+    expect(screen.getByText(/Image capacity reached/)).toBeTruthy()
+  );
+  expect(api.validate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: "review",
+    validatedAtMs: Date.now(),
+  }));
+  fireEvent.click(screen.getByLabelText(/Replace Existing image 0 ·/));
+  await waitFor(() => expect(api.validate).toHaveBeenCalledTimes(1));
+  expect(saved.change.remove).toEqual([
+    { assetId: "100", field: "MARKETING_IMAGE" },
+  ]);
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Confirm replacement & activate",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(api.publish).not.toHaveBeenCalled();
+  click(/Cancel replacements/);
+  await waitFor(() =>
+    expect(screen.getByText(/Image capacity reached/)).toBeTruthy()
+  );
+  expect(api.publish).not.toHaveBeenCalled();
+});
+it("submits only once for repeated activation clicks while a request is pending", async () => {
+  existingCampaign();
+  click("Select Images");
+  click("Select Approved image");
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+  );
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: "review",
+    validatedAtMs: Date.now(),
+  }));
+  let finish: (value: any) => void = () => {};
+  api.publish.mockImplementation(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      })
+  );
+  click("Review change →");
+  await waitFor(() =>
+    expect(
+      screen.getByText("Compatibility checked. Ready for your review.")
+    ).toBeTruthy()
+  );
+  fireEvent.click(screen.getByLabelText(/I confirm adding this creative/));
+  click("Add creative to asset group");
+  click("Add creative to asset group");
+  expect(api.publish).toHaveBeenCalledTimes(1);
+  finish({ ...saved, state: "published", result: { resources: [] } });
+  await waitFor(() =>
+    expect(
+      screen.getByText("Google confirmed your creative update.")
+    ).toBeTruthy()
+  );
 });

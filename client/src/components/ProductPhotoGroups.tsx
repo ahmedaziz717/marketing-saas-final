@@ -48,6 +48,11 @@ export function ProductPhotoGroups({
                 {photos[0].componentKind} Option
               </p>
             )}
+            {photos[0].reviewNotice && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {photos[0].reviewNotice}
+              </p>
+            )}
             {unavailable && (
               <p role="status" className="text-xs text-muted-foreground">
                 {unavailable}

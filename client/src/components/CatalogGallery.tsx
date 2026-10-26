@@ -254,9 +254,20 @@ export function CatalogGallery({
               </DialogContent>
             </Dialog>
           )}
+          {onSelect && (
+            <p className="text-xs text-muted-foreground" role="status">
+              {
+                images.filter(
+                  photo =>
+                    selected === photo.id || selectedIds?.includes(photo.id)
+                ).length
+              }{" "}
+              selected for generation · Previewing does not select an image.
+            </p>
+          )}
           <div
             ref={strip}
-            className="flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-2"
+            className="grid max-h-72 max-w-full grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-2 overflow-y-auto overscroll-contain p-1"
             aria-label="Image thumbnails"
           >
             {photos.map(photo => {
@@ -264,14 +275,17 @@ export function CatalogGallery({
                   selected === photo.id || !!selectedIds?.includes(photo.id),
                 unavailable = failed[photo.id] === photo.url;
               return (
-                <div key={photo.id} className="w-16 shrink-0">
+                <div
+                  key={photo.id}
+                  className={`min-w-0 rounded-lg border p-1 ${checked ? "border-primary bg-primary/10" : "border-border"}`}
+                >
                   <button
                     type="button"
                     onKeyDown={keyboard}
                     onClick={() => setPreviewId(photo.id)}
                     aria-label={`Preview ${label(photo.id)} for ${name}`}
                     aria-pressed={preview?.id === photo.id}
-                    className={`block w-full rounded border p-1 text-xs ${preview?.id === photo.id ? "border-primary bg-primary/10" : "border-border"}`}
+                    className={`block w-full rounded p-1 text-xs ${preview?.id === photo.id ? "ring-1 ring-inset ring-muted-foreground" : ""}`}
                   >
                     {unavailable ? (
                       <span className="grid h-12 place-items-center">
@@ -284,16 +298,20 @@ export function CatalogGallery({
                         loading="lazy"
                         className="h-12 w-full object-contain"
                         onError={() =>
-                          setFailed(old => ({ ...old, [photo.id]: photo.url }))
+                          setFailed(old => ({
+                            ...old,
+                            [photo.id]: photo.url,
+                          }))
                         }
                       />
                     )}
                     {label(photo.id)}
                   </button>
                   {onSelect && (
-                    <label className="flex min-h-10 items-center justify-center gap-1 text-xs">
+                    <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded text-xs has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                       <input
                         type="checkbox"
+                        className="h-4 w-4 accent-primary"
                         checked={checked}
                         disabled={
                           !checked &&
@@ -305,7 +323,7 @@ export function CatalogGallery({
                         aria-label={`Use ${label(photo.id)} for ${name} - ${group.name}`}
                         onChange={() => onSelect(photo.id)}
                       />{" "}
-                      Use
+                      {checked ? "Selected" : "Select"}
                     </label>
                   )}
                 </div>

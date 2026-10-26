@@ -12,6 +12,9 @@ import {
 } from "./ui/dialog";
 import {
   constrainProductLayer,
+  resizeProductLayer,
+  resizeProductLayerFromCorner,
+  type ProductResizeCorner,
   type ProductOverlayPlacement,
   type ProductOverlayReplacement,
 } from "@shared/productOverlay";
@@ -38,8 +41,9 @@ export function ProductOverlayEditor({
             <DialogDescription>
               Keep the complete creative. Drag and resize the catalog photo to
               cover the generated product, then save a separate version. The
-              catalog viewing angle stays unchanged. Adjust width and height
-              when the generated footprint differs.
+              catalog viewing angle and proportions stay unchanged. Drag the
+              product to move it, or drag a corner to resize it without
+              stretching.
             </DialogDescription>
           </DialogHeader>
           {open && (
@@ -105,6 +109,8 @@ function OverlayControls({
     left: number;
     top: number;
     index: number;
+    layer: ProductOverlayPlacement;
+    corner?: ProductResizeCorner;
   } | null>(null);
   const data = query.data;
   if (!data)
@@ -126,11 +132,31 @@ function OverlayControls({
         )}
       </div>
     );
+  const sourceProportionsChanged = data.layers.some(
+    layer =>
+      layer.height !== undefined &&
+      Math.abs(layer.width / layer.aspect - layer.height) > 1
+  );
   const layers =
     placements ??
-    data.layers.map(({ left, top, width, height, aspect }) =>
-      constrainProductLayer({ left, top, width, height }, aspect, data)
-    );
+    data.layers.map(({ left, top, width, height, aspect }) => {
+      if (height !== undefined && Math.abs(width / aspect - height) > 1) {
+        // Legacy independent dimensions stretched the product. Cover that footprint
+        // proportionally in this unsaved preview; never mutate the saved original.
+        const coverWidth = Math.max(width, height * aspect);
+        return resizeProductLayer(
+          {
+            left: left + width / 2 - coverWidth / 2,
+            top: top + height / 2 - coverWidth / aspect / 2,
+            width,
+          },
+          coverWidth,
+          aspect,
+          data
+        );
+      }
+      return constrainProductLayer({ left, top, width, height }, aspect, data);
+    });
   const enlarged = layers.some(
     (layer, i) =>
       layer.width > data.layers[i].sourceWidth ||
@@ -175,7 +201,24 @@ function OverlayControls({
         onPointerMove={event => {
           const active = drag.current,
             bounds = canvas.current?.getBoundingClientRect();
-          if (!active || !bounds) return;
+          if (!active || !bounds || bounds.width <= 0 || bounds.height <= 0)
+            return;
+          if (active.corner) {
+            update(
+              active.index,
+              resizeProductLayerFromCorner(
+                active.layer,
+                active.corner,
+                {
+                  x: ((event.clientX - active.x) * data.width) / bounds.width,
+                  y: ((event.clientY - active.y) * data.height) / bounds.height,
+                },
+                data.layers[active.index].aspect,
+                data
+              )
+            );
+            return;
+          }
           update(active.index, {
             left:
               active.left +
@@ -191,6 +234,10 @@ function OverlayControls({
         onPointerCancel={() => {
           drag.current = null;
         }}
+        onLostPointerCapture={() => {
+          drag.current = null;
+        }}
+        aria-label="Product placement canvas"
       >
         <img
           key={query.dataUpdatedAt}
@@ -220,7 +267,7 @@ function OverlayControls({
                 top: `${(100 * layer.top) / data.height}%`,
                 width: `${(100 * layer.width) / data.width}%`,
                 height: `${(100 * (layer.height ?? layer.width / data.layers[i].aspect)) / data.height}%`,
-                objectFit: "fill",
+                objectFit: "contain",
                 opacity: opacity / 100,
               }}
               onPointerDown={event => {
@@ -233,10 +280,83 @@ function OverlayControls({
                   left: layer.left,
                   top: layer.top,
                   index: i,
+                  layer: { ...layer },
                 };
               }}
             />
           ))}
+        {!original &&
+          (["nw", "ne", "sw", "se"] as const).map(corner => {
+            const layer = layers[selected];
+            const west = corner.includes("w"),
+              north = corner.includes("n");
+            return (
+              <button
+                key={corner}
+                type="button"
+                aria-label={`Resize product from ${corner} corner`}
+                className="absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-white bg-primary shadow touch-none focus-visible:ring-2 focus-visible:ring-ring"
+                style={{
+                  left: `${(100 * (layer.left + (west ? 0 : layer.width))) / data.width}%`,
+                  top: `${(100 * (layer.top + (north ? 0 : (layer.height ?? layer.width / data.layers[selected].aspect)))) / data.height}%`,
+                  cursor:
+                    corner === "nw" || corner === "se"
+                      ? "nwse-resize"
+                      : "nesw-resize",
+                }}
+                onPointerDown={event => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  drag.current = {
+                    x: event.clientX,
+                    y: event.clientY,
+                    left: layer.left,
+                    top: layer.top,
+                    index: selected,
+                    layer: { ...layer },
+                    corner,
+                  };
+                }}
+                onKeyDown={event => {
+                  if (
+                    ![
+                      "ArrowLeft",
+                      "ArrowRight",
+                      "ArrowUp",
+                      "ArrowDown",
+                    ].includes(event.key)
+                  )
+                    return;
+                  event.preventDefault();
+                  const step = event.shiftKey ? 10 : 1;
+                  update(
+                    selected,
+                    resizeProductLayerFromCorner(
+                      layer,
+                      corner,
+                      {
+                        x:
+                          event.key === "ArrowLeft"
+                            ? -step
+                            : event.key === "ArrowRight"
+                              ? step
+                              : 0,
+                        y:
+                          event.key === "ArrowUp"
+                            ? -step
+                            : event.key === "ArrowDown"
+                              ? step
+                              : 0,
+                      },
+                      data.layers[selected].aspect,
+                      data
+                    )
+                  );
+                }}
+              />
+            );
+          })}
       </div>
       <div className="space-y-4">
         {!designReady && (
@@ -261,13 +381,13 @@ function OverlayControls({
           </div>
         )}
         <p role="status" className="text-sm">
-          {placements || replacements.length
+          {placements || replacements.length || sourceProportionsChanged
             ? "You are previewing an unsaved placement. Save as a new version to keep it."
             : data.applied
               ? "The original product is already placed. Adjust it only if needed."
               : data.automaticFailure === "source_resolution"
                 ? "Automatic placement needs a sharper source or accepted enlargement. The visible product layer is an unsaved preview: move or resize it to cover the generated product."
-                : "This saved version has no applied original-product placement. The visible product layer is an unsaved preview: move or resize it to cover the generated product. Opening this editor does not run alignment or spend credits."}
+                : "This saved version has no applied original-product placement. Starting position only: the visible layer has not been matched to the generated product. Move it and drag a corner to align it. The complete design stays unchanged until you save a new version. Opening this editor does not run alignment or spend credits."}
         </p>
         <p className="text-sm">
           {replacements.length ? "Preview cutout" : "Saved cutout"}:{" "}
@@ -403,86 +523,92 @@ function OverlayControls({
             </VisualSelect>
           </ChoiceField>
         )}
-        {(["width", "height", "left", "top"] as const).map(field => (
-          <label key={field} className="block text-sm">
-            {field === "width"
-              ? "Product size"
-              : field === "height"
-                ? "Product height"
-                : field === "left"
-                  ? "Horizontal position"
-                  : "Vertical position"}{" "}
-            ·{" "}
-            {field === "height"
-              ? (layers[selected].height ??
-                Math.round(
-                  layers[selected].width / data.layers[selected].aspect
-                ))
-              : layers[selected][field]}{" "}
-            px
+        <section
+          className="space-y-3 rounded-lg border p-3"
+          aria-label="Product size and position"
+        >
+          <div className="flex items-center justify-between text-sm">
+            <strong>Size & position</strong>
+            <span className="text-xs text-muted-foreground">
+              Proportions locked
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Drag a corner to resize. Measurements use the full {data.width} ×{" "}
+            {data.height} px canvas, not this preview.
+          </p>
+          <label className="block text-sm">
+            Product size
             <input
-              className="mt-2 block w-full"
               type="range"
-              aria-label={
-                field === "width"
-                  ? "Product size"
-                  : field === "height"
-                    ? "Product height"
-                    : field === "left"
-                      ? "Horizontal position"
-                      : "Vertical position"
-              }
-              min={
-                field === "width" || field === "height"
-                  ? Math.max(1, Math.round(data.width * 0.02))
-                  : 0
-              }
-              max={
-                field === "width"
-                  ? data.width
-                  : field === "height"
-                    ? data.height
-                    : field === "left"
-                      ? data.width - layers[selected].width
-                      : data.height -
-                        (layers[selected].height ??
-                          Math.round(
-                            layers[selected].width /
-                              data.layers[selected].aspect
-                          ))
-              }
-              value={
-                field === "height"
-                  ? (layers[selected].height ??
-                    Math.round(
-                      layers[selected].width / data.layers[selected].aspect
-                    ))
-                  : layers[selected][field]
-              }
+              className="mt-2 w-full"
+              aria-label="Product size"
+              min={1}
+              max={Math.floor(
+                Math.min(data.width, data.height * data.layers[selected].aspect)
+              )}
+              value={layers[selected].width}
               onChange={e =>
-                update(selected, { [field]: Number(e.target.value) })
+                update(
+                  selected,
+                  resizeProductLayer(
+                    layers[selected],
+                    Number(e.target.value),
+                    data.layers[selected].aspect,
+                    data
+                  )
+                )
               }
-            />
-            <input
-              className="mt-1 w-full rounded border bg-background p-2"
-              aria-label={`${field} in pixels`}
-              type="number"
-              min={field === "width" || field === "height" ? 1 : 0}
-              value={
-                field === "height"
-                  ? (layers[selected].height ??
-                    Math.round(
-                      layers[selected].width / data.layers[selected].aspect
-                    ))
-                  : layers[selected][field]
-              }
-              onChange={e => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n)) update(selected, { [field]: n });
-              }}
             />
           </label>
-        ))}
+          <div className="grid grid-cols-2 gap-2">
+            {(["width", "height", "left", "top"] as const).map(field => (
+              <label
+                key={field}
+                className="block text-xs text-muted-foreground"
+              >
+                {
+                  { width: "Width", height: "Height", left: "X", top: "Y" }[
+                    field
+                  ]
+                }{" "}
+                · px
+                <input
+                  className="mt-1 w-full rounded border bg-background p-2 text-sm text-foreground"
+                  aria-label={`${field} in pixels`}
+                  type="number"
+                  min={field === "width" || field === "height" ? 1 : 0}
+                  value={
+                    field === "height"
+                      ? (layers[selected].height ??
+                        Math.round(
+                          layers[selected].width / data.layers[selected].aspect
+                        ))
+                      : layers[selected][field]
+                  }
+                  onChange={e => {
+                    if (!e.target.value) return;
+                    const n = Number(e.target.value);
+                    if (!Number.isFinite(n)) return;
+                    update(
+                      selected,
+                      field === "width" || field === "height"
+                        ? resizeProductLayer(
+                            layers[selected],
+                            field === "width"
+                              ? n
+                              : n * data.layers[selected].aspect,
+                            data.layers[selected].aspect,
+                            data
+                          )
+                        : { [field]: n }
+                    );
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </section>
         <label className="block text-sm">
           Alignment opacity · {opacity}%
           <input
@@ -565,6 +691,7 @@ function OverlayControls({
           className="w-full"
           disabled={align.isPending || save.isPending}
           onClick={() => {
+            drag.current = null;
             setPlacements(null);
             setReplacements([]);
             setSourceChoice("");

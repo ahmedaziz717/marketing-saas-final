@@ -617,6 +617,8 @@ export const creativeVariants = appSchema.table("creative_variants", {
   imageStorageKey: varchar("imageStorageKey", { length: 500 }),
   renderMetadata: json("renderMetadata").$type<{
     requestedSetup?: import("../shared/creativeBuilder").CreativeSetup;
+    /** Exact source for this output; requestedSetup retains the whole batch for reuse. */
+    renderedProductImages?: Array<{ productId: number; imageId: number | null }>;
     logoPreservation?: import("../shared/logoPreservation").LogoPreservationMetadata;
     productPreservation?: import("../shared/productOverlay").ProductOverlayMetadata;
     parentVariantId?: number;
@@ -780,3 +782,4 @@ export const catalogSources = appSchema.table(
     ),
   })
 );
+

@@ -1,10 +1,14 @@
+import {
+  canDraftCatalogImage,
+  imageDraftProductStatuses,
+} from "../../shared/catalogReadiness";
 import { componentIdentityContext } from "../../shared/studioProductFacts";
 import {
   catalogCardGallery,
   catalogImageEligible,
 } from "../../shared/catalogMedia";
 import { attachMarketingCategories } from "./catalogCategories";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   productImages,
@@ -27,7 +31,7 @@ const owned = (organizationId: number) =>
   and(
     eq(productImages.organizationId, organizationId),
     eq(products.organizationId, organizationId),
-    eq(products.status, "approved")
+    inArray(products.status, [...imageDraftProductStatuses])
   );
 type Row = {
   image: typeof productImages.$inferSelect;
@@ -80,19 +84,22 @@ function choice(
     origin: "catalog",
     componentKind: row.product.provenance?.["component.kind"] ?? null,
     representedGroupIds,
-    ...(row.product.status !== "approved" ||
+    ...(!canDraftCatalogImage(row.product.status) ||
     !catalogCardGallery(
       [row.image],
       row.product.mediaGroups,
       representedGroupIds
     ).images.length
       ? {
-          unavailableReason:
-            row.product.status !== "approved"
-              ? "Review needed in Catalog before use."
-              : "This saved view now belongs to a separate component card. Select its approved card in Catalog.",
+          unavailableReason: !canDraftCatalogImage(row.product.status)
+            ? "This product is unavailable for drafting."
+            : "This saved view now belongs to a separate component card. Select its separate card in Catalog.",
         }
       : {}),
+    reviewNotice:
+      row.product.status === "pending"
+        ? "Draft use allowed. Review product facts before publishing."
+        : undefined,
     isPrimary: !!row.image.isPrimary,
     media: row.image.media,
     mediaGroups: row.product.mediaGroups,
@@ -127,10 +134,7 @@ export async function listVideoCatalogImages(
   const browsable = and(
     eq(productImages.organizationId, organizationId),
     eq(products.organizationId, organizationId),
-    or(
-      eq(products.status, "approved"),
-      sql`${products.provenance}->>'component.kind' is not null`
-    )
+    inArray(products.status, [...imageDraftProductStatuses])
   );
   const search = input.search.trim().replace(/[\\%_]/g, "\\$&");
   // Page stable products, then load their complete photo groups. A product must
@@ -258,7 +262,7 @@ export async function readVideoCatalogImage(
     throw new TRPCError({
       code: "NOT_FOUND",
       message:
-        "This product image is unavailable. Choose an image from an approved product in this workspace.",
+        "This product image is unavailable. Choose a usable image from an approved or pending product in this workspace.",
     });
   const marketingCategory = (
     await attachMarketingCategories(db, organizationId, [row.product])

@@ -33,6 +33,7 @@ export function workflowFieldPlacement(node: WorkflowNode) {
       : [
             "theme",
             "art_style",
+            "style_influence",
             "audience",
             "voice",
             "language",
@@ -52,6 +53,7 @@ export function workflowFieldPlacement(node: WorkflowNode) {
       model: "Models",
       theme: "Theme",
       art_style: "Visual style",
+      style_influence: "Visual style",
       audience: "Audience",
       voice: "Voice",
       language: "Language",

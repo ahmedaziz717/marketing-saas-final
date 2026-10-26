@@ -1,3 +1,7 @@
+import {
+  artStyleInfluenceSchema,
+  artStyleInfluenceDirection,
+} from "./artStyleInfluence";
 import { learningOriginSchema } from "./learningHandoff";
 import { z } from "zod";
 import {
@@ -80,6 +84,7 @@ export const videoDirectionSchema = z.object({
       ...Array<(typeof CREATIVE_MOODS)[number]["id"]>,
     ]
   ),
+  artStyleInfluence: artStyleInfluenceSchema.optional(),
   artStyle: z.enum(
     CREATIVE_ART_STYLES.map(option => option.id) as [
       "realistic",
@@ -96,6 +101,7 @@ export const defaultVideoDirection: VideoDirection = {
   themePrompt: "",
   mood: "clean",
   artStyle: "realistic",
+  artStyleInfluence: "balanced",
   setting: "product",
   placement: "auto",
   extraDirection: "",
@@ -104,6 +110,7 @@ export type VideoImageChoice = {
   componentKind?: string | null;
   representedGroupIds?: string[];
   unavailableReason?: string;
+  reviewNotice?: string;
   isPrimary?: boolean;
   media?: import("./catalogMedia").CatalogImageMedia | null;
   mediaGroups?: import("./catalogMedia").CatalogMediaGroupSummary[] | null;
@@ -338,6 +345,7 @@ export function videoPrompt(
       ? "Compose the subject naturally for the selected video format."
       : `Keep the main subject toward the ${direction.placement} of the frame.`,
     direction.extraDirection,
+    artStyleInfluenceDirection(direction.artStyleInfluence, direction.artStyle),
     defaults["video.direction"],
     "Adapt this visual direction into coherent motion. Preserve reference subjects, product geometry and materials. Theme names and examples are visual inspiration, not factual offers. Do not invent discounts, claims, prices, logos, or on-screen copy. Add speech or text only when explicitly requested in the video description.",
   ]

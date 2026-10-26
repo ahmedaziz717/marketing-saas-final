@@ -22,7 +22,7 @@ it.each([
     size: [480, 666],
     hash: "d3fef5ccbba5099d88b6bd6c50c1f72c9fa058da8023400baad3ed88906cb9e3",
     box: { left: 403, top: 194, width: 509, height: 699 },
-    saved: { left: 435, top: 210, width: 550, height: 755 },
+    saved: { left: 435, top: 206, width: 550, height: 763 },
   },
   {
     id: 816,
@@ -30,7 +30,7 @@ it.each([
     size: [384, 568],
     hash: "1438cda38d94efd4563a6ec1a47d4e5318de9061213481d2693e3e404b59e835",
     box: { left: 442, top: 198, width: 506, height: 674 },
-    saved: { left: 477, top: 214, width: 546, height: 728 },
+    saved: { left: 477, top: 174, width: 546, height: 808 },
   },
   {
     id: 904,
@@ -38,10 +38,10 @@ it.each([
     size: [382, 531],
     hash: "5ac22c28ebdf2fed48ee3ba9235e0a1235bffe84ccdefc3798a9469d310ea856",
     box: { left: 472, top: 219, width: 469, height: 624 },
-    saved: { left: 510, top: 237, width: 507, height: 674 },
+    saved: { left: 510, top: 221, width: 507, height: 705 },
   },
 ])(
-  "creative $creative: fresh image $id fits without discarding source identity or independent height",
+  "creative $creative: fresh image $id covers the measured footprint without stretching or discarding source identity",
   async fixture => {
     const bytes = readFileSync(
       new URL(
@@ -94,6 +94,24 @@ it.each([
       sourceKey,
       sha256: fixture.hash,
     });
+    // Bounding-box estimates may differ from the catalog silhouette. Cover the
+    // box at the source aspect ratio instead of distorting the physical product.
+    const placed = result.layers[0];
+    expect(
+      Math.abs(
+        placed.height - (placed.width * fixture.size[1]) / fixture.size[0]
+      )
+    ).toBeLessThanOrEqual(0.5);
+    expect(placed.left).toBeLessThanOrEqual(
+      Math.round(fixture.box.left * 1.08)
+    );
+    expect(placed.top).toBeLessThanOrEqual(Math.round(fixture.box.top * 1.08));
+    expect(placed.left + placed.width).toBeGreaterThanOrEqual(
+      Math.round((fixture.box.left + fixture.box.width) * 1.08) - 1
+    );
+    expect(placed.top + placed.height).toBeGreaterThanOrEqual(
+      Math.round((fixture.box.top + fixture.box.height) * 1.08) - 1
+    );
     expect(automaticProductUpscaleAllowed(sources[0], fixture.saved)).toBe(
       true
     );

@@ -1,3 +1,4 @@
+import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { StudioRunBar } from "@/components/configurator/StudioRunBar";
 import { TaskPromptField } from "@/components/TaskPromptField";
 import { ProductCategoryContext } from "@/components/ProductCategoryContext";
@@ -1535,14 +1536,23 @@ function Configurator({
       );
     if (category === "style")
       return (
-        <StudioChoicePicker
-          title="Art style"
-          choices={studioStyleChoices}
-          selected={[direction.artStyle]}
-          onSelect={id =>
-            updateDirection({ artStyle: id as VideoDirection["artStyle"] })
-          }
-        />
+        <>
+          <StudioChoicePicker
+            title="Art style"
+            choices={studioStyleChoices}
+            selected={[direction.artStyle]}
+            onSelect={id =>
+              updateDirection({ artStyle: id as VideoDirection["artStyle"] })
+            }
+          />
+          <ArtStyleInfluenceControl
+            value={direction.artStyleInfluence}
+            onChange={artStyleInfluence =>
+              updateDirection({ artStyleInfluence })
+            }
+            preserveSourceStyle={isImage && !!image.enhancement}
+          />
+        </>
       );
     if (category === "mood")
       return cards(

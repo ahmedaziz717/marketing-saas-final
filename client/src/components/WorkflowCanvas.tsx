@@ -1,3 +1,4 @@
+import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import {
   VisualSelect,
   ChoiceField,
@@ -1026,6 +1027,7 @@ function WorkflowCanvasContent({
                             : [
                                   "theme",
                                   "art_style",
+                                  "style_influence",
                                   "choice",
                                   "channel",
                                   "size",
@@ -1581,6 +1583,19 @@ function WorkflowCanvasContent({
                             ))}
                           </VisualSelect>
                         </ChoiceField>
+                        <ArtStyleInfluenceControl
+                          value={
+                            selectedNode.config.direction.artStyleInfluence
+                          }
+                          onChange={artStyleInfluence =>
+                            config({
+                              direction: {
+                                ...selectedNode.config.direction!,
+                                artStyleInfluence,
+                              },
+                            })
+                          }
+                        />
                       </>
                     )}
                   </details>

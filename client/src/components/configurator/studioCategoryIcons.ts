@@ -71,6 +71,7 @@ const icons: Record<string, LucideIcon> = {
   theme: Palette,
   style: Brush,
   art_style: Brush,
+  style_influence: Brush,
   mood: Smile,
   composition: PanelLeft,
   message: Type,

@@ -1,3 +1,7 @@
+import {
+  ART_STYLE_INFLUENCES,
+  artStyleInfluenceDirection,
+} from "./artStyleInfluence";
 import { z } from "zod";
 import { rangeSchema, connectionChannelSchema } from "./channels";
 export const performanceInputSchema = z.object({
@@ -29,6 +33,7 @@ export const inputKinds = [
   "url",
   "theme",
   "art_style",
+  "style_influence",
   "choice",
   "product",
   "asset",
@@ -51,6 +56,7 @@ export const inputLabels: Record<(typeof inputKinds)[number], string> = {
   url: "Destination URL",
   theme: "Theme",
   art_style: "Art style",
+  style_influence: "Art Style Influence",
   choice: "Custom choices",
   model: "Model selector",
   product: "Product, service or plan",
@@ -214,6 +220,12 @@ export function systemInputChoices(kind: AppField["kind"]): InputChoice[] {
       label: t.name,
       direction: t.direction,
     }));
+  if (kind === "style_influence")
+    return ART_STYLE_INFLUENCES.map(item => ({
+      id: item.id,
+      label: item.name,
+      direction: artStyleInfluenceDirection(item.id),
+    }));
   if (kind === "size") return sizeChoices;
   if (kind === "channel")
     return [
@@ -239,7 +251,15 @@ export function fieldChoices(field: AppField) {
     : field.options;
 }
 export const isChoiceField = (f: AppField) =>
-  ["theme", "art_style", "choice", "channel", "size", "model"].includes(f.kind);
+  [
+    "theme",
+    "art_style",
+    "style_influence",
+    "choice",
+    "channel",
+    "size",
+    "model",
+  ].includes(f.kind);
 export function selectionValues(value: string, multiple: boolean) {
   if (!multiple) return value ? [value] : [];
   try {
