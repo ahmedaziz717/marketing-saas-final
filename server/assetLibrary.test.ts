@@ -10,6 +10,8 @@ import {
   type WorkflowSnapshot,
 } from "../shared/assetLibrary";
 import { detectAssetMime, normalizeCreative } from "./lib/assetLibrary";
+import { defaultCreativeSetup } from "../shared/creativeBuilder";
+import { originalProductSelections } from "../shared/productOverlay";
 import { creativeVariants } from "../drizzle/schema";
 const hash = "a".repeat(64);
 const workflow = (action: string, fingerprint = hash): WorkflowSnapshot => ({
@@ -161,4 +163,53 @@ describe("generated draft discovery preserves review handoff", () => {
       "view=approved"
     );
   });
+});
+
+it("offers original-product adjustment for saved catalog images without changing preservation or approval", () => {
+  const metadata = {
+    productIds: [622],
+    requestedSetup: {
+      ...defaultCreativeSetup(),
+      products: [
+        {
+          productId: 622,
+          imageId: 649,
+          featuredSpecKeys: [],
+          includePrice: false,
+        },
+      ],
+    },
+    width: 1080,
+    height: 1080,
+  };
+  const asset = normalizeCreative({
+    id: 92,
+    name: "Saved catalog creative",
+    status: "approved",
+    imageStorageKey: "saved-design",
+    renderMetadata: metadata,
+  } as any);
+  expect(asset).toMatchObject({
+    hasProductOverlay: false,
+    canAdjustOriginalProduct: true,
+    state: "approved",
+  });
+  expect(originalProductSelections({ ...metadata, productIds: [999] })).toEqual(
+    []
+  );
+  expect(
+    originalProductSelections({
+      ...metadata,
+      requestedSetup: {
+        ...metadata.requestedSetup,
+        products: [
+          { ...metadata.requestedSetup.products[0], imageIds: [649, 650] },
+        ],
+      },
+    })
+  ).toEqual([]);
+  expect(
+    normalizeCreative({ id: 1, renderMetadata: null } as any)
+      .canAdjustOriginalProduct
+  ).toBe(false);
 });

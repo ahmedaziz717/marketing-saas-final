@@ -31,6 +31,14 @@ export class HiggsfieldQuoteUnavailableError extends Error {
     );
   }
 }
+export class HiggsfieldEstimateError extends Error {
+  constructor(
+    public status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
 export class HiggsfieldUrlError extends Error {
   constructor(public diagnostic: Record<string, string | boolean>) {
@@ -272,8 +280,12 @@ export async function estimateHiggsfield(
       })
     );
     // Estimation does not submit generation and never creates a billable job.
-    throw new Error(
-      "A credit quote is unavailable for these settings. Check the required inputs or try again. No generation was submitted."
+    const status = error instanceof HiggsfieldError ? error.status : 0;
+    throw new HiggsfieldEstimateError(
+      status,
+      status === 401 || status === 403 || status === 422 || status === 423
+        ? (error as Error).message
+        : "The generation service could not estimate this request. Try again. No generation was submitted."
     );
   }
 }

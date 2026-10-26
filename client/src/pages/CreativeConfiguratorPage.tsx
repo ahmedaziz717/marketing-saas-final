@@ -1,3 +1,4 @@
+import { StudioRunBar } from "@/components/configurator/StudioRunBar";
 import { TaskPromptField } from "@/components/TaskPromptField";
 import { ProductCategoryContext } from "@/components/ProductCategoryContext";
 import {
@@ -2614,38 +2615,15 @@ function Configurator({
               </button>
             </div>
           )}
-          <div className="cfg-bottom">
-            <div>
-              <strong>{quoteLabel}</strong>
-              <span>
-                {busy ? (
-                  "Working…"
-                ) : (
-                  <span className="cfg-credit-detail">{creditDetail}</span>
-                )}
-                {issues.length > 0 && (
-                  <span className="cfg-completion-hint">
-                    {issues.length} {issues.length === 1 ? "item" : "items"} to
-                    complete
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="cfg-actions">
-              <button
-                className="cfg-primary"
-                disabled={!ready}
-                onClick={() => setConfirm(true)}
-              >
-                {busy ? (
-                  <Loader2 className="animate-spin" size={16} />
-                ) : (
-                  <Sparkles size={16} />
-                )}{" "}
-                Generate {isImage ? "images" : "video"}
-              </button>
-            </div>
-          </div>
+          <StudioRunBar
+            quoteLabel={quoteLabel}
+            detail={creditDetail}
+            busy={busy}
+            remaining={issues.length}
+            disabled={!ready}
+            label={`Generate ${isImage ? "images" : "video"}`}
+            onRun={() => setConfirm(true)}
+          />
         </>
       )}
       {info && (

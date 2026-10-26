@@ -1,3 +1,4 @@
+import { StudioRunBar } from "./configurator/StudioRunBar";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
@@ -62,6 +63,7 @@ export function WorkflowAppStudio({
   review,
   results,
   resultPreview,
+  actionBar,
   status,
   error,
 }: {
@@ -79,6 +81,7 @@ export function WorkflowAppStudio({
   review?: ReactNode;
   results?: ReactNode;
   resultPreview?: ReactNode;
+  actionBar?: ReactNode;
   status?: string;
   error?: string;
 }) {
@@ -462,19 +465,7 @@ export function WorkflowAppStudio({
                 to fill in.
               </p>
             )}
-            {preview ? (
-              <div className="wf-studio-run">
-                <p>
-                  In the published App, users review estimated credits here
-                  before confirming a run.
-                </p>
-                <button type="button" className="cfg-primary" disabled>
-                  Review credits & run
-                </button>
-              </div>
-            ) : (
-              review
-            )}
+            {!preview && review}
           </section>
           <section hidden={current.id !== "results"} aria-label="App results">
             <div className="cfg-content-title">
@@ -494,6 +485,17 @@ export function WorkflowAppStudio({
           </section>
         </div>
       </StudioJourney>
+      {preview ? (
+        <StudioRunBar
+          quoteLabel="Estimated credits"
+          detail="Updates automatically with your inputs"
+          label="Run App"
+          disabled
+          onRun={() => {}}
+        />
+      ) : (
+        actionBar
+      )}
     </div>
   );
 }

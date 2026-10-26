@@ -1,4 +1,24 @@
 import { z } from "zod";
+import type { CreativeSetup } from "./creativeBuilder";
+
+/** Recover only the exact catalog references saved with this output. */
+export function originalProductSelections(
+  metadata?: {
+    productIds: number[];
+    requestedSetup?: CreativeSetup;
+  } | null
+) {
+  const ids = metadata?.productIds ?? [];
+  if (!ids.length || ids.length > 3) return [];
+  const selected = ids.map(id =>
+    metadata?.requestedSetup?.products.find(p => p.productId === id)
+  );
+  if (selected.some(p => !p?.imageId || (p.imageIds?.length ?? 0) > 1))
+    return [];
+  return selected as Array<
+    CreativeSetup["products"][number] & { imageId: number }
+  >;
+}
 
 export const productOverlayPlacementSchema = z.object({
   left: z.number().int().min(0).max(8000),

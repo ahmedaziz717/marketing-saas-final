@@ -1,8 +1,10 @@
 import type { ProviderRate } from "../../shared/platformAdmin";
 import { estimatedActionCredits } from "../../shared/aiCredits";
+import { generationModels } from "../../shared/modelCatalog";
 import {
   estimateHiggsfield,
   HiggsfieldQuoteUnavailableError,
+  HiggsfieldEstimateError,
 } from "./higgsfield";
 import {
   seedanceDescriptionEstimate,
@@ -21,15 +23,25 @@ export async function providerRequestRate(
   try {
     estimate = await estimateHiggsfield(endpoint, request);
   } catch (error) {
-    if (
-      !(error instanceof HiggsfieldQuoteUnavailableError) ||
-      !error.pricingDescription
-    )
-      throw error;
+    // Estimation is optional on some provider routes. For known Seedance
+    // formulas, use the reviewed published rate when that endpoint rejects
+    // estimation or is temporarily unavailable. Never guess a price from a
+    // range, suppress credentials/balance/input failures, or accept malformed USD.
+    const unavailable =
+      error instanceof HiggsfieldEstimateError &&
+      ([400, 404, 405, 429].includes(error.status) || error.status >= 500);
+    const description =
+      error instanceof HiggsfieldQuoteUnavailableError
+        ? error.pricingDescription
+        : unavailable
+          ? generationModels.find(m => m.providerModel === endpoint)
+              ?.pricingNote
+          : undefined;
+    if (!description) throw error;
     const calculation = seedanceDescriptionEstimate(
       endpoint,
       request,
-      error.pricingDescription,
+      description,
       rate,
       context
     );
@@ -43,7 +55,7 @@ export async function providerRequestRate(
       costBasis: "published_rate_estimate",
       quotedAtMs: Date.now(),
       pricingCalculation,
-      pricingVersion: `higgsfield-formula-${stableHash(error.pricingDescription).slice(0, 16)}`,
+      pricingVersion: `higgsfield-formula-${stableHash(description).slice(0, 16)}`,
       requestHash: stableHash({ endpoint, request, context }),
       sourceUrl: `https://open.higgsfield.ai/models/${endpoint}/playground`,
     };

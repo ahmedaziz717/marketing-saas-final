@@ -398,7 +398,7 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
   ).toBe(true);
   expect(screen.queryByLabelText("Ad budget")).toBeNull();
   reviewApp();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
+  clickJourney(screen.getByRole("button", { name: "Run App" }));
   expect(screen.getByRole("alert").textContent).toContain("Audience:");
   expect(screen.getByRole("textbox", { name: "Audience" })).toBeTruthy();
   expect(api.quote).not.toHaveBeenCalled();
@@ -422,8 +422,8 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
       "Reviewed caption"
     )
   ).toBeTruthy();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  await screen.findByRole("button", { name: "Confirm & run App" });
+  await readyToRun();
+  await readyToRun();
   expect(api.run).not.toHaveBeenCalled();
   const quoted = api.quote.mock.calls[0][0];
   expect(quoted).toMatchObject({
@@ -433,7 +433,7 @@ it("validates in the correct Studio category, preserves inputs, and runs the exa
     appVersionId: "app-v1",
   });
   expect(quoted.inputs).toContainEqual({ id: "channel", value: "organic" });
-  clickJourney(screen.getByRole("button", { name: "Confirm & run App" }));
+  clickJourney(screen.getByRole("button", { name: "Run App" }));
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
   expect(api.run.mock.calls[0][0]).toEqual({
     ...quoted,
@@ -451,20 +451,19 @@ it("invalidates an estimate after an edit and accepts a zero-credit quote", asyn
   api.quote.mockResolvedValue({ credits: 0 });
   openApp();
   reviewApp();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  await screen.findByRole("button", { name: "Confirm & run App" });
+  await readyToRun();
+  await readyToRun();
   clickJourney(screen.getByRole("button", { name: "Edit Content: Copy" }));
   changeField(screen.getByLabelText("Caption"), {
     target: { value: "Changed after estimate" },
   });
   reviewApp();
   expect(
-    screen.queryByRole("button", { name: "Confirm & run App" })
-  ).toBeNull();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  clickJourney(
-    await screen.findByRole("button", { name: "Confirm & run App" })
-  );
+    (screen.getByRole("button", { name: "Run App" }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+  await readyToRun();
+  clickJourney(await readyToRun());
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
   expect(api.run.mock.calls[0][0]).toMatchObject({
     quotedCredits: 0,
@@ -479,14 +478,12 @@ it("shows run failures without losing reviewed inputs and reuses the request ide
   api.run.mockRejectedValueOnce(new Error("Connection interrupted"));
   openApp();
   reviewApp();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  clickJourney(
-    await screen.findByRole("button", { name: "Confirm & run App" })
-  );
+  await readyToRun();
+  clickJourney(await readyToRun());
   await waitFor(() =>
     expect(screen.getByRole("alert").textContent).toBe("Connection interrupted")
   );
-  clickJourney(screen.getByRole("button", { name: "Confirm & run App" }));
+  clickJourney(screen.getByRole("button", { name: "Run App" }));
   await waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
   expect(api.run.mock.calls[1][0]).toEqual(api.run.mock.calls[0][0]);
 });
@@ -494,9 +491,7 @@ it("keeps an active run in Results and exposes stopping without another run", as
   api.runs = [{ ...savedRun([]), status: "running" }];
   openApp();
   reviewApp();
-  expect(
-    screen.queryByRole("button", { name: "Review credits & run" })
-  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run App" })).toBeNull();
   clickJourney(screen.getByRole("button", { name: "View run progress" }));
   clickJourney(screen.getByRole("button", { name: "Stop after current step" }));
   await waitFor(() =>
@@ -525,8 +520,8 @@ it("supports legacy text and image inputs without republishing", async () => {
     screen.getByRole("radiogroup", { name: "Reference image" })
   ).toBeTruthy();
   reviewApp();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  await screen.findByRole("button", { name: "Confirm & run App" });
+  await readyToRun();
+  await readyToRun();
   expect(api.quote.mock.calls[0][0].inputs).toEqual([
     { id: "brief", text: "Updated legacy brief" },
     { id: "image", imageKey: undefined },
@@ -537,8 +532,8 @@ it("resets inputs and credit confirmation when opening another App version", asy
   api.app.graph.nodes[1].config.field.defaultValue = "Default audience";
   const rendered = openApp();
   reviewApp();
-  clickJourney(screen.getByRole("button", { name: "Review credits & run" }));
-  await screen.findByRole("button", { name: "Confirm & run App" });
+  await readyToRun();
+  await readyToRun();
   rendered.rerender(
     <WorkflowAppRunner
       id="app-v2"
@@ -549,8 +544,9 @@ it("resets inputs and credit confirmation when opening another App version", asy
   );
   reviewApp();
   expect(
-    screen.queryByRole("button", { name: "Confirm & run App" })
-  ).toBeNull();
+    (screen.getByRole("button", { name: "Run App" }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
   expect(api.run).not.toHaveBeenCalled();
 });
 
@@ -562,3 +558,83 @@ function clickJourney(element: Element) {
   });
   if (keep) fireEvent.click(keep);
 }
+
+async function readyToRun() {
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "Run App" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+  );
+  return screen.getByRole("button", { name: "Run App" });
+}
+
+it("estimates in the background without leaving the current section or starting generation", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Creators";
+  openApp();
+  const navigation = screen.getByRole("navigation", {
+    name: "App Studio sections",
+  });
+  const current = navigation.querySelector(
+    '[aria-current="step"]'
+  )?.textContent;
+  await readyToRun();
+  expect(navigation.querySelector('[aria-current="step"]')?.textContent).toBe(
+    current
+  );
+  expect(
+    screen.queryByRole("button", { name: "Review credits & run" })
+  ).toBeNull();
+  expect(document.querySelectorAll(".cfg-run-bar .cfg-primary")).toHaveLength(
+    1
+  );
+  expect(api.run).not.toHaveBeenCalled();
+});
+it("ignores a late estimate for old inputs and uses only the latest inputs on a single click", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Creators";
+  let finishOld!: (v: { credits: number }) => void;
+  api.quote.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finishOld = resolve;
+      })
+  );
+  openApp();
+  await waitFor(() => expect(api.quote).toHaveBeenCalledTimes(1));
+  reviewApp();
+  clickJourney(screen.getByRole("button", { name: "Edit Content: Copy" }));
+  changeField(screen.getByLabelText("Caption"), {
+    target: { value: "New caption" },
+  });
+  await readyToRun();
+  finishOld({ credits: 99 });
+  await waitFor(() =>
+    expect(screen.getByText("4 estimated AI credits")).toBeTruthy()
+  );
+  const button = screen.getByRole("button", { name: "Run App" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(api.run).toHaveBeenCalledTimes(1));
+  expect(api.run.mock.calls[0][0]).toMatchObject({
+    quotedCredits: 4,
+    inputs: expect.arrayContaining([{ id: "copy", value: "New caption" }]),
+  });
+});
+it("shows an actionable estimate failure and retries without submitting generation", async () => {
+  formApp();
+  api.app.graph.nodes[1].config.field.defaultValue = "Creators";
+  api.quote.mockRejectedValueOnce(
+    new Error("The video service credentials need administrator attention.")
+  );
+  openApp();
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    "The video service credentials need administrator attention."
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Retry estimate" }));
+  await readyToRun();
+  expect(api.run).not.toHaveBeenCalled();
+  expect(api.quote).toHaveBeenCalledTimes(2);
+});
