@@ -133,6 +133,7 @@ export function GoogleAssetReplacement({
           </p>
           <Button
             variant="outline"
+            className="h-auto max-w-full whitespace-normal text-left"
             disabled={disabled}
             onClick={() => onChange({ ...change, remove: [] })}
           >
