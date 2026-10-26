@@ -2333,7 +2333,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       const state = () => document.querySelector('[data-testid="gallery-selection"]')?.textContent;
       if (which === "gallery-elements-image") {
         check(document.body.textContent?.includes("Available for image drafting"), "Pending component shows a non-blocking review notice");
-        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use 1 for Chassis: Printed enclosure"]');
+        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use Hero for Chassis: Printed enclosure"]');
         check(!!pendingPhoto && !pendingPhoto.disabled, "Pending component photo is enabled for image drafting");
         pendingPhoto!.click();
         await pause();
