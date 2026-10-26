@@ -273,3 +273,39 @@
   padding: 16px 0;
   max-width: 760px;
 }
+
+/* Asset-first copy drafting uses the same compact card rhythm as inventory. */
+.google-pmax-ai,
+.google-copy-suggestion {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.google-pmax-ai > .google-current-assets {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.google-pmax-ai figure {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--muted);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.google-copy-suggestion > button {
+  margin: 8px 8px 0 0;
+}
+.google-current-assets > label {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.google-pmax-ai details {
+  margin: 12px 0;
+}
+.google-pmax-ai summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px 0;
+}

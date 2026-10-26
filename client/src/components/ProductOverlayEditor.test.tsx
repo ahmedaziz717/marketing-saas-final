@@ -59,25 +59,40 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { ProductOverlayEditor } from "./ProductOverlayEditor";
-it("keeps failed alignment visible and editable on open/reset without paid calls", () => {
+it("keeps an unprepared design unchanged until explicit manual placement, and reset removes the fallback", () => {
   calls.applied = false;
+  calls.sourceWidth = 145;
   render(
-    <ProductOverlayEditor organizationId={3} variantId={90} onSaved={vi.fn()} />
+    <ProductOverlayEditor organizationId={3} variantId={98} onSaved={vi.fn()} />
   );
   fireEvent.click(
     screen.getByRole("button", { name: "Adjust original product" })
   );
-  expect(screen.getByAltText("Original product 1")).toBeTruthy();
-  fireEvent.click(screen.getByLabelText("Compare with original design"));
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
   expect(screen.queryByAltText("Original product 1")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
-  expect(screen.getByAltText("Original product 1")).toBeTruthy();
+  expect(screen.getByText("Placement has not been prepared")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(screen.getByRole("alert").textContent).toContain("too small");
+  expect(
+    screen.getByText("Recover with a sharper original").closest("details")?.open
+  ).toBe(true);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Place manually at native size" })
+  );
+  expect(screen.getByAltText("Original product 1").style.width).toBe("14.5%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("29%");
   fireEvent.change(screen.getByLabelText("left in pixels"), {
     target: { value: "150" },
   });
   expect(screen.getByAltText("Original product 1").style.left).toBe("15%");
   fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
-  expect(screen.getByAltText("Original product 1").style.left).toBe("10%");
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
   expect(calls.align).not.toHaveBeenCalled();
   expect(calls.save).not.toHaveBeenCalled();
 });
@@ -230,6 +245,15 @@ it("explains a recorded resolution failure without starting another paid alignme
   expect(
     screen.getByText(/sharper source or accepted enlargement/)
   ).toBeTruthy();
+  expect(screen.getByText(/complete design is unchanged/)).toBeTruthy();
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
   expect(calls.align).not.toHaveBeenCalled();
   expect(calls.save).not.toHaveBeenCalled();
 });
@@ -250,12 +274,16 @@ it("separates unsaved alignment from saved state and resets without spending cre
   fireEvent.load(screen.getByAltText("Original complete creative design"));
   expect(screen.getByText(/Saved cutout: 164/)).toBeTruthy();
   expect(calls.align).not.toHaveBeenCalled();
-  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  expect(
+    screen.getByText(/No original-product overlay is applied/)
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
   await waitFor(() =>
     expect(screen.getByText(/Alignment suggested/)).toBeTruthy()
   );
-  expect(screen.queryByText(/This saved version has no applied/)).toBeNull();
+  expect(
+    screen.queryByText(/No original-product overlay is applied/)
+  ).toBeNull();
   expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
   expect(
     (
@@ -267,7 +295,9 @@ it("separates unsaved alignment from saved state and resets without spending cre
   fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
   fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
   expect(screen.queryByText(/Alignment suggested/)).toBeNull();
-  expect(screen.getByText(/This saved version has no applied/)).toBeTruthy();
+  expect(
+    screen.getByText(/No original-product overlay is applied/)
+  ).toBeTruthy();
   expect(
     (screen.getByLabelText("Compare with original design") as HTMLInputElement)
       .checked

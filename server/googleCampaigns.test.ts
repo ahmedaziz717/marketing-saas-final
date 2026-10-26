@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
@@ -10,6 +11,7 @@ const f = vi.hoisted(() => ({
   mutate: vi.fn(),
   videoUpload: vi.fn(),
   generate: vi.fn(),
+  storage: vi.fn(),
 }));
 vi.mock("./lib/googlePmaxAi", () => ({
   generatePmaxCopy: (...args: unknown[]) => f.generate(...args),
@@ -28,8 +30,7 @@ vi.mock("./lib/googleVideoUploadApi", () => ({
 }));
 vi.mock("./storage", async original => ({
   ...(await original<any>()),
-  storageGetBase64: async () =>
-    Buffer.from("synthetic-video").toString("base64"),
+  storageGetBase64: (...args: unknown[]) => f.storage(...args),
 }));
 import { googleLibraryVideo } from "./lib/googleVideoUploads";
 import { readLibraryAsset } from "./lib/assetLibrary";
@@ -188,6 +189,9 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 beforeEach(() => {
+  f.storage
+    .mockReset()
+    .mockResolvedValue(Buffer.from("synthetic-video").toString("base64"));
   f.generate.mockReset().mockResolvedValue({ headlines: ["Draft"] });
   f.read.mockReset().mockResolvedValue([snapshot()]);
   f.mutate
@@ -270,6 +274,89 @@ it("scopes PMax AI products server-side and requires explicit neutral category h
   expect(f.mutate).not.toHaveBeenCalled();
   expect(f.videoUpload).not.toHaveBeenCalled();
 });
+it("grounds draft copy in an approved workspace image and forwards exact generation controls without activation", async () => {
+  const kit = (
+    await f.db.select().from(brandKits).where(eq(brandKits.organizationId, org))
+  )[0];
+  const [row] = await f.db
+    .insert(brandAssets)
+    .values({
+      organizationId: org,
+      brandKitId: kit.id,
+      name: "Selected product image",
+      type: "other",
+      storageKey: `org-${org}/selected.png`,
+      url: "https://example.test/selected.png",
+      mimeType: "image/png",
+      status: "approved",
+      uploadedByUserId: owner,
+      createdAtMs: 1,
+      metadata: { library: { purpose: "finished" } },
+    })
+    .returning();
+  const pixels = await sharp({
+    create: { width: 1200, height: 1200, channels: 3, background: "#336699" },
+  })
+    .png()
+    .toBuffer();
+  f.storage.mockResolvedValue(pixels.toString("base64"));
+  const caller = googleCampaignsRouter.createCaller({
+    user: { id: owner },
+  } as any);
+  const copyRequest = {
+    counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
+  };
+  await caller.draftPmaxCopy({
+    organizationId: org,
+    selectedAssets: [
+      {
+        field: "SQUARE_MARKETING_IMAGE",
+        source: { kind: "library", key: `asset:${row.id}` },
+      },
+    ],
+    copyRequest,
+  });
+  expect(f.generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      assets: [
+        expect.objectContaining({
+          reference: `asset:${row.id}`,
+          name: "Selected product image",
+          evidence: "selected_image",
+          imageIndex: 0,
+        }),
+      ],
+    }),
+    undefined,
+    copyRequest,
+    [expect.stringMatching(/^data:image\/jpeg;base64,/)]
+  );
+  expect(f.storage).toHaveBeenCalledWith(
+    `org-${org}/selected.png`,
+    8 * 1024 * 1024
+  );
+  expect(f.mutate).not.toHaveBeenCalled();
+  expect(f.videoUpload).not.toHaveBeenCalled();
+  f.generate.mockClear();
+  await f.db
+    .update(brandAssets)
+    .set({ status: "pending" })
+    .where(eq(brandAssets.id, row.id));
+  await expect(
+    caller.draftPmaxCopy({
+      organizationId: org,
+      selectedAssets: [
+        {
+          field: "SQUARE_MARKETING_IMAGE",
+          source: { kind: "library", key: `asset:${row.id}` },
+        },
+      ],
+      copyRequest,
+    })
+  ).rejects.toThrow(/approved/);
+  expect(f.generate).not.toHaveBeenCalled();
+});
+
 async function reviewed(change = search()) {
   const draft = await saveGoogleDraft(owner, {
     organizationId: org,

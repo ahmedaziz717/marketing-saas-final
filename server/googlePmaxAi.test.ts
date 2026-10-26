@@ -123,3 +123,125 @@ it("surfaces missing ad name at its real payload path instead of a generic union
       true
     );
 });
+
+it("requests and validates a full 15/5/5 set grounded in selected image inputs", async () => {
+  const output = {
+    headlines: Array.from({ length: 15 }, (_, i) => `Headline ${i + 1}`),
+    longHeadlines: Array.from(
+      { length: 5 },
+      (_, i) => `Explore the collection ${i + 1}`
+    ),
+    descriptions: Array.from(
+      { length: 5 },
+      (_, i) => `Find your next product ${i + 1}`
+    ),
+  };
+  mock.generate.mockImplementation(async (_prompt, _context, schema) =>
+    schema.parse(output)
+  );
+  const images = ["data:image/jpeg;base64,synthetic-image"];
+  const context = {
+    assets: [
+      { reference: "creative:1", imageIndex: 0, evidence: "selected_image" },
+    ],
+  };
+  const request = {
+    counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
+  };
+  await expect(
+    generatePmaxCopy(context, "Brand direction", request, images)
+  ).resolves.toEqual(output);
+  const [prompt, payload, , visualInputs] = mock.generate.mock.calls[0];
+  expect(prompt).toContain("exactly 15 distinct headlines");
+  expect(prompt).toContain("exactly 5 distinct long headlines");
+  expect(prompt).toContain("exactly 5 distinct descriptions");
+  expect(prompt).toContain(
+    "never infer technical specifications or verified claims from appearance"
+  );
+  expect(prompt).toContain(
+    "Never invent prices, discounts, urgency, specifications or endorsements"
+  );
+  expect(prompt).toContain("Suggestions only; never publish");
+  expect(payload).toEqual({ context, request });
+  expect(visualInputs).toBe(images);
+});
+
+it("regenerates one headline without forcing a second short headline when retained copy already supplies it", async () => {
+  const output = {
+    headlines: ["Explore our newest collection"],
+    longHeadlines: [],
+    descriptions: [],
+  };
+  mock.generate.mockImplementation(async (_prompt, _context, schema) =>
+    schema.parse(output)
+  );
+  const request = {
+    counts: { headlines: 1, longHeadlines: 0, descriptions: 0 },
+    target: "headlines" as const,
+    existingCopy: {
+      headlines: ["Shop now"],
+      longHeadlines: [],
+      descriptions: [],
+    },
+  };
+  await expect(generatePmaxCopy({}, undefined, request)).resolves.toEqual(
+    output
+  );
+  expect(mock.generate.mock.calls[0][0]).toContain(
+    "exactly 0 distinct long headlines"
+  );
+  expect(mock.generate.mock.calls[0][0]).toContain(
+    "exactly 0 distinct descriptions"
+  );
+  expect(request.existingCopy.headlines).toEqual(["Shop now"]);
+  await expect(
+    generatePmaxCopy({}, undefined, {
+      ...request,
+      existingCopy: { ...request.existingCopy, headlines: ["   "] },
+    })
+  ).rejects.toThrow("Your draft is unchanged");
+});
+
+it("enforces zero-count roles and exact requested counts without truncation", async () => {
+  const request = {
+    counts: { headlines: 0, longHeadlines: 0, descriptions: 1 },
+    target: "descriptions" as const,
+  };
+  let output = {
+    headlines: [] as string[],
+    longHeadlines: [] as string[],
+    descriptions: ["Explore the collection."],
+  };
+  mock.generate.mockImplementation(async (_prompt, _context, schema) =>
+    schema.parse(output)
+  );
+  await expect(generatePmaxCopy({}, undefined, request)).resolves.toEqual(
+    output
+  );
+  output = { ...output, headlines: ["Unexpected"] };
+  await expect(generatePmaxCopy({}, undefined, request)).rejects.toThrow(
+    "Your draft is unchanged"
+  );
+  output = {
+    headlines: [],
+    longHeadlines: [],
+    descriptions: ["First", "Second"],
+  };
+  await expect(generatePmaxCopy({}, undefined, request)).rejects.toThrow(
+    "Your draft is unchanged"
+  );
+});
+
+it("rejects excessive or empty requested sets before calling the generator", async () => {
+  for (const counts of [
+    { headlines: 16, longHeadlines: 5, descriptions: 5 },
+    { headlines: 15, longHeadlines: 6, descriptions: 5 },
+    { headlines: 15, longHeadlines: 5, descriptions: 6 },
+    { headlines: 0, longHeadlines: 0, descriptions: 0 },
+  ]) {
+    await expect(generatePmaxCopy({}, undefined, { counts })).rejects.toThrow(
+      "Your draft is unchanged"
+    );
+  }
+  expect(mock.generate).not.toHaveBeenCalled();
+});

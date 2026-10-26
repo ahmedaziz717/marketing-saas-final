@@ -1,3 +1,4 @@
+import { resolveDestinationSelection } from "@shared/destinationSelection";
 import { StudioAccountPicker } from "./StudioAccountPicker";
 import { Button } from "../ui/button";
 import {
@@ -124,15 +125,34 @@ export function ActivationComposerStudio(p: Props) {
             : p.entry!.category!,
       }));
   }, [p.entry, p.active]);
-  const category =
+  const requestedCategory =
     p.section === "copy"
       ? normalizeCopyCategory(categories.copy)
       : categories[p.section];
+  const accountSelection = resolveDestinationSelection(
+    p.accounts.filter(a => a.details.capabilities.includes("publish")),
+    p.connectionId,
+    { loading: p.connectionsLoading, error: p.connectionsError }
+  );
+  const account = accountSelection.selected;
+  const meta = p.channel === "meta_ads";
+  const hideAccount = accountSelection.status === "single";
+  // Each Meta connection has one bound Page identity, not a second choice.
+  const hidePage =
+    !!account?.details.pageId && !p.connectionsLoading && !p.connectionsError;
+  const category =
+    requestedCategory === "account" && hideAccount
+      ? meta
+        ? hidePage
+          ? "campaign"
+          : "page"
+        : "details"
+      : requestedCategory === "page" && hidePage
+        ? "campaign"
+        : requestedCategory;
   const directionCategory = copyDimensions.includes(category as CopyDimension)
     ? (category as CopyDimension)
     : undefined;
-  const account = p.accounts.find(a => a.id === p.connectionId);
-  const meta = p.channel === "meta_ads";
   const keys =
     p.format === "placement"
       ? Object.values(p.content.placementAssetKeys ?? {}).filter(
@@ -158,15 +178,21 @@ export function ActivationComposerStudio(p: Props) {
     section === "setup"
       ? [
           { id: "channel", title: "Channel" },
-          { id: "account", title: meta ? "Ad account" : "Facebook Page" },
+          ...(!hideAccount
+            ? [{ id: "account", title: meta ? "Ad account" : "Facebook Page" }]
+            : []),
           ...(meta
             ? [
-                {
-                  id: "page",
-                  title: "Page identity",
-                  disabled: !account,
-                  reason: "Choose an ad account first",
-                },
+                ...(!hidePage
+                  ? [
+                      {
+                        id: "page",
+                        title: "Page identity",
+                        disabled: !account,
+                        reason: "Choose an ad account first",
+                      },
+                    ]
+                  : []),
                 {
                   id: "campaign",
                   title: "Campaign & ad set",
@@ -227,7 +253,14 @@ export function ActivationComposerStudio(p: Props) {
     scopeKey: `activation:${p.organizationId}:${p.channel}:${p.draftId || "new"}`,
     sections: activationSections.map(section => ({
       ...section,
-      initialCategory: categories[section.id],
+      initialCategory:
+        section.id === "setup" && hideAccount
+          ? meta
+            ? hidePage
+              ? "campaign"
+              : "page"
+            : "details"
+          : categories[section.id],
       categories: getItems(section.id).map(item => ({
         ...item,
         value: values[item.id],
@@ -314,22 +347,38 @@ export function ActivationComposerStudio(p: Props) {
                     section: "delivery",
                     category: "schedule",
                   },
-                ].map(item => (
-                  <button
-                    key={item.title}
-                    type="button"
-                    onClick={() => {
-                      if (item.category === "channel" && !p.channelChoices)
-                        p.onChangeChannel?.();
-                      else {
-                        journey.navigate(item.section, item.category);
-                      }
-                    }}
-                  >
-                    <span>{item.title}</span>
-                    <strong>{item.value}</strong>
-                  </button>
-                ))}
+                ].map(item =>
+                  item.category === "account" && hideAccount ? (
+                    <div
+                      key={item.title}
+                      className="activation-fixed-destination"
+                    >
+                      <span>{item.title}</span>
+                      <strong>{item.value}</strong>
+                      {meta && account?.details.pageId && (
+                        <small>
+                          Page:{" "}
+                          {account.details.pageName || account.details.pageId}
+                        </small>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      key={item.title}
+                      type="button"
+                      onClick={() => {
+                        if (item.category === "channel" && !p.channelChoices)
+                          p.onChangeChannel?.();
+                        else {
+                          journey.navigate(item.section, item.category);
+                        }
+                      }}
+                    >
+                      <span>{item.title}</span>
+                      <strong>{item.value}</strong>
+                    </button>
+                  )
+                )}
               </div>
               <p>
                 {meta
@@ -375,7 +424,7 @@ export function ActivationComposerStudio(p: Props) {
                       Choose a connected {meta ? "ad account" : "Page"} with
                       publishing permission.
                     </p>
-                    {p.connectionsLoading && (
+                    {p.connectionsLoading && !p.connectionsError && (
                       <p role="status">Loading connected accounts…</p>
                     )}
                     {p.connectionsError && (
@@ -390,39 +439,48 @@ export function ActivationComposerStudio(p: Props) {
                         </Button>
                       </p>
                     )}
-                    <StudioAccountPicker
-                      accounts={p.accounts.map(a => ({
-                        id: a.id,
-                        name: a.name,
-                        accountId: a.accountId,
-                        currency: a.details.currency,
-                        timezone: a.details.timezone,
-                        description: a.details.pageName,
-                        disabled: !a.details.capabilities.includes("publish"),
-                        disabledReason: "Publishing permission required",
-                      }))}
-                      channelLabel={channelNames[p.channel]}
-                      value={p.connectionId}
-                      disabled={p.pending}
-                      onChange={id => {
-                        if (id !== p.connectionId) {
-                          p.setConnection(id);
-                          p.setContent(previous => ({
-                            ...previous,
-                            metaCampaignId: "",
-                            adSetId: "",
-                          }));
-                        }
-                      }}
-                    />
-                    {!!p.connectionId && !account && (
+                    {accountSelection.showPicker && (
+                      <StudioAccountPicker
+                        accounts={accountSelection.eligible.map(a => ({
+                          id: a.id,
+                          name: a.name,
+                          accountId: a.accountId,
+                          currency: a.details.currency,
+                          timezone: a.details.timezone,
+                          description: a.details.pageName,
+                        }))}
+                        channelLabel={channelNames[p.channel]}
+                        value={p.connectionId}
+                        disabled={p.pending}
+                        onChange={p.setConnection}
+                      />
+                    )}
+                    {accountSelection.status === "unavailable" && (
                       <p role="alert">
-                        The previous account is unavailable. Reconnect it or
-                        choose another account.
+                        The previous account is unavailable. It has not been
+                        replaced automatically. Reconnect it or choose another
+                        account.
                       </p>
                     )}
-                    {!p.connectionsLoading && !p.accounts.length && (
-                      <p role="status">No connected accounts available.</p>
+                    {accountSelection.status === "unavailable" &&
+                      accountSelection.onlyOption && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            p.setConnection(accountSelection.onlyOption!.id)
+                          }
+                        >
+                          Use {accountSelection.onlyOption.name} instead
+                        </Button>
+                      )}
+                    {(accountSelection.status === "empty" ||
+                      (accountSelection.status === "unavailable" &&
+                        !accountSelection.eligible.length)) && (
+                      <p role="status">
+                        No connected accounts with publishing permission are
+                        available.
+                      </p>
                     )}
                     <Link
                       className="activation-connect"
@@ -434,27 +492,16 @@ export function ActivationComposerStudio(p: Props) {
                 )}
                 {category === "page" && (
                   <>
-                    <div className="cfg-card-grid activation-account-grid">
-                      <StudioCard
-                        title={account?.details.pageName || "Page not selected"}
-                        description="The Facebook Page connected to this ad account is the public identity for your ad."
-                        badge="Ad identity"
-                        selected={!!account?.details.pageId}
-                        media={
-                          <div className="activation-choice-symbol">
-                            <Building2 size={42} />
-                          </div>
-                        }
-                        onSelect={() => {}}
-                      />
-                    </div>
-                    <p className="activation-help">
-                      To use another Page, update this ad connection in{" "}
-                      <Link href="/app/settings/integrations">
-                        Integrations
-                      </Link>
-                      .
+                    <p role="status" className="activation-help">
+                      {p.connectionsLoading
+                        ? "Loading Page identity…"
+                        : account
+                          ? "This ad account has no Page identity connected. Select a Page for this connection in Integrations before activating an ad."
+                          : "Choose an authorized ad account first to check its Page identity."}
                     </p>
+                    <Link href="/app/settings/integrations">
+                      Manage Page identity in Integrations
+                    </Link>
                   </>
                 )}
                 {category === "campaign" && account && (
@@ -904,7 +951,7 @@ export function ActivationComposerStudio(p: Props) {
                     {[
                       {
                         title: "Destination",
-                        value: `${channelNames[p.channel]} · ${account?.name || "Choose an account"}`,
+                        value: `${channelNames[p.channel]} · ${account?.name || "Choose an account"}${meta && account?.details.pageId ? ` · Page: ${account.details.pageName || account.details.pageId}` : ""}`,
                         section: "setup",
                         category: "account",
                       },
@@ -940,14 +987,25 @@ export function ActivationComposerStudio(p: Props) {
                           <strong>{row.title}</strong>
                           <p>{row.value}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            journey.navigate(row.section, row.category);
-                          }}
-                        >
-                          Edit {row.title.toLowerCase()}
-                        </button>
+                        {!(
+                          row.category === "account" &&
+                          hideAccount &&
+                          (!meta || hidePage)
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              journey.navigate(
+                                row.section,
+                                row.category === "account" && hideAccount
+                                  ? "page"
+                                  : row.category
+                              );
+                            }}
+                          >
+                            Edit {row.title.toLowerCase()}
+                          </button>
+                        )}
                       </div>
                     ))}
                     <p>

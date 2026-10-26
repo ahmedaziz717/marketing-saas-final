@@ -1,3 +1,5 @@
+import { resolveDestinationSelection } from "@shared/destinationSelection";
+import { GoogleAssetMetricsProvider } from "./GoogleAssetMetrics";
 import { GoogleAssetReplacement } from "./GoogleAssetReplacement";
 import {
   GoogleFormatPicker,
@@ -8,7 +10,7 @@ import {
 } from "./GoogleCreativeFormat";
 import { AdEditor, AssetEditor } from "./GoogleAdEditor";
 import { StudioAccountPicker } from "../activation/StudioAccountPicker";
-import { GooglePmaxAi } from "./GooglePmaxAi";
+import { GooglePmaxCopyEditor } from "./GooglePmaxCopyEditor";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
 import { GoogleChangeSummary } from "./GoogleChangeSummary";
@@ -37,6 +39,7 @@ import {
   type GoogleChange,
   type GoogleCampaignCreate,
   type GoogleAdContent,
+  type GoogleAssetInput,
 } from "@shared/googleCampaigns";
 import type { GoogleCampaignDraft } from "../../../../drizzle/channelSchema";
 import "@/styles/configurator.css";
@@ -96,8 +99,14 @@ export function GoogleCampaignComposer({
     connections.data?.items.filter(
       c => c.status === "connected" && !c.needsReconnect
     ) ?? [];
+  const retainedLibraryAssets = useRef<GoogleAssetInput[]>([]);
+  const [selectionNotice, setSelectionNotice] = useState("");
   const [chosen, setChosen] = useState(params.get("connectionId") ?? "");
-  const connection = available.find(c => c.id === chosen),
+  const accountSelection = resolveDestinationSelection(available, chosen, {
+    loading: connections.isLoading,
+    error: !!connections.error,
+  });
+  const connection = accountSelection.selected,
     connectionId = connection?.id ?? "";
   const scope = { organizationId, connectionId };
   const [section, setSection] = useState(
@@ -168,6 +177,19 @@ export function GoogleCampaignComposer({
       setConfirmed(false);
     },
   });
+  useEffect(() => {
+    if (accountSelection.autoSelectId) {
+      setChosen(previous => previous || accountSelection.autoSelectId!);
+    }
+  }, [accountSelection.autoSelectId]);
+  useEffect(() => {
+    if (
+      accountSelection.status === "single" &&
+      connectionId &&
+      section === "account"
+    )
+      setSection("campaign");
+  }, [accountSelection.status, connectionId, section]);
   const list = trpc.googleAds.campaigns.inventory.useQuery(
     { ...scope, includeInactive },
     { enabled: !!connectionId }
@@ -244,6 +266,26 @@ export function GoogleCampaignComposer({
     setError("");
   };
   const begin = (next: GoogleChange, target = "settings") => {
+    if (retainedLibraryAssets.current.length) {
+      const merge = (assets: GoogleAssetInput[]) => [
+        ...assets,
+        ...retainedLibraryAssets.current.filter(
+          item => !assets.some(a => JSON.stringify(a) === JSON.stringify(item))
+        ),
+      ];
+      if ("ad" in next)
+        next = { ...next, ad: { ...next.ad, assets: merge(next.ad.assets) } };
+      else if (next.kind === "asset_group_assets")
+        next = { ...next, add: merge(next.add) };
+      else if (next.kind === "asset_group_create")
+        next = { ...next, assets: merge(next.assets) };
+      if (
+        "ad" in next ||
+        next.kind === "asset_group_assets" ||
+        next.kind === "asset_group_create"
+      )
+        retainedLibraryAssets.current = [];
+    }
     setCheckAttempt(value => value + 1);
     edit(next);
     setEditingSettings(
@@ -254,11 +296,19 @@ export function GoogleCampaignComposer({
     setFormat(campaignMedia);
     setSection(target);
   };
-  const hasAd = "ad" in change;
+  const destinationReady =
+    !pendingRestore &&
+    (mode === "new" ||
+      (mode === "existing" &&
+        !!campaignId &&
+        change.kind !== "campaign_create") ||
+      (mode === "drafts" && !!draft));
+  const hasAd = destinationReady && "ad" in change;
   const hasAssets =
-    hasAd ||
-    change.kind === "asset_group_assets" ||
-    change.kind === "asset_group_create";
+    destinationReady &&
+    (hasAd ||
+      change.kind === "asset_group_assets" ||
+      change.kind === "asset_group_create");
   const creativeType = hasAd ? change.type : "PERFORMANCE_MAX";
   const brandAssets = hasAd || !current?.campaign.brandGuidelinesEnabled;
   const choices = googleCreativeFormats(creativeType, brandAssets).filter(
@@ -286,7 +336,7 @@ export function GoogleCampaignComposer({
         : section === "format"
           ? "creative"
           : section,
-    category: section,
+    category: section === "format" ? "creative" : section,
     onNavigate: (_section, category) => setSection(category),
     sections: [
       {
@@ -296,12 +346,16 @@ export function GoogleCampaignComposer({
         icon: Radio,
         categories: [
           { id: "channel", title: "Channel", value: "Google Ads" },
-          {
-            id: "account",
-            title: "Account",
-            value: connection?.name ?? "Choose a Google account",
-            needsInput: !connection,
-          },
+          ...(accountSelection.status === "single"
+            ? []
+            : [
+                {
+                  id: "account",
+                  title: "Account",
+                  value: connection?.name ?? "Choose a Google account",
+                  needsInput: !connection,
+                },
+              ]),
           {
             id: "campaign",
             title: "Campaign",
@@ -318,30 +372,18 @@ export function GoogleCampaignComposer({
         subtitle: "Ads & asset groups",
         icon: Images,
         categories: [
-          ...(hasAssets && choices.length > 0
-            ? [
-                {
-                  id: "format",
-                  title:
-                    creativeType === "PERFORMANCE_MAX"
-                      ? "Asset type"
-                      : "Ad format",
-                  value: googleFormatLabel(activeFormat),
-                  disabled: !connection,
-                  reason: "Choose an account first",
-                },
-              ]
-            : []),
           {
             id: "creative",
             title: hasAssets ? "Assets & details" : "Creative",
             value: "Native formats & approved assets",
-            disabled: !connection,
-            reason: "Choose an account first",
+            disabled: !connection || !destinationReady,
+            reason: !connection
+              ? "Choose an account first"
+              : "Choose a campaign or saved draft first",
           },
         ],
       },
-      ...(hasAd
+      ...(hasAssets
         ? [
             {
               id: "copy",
@@ -353,7 +395,7 @@ export function GoogleCampaignComposer({
                   id: "copy",
                   title: "Ad copy",
                   value:
-                    change.type === "SHOPPING"
+                    "type" in change && change.type === "SHOPPING"
                       ? "From your product feed"
                       : "Channel-specific text limits",
                   disabled: !connection,
@@ -363,7 +405,8 @@ export function GoogleCampaignComposer({
             },
           ]
         : []),
-      ...(change.kind === "campaign_create" || editingSettings
+      ...(destinationReady &&
+      (change.kind === "campaign_create" || editingSettings)
         ? [
             {
               id: "delivery",
@@ -408,6 +451,7 @@ export function GoogleCampaignComposer({
             value: draft?.state ?? "Unsaved draft",
             disabled:
               !connection ||
+              !destinationReady ||
               (change.kind === "campaign_update" && !editingSettings),
             reason: !connection
               ? "Choose an account first"
@@ -448,6 +492,7 @@ export function GoogleCampaignComposer({
   useEffect(() => {
     if (
       section !== "review" ||
+      !destinationReady ||
       !connectionId ||
       pendingRestore ||
       locked ||
@@ -535,6 +580,7 @@ export function GoogleCampaignComposer({
     // Draft state and mutation handles change during the check, but do not restart it.
   }, [
     section,
+    destinationReady,
     reviewInput,
     checkAttempt,
     !!pendingRestore,
@@ -575,9 +621,10 @@ export function GoogleCampaignComposer({
       deliveryInFlight.current = false;
     }
   }
-  const localValidation = showValidation
-    ? googleChangeSchema.safeParse(change)
-    : null;
+  const localValidation =
+    showValidation && section === "review"
+      ? googleChangeSchema.safeParse(change)
+      : null;
   const fieldIssues =
     localValidation && !localValidation.success
       ? localValidation.error.issues
@@ -704,6 +751,7 @@ export function GoogleCampaignComposer({
         </StudioSummary>
         <StudioJourney journey={journey} label="Activation sections">
           <section className="cfg-body google-fields">
+            {selectionNotice && <p role="status">{selectionNotice}</p>}
             {section === "channel" && channelChoices}
             {section === "account" && (
               <>
@@ -724,30 +772,49 @@ export function GoogleCampaignComposer({
                     account to continue.
                   </p>
                 )}
-                <StudioAccountPicker
-                  accounts={available.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    accountId: c.accountId,
-                    currency: c.details.currency,
-                    timezone: c.details.timezone,
-                  }))}
-                  channelLabel="Google Ads"
-                  value={connectionId}
-                  disabled={busy}
-                  onChange={id => {
-                    if (id !== connectionId) {
-                      setChosen(id);
-                      setCampaignId("");
-                      setPendingRestore(null);
-                      setDraft(null);
-                      setChange(newCampaign());
-                      setConfirmed(false);
-                      setError("");
-                    }
-                    setSection("campaign");
-                  }}
-                />
+                {(accountSelection.showPicker ||
+                  accountSelection.status === "unavailable") && (
+                  <StudioAccountPicker
+                    accounts={available.map(c => ({
+                      id: c.id,
+                      name: c.name,
+                      accountId: c.accountId,
+                      currency: c.details.currency,
+                      timezone: c.details.timezone,
+                    }))}
+                    channelLabel="Google Ads"
+                    value={connectionId}
+                    disabled={busy}
+                    onChange={id => {
+                      if (id !== connectionId) {
+                        const picked =
+                          "ad" in change
+                            ? change.ad.assets
+                            : change.kind === "asset_group_assets"
+                              ? change.add
+                              : change.kind === "asset_group_create"
+                                ? change.assets
+                                : [];
+                        retainedLibraryAssets.current = picked.filter(
+                          a => a.source.kind === "library"
+                        );
+                        setSelectionNotice(
+                          picked.length
+                            ? "Workspace library selections are kept for your next destination. Google account-specific selections must be picked again. Review compatibility before activation."
+                            : ""
+                        );
+                        setChosen(id);
+                        setCampaignId("");
+                        setPendingRestore(null);
+                        setDraft(null);
+                        setChange(newCampaign());
+                        setConfirmed(false);
+                        setError("");
+                      }
+                      setSection("campaign");
+                    }}
+                  />
+                )}
                 {!connections.isLoading && !available.length && (
                   <p>
                     <Link href="/app/settings/integrations">
@@ -770,11 +837,20 @@ export function GoogleCampaignComposer({
                       variant={mode === m ? "default" : "outline"}
                       key={m}
                       onClick={() => {
+                        if (m === mode) return;
                         setMode(m);
-                        if (m === "new") {
-                          setCampaignId("");
-                          begin(newCampaign(), "campaign");
-                        }
+                        setCampaignId("");
+                        setPendingRestore(null);
+                        setDraft(null);
+                        setChange(newCampaign());
+                        setEditingSettings(false);
+                        setConfirmed(false);
+                        setShowValidation(false);
+                        setCheckFailed(false);
+                        setChecking(false);
+                        setError("");
+                        setCheckAttempt(value => value + 1);
+                        setSection("campaign");
                       }}
                     >
                       {label(
@@ -1076,6 +1152,10 @@ export function GoogleCampaignComposer({
                         key={d.id}
                         onClick={() => {
                           setPendingRestore(null);
+                          setError("");
+                          setShowValidation(false);
+                          setCheckFailed(false);
+                          setChecking(false);
                           setDraft(d);
                           setCheckAttempt(value => value + 1);
                           setChange(d.change);
@@ -1084,8 +1164,11 @@ export function GoogleCampaignComposer({
                           );
                           setConfirmed(false);
                           setSection("review");
-                          if (d.change.kind !== "campaign_create")
-                            setCampaignId(d.change.campaignId);
+                          setCampaignId(
+                            d.change.kind === "campaign_create"
+                              ? ""
+                              : d.change.campaignId
+                          );
                         }}
                       >
                         <strong>
@@ -1109,6 +1192,7 @@ export function GoogleCampaignComposer({
               </>
             )}
             {["settings", "targeting", "options"].includes(section) &&
+              destinationReady &&
               !!connection && (
                 <GoogleDeliverySettings
                   {...scope}
@@ -1119,218 +1203,244 @@ export function GoogleCampaignComposer({
                   disabled={locked || busy}
                 />
               )}
-            {section === "format" && !!connection && hasAssets && (
-              <fieldset disabled={locked || busy}>
-                <p>
-                  {current?.campaign.name}
-                  {selectedGroup
-                    ? ` · ${(selectedGroup.assetGroup ?? selectedGroup.adGroup).name}`
-                    : ""}
-                </p>
-                <GoogleFormatPicker
-                  type={creativeType}
-                  includeText={!hasAd}
-                  brandAssets={brandAssets}
-                  value={activeFormat}
-                  onChange={value => {
-                    setFormat(value);
-                    setSection("creative");
-                  }}
-                />
-              </fieldset>
-            )}
-            {(section === "creative" || section === "copy") && !!connection && (
-              <fieldset disabled={locked || busy}>
-                {change.kind !== "campaign_create" && (
-                  <p>
-                    {current?.campaign.name}
-                    {selectedGroup
-                      ? ` · ${(selectedGroup.assetGroup ?? selectedGroup.adGroup).name}`
-                      : ""}
-                  </p>
-                )}
-                {"ad" in change && (
-                  <AdEditor
-                    {...scope}
-                    part={section === "copy" ? "copy" : "creative"}
-                    type={change.type}
-                    format={activeFormat}
-                    ad={change.ad}
-                    onChange={ad => edit({ ...change, ad })}
-                  />
-                )}
-                {(change.kind === "asset_group_assets" ||
-                  change.kind === "asset_group_create") && (
-                  <GooglePmaxAi
-                    key={`${connectionId}:${campaignId}:${change.kind}:${"assetGroupId" in change ? change.assetGroupId : "new"}`}
-                    organizationId={organizationId}
-                    onAdd={asset => {
-                      const list =
-                        change.kind === "asset_group_assets"
-                          ? change.add
-                          : change.assets;
-                      if (
-                        list.some(
-                          a => JSON.stringify(a) === JSON.stringify(asset)
-                        )
-                      )
-                        return;
-                      if (change.kind === "asset_group_assets")
-                        edit({ ...change, add: [...list, asset] });
-                      else edit({ ...change, assets: [...list, asset] });
-                    }}
-                  />
-                )}
-                {change.kind === "campaign_update" && (
-                  <>
-                    <h2>
-                      {current?.campaign.advertisingChannelType ===
-                      "PERFORMANCE_MAX"
-                        ? "Choose an asset group"
-                        : "Choose an ad group"}
-                    </h2>
+            {(section === "creative" ||
+              section === "format" ||
+              section === "copy") &&
+              destinationReady &&
+              !!connection && (
+                <fieldset disabled={locked || busy}>
+                  {section !== "copy" && hasAssets && choices.length > 0 && (
+                    <GoogleFormatPicker
+                      type={creativeType}
+                      includeText={false}
+                      brandAssets={brandAssets}
+                      value={activeFormat}
+                      onChange={value => {
+                        setFormat(value);
+                        setSection("creative");
+                      }}
+                    />
+                  )}
+                  {change.kind !== "campaign_create" && (
                     <p>
-                      Choose where to add your creative, then browse EvokeLoop
-                      Library, upload files, or reuse Google assets.
+                      {current?.campaign.name}
+                      {selectedGroup
+                        ? ` · ${(selectedGroup.assetGroup ?? selectedGroup.adGroup).name}`
+                        : ""}
                     </p>
-                    {detail.isFetching && <p role="status">Loading groups…</p>}
-                    {detail.error && <p role="alert">{detail.error.message}</p>}
-                    <div className="cfg-card-grid">
-                      {current &&
-                        detail.data?.groups.map(row => {
-                          const group = row.assetGroup ?? row.adGroup;
-                          return (
-                            <StudioCard
-                              key={group.id}
-                              title={group.name}
-                              description={label(group.status ?? "UNKNOWN")}
-                              selected={false}
-                              onSelect={() =>
-                                begin(
-                                  row.assetGroup
-                                    ? {
-                                        kind: "asset_group_assets",
-                                        campaignId,
-                                        assetGroupId: String(group.id),
-                                        add: [],
-                                        remove: [],
-                                      }
-                                    : {
-                                        kind: "ad_create",
-                                        campaignId,
-                                        adGroupId: String(group.id),
-                                        type: current.campaign
-                                          .advertisingChannelType as
-                                          | "DISPLAY"
-                                          | "DEMAND_GEN",
-                                        ad: { ...emptyAd(), name: group.name },
-                                      },
-                                  "creative"
+                  )}
+                  {"ad" in change && (
+                    <AdEditor
+                      {...scope}
+                      part={section === "copy" ? "copy" : "creative"}
+                      type={change.type}
+                      format={activeFormat}
+                      ad={change.ad}
+                      onChange={ad => edit({ ...change, ad })}
+                    />
+                  )}
+                  {section === "copy" &&
+                    (change.kind === "asset_group_assets" ||
+                      change.kind === "asset_group_create") && (
+                      <GooglePmaxCopyEditor
+                        key={`${connectionId}:${campaignId}:${change.kind}:${"assetGroupId" in change ? change.assetGroupId : "new"}`}
+                        organizationId={organizationId}
+                        connectionId={connectionId}
+                        assets={
+                          change.kind === "asset_group_assets"
+                            ? change.add
+                            : change.assets
+                        }
+                        existing={
+                          change.kind === "asset_group_assets"
+                            ? (detail.data?.assets ?? [])
+                                .filter(
+                                  row =>
+                                    String(row.assetGroup.id) ===
+                                      change.assetGroupId &&
+                                    !change.remove.some(
+                                      r =>
+                                        r.assetId === String(row.asset.id) &&
+                                        r.field ===
+                                          row.assetGroupAsset.fieldType
+                                    )
                                 )
-                              }
-                            />
-                          );
-                        })}
-                    </div>
-                    {!detail.isFetching &&
-                      current &&
-                      !detail.data?.groups.length && (
-                        <p>
-                          No available groups. Choose another campaign or create
-                          a group in Google Ads.
-                        </p>
+                                .map(row => ({
+                                  field: row.assetGroupAsset.fieldType,
+                                  text: row.asset.textAsset?.text,
+                                }))
+                            : []
+                        }
+                        onChange={assets =>
+                          change.kind === "asset_group_assets"
+                            ? edit({ ...change, add: assets })
+                            : edit({ ...change, assets })
+                        }
+                      />
+                    )}
+                  {change.kind === "campaign_update" && (
+                    <>
+                      <h2>
+                        {current?.campaign.advertisingChannelType ===
+                        "PERFORMANCE_MAX"
+                          ? "Choose an asset group"
+                          : "Choose an ad group"}
+                      </h2>
+                      <p>
+                        Choose where to add your creative, then browse EvokeLoop
+                        Library, upload files, or reuse Google assets.
+                      </p>
+                      {detail.isFetching && (
+                        <p role="status">Loading groups…</p>
                       )}
-                    {!current && (
-                      <Button onClick={() => setSection("campaign")}>
-                        Choose a compatible campaign
-                      </Button>
-                    )}
-                  </>
-                )}
-                {(change.kind === "asset_group_create" ||
-                  change.kind === "asset_group_update") && (
-                  <>
-                    <Field title="Asset group name">
-                      <input
-                        value={change.name}
-                        onChange={e =>
-                          edit({ ...change, name: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field title="Landing page">
-                      <input
-                        type="url"
-                        value={change.finalUrl}
-                        onChange={e =>
-                          edit({ ...change, finalUrl: e.target.value })
-                        }
-                      />
-                    </Field>
-                    {change.kind === "asset_group_update" && (
-                      <Field title="Asset group status">
-                        <select
-                          value={change.status}
-                          onChange={e =>
-                            edit({
-                              ...change,
-                              status: e.target.value as "ENABLED" | "PAUSED",
-                            })
-                          }
-                        >
-                          <option value="ENABLED">Active</option>
-                          <option value="PAUSED">Paused</option>
-                        </select>
-                      </Field>
-                    )}
-                    {change.kind === "asset_group_create" && (
+                      {detail.error && (
+                        <p role="alert">{detail.error.message}</p>
+                      )}
+                      <div className="cfg-card-grid">
+                        {current &&
+                          detail.data?.groups.map(row => {
+                            const group = row.assetGroup ?? row.adGroup;
+                            return (
+                              <StudioCard
+                                key={group.id}
+                                title={group.name}
+                                description={label(group.status ?? "UNKNOWN")}
+                                selected={false}
+                                onSelect={() =>
+                                  begin(
+                                    row.assetGroup
+                                      ? {
+                                          kind: "asset_group_assets",
+                                          campaignId,
+                                          assetGroupId: String(group.id),
+                                          add: [],
+                                          remove: [],
+                                        }
+                                      : {
+                                          kind: "ad_create",
+                                          campaignId,
+                                          adGroupId: String(group.id),
+                                          type: current.campaign
+                                            .advertisingChannelType as
+                                            | "DISPLAY"
+                                            | "DEMAND_GEN",
+                                          ad: {
+                                            ...emptyAd(),
+                                            name: group.name,
+                                          },
+                                        },
+                                    "creative"
+                                  )
+                                }
+                              />
+                            );
+                          })}
+                      </div>
+                      {!detail.isFetching &&
+                        current &&
+                        !detail.data?.groups.length && (
+                          <p>
+                            No available groups. Choose another campaign or
+                            create a group in Google Ads.
+                          </p>
+                        )}
+                      {!current && (
+                        <Button onClick={() => setSection("campaign")}>
+                          Choose a compatible campaign
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {section !== "copy" &&
+                    (change.kind === "asset_group_create" ||
+                      change.kind === "asset_group_update") && (
                       <>
-                        <p>
-                          Add at least 3 headlines, 1 long headline, 2
-                          descriptions, a landscape image and a square image.
-                          Campaign brand assets are retained.
-                        </p>
+                        <Field title="Asset group name">
+                          <input
+                            value={change.name}
+                            onChange={e =>
+                              edit({ ...change, name: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field title="Landing page">
+                          <input
+                            type="url"
+                            value={change.finalUrl}
+                            onChange={e =>
+                              edit({ ...change, finalUrl: e.target.value })
+                            }
+                          />
+                        </Field>
+                        {change.kind === "asset_group_update" && (
+                          <Field title="Asset group status">
+                            <select
+                              value={change.status}
+                              onChange={e =>
+                                edit({
+                                  ...change,
+                                  status: e.target.value as
+                                    | "ENABLED"
+                                    | "PAUSED",
+                                })
+                              }
+                            >
+                              <option value="ENABLED">Active</option>
+                              <option value="PAUSED">Paused</option>
+                            </select>
+                          </Field>
+                        )}
+                        {change.kind === "asset_group_create" && (
+                          <>
+                            <p>
+                              Add at least 3 headlines, 1 long headline, 2
+                              descriptions, a landscape image and a square
+                              image. Campaign brand assets are retained.
+                            </p>
+                            <AssetEditor
+                              key={`${connectionId}:${campaignId}:${activeFormat}`}
+                              format={activeFormat}
+                              {...scope}
+                              assets={change.assets}
+                              brandAssets={
+                                !current?.campaign.brandGuidelinesEnabled
+                              }
+                              onChange={assets => edit({ ...change, assets })}
+                            />
+                          </>
+                        )}
+                      </>
+                    )}
+                  {section !== "copy" &&
+                    change.kind === "asset_group_assets" && (
+                      <>
                         <AssetEditor
-                          key={`${connectionId}:${campaignId}:${activeFormat}`}
+                          key={`${connectionId}:${campaignId}:${change.assetGroupId}:${activeFormat}`}
                           format={activeFormat}
                           {...scope}
-                          assets={change.assets}
+                          assets={change.add}
                           brandAssets={
                             !current?.campaign.brandGuidelinesEnabled
                           }
-                          onChange={assets => edit({ ...change, assets })}
+                          onChange={add => edit({ ...change, add, remove: [] })}
                         />
+                        <GoogleAssetMetricsProvider
+                          {...scope}
+                          campaignId={campaignId}
+                          assetGroupId={change.assetGroupId}
+                        >
+                          <GoogleAssetReplacement
+                            change={change}
+                            assets={detail.data?.assets ?? []}
+                            onChange={edit}
+                            disabled={busy || locked}
+                          />
+                        </GoogleAssetMetricsProvider>
                       </>
                     )}
-                  </>
-                )}
-                {change.kind === "asset_group_assets" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSection("format")}
-                    >
-                      Choose another asset type
-                    </Button>
-                    <AssetEditor
-                      key={`${connectionId}:${campaignId}:${change.assetGroupId}:${activeFormat}`}
-                      format={activeFormat}
-                      {...scope}
-                      assets={change.add}
-                      brandAssets={!current?.campaign.brandGuidelinesEnabled}
-                      onChange={add => edit({ ...change, add, remove: [] })}
-                    />
-                    <GoogleAssetReplacement
-                      change={change}
-                      assets={detail.data?.assets ?? []}
-                      onChange={edit}
-                      disabled={busy || locked}
-                    />
-                  </>
-                )}
-              </fieldset>
-            )}
-            {section === "review" && !!connection && (
+                </fieldset>
+              )}
+            {section === "review" && destinationReady && !!connection && (
               <>
                 <h2>Review this change</h2>
                 <p>
@@ -1360,12 +1470,18 @@ export function GoogleCampaignComposer({
                   libraryAssets={entryAssets.data ?? []}
                 />
                 {change.kind === "asset_group_assets" && (
-                  <GoogleAssetReplacement
-                    change={change}
-                    assets={detail.data?.assets ?? []}
-                    onChange={edit}
-                    disabled={busy || locked}
-                  />
+                  <GoogleAssetMetricsProvider
+                    {...scope}
+                    campaignId={campaignId}
+                    assetGroupId={change.assetGroupId}
+                  >
+                    <GoogleAssetReplacement
+                      change={change}
+                      assets={detail.data?.assets ?? []}
+                      onChange={edit}
+                      disabled={busy || locked}
+                    />
+                  </GoogleAssetMetricsProvider>
                 )}
                 <p>
                   Compatibility is checked automatically against this account’s
@@ -1548,17 +1664,29 @@ export function GoogleCampaignComposer({
               </p>
             )}
             {!!connection &&
+              destinationReady &&
               !(section === "creative" && change.kind === "campaign_update") &&
               !["review", "campaign", "channel", "account"].includes(
                 section
               ) && (
                 <Button
                   onClick={() => {
-                    setSection("review");
+                    setSection(
+                      ["creative", "format"].includes(section) && hasAssets
+                        ? "copy"
+                        : section === "copy" &&
+                            change.kind === "campaign_create"
+                          ? "settings"
+                          : "review"
+                    );
                     setConfirmed(false);
                   }}
                 >
-                  Review change →
+                  {["creative", "format"].includes(section) && hasAssets
+                    ? "Continue to Copy →"
+                    : section === "copy" && change.kind === "campaign_create"
+                      ? "Continue to Delivery →"
+                      : "Review change →"}
                 </Button>
               )}
           </section>

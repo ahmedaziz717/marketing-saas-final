@@ -1,9 +1,15 @@
+import { googleAssetMetrics } from "../lib/googleAssetMetrics";
+import { googleAssetMetricsDays } from "../../shared/googleAssetMetrics";
 import { googleLibraryVideo } from "../lib/googleVideoUploads";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { scopeSchema } from "../../shared/channels";
-import { googleChangeSchema } from "../../shared/googleCampaigns";
+import {
+  googleAssetInputSchema,
+  googleChangeSchema,
+} from "../../shared/googleCampaigns";
+import { googleCopyRequestSchema } from "../../shared/googleCopy";
 import { requireOrganizationRole } from "../lib/access";
 import { libraryDatabase } from "../lib/assetLibrary";
 import { GoogleAdsError } from "../lib/googleAdsApi";
@@ -11,6 +17,7 @@ import { GoogleMutationError } from "../lib/googleAdsMutate";
 import { and, eq, inArray } from "drizzle-orm";
 import { brandKits, products } from "../../drizzle/schema";
 import { generatePmaxCopy } from "../lib/googlePmaxAi";
+import { googleCopyContext } from "../lib/googleCopyContext";
 import { attachMarketingCategories } from "../lib/catalogCategories";
 import { selectProductFacts } from "../lib/productFacts";
 import { categorySelectionState } from "../../shared/catalogCategories";
@@ -55,6 +62,9 @@ export const googleCampaignsRouter = router({
         direction: z.string().trim().max(2000).default(""),
         defaultInstructions: z.string().trim().min(1).max(6000).optional(),
         neutralCategories: z.boolean().default(false),
+        selectedAssets: z.array(googleAssetInputSchema).max(50).default([]),
+        connectionId: z.string().uuid().optional(),
+        copyRequest: googleCopyRequestSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -75,7 +85,21 @@ export const googleCampaignsRouter = router({
           code: "PRECONDITION_FAILED",
           message: "Set up your Brand Kit before generating PMax copy.",
         });
-      const catalog = input.productIds.length
+      const selected = await googleCopyContext(
+        db,
+        input.organizationId,
+        input.selectedAssets,
+        input.connectionId
+      );
+      const productIds = Array.from(
+        new Set([...input.productIds, ...selected.productIds])
+      );
+      if (productIds.length > 50)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose fewer product creatives for one copy request.",
+        });
+      const catalog = productIds.length
         ? await db
             .select()
             .from(products)
@@ -83,11 +107,13 @@ export const googleCampaignsRouter = router({
               and(
                 eq(products.organizationId, input.organizationId),
                 eq(products.status, "approved"),
-                inArray(products.id, input.productIds)
+                inArray(products.id, productIds)
               )
             )
         : [];
-      if (catalog.length !== new Set(input.productIds).size)
+      if (
+        input.productIds.some(id => !catalog.some(product => product.id === id))
+      )
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Choose approved products from this workspace.",
@@ -106,27 +132,35 @@ export const googleCampaignsRouter = router({
           message:
             "Selected products have mixed or unmapped marketing categories. Confirm neutral wording or choose one confirmed category.",
         });
-      return generatePmaxCopy(
-        {
-          brand: {
-            name: brand.name,
-            businessProfile: brand.businessProfile,
-            voice: brand.voice,
-            requiredClaims: brand.requiredClaims,
-            prohibitedContent: brand.prohibitedContent,
-          },
-          products: categorized.map(product =>
-            selectProductFacts(product, {
-              productId: product.id,
-              featuredSpecKeys: [],
-              includePrice: false,
-              includeDescription: true,
-            })
-          ),
-          neutralCategories: input.neutralCategories,
-          direction: input.direction,
+      const context = {
+        brand: {
+          name: brand.name,
+          businessProfile: brand.businessProfile,
+          voice: brand.voice,
+          requiredClaims: brand.requiredClaims,
+          prohibitedContent: brand.prohibitedContent,
         },
-        input.defaultInstructions
+        products: categorized.map(product =>
+          selectProductFacts(product, {
+            productId: product.id,
+            featuredSpecKeys: [],
+            includePrice: false,
+            includeDescription: true,
+          })
+        ),
+        neutralCategories: input.neutralCategories,
+        direction: input.direction,
+        ...(selected.assets.length ? { assets: selected.assets } : {}),
+      };
+      // Preserve legacy callers while new requests carry exact output counts and
+      // authorized visual references. This mutation produces suggestions only.
+      if (!input.selectedAssets.length && !input.copyRequest)
+        return generatePmaxCopy(context, input.defaultInstructions);
+      return generatePmaxCopy(
+        context,
+        input.defaultInstructions,
+        input.copyRequest,
+        selected.images
       );
     }),
   videoUploadStatus: protectedProcedure
@@ -160,6 +194,27 @@ export const googleCampaignsRouter = router({
           input.connectionId,
           input.includeInactive,
           input.campaignId
+        );
+      })
+    ),
+  assetMetrics: protectedProcedure
+    .input(
+      account.extend({
+        campaignId: z.string().regex(/^\d{1,20}$/),
+        assetGroupId: z.string().regex(/^\d{1,20}$/),
+        days: googleAssetMetricsDays.default(30),
+      })
+    )
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleAssetMetrics(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.campaignId,
+          input.assetGroupId,
+          input.days
         );
       })
     ),

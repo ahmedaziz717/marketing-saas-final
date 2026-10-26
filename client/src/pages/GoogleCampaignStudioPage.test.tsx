@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   library: [] as any[],
   resources: [] as any[],
   drafts: [] as any[],
+  accounts: [] as any[],
 }));
 const account = {
   id: "google",
@@ -53,10 +54,18 @@ vi.mock("@/lib/trpc", () => ({
     googleAds: {
       connections: {
         useQuery: () => ({
-          data: { items: [account], livePublishingEnabled: true },
+          data: { items: api.accounts, livePublishingEnabled: true },
         }),
       },
       campaigns: {
+        assetMetrics: {
+          useQuery: () => ({
+            data: undefined,
+            isPending: false,
+            isError: false,
+            refetch: vi.fn(),
+          }),
+        },
         draftPmaxCopy: {
           useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
         },
@@ -101,6 +110,7 @@ function setup(query = "?connectionId=google") {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  api.accounts = [account];
   api.library = [];
   api.resources = [];
   api.drafts = [];
@@ -141,6 +151,10 @@ it.each([
     section("Copy");
     if (type === "Shopping")
       expect(screen.getByText(/Shopping ads use titles/)).toBeTruthy();
+    else if (type === "Performance Max")
+      expect(
+        screen.getByRole("region", { name: "Headlines draft editor" })
+      ).toBeTruthy();
     else expect(screen.getByLabelText(/Headlines · one per line/)).toBeTruthy();
     section("Delivery");
     expect(
@@ -152,7 +166,11 @@ it.each([
     expect(api.mutate).not.toHaveBeenCalled();
   }
 );
-it("requires an explicit account and keeps inactive campaign discovery off", () => {
+it("requires an explicit account when multiple are connected and keeps inactive campaign discovery off", () => {
+  api.accounts = [
+    account,
+    { ...account, id: "google-other", name: "Other Google account" },
+  ];
   setup("");
   expect(
     screen
@@ -275,7 +293,6 @@ it("adds images and videos to the selected existing asset group without changing
     screen.queryByRole("button", { name: "Select Library video" })
   ).toBeNull();
   click("Select Approved image");
-  click("Choose another asset type");
   click("Select Videos");
   expect(
     screen.queryByRole("button", { name: "Select Google image" })
@@ -300,6 +317,7 @@ it("adds images and videos to the selected existing asset group without changing
     state: "validated",
     reviewHash: "hash",
   }));
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
   expect(api.mutate).toHaveBeenCalledWith({
@@ -335,17 +353,10 @@ it("validates YouTube entries and keeps video/text sources separate", () => {
   });
   click("Add asset");
   expect(screen.queryByRole("alert")).toBeNull();
-  click("Choose another asset type");
-  click("Select Text");
-  expect(screen.getByLabelText("Text")).toBeTruthy();
-  expect(
-    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
-      "radio",
-      {
-        name: "Video",
-      }
-    )
-  ).toBeNull();
+  section("Copy");
+  click("Add headline");
+  expect(screen.getByLabelText("Headlines 1")).toBeTruthy();
+  expect(screen.queryByLabelText("YouTube link or video ID")).toBeNull();
 });
 it.each(["DISPLAY", "DEMAND_GEN"])(
   "only offers implemented %s formats for an existing ad group",
@@ -360,15 +371,11 @@ it.each(["DISPLAY", "DEMAND_GEN"])(
 it("keeps campaign-level brand assets out of the asset-group picker", () => {
   existingCampaign("PERFORMANCE_MAX", true);
   expect(screen.queryByRole("button", { name: "Select Logos" })).toBeNull();
-  click("Select Text");
+  section("Copy");
   expect(
-    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
-      "radio",
-      {
-        name: /Business/,
-      }
-    )
-  ).toBeNull();
+    screen.getByRole("region", { name: "Headlines draft editor" })
+  ).toBeTruthy();
+  expect(screen.queryByLabelText(/Business name/)).toBeNull();
 });
 
 it("offers all three source tiles and renders uploads inline without mutating on selection", () => {
@@ -490,7 +497,7 @@ it("keeps missing saved Google drafts unavailable instead of submitting local co
   entry.value.draftRevision = 1;
   localStorage.setItem(key, JSON.stringify(entry));
   setup();
-  section("Delivery");
+  expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
   await waitFor(() =>
     expect(screen.getByText(/saved Google draft is unavailable/)).toBeTruthy()
   );
@@ -595,6 +602,7 @@ it("checks automatically and only publishes after explicit approval", async () =
     reviewHash: "review",
     validatedAtMs: Date.now(),
   }));
+  click("Continue to Copy →");
   click("Review change →");
   expect(
     screen.queryByRole("button", { name: "Validate with Google" })
@@ -644,6 +652,7 @@ it("keeps provider failures visible and retries the saved draft without publishi
       (saved = { ...input, id: "draft", revision: 1, state: "draft" })
   );
   api.validate.mockRejectedValueOnce(new Error("Landscape image too small"));
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() =>
     expect(screen.getByText("Landscape image too small")).toBeTruthy()
@@ -681,6 +690,7 @@ it("ignores a late check after switching accounts or leaving review", async () =
         finish = resolve;
       })
   );
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() => expect(api.validate).toHaveBeenCalled());
   section("Destination");
@@ -713,7 +723,7 @@ it("carries an approved Creative Studio image into its selected asset group", ()
   click("Select Existing group");
   expect(
     within(screen.getByRole("radiogroup", { name: "Placement" }))
-      .getByRole("radio", { name: "Square image · 1:1" })
+      .getByRole("radio", { name: "Automatic image size · recommended" })
       .getAttribute("aria-checked")
   ).toBe("true");
   expect(
@@ -749,6 +759,7 @@ it("keeps a Creative Studio video in the EvokeLoop picker and filters its destin
 it("shows incomplete details without submitting a Google check", async () => {
   existingCampaign();
   click("Select Images");
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
   expect(api.mutate).not.toHaveBeenCalled();
@@ -760,6 +771,7 @@ it("shows a contextual activation action and preview before checks finish withou
   existingCampaign();
   click("Select Images");
   click("Select Approved image");
+  click("Continue to Copy →");
   click("Review change →");
   expect(screen.getByAltText("To add: Approved image")).toBeTruthy();
   expect(
@@ -791,6 +803,7 @@ it("requires explicit image replacement at capacity, and cancelling keeps all ex
   click("Select Images");
   click("Select Approved image");
   expect(screen.getByText("Choose images to replace")).toBeTruthy();
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() =>
     expect(screen.getByText(/Image capacity reached/)).toBeTruthy()
@@ -849,6 +862,7 @@ it("submits only once for repeated activation clicks while a request is pending"
         finish = resolve;
       })
   );
+  click("Continue to Copy →");
   click("Review change →");
   await waitFor(() =>
     expect(
@@ -865,4 +879,340 @@ it("submits only once for repeated activation clicks while a request is pending"
       screen.getByText("Google confirmed your creative update.")
     ).toBeTruthy()
   );
+});
+
+it("opens the sole connected account automatically without mutating Google", () => {
+  setup("");
+  expect(api.calls).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: "google", includeInactive: false })
+  );
+  expect(
+    screen
+      .getByRole("button", { name: "Open Campaign category" })
+      .hasAttribute("disabled")
+  ).toBe(false);
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("shows approved assets immediately and preserves picks across format and source navigation", () => {
+  existingCampaign();
+  expect(
+    screen.getByRole("button", { name: "Select Approved image" })
+  ).toBeTruthy();
+  expect(screen.queryByText("Required fields")).toBeNull();
+  click("Select Approved image");
+  click("Select Videos");
+  click("Select Google Ads Library");
+  click("Select Google video");
+  click("Select Images");
+  click("Select EvokeLoop Library");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Approved image" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  click("Select Videos");
+  click("Select Google Ads Library");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Google video" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+
+it("shows required-field summaries only in review, not over the asset picker or copy editor", async () => {
+  existingCampaign();
+  expect(screen.queryByText("Required fields")).toBeNull();
+  click("Continue to Copy →");
+  expect(screen.queryByText("Required fields")).toBeNull();
+  click("Review change →");
+  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
+  section("Creative");
+  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Select Approved image" })
+  ).toBeTruthy();
+  expect(api.validate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("retains workspace picks on explicit account change but never retargets old Google assets", async () => {
+  api.accounts = [
+    account,
+    {
+      ...account,
+      id: "google-other",
+      name: "Other Google account",
+      accountId: "456",
+    },
+  ];
+  existingCampaign();
+  click("Select Approved image");
+  click("Select Videos");
+  click("Select Google Ads Library");
+  click("Select Google video");
+  section("Destination");
+  click("Open Account category");
+  click("Select Other Google account");
+  expect(
+    screen.getByText(/Workspace library selections are kept/)
+  ).toBeTruthy();
+  click(/^Existing campaign /);
+  click("Add images, videos & text");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Approved image" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  click("Select Videos");
+  click("Select Google Ads Library");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Google video" })
+      .getAttribute("aria-pressed")
+  ).toBe("false");
+  api.mutate.mockImplementation(async input => ({
+    ...input,
+    id: "draft",
+    revision: 1,
+    state: "draft",
+  }));
+  api.validate.mockImplementation(async input => ({
+    ...input,
+    change: api.mutate.mock.calls.at(-1)![0].change,
+    state: "validated",
+    reviewHash: "hash",
+  }));
+  click("Continue to Copy →");
+  click("Review change →");
+  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
+  expect(api.mutate.mock.calls[0][0]).toMatchObject({
+    connectionId: "google-other",
+    change: {
+      add: [
+        {
+          field: "MARKETING_IMAGE",
+          source: { kind: "library", key: "asset:1" },
+        },
+      ],
+      remove: [],
+    },
+  });
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("creates a new group inside the existing PMax campaign without requiring new-campaign budget settings", async () => {
+  existingCampaign("PERFORMANCE_MAX", true);
+  api.library.push({
+    key: "asset:4",
+    name: "Approved square",
+    mediaType: "image",
+    state: "approved",
+    width: 1080,
+    height: 1080,
+    url: "https://example.com/square.png",
+  });
+  section("Destination");
+  click("Open Campaign category");
+  expect(screen.getByRole("button", { name: "New asset group" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Add images, videos & text" })
+  ).toBeTruthy();
+  click("New asset group");
+  expect(screen.queryByLabelText("Daily budget")).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Asset group name"), {
+    target: { value: "Seasonal products" },
+  });
+  fireEvent.change(screen.getByLabelText("Landing page"), {
+    target: { value: "https://example.com/seasonal" },
+  });
+  click("Select Approved image");
+  click("Select Approved square");
+  click("Continue to Copy →");
+  const textFields = [
+    [
+      "Add headline",
+      "Headlines",
+      ["Shop seasonal", "Explore seasonal products", "Find your next favorite"],
+    ],
+    [
+      "Add long headline",
+      "Long headlines",
+      ["Explore seasonal products for your next project"],
+    ],
+    [
+      "Add description",
+      "Descriptions",
+      [
+        "Browse the seasonal collection.",
+        "Find product details and choose what suits you.",
+      ],
+    ],
+  ] as const;
+  for (const [button, label, values] of textFields)
+    values.forEach((value, index) => {
+      click(button);
+      fireEvent.change(screen.getByLabelText(`${label} ${index + 1}`), {
+        target: { value },
+      });
+    });
+  api.mutate.mockImplementation(async input => ({
+    ...input,
+    id: "new-group-draft",
+    revision: 1,
+    state: "draft",
+  }));
+  api.validate.mockImplementation(async input => ({
+    ...input,
+    change: api.mutate.mock.calls.at(-1)![0].change,
+    state: "validated",
+    reviewHash: "group-hash",
+  }));
+  click("Review change →");
+  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
+  const change = api.mutate.mock.calls[0][0].change;
+  expect(change).toEqual({
+    kind: "asset_group_create",
+    campaignId: "11",
+    name: "Seasonal products",
+    finalUrl: "https://example.com/seasonal",
+    assets: [
+      { field: "MARKETING_IMAGE", source: { kind: "library", key: "asset:1" } },
+      {
+        field: "SQUARE_MARKETING_IMAGE",
+        source: { kind: "library", key: "asset:4" },
+      },
+      ...textFields.flatMap(([, label, values]) =>
+        values.map(text => ({
+          field:
+            label === "Headlines"
+              ? "HEADLINE"
+              : label === "Long headlines"
+                ? "LONG_HEADLINE"
+                : "DESCRIPTION",
+          source: { kind: "text", text },
+        }))
+      ),
+    ],
+  });
+  expect(change).not.toHaveProperty("dailyBudget");
+  expect(change).not.toHaveProperty("remove");
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("requires group name and landing page for new groups without showing new-campaign required settings", async () => {
+  existingCampaign();
+  section("Destination");
+  click("Open Campaign category");
+  click("New asset group");
+  click("Select Approved image");
+  click("Continue to Copy →");
+  click("Review change →");
+  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
+  const required = screen.getByText("Required fields").parentElement!;
+  expect(required.textContent).toContain("name");
+  expect(required.textContent).toContain("finalUrl");
+  expect(required.textContent).not.toMatch(
+    /dailyBudget|bidding|locationIds|languageIds/
+  );
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+
+it("clears a prior review failure when switching to Saved drafts before choosing another draft", async () => {
+  existingCampaign();
+  click("Select Approved image");
+  api.mutate.mockImplementation(async input => ({
+    ...input,
+    id: "prior-draft",
+    revision: 1,
+    state: "draft",
+  }));
+  api.validate.mockRejectedValueOnce(
+    new Error("Previous destination failed validation")
+  );
+  click("Continue to Copy →");
+  click("Review change →");
+  await waitFor(() =>
+    expect(
+      screen.getByText("Previous destination failed validation")
+    ).toBeTruthy()
+  );
+  section("Destination");
+  click("Open Campaign category");
+  click("Saved drafts");
+  expect(
+    screen.queryByText("Previous destination failed validation")
+  ).toBeNull();
+  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("does not expose placeholder new-campaign controls after switching back to existing destinations", () => {
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  fireEvent.change(screen.getByLabelText("Campaign name"), {
+    target: { value: "Unsaved new launch" },
+  });
+  section("Destination");
+  click("Open Campaign category");
+  click("New campaign");
+  section("Delivery");
+  expect(
+    (screen.getByLabelText("Campaign name") as HTMLInputElement).value
+  ).toBe("Unsaved new launch");
+  section("Destination");
+  click("Open Campaign category");
+  click("Existing campaigns");
+  expect(screen.queryByRole("button", { name: /^Copy / })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
+  expect(screen.queryByLabelText("Campaign name")).toBeNull();
+  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("opens a saved new-campaign draft without attaching the previous existing destination", () => {
+  existingCampaign();
+  api.drafts = [
+    {
+      id: "saved-new",
+      revision: 2,
+      state: "draft",
+      change: {
+        kind: "campaign_create",
+        type: "SEARCH",
+        name: "Saved launch",
+        status: "ENABLED",
+        politicalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+        dailyBudget: 10,
+        ad: {
+          name: "Saved ad",
+          finalUrl: "https://example.com",
+          headlines: [],
+          descriptions: [],
+          assets: [],
+          path1: "",
+          path2: "",
+        },
+        bidding: { strategy: "MAXIMIZE_CONVERSIONS" },
+        locationIds: [],
+        languageIds: [],
+        keywords: [],
+      },
+    },
+  ];
+  section("Destination");
+  click("Open Campaign category");
+  click("Saved drafts");
+  click(/Saved launch/);
+  expect(screen.queryByText("Existing campaign")).toBeNull();
+  section("Delivery");
+  expect(
+    (screen.getByLabelText("Campaign name") as HTMLInputElement).value
+  ).toBe("Saved launch");
+  expect(api.mutate).not.toHaveBeenCalled();
 });

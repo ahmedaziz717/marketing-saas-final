@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import recipe from "../docs/catalog-recipes/clx-chassis.json";
 import kitRecipe from "../docs/catalog-recipes/clx-kit-gallery.json";
+import { galleryPilotRecipeSchema } from "../shared/catalogGalleryPilot";
 import galleryFixture from "./fixtures/clx-chassis-gallery.json";
 import { apiCatalogConfigSchema } from "../shared/apiCatalog";
 import { mapCatalogMediaGroups } from "./lib/catalogMediaMapping";
@@ -81,7 +82,7 @@ it("upgrades an existing thumbnail's stable catalog identity through its explici
   const entry = catalogEntrySchema.parse({name: "Kit alias fixture", productUrl: "https://shop.test/kit-alias", imageUrl: thumbnail});
   const product = await importCatalogEntry(db, 770, entry);
   const [before] = await db.select().from(productImages).where(eq(productImages.productId, product.id));
-  const mediaGroups = mapCatalogMediaGroups({code: "gmhorrtu4b03bm", name: entry.name, metadata: {gallery: {size: 6}, images: {main: "kits/gmhorrtu4b03bm/gmhorrtu4b03bm_gaming-pc.png"}}}, apiCatalogConfigSchema.parse(kitRecipe), "https://api.cybertron.com")!;
+  const mediaGroups = mapCatalogMediaGroups({code: "gmhorrtu4b03bm", name: entry.name, metadata: {gallery: {size: 6}, images: {main: "kits/gmhorrtu4b03bm/gmhorrtu4b03bm_gaming-pc.png"}}}, apiCatalogConfigSchema.parse(galleryPilotRecipeSchema.parse({...kitRecipe, detailIdentityPath: "code"})), "https://api.cybertron.com")!;
   await importCatalogEntry(db, 770, {...entry, mediaGroups});
   const images = await db.select().from(productImages).where(eq(productImages.productId, product.id));
   expect(images).toHaveLength(6);

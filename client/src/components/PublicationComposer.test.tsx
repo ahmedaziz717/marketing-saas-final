@@ -14,8 +14,15 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { contentSchema } from "@shared/channels";
+import { studioDraftKey, writeStudioDraft } from "@/lib/studioDrafts";
 import { PROMPT_REGISTRY } from "@shared/promptRegistry";
-const promptDefaults = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system", updatedAtMs: null }));
+const promptDefaults = PROMPT_REGISTRY.map(p => ({
+  ...p,
+  value: p.baseline,
+  revision: 0,
+  source: "system",
+  updatedAtMs: null,
+}));
 import type { Publication } from "./PublicationComposer";
 
 const api = vi.hoisted(() => ({
@@ -26,6 +33,10 @@ const api = vi.hoisted(() => ({
   plan: undefined as any,
   brand: undefined as any,
   accounts: [] as any[],
+  connectionsLoading: false,
+  connectionsFetching: false,
+  connectionsError: null as null | { message: string },
+  connectionsAvailable: true,
   role: "owner",
   liveSocial: true,
   review: vi.fn(),
@@ -39,7 +50,10 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    prompts: { list: { useQuery: () => ({ data: promptDefaults }) }, change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
+    prompts: {
+      list: { useQuery: () => ({ data: promptDefaults }) },
+      change: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({
       prompts: { list: { invalidate: vi.fn() } },
       publishing: {
@@ -57,11 +71,17 @@ vi.mock("@/lib/trpc", () => ({
       },
       connections: {
         useQuery: () => ({
-          data: {
-            items: api.accounts,
-            liveSocial: api.liveSocial,
-            liveAds: api.liveSocial,
-          },
+          data: api.connectionsAvailable
+            ? {
+                items: api.accounts,
+                liveSocial: api.liveSocial,
+                liveAds: api.liveSocial,
+              }
+            : undefined,
+          isLoading: api.connectionsLoading,
+          isFetching: api.connectionsFetching,
+          error: api.connectionsError,
+          refetch: vi.fn(),
         }),
       },
     },
@@ -189,6 +209,10 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.clear();
   vi.clearAllMocks();
+  api.connectionsLoading = false;
+  api.connectionsFetching = false;
+  api.connectionsError = null;
+  api.connectionsAvailable = true;
   api.plan = undefined;
   api.brand = undefined;
   api.role = "owner";
@@ -445,6 +469,7 @@ it("adds a valid website link directly to a video caption and hides image-only A
 });
 
 it("allows incomplete drafts but shows actionable required fields before continuing", () => {
+  api.accounts.push({ ...api.accounts[0], id: "page2", name: "Other Page" });
   render(<PublicationComposer {...baseProps} />);
   clickJourney(screen.getByRole("button", { name: "Save & continue" }));
   expect(api.save).not.toHaveBeenCalled();
@@ -531,7 +556,7 @@ it("keeps a Studio social draft intact across steps and saves timing without app
     />
   );
   expect(screen.queryByRole("dialog")).toBeNull();
-  clickJourney(screen.getByRole("button", { name: "Select Our Page" }));
+  expect(screen.queryByRole("button", { name: "Select Our Page" })).toBeNull();
   clickJourney(screen.getByRole("button", { name: /Copy Words & AI/ }));
   clickJourney(screen.getByRole("button", { name: "Open Compose category" }));
   changeField(caption(), {
@@ -565,7 +590,7 @@ it("keeps a Studio social draft intact across steps and saves timing without app
   expect(api.queue).not.toHaveBeenCalled();
 });
 
-it("disables read-only Studio accounts and omits expired connections", () => {
+it("counts only eligible Pages and omits read-only and expired choices", () => {
   api.accounts.push({
     ...api.accounts[0],
     id: "read",
@@ -580,15 +605,19 @@ it("disables read-only Studio accounts and omits expired connections", () => {
   });
   render(<PublicationComposer {...baseProps} studio />);
   expect(
-    (
-      screen.getByRole("button", {
-        name: "Select Read only Page",
-      }) as HTMLButtonElement
-    ).disabled
-  ).toBe(true);
+    screen.queryByRole("button", { name: "Select Read only Page" })
+  ).toBeNull();
   expect(
     screen.queryByRole("button", { name: "Select Expired Page" })
   ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Select Our Page" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Open Facebook Page category" })
+  ).toBeNull();
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: "page" })
+  );
 });
 
 it("uses edited Studio timing for existing drafts and blocks dates in the past", () => {
@@ -1037,4 +1066,265 @@ it("hides publisher recovery controls from creators", () => {
   expect(
     screen.queryByRole("button", { name: "Return failed item to draft" })
   ).toBeNull();
+});
+
+it.each([false, true])(
+  "auto-selects a single eligible social Page without a picker (studio=%s)",
+  studio => {
+    render(<PublicationComposer {...baseProps} studio={studio} />);
+    expect(
+      screen.queryByRole("radiogroup", { name: "Social account" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Select Our Page" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Open Facebook Page category" })
+    ).toBeNull();
+    expect(screen.getAllByText("Our Page").length).toBeGreaterThan(0);
+    expect(api.save).not.toHaveBeenCalled();
+    expect(api.reviewAsync).not.toHaveBeenCalled();
+    saveDraft();
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: "page" })
+    );
+  }
+);
+
+it("keeps multiple social identities selectable independently of a single ad account", () => {
+  api.accounts.push({ ...api.accounts[0], id: "page2", name: "Other Page" });
+  api.accounts.push({
+    ...api.accounts[0],
+    channel: "meta_ads",
+    id: "ad",
+    name: "Only ad account",
+  });
+  render(<PublicationComposer {...baseProps} studio />);
+  expect(screen.getByRole("button", { name: "Select Our Page" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Select Other Page" })
+  ).toBeTruthy();
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: null })
+  );
+});
+
+it("omits a single ad account and bound Page identity while retaining other setup and the review destination", () => {
+  api.accounts = [
+    {
+      ...api.accounts[0],
+      channel: "meta_ads",
+      id: "ad",
+      name: "Only ad account",
+      details: {
+        capabilities: ["publish"],
+        pageId: "123",
+        pageName: "Bound Page",
+      },
+    },
+  ];
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="meta_ads"
+      initialAdSetId="456"
+      studioEntry={{ section: "preview", visit: 1 }}
+    />
+  );
+  expect(
+    screen.queryByRole("button", { name: "Select Only ad account" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Open Ad account category" })
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Open Page identity category" })
+  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit destination" })).toBeNull();
+  expect(
+    screen.getByText("Meta Ads · Only ad account · Page: Bound Page")
+  ).toBeTruthy();
+  clickJourney(screen.getByRole("button", { name: /Destination Channel/ }));
+  expect(
+    screen.getByRole("button", { name: "Open Campaign & ad set category" })
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Open Ad details category" })
+  ).toBeTruthy();
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+});
+
+it("keeps missing Page identity guidance even when the sole account picker is omitted", () => {
+  api.accounts = [
+    {
+      ...api.accounts[0],
+      channel: "meta_ads",
+      id: "ad",
+      name: "Only ad account",
+    },
+  ];
+  render(
+    <PublicationComposer {...baseProps} studio initialChannel="meta_ads" />
+  );
+  expect(
+    screen.queryByRole("button", { name: "Select Only ad account" })
+  ).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Open Page identity category" })
+  ).toBeTruthy();
+  expect(
+    screen.getByText(/This ad account has no Page identity connected/)
+  ).toBeTruthy();
+});
+
+it.each(["loading", "fetching", "error"])(
+  "waits for successful account loading before singleton selection (%s)",
+  async state => {
+    api.connectionsLoading = state === "loading";
+    api.connectionsFetching = state === "fetching";
+    api.connectionsError =
+      state === "error" ? { message: "Unavailable" } : null;
+    const view = render(<PublicationComposer {...baseProps} studio />);
+    expect(
+      screen.getByRole("button", { name: "Open Facebook Page category" })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Select Our Page" })
+    ).toBeNull();
+    saveDraft();
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: null })
+    );
+    await completeSave();
+    api.save.mockClear();
+    api.connectionsLoading = false;
+    api.connectionsFetching = false;
+    api.connectionsError = null;
+    view.rerender(<PublicationComposer {...baseProps} studio />);
+    expect(
+      screen.queryByRole("button", { name: "Open Facebook Page category" })
+    ).toBeNull();
+    saveDraft();
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: "page" })
+    );
+  }
+);
+
+it("restores the account choice on one-to-many refresh and never retargets it when it disappears", () => {
+  const view = render(<PublicationComposer {...baseProps} studio />);
+  api.accounts.push({ ...api.accounts[0], id: "other", name: "Other Page" });
+  view.rerender(<PublicationComposer {...baseProps} studio />);
+  expect(
+    screen
+      .getByRole("button", { name: "Select Our Page" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Other Page" })
+      .getAttribute("aria-pressed")
+  ).toBe("false");
+  api.accounts = [api.accounts[1]];
+  view.rerender(<PublicationComposer {...baseProps} studio />);
+  expect(
+    screen.getByText(/It has not been replaced automatically/)
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Use Other Page instead" })
+  ).toBeTruthy();
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: "page" })
+  );
+  api.accounts = [];
+  view.rerender(<PublicationComposer {...baseProps} studio />);
+  expect(
+    screen.getByText(/No connected accounts with publishing permission/)
+  ).toBeTruthy();
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+});
+
+it("requires explicit replacement of an unavailable saved destination", () => {
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      item={deliveryItem({ connectionId: "missing" })}
+    />
+  );
+  expect(
+    screen.getByText(/It has not been replaced automatically/)
+  ).toBeTruthy();
+  expect(api.save).not.toHaveBeenCalled();
+  clickJourney(screen.getByRole("button", { name: "Use Our Page instead" }));
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: "page" })
+  );
+});
+
+it("updates the bound identity and clears campaign fields when an ad account changes", () => {
+  api.accounts = ["First", "Second"].map((name, i) => ({
+    ...api.accounts[0],
+    channel: "meta_ads",
+    id: `ad${i}`,
+    name: `${name} ad account`,
+    details: {
+      capabilities: ["publish"],
+      pageId: `${i + 1}`,
+      pageName: `${name} Page`,
+    },
+  }));
+  render(
+    <PublicationComposer
+      {...baseProps}
+      studio
+      initialChannel="meta_ads"
+      initialConnectionId="ad0"
+      initialAdSetId="456"
+    />
+  );
+  expect(
+    screen.queryByRole("button", { name: "Open Page identity category" })
+  ).toBeNull();
+  clickJourney(
+    screen.getByRole("button", { name: "Select Second ad account" })
+  );
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      connectionId: "ad1",
+      content: expect.objectContaining({ adSetId: "", metaCampaignId: "" }),
+    })
+  );
+  expect(api.reviewAsync).not.toHaveBeenCalled();
+});
+
+it("does not overwrite a restored local destination with a new singleton default", () => {
+  writeStudioDraft(studioDraftKey(10, 1, "activation:facebook", "new::"), {
+    version: 1,
+    value: {
+      placement: false,
+      carousel: false,
+      connectionId: "previous-page",
+      assetKey: "",
+      content: contentSchema.parse({
+        title: "Saved draft",
+        message: "Keep this draft destination",
+      }),
+      timezone: "UTC",
+      local: "",
+    },
+  });
+  render(<PublicationComposer {...baseProps} studio />);
+  expect(
+    screen.getByText(/It has not been replaced automatically/)
+  ).toBeTruthy();
+  saveDraft();
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: "previous-page" })
+  );
 });

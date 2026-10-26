@@ -782,3 +782,20 @@
 .studio-copy-fields.is-generating textarea:placeholder-shown::placeholder {
   color: transparent;
 }
+
+/* A fixed singleton destination stays visible in the summary, not as a picker. */
+.activation-summary .activation-fixed-destination {
+  position: relative;
+  text-align: left;
+  border: 1px solid var(--cfg-line);
+  border-radius: 9px;
+  padding: 10px;
+  min-width: 0;
+  background: var(--cfg-bg);
+}
+.activation-fixed-destination small {
+  display: block;
+  color: var(--cfg-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}

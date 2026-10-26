@@ -1,3 +1,7 @@
+import {
+  googleImageMatches,
+  googleImageSpecs,
+} from "../../shared/googleImagePlacement";
 import type { DraftSaveHook } from "./mcpDraftReceipt";
 import {
   pmaxMissingAssets,
@@ -134,13 +138,16 @@ export async function googleCampaignResources(
       if (kind === "assets")
         return (
           await read(
-            "SELECT asset.id, asset.name, asset.type, asset.text_asset.text, asset.image_asset.full_size.url, asset.youtube_video_asset.youtube_video_id FROM asset ORDER BY asset.id DESC LIMIT 200"
+            "SELECT asset.id, asset.name, asset.type, asset.text_asset.text, asset.image_asset.full_size.url, asset.image_asset.full_size.width_pixels, asset.image_asset.full_size.height_pixels, asset.youtube_video_asset.youtube_video_id FROM asset ORDER BY asset.id DESC LIMIT 200"
           )
         ).map(r => ({
           id: String(r.asset.id),
           name:
             r.asset.name || r.asset.textAsset?.text || `Asset ${r.asset.id}`,
           type: r.asset.type,
+          width: Number(r.asset.imageAsset?.fullSize?.widthPixels) || undefined,
+          height:
+            Number(r.asset.imageAsset?.fullSize?.heightPixels) || undefined,
           url: (r.asset.imageAsset?.fullSize?.url ||
             (/^[\w-]{11}$/.test(r.asset.youtubeVideoAsset?.youtubeVideoId ?? "")
               ? `https://i.ytimg.com/vi/${r.asset.youtubeVideoAsset.youtubeVideoId}/hqdefault.jpg`
@@ -374,22 +381,10 @@ async function prepare(
       const meta = await image.metadata();
       const width = meta.width ?? 0,
         height = meta.height ?? 0;
-      const specs: Record<string, [number, number, number]> = {
-        MARKETING_IMAGE: [600, 314, 1.91],
-        SQUARE_MARKETING_IMAGE: [300, 300, 1],
-        PORTRAIT_MARKETING_IMAGE: [480, 600, 0.8],
-        LOGO: [128, 128, 1],
-        LANDSCAPE_LOGO: [512, 128, 4],
-      };
-      const spec = specs[item.field];
-      if (
-        !spec ||
-        width < spec[0] ||
-        height < spec[1] ||
-        Math.abs(width / height / spec[2] - 1) > 0.01
-      )
+      const spec = googleImageSpecs[item.field];
+      if (!googleImageMatches(item.field, width, height))
         fail(
-          `${asset.name}: ${item.field.toLowerCase().replace(/_/g, " ")} requires at least ${spec?.[0]} × ${spec?.[1]} pixels and a ${spec?.[2]}:1 ratio.`
+          `${asset.name}: ${item.field.toLowerCase().replace(/_/g, " ")} requires at least ${spec?.[0]} × ${spec?.[1]} pixels and a ${spec?.[2]}:1 ratio. This image is ${width} × ${height}. Return to Creative and choose Automatic image size or a compatible placement; the size of the image being replaced does not determine the new image’s placement.`
         );
       const imageBytes = await image.rotate().png().toBuffer();
       if (imageBytes.length > 5 * 1024 * 1024)

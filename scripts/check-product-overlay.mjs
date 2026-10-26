@@ -216,6 +216,31 @@ try {
     }
     await click("Adjust original product");
     await pause(150);
+    const beginManualIfNeeded = async () => {
+      if (item.applied) return;
+      assert.equal(
+        await evaluate(
+          `!!document.querySelector('img[alt="Original product 1"]')`
+        ),
+        false,
+        "unprepared overlay must not replace the complete design"
+      );
+      assert.equal(
+        await evaluate(
+          `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save as new version').disabled`
+        ),
+        true
+      );
+      await click("Place manually at native size");
+      await pause(40);
+    };
+    const resetForEditing = async () => {
+      await click("Reset placement");
+      await pause(40);
+      await beginManualIfNeeded();
+    };
+    await beginManualIfNeeded();
+
     assert.equal(
       await evaluate(
         `document.querySelector('img[alt="Original product 1"]')?.complete`
@@ -278,7 +303,7 @@ try {
       initial.left,
       "drag did not move product"
     );
-    await click("Reset placement");
+    await resetForEditing();
     await pause(40);
     assert.equal(
       await evaluate(
@@ -339,7 +364,7 @@ try {
       Math.abs(resized.width / resized.height - 384 / 568) < 0.003,
       "corner resize distorted source proportions"
     );
-    await click("Reset placement");
+    await resetForEditing();
     await pause(40);
     await evaluate(
       `Array.from(document.querySelectorAll('label')).find(l=>l.textContent.includes('Compare with original design')).querySelector('input').click()`
@@ -351,7 +376,7 @@ try {
       ),
       false
     );
-    await click("Reset placement");
+    await resetForEditing();
     await pause(30);
     assert.equal(
       await evaluate(
@@ -398,7 +423,7 @@ try {
       `({aligned:window.__overlayFixture.aligned,saves:window.__overlayFixture.saved.length})`
     );
     assert.deepEqual(calls, { aligned: 0, saves: 0 });
-    await click("Reset placement");
+    await resetForEditing();
     results.push({
       name,
       passed: true,
