@@ -139,6 +139,25 @@ export function GoogleAssetReplacement({
       )}
       {change.remove.length > 0 && (
         <>
+          {group
+            .filter(
+              a =>
+                ["HEADLINE", "LONG_HEADLINE", "DESCRIPTION"].includes(
+                  a.assetGroupAsset.fieldType
+                ) &&
+                change.remove.some(
+                  r =>
+                    r.assetId === String(a.asset.id) &&
+                    r.field === a.assetGroupAsset.fieldType
+                )
+            )
+            .map(a => (
+              <p key={a.assetGroupAsset.resourceName}>
+                Selected {label(a.assetGroupAsset.fieldType).toLowerCase()} to
+                replace:{" "}
+                {a.asset.textAsset?.text || `Google asset ${a.asset.id}`}
+              </p>
+            ))}
           <p role="status">
             Only the {change.remove.length} selected association
             {change.remove.length === 1 ? "" : "s"} will be{" "}

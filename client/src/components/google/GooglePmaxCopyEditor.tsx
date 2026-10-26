@@ -14,12 +14,17 @@ export function GooglePmaxCopyEditor({
   assets,
   onChange,
   existing = [],
+  onReplaceExisting,
 }: {
   organizationId: number;
   connectionId: string;
   assets: GoogleAssetInput[];
   onChange: (assets: GoogleAssetInput[]) => void;
-  existing?: Array<{ field: string; text?: string }>;
+  existing?: Array<{ assetId?: string; field: string; text?: string }>;
+  onReplaceExisting?: (
+    target: { assetId: string; field: GoogleAssetInput["field"] },
+    replacement: GoogleAssetInput
+  ) => void;
 }) {
   const occupied = [
     ...existing.map(a => a.field),
@@ -38,6 +43,62 @@ export function GooglePmaxCopyEditor({
     ]
       .filter(Boolean)
       .slice(0, googleCopySpecs[key].maximum);
+  }
+  const replacements = googleCopyFields.flatMap(key => {
+    const field = googleCopySpecs[key].field;
+    return [
+      ...assets.flatMap((asset, index) =>
+        asset.field === field &&
+        asset.source.kind === "text" &&
+        asset.source.text.trim()
+          ? [
+              {
+                id: JSON.stringify(["draft", index, asset]),
+                field: key,
+                label: `Draft: ${asset.source.text}`,
+                index,
+                existing: undefined,
+              },
+            ]
+          : []
+      ),
+      ...existing.flatMap(asset =>
+        onReplaceExisting && asset.assetId && asset.field === field
+          ? [
+              {
+                id: JSON.stringify(["existing", asset]),
+                field: key,
+                label: `Google: ${asset.text || `Asset ${asset.assetId}`}`,
+                index: undefined,
+                existing: { assetId: asset.assetId, field },
+              },
+            ]
+          : []
+      ),
+    ];
+  });
+  function replace(id: string, item: GoogleAssetInput) {
+    const target = replacements.find(option => option.id === id);
+    if (!target || item.source.kind !== "text") return;
+    const spec = googleCopySpecs[target.field];
+    const text = item.source.text.trim();
+    if (
+      item.field !== spec.field ||
+      !text ||
+      text.length > spec.characters ||
+      copy[target.field].some(
+        value => value.trim().toLowerCase() === text.toLowerCase()
+      )
+    )
+      return;
+    const replacement = { ...item, source: { kind: "text" as const, text } };
+    if (target.existing) onReplaceExisting?.(target.existing, replacement);
+    else if (target.index !== undefined)
+      onChange(
+        assets.map((asset, index) =>
+          index === target.index ? replacement : asset
+        )
+      );
   }
   function add(items: GoogleAssetInput[]) {
     const next = [...assets];
@@ -89,6 +150,8 @@ export function GooglePmaxCopyEditor({
         assets={assets}
         occupiedFields={occupied}
         existingCopy={copy}
+        replacementOptions={replacements}
+        onReplace={replace}
         onAdd={item => add([item])}
         onApply={add}
       />
@@ -96,7 +159,8 @@ export function GooglePmaxCopyEditor({
       <p>
         Headlines are short titles; long headlines are Google's longer title
         field, not a separate subheadline. Counts include retained Google
-        assets. Existing text below is read-only and stays in the campaign.
+        assets. Existing text stays in the campaign unless you explicitly select
+        it for replacement and activate the reviewed draft.
       </p>
       {googleCopyFields.map(key => {
         const spec = googleCopySpecs[key];
