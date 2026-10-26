@@ -1,3 +1,4 @@
+import { StudioRunBar } from "./configurator/StudioRunBar";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { PartnerLogo } from "./PartnerLogo";
 import { WorkflowDataResult } from "./WorkflowDataResult";
@@ -14,7 +15,7 @@ import {
   workflowVisibleFields,
 } from "@shared/workflowStudio";
 import { fieldValueProblem } from "@shared/workflowInputs";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AppWindow, ArrowRight, Workflow } from "lucide-react";
 import { toast } from "sonner";
@@ -215,6 +216,68 @@ function WorkflowAppRunnerSession({
   const quote = trpc.workflows.quote.useMutation(),
     run = trpc.workflows.run.useMutation(),
     stop = trpc.workflows.stop.useMutation();
+  const [estimating, setEstimating] = useState(false);
+  const [estimateRetry, setEstimateRetry] = useState(0);
+  const runs = detail.data?.runs.filter(r => r.appVersionId === id) ?? [];
+  const active = runs.find(r => ["queued", "running"].includes(r.status));
+  const quoteRequest = useRef(quote.mutateAsync);
+  quoteRequest.current = quote.mutateAsync;
+  useEffect(() => {
+    const item = app.data;
+    setReview(null);
+    if (!item || active) {
+      setEstimating(false);
+      return;
+    }
+    const invalid = workflowVisibleFields(item.graph, values).some(
+      n =>
+        n.config.field &&
+        fieldValueProblem(n.config.field, workflowFieldValue(n, values))
+    );
+    if (invalid) {
+      setEstimating(false);
+      return;
+    }
+    let cancelled = false;
+    const revision = inputRevision.current;
+    setEstimating(true);
+    const timer = setTimeout(async () => {
+      const inputs = workflowAppFields(item.graph).map(n => ({
+        id: n.id,
+        ...(n.config.field
+          ? { value: workflowFieldValue(n, values) }
+          : n.type === "image"
+            ? { imageKey: workflowFieldValue(n, values) || undefined }
+            : { text: workflowFieldValue(n, values) }),
+      }));
+      try {
+        const q = await quoteRequest.current({
+          organizationId,
+          id: item.workflowId,
+          revision: item.workflowRevision,
+          appVersionId: id,
+          inputs,
+        });
+        if (!cancelled && revision === inputRevision.current) {
+          setReview({
+            credits: q.credits,
+            requestId: crypto.randomUUID(),
+            inputs,
+          });
+          setProblem("");
+        }
+      } catch (e) {
+        if (!cancelled && revision === inputRevision.current)
+          setProblem((e as Error).message);
+      } finally {
+        if (!cancelled) setEstimating(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [app.data, values, organizationId, id, active?.id, estimateRetry]);
   if (app.error)
     return (
       <div role="alert">
@@ -225,9 +288,7 @@ function WorkflowAppRunnerSession({
   if (!app.data) return <p>Opening App…</p>;
   const item = app.data,
     section = workflowSections[item.family];
-  const fields = workflowAppFields(item.graph);
-  const runs = detail.data?.runs.filter(r => r.appVersionId === id) ?? [];
-  const active = runs.find(r => ["queued", "running"].includes(r.status));
+
   const latest = runs.find(r => r.id === selectedRun) ?? active ?? runs[0];
   const output = availableWorkflowResults(latest);
   const changeValue = (fieldId: string, value: string) => {
@@ -236,48 +297,24 @@ function WorkflowAppRunnerSession({
     setReview(null);
     setProblem("");
   };
-  const estimate = async () => {
-    if (submitting.current || active) return;
-    setProblem("");
-    for (const n of workflowVisibleFields(item.graph, values)) {
-      const error =
-        n.config.field &&
-        fieldValueProblem(n.config.field, workflowFieldValue(n, values));
-      if (error) {
-        setProblem(`${n.title}: ${error}`);
-        setPage(workflowFieldPlacement(n).page);
-        return;
-      }
-    }
-    submitting.current = true;
-    const revision = inputRevision.current;
-    const inputs = fields.map(n => ({
-      id: n.id,
-      ...(n.config.field
-        ? { value: workflowFieldValue(n, values) }
-        : n.type === "image"
-          ? { imageKey: workflowFieldValue(n, values) || undefined }
-          : { text: workflowFieldValue(n, values) }),
-    }));
-    try {
-      const q = await quote.mutateAsync({
-        organizationId,
-        id: item.workflowId,
-        revision: item.workflowRevision,
-        appVersionId: id,
-        inputs,
-      });
-      if (revision !== inputRevision.current) return;
-      setReview({ credits: q.credits, requestId: crypto.randomUUID(), inputs });
-      setPage("review");
-    } catch (e) {
-      setProblem((e as Error).message);
-    } finally {
-      submitting.current = false;
-    }
-  };
+  const missing = workflowVisibleFields(item.graph, values).flatMap(n => {
+    const error =
+      n.config.field &&
+      fieldValueProblem(n.config.field, workflowFieldValue(n, values));
+    return error ? [{ node: n, error }] : [];
+  });
   const confirm = async () => {
-    if (!review || submitting.current || active) return;
+    if (submitting.current || active || estimating) return;
+    if (missing.length) {
+      setProblem(`${missing[0].node.title}: ${missing[0].error}`);
+      setPage(workflowFieldPlacement(missing[0].node).page);
+      return;
+    }
+    if (!review) {
+      setProblem("");
+      setEstimateRetry(n => n + 1);
+      return;
+    }
     submitting.current = true;
     setProblem("");
     try {
@@ -322,7 +359,7 @@ function WorkflowAppRunnerSession({
       onChange={changeValue}
       page={page}
       onPageChange={setPage}
-      busy={quote.isPending || run.isPending}
+      busy={run.isPending}
       status={
         latest ? `${workflowRunStatusLabel(latest)} · View results` : undefined
       }
@@ -332,6 +369,37 @@ function WorkflowAppRunnerSession({
           key={latest?.id ?? "empty"}
           values={output}
           pending={!!active}
+        />
+      }
+      actionBar={
+        <StudioRunBar
+          quoteLabel={
+            active
+              ? "Run in progress"
+              : review
+                ? `${review.credits} estimated AI credits`
+                : estimating
+                  ? "Estimating credits…"
+                  : missing.length
+                    ? "Complete your inputs"
+                    : "Estimate unavailable"
+          }
+          detail={
+            active
+              ? "Your outputs appear in Results"
+              : "Updates automatically with your inputs"
+          }
+          busy={run.isPending}
+          remaining={missing.length}
+          disabled={!!run.isPending || (!active && estimating)}
+          label={
+            active
+              ? "View run progress"
+              : !review && !estimating && !missing.length
+                ? "Retry estimate"
+                : "Run App"
+          }
+          onRun={active ? () => setPage("results") : confirm}
         />
       }
       review={
@@ -349,48 +417,7 @@ function WorkflowAppRunnerSession({
                   ? "Creates your copy and post draft. Review finished assets when prompted, then open the result in Activation Studio to edit, approve and publish or schedule."
                   : "Runs this published version with your chosen inputs. Your outputs appear in Results as each branch completes."}
             </p>
-            {active ? (
-              <>
-                <p>A run is already in progress.</p>
-                <button
-                  type="button"
-                  className="cfg-primary"
-                  onClick={() => setPage("results")}
-                >
-                  View run progress
-                </button>
-              </>
-            ) : review ? (
-              <>
-                <div className="wf-studio-credit">
-                  <strong>{review.credits}</strong>
-                  <span>estimated AI credits</span>
-                </div>
-                <p>
-                  Changing any input clears this estimate so you can review the
-                  updated cost.
-                </p>
-                <button
-                  type="button"
-                  className="cfg-primary"
-                  disabled={run.isPending}
-                  onClick={confirm}
-                >
-                  {run.isPending ? "Starting…" : "Confirm & run App"}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="cfg-primary"
-                disabled={quote.isPending || run.isPending}
-                onClick={estimate}
-              >
-                {quote.isPending
-                  ? "Checking inputs & estimating…"
-                  : "Review credits & run"}
-              </button>
-            )}
+            {active && <p>A run is already in progress.</p>}
           </div>
           <WorkflowAutomationControls
             organizationId={organizationId}

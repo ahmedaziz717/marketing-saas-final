@@ -42,6 +42,7 @@ export type LibraryAsset = {
   copyText?: string;
   campaignPlanId?: number;
   hasProductOverlay?: boolean;
+  canAdjustOriginalProduct?: boolean;
   productOverlayAlignment?: "automatic" | "manual" | "needs_adjustment";
   promotion?: import("./creativeBuilder").CreativeSetup["promotion"];
   intelligence?: import("./creativeIntelligence").CreativeIntelligence;

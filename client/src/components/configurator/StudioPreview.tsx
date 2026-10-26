@@ -561,7 +561,7 @@ export function StudioPreview({
                 {selectedAsset?.productOverlayAlignment === "needs_adjustment" && (
                   <p role="status" className="cfg-help">The original product could not be aligned confidently. Your generated design is saved unchanged; check Adjust original product before approval.</p>
                 )}
-                {kind === "image" && selectedAsset?.hasProductOverlay && (
+                {kind === "image" && (selectedAsset?.canAdjustOriginalProduct || selectedAsset?.hasProductOverlay) && ["owner", "admin", "creator"].includes(role) && (
                   <ProductOverlayEditor
                     organizationId={organizationId}
                     variantId={Number(selected.key.split(":")[1])}

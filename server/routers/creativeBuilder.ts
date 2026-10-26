@@ -7,7 +7,7 @@ import {
   catalogOverlaySources,
 } from "../lib/productOverlaySources";
 import { productOverlayReplacementsSchema } from "../../shared/productOverlay";
-import { manuallyAppliedProductOverlay } from "../../shared/productOverlay";
+import { originalProductSelections, manuallyAppliedProductOverlay } from "../../shared/productOverlay";
 import type { ProductOverlayFailureDiagnostic } from "../../shared/productOverlay";
 import { relatedCatalogSources } from "../../shared/catalogSources";
 import {
@@ -870,14 +870,34 @@ async function readOverlayDesign(
       )
     )
     .limit(1);
-  const metadata = variant?.renderMetadata?.productPreservation;
+  let metadata = variant?.renderMetadata?.productPreservation;
+  if (variant && !metadata && variant.imageStorageKey && variant.renderMetadata) {
+    const selections = originalProductSelections(variant.renderMetadata);
+    if (selections.length) {
+      const candidates = await catalogOverlaySources(db, organizationId, variant.renderMetadata.productIds);
+      const cutouts = [];
+      for (const selection of selections) {
+        const source = candidates.find(c => c.productId === selection.productId && c.key === `catalog-image:${selection.imageId}`);
+        if (!source) throw new TRPCError({code: "PRECONDITION_FAILED", message: "The original catalog photo is unavailable. Restore that photo in Catalog before adjusting this image."});
+        cutouts.push(await readProductCutout(source.storageKey));
+      }
+      const layers = await layoutPreservedProducts(cutouts, variant.renderMetadata, variant.renderMetadata.requestedSetup?.placement ?? "auto");
+      metadata = { method: "editable_original_v3", designStorageKey: variant.imageStorageKey, designUrl: variant.imageUrl!, applied: false,
+        alignment: "needs_adjustment", layers: layers.map(({sourceKey, sha256, left, top, width, height}) => ({sourceKey, sha256, left, top, width, height})) };
+    }
+  }
   if (!variant || metadata?.method !== "editable_original_v3")
     throw new TRPCError({
       code: "NOT_FOUND",
       message:
-        "This version does not have editable original-product layers. Generate a new design with product overlay enabled.",
+        "This image has no saved catalog-product reference to adjust.",
     });
   return { variant, metadata };
+}
+
+function overlayRevision(variant: typeof creativeVariants.$inferSelect,
+  metadata: import("../../shared/productOverlay").ProductOverlayMetadata, revision: string) {
+  return variant.renderMetadata?.productPreservation ? revision : stableHash({revision, metadata});
 }
 
 export const creativeDraftSaveInput = organizationInput.extend({
@@ -1114,7 +1134,7 @@ export const creativeBuilderRouter = router({
         designUrl: await productOverlayPreview(metadata.designStorageKey),
         width: variant.renderMetadata!.width,
         height: variant.renderMetadata!.height,
-        revision: asset.revision,
+        revision: overlayRevision(variant, metadata, asset.revision),
         applied: metadata.applied,
         automaticFailure: metadata.automaticFailure,
         automaticFailureDiagnostic: metadata.automaticFailureDiagnostic,
@@ -1187,7 +1207,7 @@ export const creativeBuilderRouter = router({
         input.organizationId,
         `creative:${variant.id}`
       );
-      if (asset.revision !== input.revision)
+      if (overlayRevision(variant, metadata, asset.revision) !== input.revision)
         throw new TRPCError({
           code: "CONFLICT",
           message: "This version changed. Refresh before saving.",
@@ -1224,7 +1244,7 @@ export const creativeBuilderRouter = router({
             input.organizationId,
             `creative:${variant.id}`
           );
-          if (current.revision !== input.revision)
+          if (current.revision !== asset.revision)
             throw new TRPCError({
               code: "CONFLICT",
               message: "This version changed. Refresh before saving.",

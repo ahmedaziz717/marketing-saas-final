@@ -273,3 +273,81 @@ it("does not convert a live descriptive estimate into an invented discounted pri
   expect(request).toHaveBeenCalledTimes(1);
   expect(request.mock.calls[0][0]).toContain("/estimate/");
 });
+
+it.each([400, 404, 405, 429, 500, 503])(
+  "uses reviewed Seedance pricing when the optional estimate endpoint returns %s",
+  async status => {
+    const { providerRequestRate } = await import("./lib/providerQuote");
+    const { generationModel } = await import("../shared/modelCatalog");
+    const { defaultModelRate } = await import("./lib/modelCatalog");
+    const model = generationModel(
+      "higgsfield:bytedance/seedance-2.5/reference-to-video"
+    )!;
+    request.mockResolvedValue(new Response("{}", { status }));
+    const rate = await providerRequestRate(
+      defaultModelRate(model),
+      model.providerModel,
+      {
+        duration: 5,
+        resolution: "480p",
+        aspect_ratio: "1:1",
+        image_urls: ["https://example.test/product.png"],
+      }
+    );
+    expect(rate).toMatchObject({
+      costBasis: "published_rate_estimate",
+      estimatedCostMicros: 1027200,
+    });
+    expect(rate.pricingCalculation).toMatchObject({
+      width: 640,
+      height: 640,
+      outputSeconds: 5,
+      discount: 0,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(String(request.mock.calls[0][0])).toContain("/estimate/");
+  }
+);
+it.each([401, 403, 422, 423])(
+  "preserves provider account and input errors (%s)",
+  async status => {
+    const { providerRequestRate } = await import("./lib/providerQuote");
+    const { generationModel } = await import("../shared/modelCatalog");
+    const { defaultModelRate } = await import("./lib/modelCatalog");
+    const model = generationModel(
+      "higgsfield:bytedance/seedance-2.5/reference-to-video"
+    )!;
+    request.mockResolvedValue(new Response("{}", { status }));
+    await expect(
+      providerRequestRate(defaultModelRate(model), model.providerModel, {
+        duration: 5,
+        resolution: "480p",
+        aspect_ratio: "1:1",
+      })
+    ).rejects.toMatchObject({ status });
+  }
+);
+it("does not guess prices for unknown formulas or malformed account estimates", async () => {
+  const { providerRequestRate } = await import("./lib/providerQuote");
+  const { generationModel } = await import("../shared/modelCatalog");
+  const { defaultModelRate } = await import("./lib/modelCatalog");
+  const model = generationModel(
+    "higgsfield:bytedance/seedance-2.5/reference-to-video"
+  )!;
+  request.mockResolvedValue(new Response(JSON.stringify({ usd: "invalid" })));
+  await expect(
+    providerRequestRate(defaultModelRate(model), model.providerModel, {
+      duration: 5,
+      resolution: "480p",
+      aspect_ratio: "1:1",
+    })
+  ).rejects.toThrow();
+  request.mockResolvedValue(new Response("{}", { status: 400 }));
+  await expect(
+    providerRequestRate(defaultModelRate(model), model.providerModel, {
+      duration: 5,
+      resolution: "unknown",
+      aspect_ratio: "1:1",
+    })
+  ).rejects.toThrow();
+});

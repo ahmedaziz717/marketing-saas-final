@@ -160,7 +160,7 @@ it("publishes the same authored grouping in the Studio preview while preserving 
   expect(
     (
       screen.getByRole("button", {
-        name: "Review credits & run",
+        name: "Run App",
       }) as HTMLButtonElement
     ).disabled
   ).toBe(true);
@@ -269,9 +269,7 @@ it("adds Model selector in App form with one default, lets the designer allow al
     );
   }
   render(<Harness />);
-  clickJourney(
-      screen.getByRole("radio", { name: "Model selector" })
-  );
+  clickJourney(screen.getByRole("radio", { name: "Model selector" }));
   clickJourney(screen.getByRole("button", { name: "+ Add field" }));
   let graph = JSON.parse(screen.getByTestId("graph").textContent!);
   expect(graph.edges[0]).toMatchObject({

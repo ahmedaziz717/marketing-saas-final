@@ -614,6 +614,84 @@ it("recovers a sharp same-product source into a separate version without provide
       createdAtMs: Date.now(),
     })
     .returning();
+  // A catalog creative without preservation can be adjusted after generation.
+  const [withoutOverlay] = await db
+    .insert(creativeVariants)
+    .values({
+      ...base,
+      name: "Catalog image without original layer",
+      status: "approved",
+      imageStorageKey: "recovery-design",
+      imageUrl: "/recovery-design",
+      renderMetadata: {
+        ...template.renderMetadata!,
+        productPreservation: undefined,
+        width: 200,
+        height: 200,
+        productIds: [productId],
+        requestedSetup: {
+          ...setup(),
+          preserveProduct: undefined,
+          products: [
+            {
+              productId,
+              imageId: image.id,
+              featuredSpecKeys: [],
+              includePrice: false,
+            },
+          ],
+        },
+      },
+    })
+    .returning();
+  const originalAsset = await readLibraryAsset(
+    db,
+    organizationId,
+    `creative:${withoutOverlay.id}`
+  );
+  expect(originalAsset).toMatchObject({
+    hasProductOverlay: false,
+    canAdjustOriginalProduct: true,
+    state: "approved",
+  });
+  const originalCalls = provider.calls;
+  const initialOverlay = await caller.creativeBuilder.productOverlay({
+    organizationId,
+    variantId: withoutOverlay.id,
+  });
+  expect(initialOverlay).toMatchObject({
+    applied: false,
+    alignment: "needs_adjustment",
+    layers: [{ productId }],
+  });
+  const initialRequest = {
+    organizationId,
+    variantId: withoutOverlay.id,
+    revision: initialOverlay.revision,
+    layers: [{ left: 50, top: 40, width: 60, height: 120 }],
+  };
+  const adjusted =
+    await caller.creativeBuilder.saveProductOverlay(initialRequest);
+  expect(
+    await readLibraryAsset(db, organizationId, adjusted.key)
+  ).toMatchObject({
+    parentKey: originalAsset.key,
+    hasProductOverlay: true,
+    state: "draft",
+  });
+  expect(
+    await readLibraryAsset(db, organizationId, originalAsset.key)
+  ).toMatchObject({
+    revision: originalAsset.revision,
+    hasProductOverlay: false,
+    state: "approved",
+  });
+  expect(provider.calls).toBe(originalCalls);
+  provider.storage.set("recovery-large", await cutout(81));
+  await expect(
+    caller.creativeBuilder.saveProductOverlay(initialRequest)
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  provider.storage.set("recovery-large", larger);
   const preview = await caller.creativeBuilder.productOverlay({
     organizationId,
     variantId: source.id,
@@ -793,41 +871,89 @@ it("persists person choices and rejects unapproved or cross-workspace person ass
   }
 });
 
-
 it("creates a draft image from a pending product without category, price, URL, description or specs", async () => {
   const db = await database();
-  const [pending] = await db.insert(products).values({
-    organizationId, name: "Incomplete imported product", status: "pending",
-    dedupeKey: "incomplete-" + suffix, productUrl: "", provenance: {}, createdAtMs: Date.now(),
-    specifications: {}, updatedAtMs: Date.now(),
-  }).returning();
-  const [photo] = await db.insert(productImages).values({
-    organizationId, productId: pending.id, storageKey: "test/incomplete.png",
-    url: "/manus-storage/test/incomplete.png", isPrimary: 1,
-    sourceUrl: "https://example.test/incomplete.png", createdAtMs: Date.now(),
-  }).returning();
-  const input = { ...defaultCreativeSetup(),
-    products: [{ productId: pending.id, imageId: photo.id, featuredSpecKeys: [], includePrice: false }],
+  const [pending] = await db
+    .insert(products)
+    .values({
+      organizationId,
+      name: "Incomplete imported product",
+      status: "pending",
+      dedupeKey: "incomplete-" + suffix,
+      productUrl: "",
+      provenance: {},
+      createdAtMs: Date.now(),
+      specifications: {},
+      updatedAtMs: Date.now(),
+    })
+    .returning();
+  const [photo] = await db
+    .insert(productImages)
+    .values({
+      organizationId,
+      productId: pending.id,
+      storageKey: "test/incomplete.png",
+      url: "/manus-storage/test/incomplete.png",
+      isPrimary: 1,
+      sourceUrl: "https://example.test/incomplete.png",
+      createdAtMs: Date.now(),
+    })
+    .returning();
+  const input = {
+    ...defaultCreativeSetup(),
+    products: [
+      {
+        productId: pending.id,
+        imageId: photo.id,
+        featuredSpecKeys: [],
+        includePrice: false,
+      },
+    ],
     formatIds: [defaultCreativeSetup().formatIds[0]],
     copy: { headline: "Explore the design", subheadline: "", cta: "Explore" },
   };
   // Discovery, copy and quote must all work without manually opting into neutral wording.
   const options = await caller.creativeBuilder.options({ organizationId });
-  expect(options.products.find(p => p.id === pending.id)?.status).toBe("pending");
-  await expect(caller.creativeBuilder.refreshCopy({ organizationId, setup: input })).resolves.toHaveProperty("headline");
-  const quote = await caller.creativeBuilder.quote({ organizationId, setup: input });
-  const saved = await caller.creativeBuilder.save({ organizationId, setup: input });
-  const started = await caller.creativeBuilder.generate({ organizationId,
-    briefId: saved.briefId, expectedUpdatedAtMs: saved.updatedAtMs,
-    requestId: randomUUID(), quotedCredits: quote.credits,
+  expect(options.products.find(p => p.id === pending.id)?.status).toBe(
+    "pending"
+  );
+  await expect(
+    caller.creativeBuilder.refreshCopy({ organizationId, setup: input })
+  ).resolves.toHaveProperty("headline");
+  const quote = await caller.creativeBuilder.quote({
+    organizationId,
+    setup: input,
+  });
+  const saved = await caller.creativeBuilder.save({
+    organizationId,
+    setup: input,
+  });
+  const started = await caller.creativeBuilder.generate({
+    organizationId,
+    briefId: saved.briefId,
+    expectedUpdatedAtMs: saved.updatedAtMs,
+    requestId: randomUUID(),
+    quotedCredits: quote.credits,
   });
   await processNextBuilderJob(db);
-  await vi.waitFor(async () => {
-    const overview = await caller.creatives.overview({ organizationId });
-    expect(overview.jobs.find(job => job.id === started.jobId)?.status).toBe("completed");
-    expect(overview.variants.filter(item => item.jobId === started.jobId).map(item => item.status)).toEqual(["pending"]);
-  }, { timeout: 10000 });
-  const [unchanged] = await db.select().from(products).where(eq(products.id, pending.id));
+  await vi.waitFor(
+    async () => {
+      const overview = await caller.creatives.overview({ organizationId });
+      expect(overview.jobs.find(job => job.id === started.jobId)?.status).toBe(
+        "completed"
+      );
+      expect(
+        overview.variants
+          .filter(item => item.jobId === started.jobId)
+          .map(item => item.status)
+      ).toEqual(["pending"]);
+    },
+    { timeout: 10000 }
+  );
+  const [unchanged] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, pending.id));
   expect(unchanged.status).toBe("pending");
   expect(unchanged.category).toBeNull();
 });

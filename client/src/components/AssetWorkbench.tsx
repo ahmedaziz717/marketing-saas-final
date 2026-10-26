@@ -616,7 +616,7 @@ export function AssetWorkbench({
           {selected && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
               <section className="min-w-0">
-                {selected.hasProductOverlay && canCreate && (
+                {(selected.canAdjustOriginalProduct || selected.hasProductOverlay) && canCreate && (
                   <div className="mb-3">
                     <ProductOverlayEditor
                       organizationId={organizationId!}

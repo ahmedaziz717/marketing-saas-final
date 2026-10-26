@@ -1,3 +1,4 @@
+import { StudioRunBar } from "../../client/src/components/configurator/StudioRunBar";
 import { GalleryElementsFixture, galleryWorkflowChoices } from "./gallery-elements";
 import { componentCatalogFixture } from "./catalog-components";
 import { CatalogGalleryPilot } from "../../client/src/components/CatalogGalleryPilot";
@@ -1011,6 +1012,8 @@ function respond(path: string, input: any) {
       warnings: [],
     };
   }
+  if (path === "assetLibrary.studioList" && which === "creative-history")
+    return [{...studioDraftAssets[0], key: "creative:8", canAdjustOriginalProduct: true, hasProductOverlay: false}];
   if (path === "assetLibrary.studioList")
     return ["studio-drafts", "video-studio", "video-ugc"].includes(which)
       ? studioDraftAssets
@@ -1414,6 +1417,7 @@ function WorkflowPreviewFixture() {
           ]}
         />
       }
+      actionBar={<StudioRunBar quoteLabel="4 estimated AI credits" detail="Updates automatically with your inputs" label="Run App" onRun={() => {}} />}
       review={<p>Review credits and inputs here.</p>}
       results={<p>Full saved result and run history.</p>}
     />
@@ -2034,6 +2038,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       )!;
       if (summaryToggle.getAttribute("aria-expanded") !== "true")
         await pressStudioControl(summaryToggle, "Open saved result preview");
+      const runBar = document.querySelector<HTMLElement>(".wf-studio .cfg-run-bar")!;
+      check(!!runBar && runBar.querySelectorAll(".cfg-primary").length === 1, "App uses one shared creation action");
+      check(getComputedStyle(runBar).position === "sticky", "App creation action stays sticky");
+      check(!document.body.textContent?.includes("Review credits & run"), "App has no separate credit review action");
       const stage = document.querySelector<HTMLElement>(".wf-studio-stage")!;
       const preview = document.querySelector<HTMLElement>(
         ".wf-studio-stage-preview"
@@ -2463,6 +2471,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       const toggle = document.querySelector<HTMLButtonElement>(".journey-summary-toggle")!;
       if (toggle.getAttribute("aria-expanded") !== "true") await pressStudioControl(toggle, "Open creative history preview");
       await click("Preview Previous collection");
+      if (["owner", "admin", "creator"].includes(role)) check(!!button("Adjust original product"), "Catalog creative can be adjusted without a pre-existing overlay");
       check(!!document.querySelector('.cfg-preview-gallery [aria-label="Previous generated versions"]'), "Thumbnails remain beneath the preview in Review");
       check(mutations.length === 0, "Inspecting history never generates, saves or approves");
       layout();
