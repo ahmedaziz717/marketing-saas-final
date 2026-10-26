@@ -1,5 +1,8 @@
 import type { DraftSaveHook } from "./mcpDraftReceipt";
-import { pmaxMissingAssets } from "../../shared/googleCampaigns";
+import {
+  pmaxMissingAssets,
+  pmaxChangedAssetIssues,
+} from "../../shared/googleCampaigns";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -281,8 +284,9 @@ async function prepare(
             })
             .map(a => a.field),
         ];
-        const missing = pmaxMissingAssets(
+        const missing = pmaxChangedAssetIssues(
           fields,
+          [...change.add.map(a => a.field), ...change.remove.map(a => a.field)],
           snapshot?.campaign.brandGuidelinesEnabled
         );
         if (missing.length) fail(missing.map(i => i.message).join(" "));

@@ -1,3 +1,4 @@
+import { GoogleAssetReplacement } from "./GoogleAssetReplacement";
 import {
   GoogleFormatPicker,
   googleCreativeFormats,
@@ -30,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PartnerLogo } from "@/components/PartnerLogo";
 import {
+  pmaxImageCapacity,
   googleCampaignTypes,
   googleChangeSchema,
   type GoogleChange,
@@ -110,10 +112,7 @@ export function GoogleCampaignComposer({
   const [editingSettings, setEditingSettings] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const [checkAttempt, setCheckAttempt] = useState(0);
-  const entryAssets = trpc.assetLibrary.list.useQuery(
-    { organizationId },
-    { enabled: params.has("asset") }
-  );
+  const entryAssets = trpc.assetLibrary.list.useQuery({ organizationId });
   const entryApplied = useRef(false);
   useEffect(() => {
     if (entryApplied.current || !entryAssets.data || !params.has("asset"))
@@ -418,6 +417,30 @@ export function GoogleCampaignComposer({
       },
     ],
   });
+  const imageCapacity =
+    change.kind === "asset_group_assets"
+      ? pmaxImageCapacity(
+          (detail.data?.assets ?? [])
+            .filter(a => String(a.assetGroup.id) === change.assetGroupId)
+            .map(a => ({
+              assetId: String(a.asset.id),
+              field: a.assetGroupAsset.fieldType,
+            })),
+          change.add,
+          change.remove
+        )
+      : [];
+  const needsReplacement = imageCapacity.some(c => c.remaining > 0);
+  const activationLabel =
+    change.kind === "asset_group_assets"
+      ? change.remove.length
+        ? change.add.length
+          ? "Confirm replacement & activate"
+          : "Confirm selected removals"
+        : "Add creative to asset group"
+      : change.kind === "campaign_create"
+        ? "Publish campaign to Google Ads"
+        : "Publish reviewed changes";
   const reviewInput = JSON.stringify({ organizationId, connectionId, change });
   const latestReview = useRef(reviewInput);
   latestReview.current = reviewInput;
@@ -451,6 +474,13 @@ export function GoogleCampaignComposer({
       ) {
         setError(
           "Choose a compatible campaign in Destination before continuing."
+        );
+        return;
+      }
+      if (needsReplacement) {
+        setCheckFailed(true);
+        setError(
+          "Image capacity reached. Choose the existing images to replace, or remove new selections. Nothing has been activated or removed."
         );
         return;
       }
@@ -503,9 +533,26 @@ export function GoogleCampaignComposer({
       setChecking(false);
     };
     // Draft state and mutation handles change during the check, but do not restart it.
-  }, [section, reviewInput, checkAttempt, !!pendingRestore, locked]);
+  }, [
+    section,
+    reviewInput,
+    checkAttempt,
+    !!pendingRestore,
+    locked,
+    needsReplacement,
+  ]);
+  const deliveryInFlight = useRef(false);
   async function deliver() {
-    if (!draft?.reviewHash || dirty || !confirmed) return;
+    if (
+      !draft?.reviewHash ||
+      dirty ||
+      !confirmed ||
+      busy ||
+      needsReplacement ||
+      deliveryInFlight.current
+    )
+      return;
+    deliveryInFlight.current = true;
     try {
       const result = await publish.mutateAsync({
         organizationId,
@@ -524,6 +571,8 @@ export function GoogleCampaignComposer({
       void drafts.refetch();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Publishing could not finish.");
+    } finally {
+      deliveryInFlight.current = false;
     }
   }
   const localValidation = showValidation
@@ -566,14 +615,45 @@ export function GoogleCampaignComposer({
               <h3>
                 {"ad" in change
                   ? change.ad.headlines[0] || "Your headline"
-                  : "Your campaign creative"}
+                  : change.kind === "asset_group_assets"
+                    ? change.add.length
+                      ? `${change.add.length} creative asset${change.add.length === 1 ? "" : "s"} to add`
+                      : `${change.remove.length} selected asset association(s) to remove`
+                    : "Your campaign creative"}
               </h3>
               <p>
                 {"ad" in change
                   ? change.ad.descriptions[0] ||
                     "Your description appears here."
-                  : "Select a campaign, ad or asset group to prepare a change."}
+                  : change.kind === "asset_group_assets"
+                    ? `${change.remove.length ? `${change.remove.length} chosen ${change.add.length ? "replacement(s)" : "removal(s)"}` : "Existing assets kept"} · Budget and campaign settings unchanged.`
+                    : "Select a campaign, ad or asset group to prepare a change."}
               </p>
+              {change.kind === "asset_group_assets" && (
+                <div className="google-current-assets">
+                  {change.add.flatMap((asset, index) => {
+                    const source = asset.source;
+                    const item =
+                      source.kind === "library"
+                        ? entryAssets.data?.find(a => a.key === source.key)
+                        : undefined;
+                    return item?.mediaType === "image" && item.url
+                      ? [
+                          <img
+                            key={index}
+                            src={item.url}
+                            alt={`To add: ${item.name}`}
+                            style={{
+                              maxWidth: 180,
+                              maxHeight: 180,
+                              objectFit: "contain",
+                            }}
+                          />,
+                        ]
+                      : [];
+                  })}
+                </div>
+              )}
               {"ad" in change && (
                 <small>{change.ad.finalUrl || "Landing page"}</small>
               )}
@@ -940,7 +1020,9 @@ export function GoogleCampaignComposer({
                                           adGroupId: String(group.id),
                                           type: current.campaign
                                             .advertisingChannelType as
-                                            "SEARCH" | "DISPLAY" | "DEMAND_GEN",
+                                            | "SEARCH"
+                                            | "DISPLAY"
+                                            | "DEMAND_GEN",
                                           ad: {
                                             ...emptyAd(),
                                             name: group.name,
@@ -1139,7 +1221,8 @@ export function GoogleCampaignComposer({
                                         adGroupId: String(group.id),
                                         type: current.campaign
                                           .advertisingChannelType as
-                                          "DISPLAY" | "DEMAND_GEN",
+                                          | "DISPLAY"
+                                          | "DEMAND_GEN",
                                         ad: { ...emptyAd(), name: group.name },
                                       },
                                   "creative"
@@ -1235,76 +1318,14 @@ export function GoogleCampaignComposer({
                       {...scope}
                       assets={change.add}
                       brandAssets={!current?.campaign.brandGuidelinesEnabled}
-                      onChange={add => edit({ ...change, add })}
+                      onChange={add => edit({ ...change, add, remove: [] })}
                     />
-                    <details className="google-existing-assets">
-                      <summary>
-                        Replace or remove existing assets (
-                        {change.remove.length} selected)
-                      </summary>
-                      <h3>Current group assets</h3>
-                      <p>
-                        Select associations to unlink. To replace an asset,
-                        select it here and add its replacement above. Shared
-                        Google assets remain available in other groups.
-                      </p>
-                      <div className="google-current-assets">
-                        {detail.data?.assets
-                          .filter(
-                            a => String(a.assetGroup.id) === change.assetGroupId
-                          )
-                          .map(a => {
-                            const selected = change.remove.some(
-                              r =>
-                                r.assetId === String(a.asset.id) &&
-                                r.field === a.assetGroupAsset.fieldType
-                            );
-                            return (
-                              <label key={a.assetGroupAsset.resourceName}>
-                                {a.asset.imageAsset?.fullSize?.url && (
-                                  <img
-                                    src={a.asset.imageAsset.fullSize.url}
-                                    alt={a.asset.name || "Google asset"}
-                                  />
-                                )}
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  onChange={e =>
-                                    edit({
-                                      ...change,
-                                      remove: e.target.checked
-                                        ? [
-                                            ...change.remove,
-                                            {
-                                              assetId: String(a.asset.id),
-                                              field:
-                                                a.assetGroupAsset.fieldType,
-                                            },
-                                          ]
-                                        : change.remove.filter(
-                                            r =>
-                                              !(
-                                                r.assetId ===
-                                                  String(a.asset.id) &&
-                                                r.field ===
-                                                  a.assetGroupAsset.fieldType
-                                              )
-                                          ),
-                                    })
-                                  }
-                                />
-                                <span>
-                                  {label(a.assetGroupAsset.fieldType)} ·{" "}
-                                  {a.asset.textAsset?.text ||
-                                    a.asset.name ||
-                                    a.asset.id}
-                                </span>
-                              </label>
-                            );
-                          })}
-                      </div>
-                    </details>
+                    <GoogleAssetReplacement
+                      change={change}
+                      assets={detail.data?.assets ?? []}
+                      onChange={edit}
+                      disabled={busy || locked}
+                    />
                   </>
                 )}
               </fieldset>
@@ -1317,7 +1338,35 @@ export function GoogleCampaignComposer({
                   {connection?.details.currency} ·{" "}
                   {connection?.details.timezone}
                 </p>
-                <GoogleChangeSummary change={change} />
+                {current && (
+                  <p>
+                    Campaign: <strong>{current.campaign.name}</strong>
+                    {selectedGroup && (
+                      <>
+                        {" "}
+                        · Asset group:{" "}
+                        <strong>
+                          {
+                            (selectedGroup.assetGroup ?? selectedGroup.adGroup)
+                              ?.name
+                          }
+                        </strong>
+                      </>
+                    )}
+                  </p>
+                )}
+                <GoogleChangeSummary
+                  change={change}
+                  libraryAssets={entryAssets.data ?? []}
+                />
+                {change.kind === "asset_group_assets" && (
+                  <GoogleAssetReplacement
+                    change={change}
+                    assets={detail.data?.assets ?? []}
+                    onChange={edit}
+                    disabled={busy || locked}
+                  />
+                )}
                 <p>
                   Compatibility is checked automatically against this account’s
                   requirements. Publishing submits the reviewed change to
@@ -1325,7 +1374,20 @@ export function GoogleCampaignComposer({
                 </p>
                 {draft?.state === "published" ? (
                   <div role="status">
-                    <strong>Google confirmed this change.</strong>
+                    <strong>
+                      {change.kind === "asset_group_assets"
+                        ? "Google confirmed your creative update."
+                        : "Google confirmed this change."}
+                    </strong>
+                    {change.kind === "asset_group_assets" && (
+                      <p>
+                        {change.add.length
+                          ? `${change.add.length} asset(s) submitted${change.remove.length ? ` with ${change.remove.length} explicitly selected replacement(s)` : "; all existing assets kept"}`
+                          : `${change.remove.length} explicitly selected association(s) removed; all other assets kept`}
+                        . Google reviews eligibility before delivery; this does
+                        not guarantee immediate impressions.
+                      </p>
+                    )}
                     <p>{draft.result?.resources.length} resources confirmed.</p>
                     <Button
                       onClick={() => {
@@ -1373,7 +1435,10 @@ export function GoogleCampaignComposer({
                       {checkFailed && (
                         <Button
                           disabled={busy}
-                          onClick={() => setCheckAttempt(value => value + 1)}
+                          onClick={async () => {
+                            await detail.refetch?.();
+                            setCheckAttempt(value => value + 1);
+                          }}
                         >
                           Retry check
                         </Button>
@@ -1388,54 +1453,65 @@ export function GoogleCampaignComposer({
                             ? "Compatibility checked. Ready for your review."
                             : "Your draft is saved and checked automatically when its required details are complete."}
                     </p>
-                    {draft?.state === "validated" &&
-                      !dirty &&
-                      !checking &&
-                      !checkFailed && (
-                        <>
-                          <p role="status">
-                            Draft saved. Compatibility checks refresh
-                            automatically.
-                          </p>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={confirmed}
-                              onChange={e => setConfirmed(e.target.checked)}
-                            />{" "}
-                            I approve the settings, creative and budget shown
-                            above.
-                          </label>
-                          <Button
-                            disabled={
-                              busy ||
-                              !confirmed ||
-                              !canPublish ||
-                              !connections.data?.livePublishingEnabled
-                            }
-                            onClick={() => void deliver()}
-                          >
-                            {publish.isPending
-                              ? "Publishing…"
-                              : change.kind === "campaign_create"
-                                ? "Publish campaign to Google Ads"
-                                : "Publish reviewed changes"}
-                          </Button>
-                          {!connections.data?.livePublishingEnabled && (
-                            <p>
-                              Live advertising changes are disabled in this
-                              environment. Drafts can still be saved and
-                              validated.
-                            </p>
-                          )}
-                          {!canPublish && (
-                            <p>
-                              A workspace publisher, admin or owner must approve
-                              publishing.
-                            </p>
-                          )}
-                        </>
+                    <>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={confirmed}
+                          disabled={
+                            busy ||
+                            draft?.state !== "validated" ||
+                            dirty ||
+                            checkFailed ||
+                            needsReplacement
+                          }
+                          onChange={e => setConfirmed(e.target.checked)}
+                        />{" "}
+                        {change.kind === "asset_group_assets"
+                          ? change.remove.length
+                            ? change.add.length
+                              ? "I confirm the new creative and only the replacements listed above."
+                              : "I confirm removing only the existing asset associations listed above. All other assets and budget stay unchanged."
+                            : "I confirm adding this creative to the asset group shown above. Existing assets and budget stay unchanged."
+                          : "I approve the settings, creative and budget shown above."}
+                      </label>
+                      <Button
+                        disabled={
+                          busy ||
+                          !confirmed ||
+                          draft?.state !== "validated" ||
+                          dirty ||
+                          checkFailed ||
+                          needsReplacement ||
+                          !canPublish ||
+                          !connections.data?.livePublishingEnabled
+                        }
+                        onClick={() => void deliver()}
+                      >
+                        {publish.isPending
+                          ? "Submitting creative…"
+                          : activationLabel}
+                      </Button>
+                      {change.kind === "asset_group_assets" && (
+                        <p>
+                          Compatibility checks do not activate anything. The
+                          button above submits only the additions and selected
+                          replacements after your confirmation.
+                        </p>
                       )}
+                      {!connections.data?.livePublishingEnabled && (
+                        <p>
+                          Live advertising changes are disabled in this
+                          environment. Drafts can still be saved and validated.
+                        </p>
+                      )}
+                      {!canPublish && (
+                        <p>
+                          A workspace publisher, admin or owner must approve
+                          publishing.
+                        </p>
+                      )}
+                    </>
                   </>
                 )}
               </>

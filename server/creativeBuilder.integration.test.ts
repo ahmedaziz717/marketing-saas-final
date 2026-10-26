@@ -629,13 +629,17 @@ it("recovers a sharp same-product source into a separate version without provide
         width: 200,
         height: 200,
         productIds: [productId],
+        // This output used the new sharp photo, even though its reusable batch
+        // setup also contains an older opaque photo. Never recover that first view.
+        renderedProductImages: [{ productId, imageId: image.id }],
         requestedSetup: {
           ...setup(),
           preserveProduct: undefined,
           products: [
             {
               productId,
-              imageId: image.id,
+              imageId,
+              imageIds: [imageId, image.id],
               featuredSpecKeys: [],
               includePrice: false,
             },
@@ -662,7 +666,7 @@ it("recovers a sharp same-product source into a separate version without provide
   expect(initialOverlay).toMatchObject({
     applied: false,
     alignment: "needs_adjustment",
-    layers: [{ productId }],
+    layers: [{ productId, sourceWidth: 80, sourceHeight: 160 }],
   });
   const initialRequest = {
     organizationId,

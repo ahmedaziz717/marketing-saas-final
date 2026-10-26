@@ -4205,6 +4205,73 @@ async function navigationChecks(ten: boolean) {
   );
   overview.click();
   await pause();
+  for (const label of ["Apps", "Workflows"]) {
+    await openDrawer();
+    parent(label).click();
+    await pause();
+    check(
+      document.querySelector("h1")?.textContent === label,
+      `${label} parent opens its directory directly`
+    );
+    const links = Array.from(
+      children(label).querySelectorAll<HTMLAnchorElement>("a")
+    );
+    const tiles = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(".tools-directory-card")
+    );
+    check(
+      links.length === 4 && tiles.length === 4,
+      `${label} has exactly four menu choices and tiles`
+    );
+    check(
+      links.every(
+        (link, index) =>
+          link.getAttribute("href") === tiles[index].getAttribute("href")
+      ),
+      `${label} menu choices match the category tiles`
+    );
+    check(
+      !children(label).textContent?.includes(`All ${label}`),
+      `${label} has no redundant All entry`
+    );
+    if (!mobile) {
+      const trigger = parent(label);
+      links[0].focus();
+      links[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
+      await pause();
+      check(
+        trigger.getAttribute("aria-expanded") === "false" &&
+          document.activeElement === trigger,
+        `${label} flyout Escape restores focus without leaving the directory`
+      );
+      check(
+        document.querySelectorAll(".tools-directory-card").length === 4,
+        "Closing flyout retains directory tiles"
+      );
+      trigger.click();
+      await pause();
+    }
+    children(label).querySelector<HTMLAnchorElement>("a")!.click();
+    await pause();
+    if (mobile)
+      check(
+        !document.querySelector('[data-mobile="true"]'),
+        "Category selection closes mobile drawer"
+      );
+    else
+      check(
+        parent(label).getAttribute("aria-expanded") === "false",
+        "Category selection dismisses submenu"
+      );
+    fixtureRouter.navigate(`/app/${label.toLowerCase()}`);
+    await pause();
+    check(
+      document.querySelectorAll(".tools-directory-card").length === 4,
+      "Returning restores directory tiles"
+    );
+  }
   layout();
   fixtureRouter.navigate("/app/advertising/meta");
   await pause();

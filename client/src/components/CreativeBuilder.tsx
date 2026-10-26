@@ -1,3 +1,4 @@
+import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { TaskPromptField } from "./TaskPromptField";
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
 import { PromptDefaultControls } from "@/components/PromptDefaultControls";
@@ -1073,6 +1074,13 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
                 value={setup.artStyle}
                 options={CREATIVE_ART_STYLES}
                 onChange={artStyle => change({ ...setupRef.current, artStyle })}
+              />
+              <ArtStyleInfluenceControl
+                value={setup.artStyleInfluence}
+                onChange={artStyleInfluence =>
+                  change({ ...setupRef.current, artStyleInfluence })
+                }
+                preserveSourceStyle={!!setup.enhancement}
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

@@ -747,3 +747,107 @@ it("blocks video transfers when live actions are disabled", async () => {
   );
   vi.stubEnv("LIVE_AD_ACTIONS_ENABLED", "true");
 });
+
+function pmaxImageFixture(imageCount = 1) {
+  const fields = [
+    ...Array(21).fill("HEADLINE"),
+    ...Array(6).fill("DESCRIPTION"),
+    "LONG_HEADLINE",
+    "SQUARE_MARKETING_IMAGE",
+    "LOGO",
+    "BUSINESS_NAME",
+    ...Array(imageCount).fill("MARKETING_IMAGE"),
+  ];
+  return fields.map((fieldType, index) => ({
+    asset: { id: String(100 + index) },
+    assetGroupAsset: {
+      resourceName: `customers/2222222222/assetGroupAssets/22~${100 + index}~${fieldType}`,
+      fieldType,
+    },
+  }));
+}
+function mockPmaxImages(getLinks: () => ReturnType<typeof pmaxImageFixture>) {
+  f.read.mockImplementation(async (_token, _customer, query: string) => {
+    if (query.includes("FROM asset_group_asset")) return getLinks();
+    if (query.includes("FROM asset_group "))
+      return [{ assetGroup: { id: "22", name: "Group", status: "ENABLED" } }];
+    if (query.includes("FROM asset WHERE"))
+      return [
+        {
+          asset: {
+            id: "999",
+            type: "IMAGE",
+            imageAsset: { fullSize: { widthPixels: 1200, heightPixels: 628 } },
+          },
+        },
+      ];
+    const value = snapshot();
+    value.campaign.advertisingChannelType = "PERFORMANCE_MAX";
+    return [value];
+  });
+}
+const imageAddition = (
+  remove: { assetId: string; field: "MARKETING_IMAGE" }[] = []
+): GoogleChange => ({
+  kind: "asset_group_assets",
+  campaignId: "11",
+  assetGroupId: "22",
+  add: [{ field: "MARKETING_IMAGE", source: { kind: "existing", id: "999" } }],
+  remove,
+});
+it("adds an image without demanding unrelated legacy/generated headline or description removals", async () => {
+  mockPmaxImages(() => pmaxImageFixture());
+  const draft = await reviewed(imageAddition());
+  expect(draft.state).toBe("validated");
+  expect(f.mutate.mock.calls).toHaveLength(1);
+  expect(f.mutate.mock.calls[0][3]).toBe(true);
+  const ops = f.mutate.mock.calls[0][2];
+  expect(ops).toHaveLength(1);
+  expect(ops[0].assetGroupAssetOperation.create).toMatchObject({
+    asset: "customers/2222222222/assets/999",
+    fieldType: "MARKETING_IMAGE",
+  });
+  expect(JSON.stringify(ops)).not.toContain('"remove"');
+});
+it("requires an explicit replacement at image capacity and preserves every unrelated association", async () => {
+  const links = pmaxImageFixture(19);
+  mockPmaxImages(() => links);
+  await expect(reviewed(imageAddition())).rejects.toThrow("maximum 20");
+  expect(f.mutate).not.toHaveBeenCalled();
+  const assetId = links.at(-1)!.asset.id;
+  const draft = await reviewed(
+    imageAddition([{ assetId, field: "MARKETING_IMAGE" }])
+  );
+  expect(draft.state).toBe("validated");
+  const ops = f.mutate.mock.calls[0][2];
+  expect(ops).toHaveLength(2);
+  expect(ops.filter((o: any) => o.assetGroupAssetOperation?.remove)).toEqual([
+    {
+      assetGroupAssetOperation: {
+        remove: `customers/2222222222/assetGroupAssets/22~${assetId}~MARKETING_IMAGE`,
+      },
+    },
+  ]);
+  expect(f.mutate.mock.calls.every(call => call[3] === true)).toBe(true);
+});
+it("rejects stale replacement choices and changed group capacity before publishing", async () => {
+  let links = pmaxImageFixture(19);
+  mockPmaxImages(() => links);
+  const assetId = links.at(-1)!.asset.id;
+  const draft = await reviewed(
+    imageAddition([{ assetId, field: "MARKETING_IMAGE" }])
+  );
+  links = links.slice(0, -1);
+  await expect(
+    publishGoogleDraft(owner, approval(draft))
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(f.mutate.mock.calls.filter(call => call[3] === false)).toHaveLength(0);
+});
+it("keeps Google provider validation authoritative for incompatible added images", async () => {
+  mockPmaxImages(() => pmaxImageFixture());
+  f.mutate.mockRejectedValueOnce(new Error("ASPECT_RATIO_NOT_ALLOWED"));
+  await expect(reviewed(imageAddition())).rejects.toThrow(
+    "ASPECT_RATIO_NOT_ALLOWED"
+  );
+  expect(f.mutate.mock.calls.every(call => call[3] === true)).toBe(true);
+});

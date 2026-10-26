@@ -173,3 +173,22 @@ it("keeps disabled category behavior and accessible labels alongside decorative 
   fireEvent.click(active);
   expect(change).toHaveBeenCalledWith("theme");
 });
+
+it("uses the shared influence options in published App forms", () => {
+  const onChange = vi.fn();
+  render(
+    <WorkflowChoiceInput
+      field={appFieldSchema.parse({
+        kind: "style_influence",
+        source: "system",
+        defaultValue: "balanced",
+      })}
+      title="Art Style Influence"
+      value="balanced"
+      onChange={onChange}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Select Strong" }));
+  expect(onChange).toHaveBeenCalledWith("strong");
+  expect(screen.getByRole("button", { name: "Select Subtle" })).toBeTruthy();
+});

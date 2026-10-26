@@ -1,3 +1,4 @@
+import { artStyleInfluenceDirection } from "../../shared/artStyleInfluence";
 import { canDraftCatalogImage } from "../../shared/catalogReadiness";
 import { imageCategoryHandling } from "../../shared/catalogCategories";
 import { catalogImageEligible } from "../../shared/catalogMedia";
@@ -225,7 +226,7 @@ function renderCreativePrompt(input: CreativePromptInput) {
       artStyle.name +
       ": " +
       managed(`creative.style.${setup.artStyle}`, artStyle.direction) +
-      " Make this art style visibly unmistakable across the background, environment, lighting, textures, depth treatment, supporting graphics, and typography treatment. Do not silently revert to a generic studio-ad aesthetic.",
+      " Apply this style across the non-product environment according to the Art Style Influence policy below. Do not silently revert to a generic studio-ad aesthetic.",
     "Apply the selected mood and art style to every non-product visual element and to the presentation of the product. Preserve the supplied product's exact shape, proportions, colors, markings, controls, and factual features even when the selected style is illustrative or animated.",
     "Shot: " +
       (setup.promotionMode === "platform" && setup.shot === "product"
@@ -272,6 +273,7 @@ function renderCreativePrompt(input: CreativePromptInput) {
           "PRODUCT OVERLAY WORKFLOW: First create the complete, polished advertisement with all creative styling, typography, lighting and selected copy intact. Follow the separate logo instructions above. The original product photo can be layered over this saved design afterward. Render each product in the EXACT same viewing angle, silhouette and proportions as its supplied photo, at a strong hero scale. Do not rotate the camera around it, invent hidden faces or let lettering, hands or props overlap its silhouette. Preserve the creative design; do not make an empty set or a software-style text panel.",
         ]
       : []),
+    artStyleInfluenceDirection(setup.artStyleInfluence, setup.artStyle),
     "Render this customer-selected copy accurately: " +
       JSON.stringify(setup.copy),
     productFactsDirection,

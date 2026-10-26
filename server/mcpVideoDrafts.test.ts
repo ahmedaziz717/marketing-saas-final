@@ -42,56 +42,48 @@ beforeAll(async () => {
     { id: 1, openId: "video-owner" },
     { id: 2, openId: "video-other" },
   ]);
-  await state.db
-    .insert(organizations)
-    .values(
-      [1, 2].map(id => ({
-        id,
-        name: `Video ${id}`,
-        slug: `mcp-video-${id}`,
-        createdByUserId: 1,
-        createdAtMs: 1,
-      }))
-    );
-  await state.db
-    .insert(organizationMemberships)
-    .values({
-      organizationId: 1,
-      userId: 1,
-      role: "owner",
-      status: "active",
+  await state.db.insert(organizations).values(
+    [1, 2].map(id => ({
+      id,
+      name: `Video ${id}`,
+      slug: `mcp-video-${id}`,
+      createdByUserId: 1,
       createdAtMs: 1,
-    });
-  await state.db
-    .insert(products)
-    .values(
-      [1, 2, 3].map(id => ({
-        id,
-        organizationId: id === 2 ? 2 : 1,
-        name: `Product ${id}`,
-        dedupeKey: `mcp-video-product-${id}`,
-        productUrl: `https://example.test/product/${id}`,
-        specifications: {},
-        provenance: {},
-        status: id === 3 ? "pending" : "approved",
-        createdAtMs: 1,
-        updatedAtMs: 1,
-      }))
-    );
-  await state.db
-    .insert(productImages)
-    .values(
-      [1, 2, 3].map(id => ({
-        id,
-        organizationId: id === 2 ? 2 : 1,
-        productId: id,
-        sourceUrl: `https://example.test/${id}.png`,
-        storageKey: `products/${id}.png`,
-        url: `https://example.test/${id}.png`,
-        isPrimary: 1,
-        createdAtMs: 1,
-      }))
-    );
+    }))
+  );
+  await state.db.insert(organizationMemberships).values({
+    organizationId: 1,
+    userId: 1,
+    role: "owner",
+    status: "active",
+    createdAtMs: 1,
+  });
+  await state.db.insert(products).values(
+    [1, 2, 3, 4].map(id => ({
+      id,
+      organizationId: id === 2 ? 2 : 1,
+      name: `Product ${id}`,
+      dedupeKey: `mcp-video-product-${id}`,
+      productUrl: `https://example.test/product/${id}`,
+      specifications: {},
+      provenance: {},
+      status: id === 3 ? "pending" : id === 4 ? "rejected" : "approved",
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    }))
+  );
+  await state.db.insert(productImages).values(
+    [1, 2, 3, 4].map(id => ({
+      id,
+      organizationId: id === 2 ? 2 : 1,
+      productId: id,
+      sourceUrl: `https://example.test/${id}.png`,
+      storageKey: `products/${id}.png`,
+      url: `https://example.test/${id}.png`,
+      isPrimary: 1,
+      createdAtMs: 1,
+    }))
+  );
   vi.stubGlobal("fetch", fetchSpy);
 });
 afterAll(async () => {
@@ -187,10 +179,36 @@ it("requires exact request hashes and paired current revision on updates", async
   ).rejects.toThrow();
 });
 
+it("allows pending product photos for an unbilled draft without approving the product", async () => {
+  const request = {
+    ...input(),
+    setup: { ...defaultVideoSetup, imageKeys: ["product_image:3"] },
+  };
+  const saved = await saveMcpVideoDraft(1, guard, request);
+  expect(saved).toMatchObject({ status: "draft", revision: 1 });
+  const [product] = await state.db
+    .select()
+    .from(products)
+    .where(eq(products.id, 3));
+  expect(product.status).toBe("pending");
+  const [draft] = await state.db
+    .select()
+    .from(videoJobs)
+    .where(eq(videoJobs.id, saved.id));
+  expect(draft).toMatchObject({
+    credits: 0,
+    status: "draft",
+    providerRequestId: null,
+  });
+  expect(state.resolve).not.toHaveBeenCalled();
+  expect(state.quote).not.toHaveBeenCalled();
+  expect(fetchSpy).not.toHaveBeenCalled();
+});
+
 it("rejects tenant/approval/plan/reference mismatches and leaves no request receipt", async () => {
   for (const setup of [
     { ...defaultVideoSetup, imageKeys: ["product_image:2"] },
-    { ...defaultVideoSetup, imageKeys: ["product_image:3"] },
+    { ...defaultVideoSetup, imageKeys: ["product_image:4"] },
     { ...defaultVideoSetup, imageKeys: ["asset:999999"] },
     { ...defaultVideoSetup, sourceVideoKey: "asset:999999" },
     { ...defaultVideoSetup, campaignPlanId: 999999 },

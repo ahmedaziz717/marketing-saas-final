@@ -8,7 +8,9 @@ import {
   act,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { Router } from "wouter";
+import { Router, useLocation } from "wouter";
+import type { ReactNode } from "react";
+import ToolsDirectoryPage from "@/pages/ToolsDirectoryPage";
 import { memoryLocation } from "wouter/memory-location";
 import { workflowSections } from "@shared/workflowPlatform";
 import { SidebarProvider, useSidebar } from "./ui/sidebar";
@@ -18,6 +20,14 @@ import {
   workspacePageLabel,
   workspaceSection,
 } from "./WorkspaceNavigation";
+vi.mock("@/components/WorkspaceGate", () => ({
+  WorkspaceGate: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+function Directory() {
+  const [location] = useLocation();
+  if (location !== "/app/apps" && location !== "/app/workflows") return null;
+  return <ToolsDirectoryPage workflows={location === "/app/workflows"} />;
+}
 const viewport = vi.hoisted(() => ({ mobile: false }));
 vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => viewport.mobile }));
 function State() {
@@ -42,6 +52,7 @@ function setup(
       <SidebarProvider defaultOpen={!collapsed}>
         <WorkspaceNavigation items={items} />
         <State />
+        <Directory />
       </SidebarProvider>
     </Router>
   );
@@ -328,3 +339,74 @@ it("keeps app editors, historic links, and roadmap labels understandable", () =>
     false
   );
 });
+
+it.each(["Apps", "Workflows"])(
+  "%s opens its four-category landing page and submenu directly",
+  label => {
+    const router = setup("/app");
+    const trigger = screen.getByRole("button", { name: label });
+    fireEvent.click(trigger);
+    const path = `/app/${label.toLowerCase()}`;
+    expect(router.history.at(-1)).toBe(path);
+    expect(workspacePageLabel(path)).toBe(label);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const menu = document.getElementById(
+      trigger.getAttribute("aria-controls")!
+    )!;
+    const links = within(menu).getAllByRole("link");
+    expect(links).toHaveLength(4);
+    const tiles = within(
+      screen.getByRole("region", { name: `${label} collections` })
+    ).getAllByRole("link");
+    expect(tiles).toHaveLength(4);
+    expect(links.map(link => link.getAttribute("href"))).toEqual(
+      tiles.map(link => link.getAttribute("href"))
+    );
+    expect(screen.queryByRole("link", { name: `All ${label}` })).toBeNull();
+    // Repeated clicks toggle only the menu, never add duplicate history entries.
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(router.history).toEqual(["/app", path]);
+    fireEvent.click(within(menu).getAllByRole("link")[0]);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // External history navigation restores the page without reopening overlays.
+    act(() => router.navigate(path));
+    expect(
+      screen.getByRole("region", { name: `${label} collections` })
+    ).toBeTruthy();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    act(() => router.navigate("/app"));
+    expect(
+      screen.queryByRole("region", { name: `${label} collections` })
+    ).toBeNull();
+  }
+);
+
+it.each(["Apps", "Workflows"])(
+  "mobile %s shows four choices, then closes the drawer on category selection",
+  label => {
+    viewport.mobile = true;
+    const router = setup("/app", true);
+    fireEvent.click(screen.getByRole("button", { name: "Open drawer" }));
+    const trigger = screen.getByRole("button", { name: label });
+    fireEvent.click(trigger);
+    expect(router.history.at(-1)).toBe(`/app/${label.toLowerCase()}`);
+    expect(screen.getByTestId("sidebar-state").textContent).toBe(
+      "collapsed/true"
+    );
+    const menu = document.getElementById(
+      trigger.getAttribute("aria-controls")!
+    )!;
+    const links = within(menu).getAllByRole("link");
+    expect(links).toHaveLength(4);
+    expect(document.querySelectorAll(".tools-directory-card")).toHaveLength(4);
+    const destination = links[2].getAttribute("href");
+    fireEvent.click(links[2]);
+    expect(router.history.at(-1)).toBe(destination);
+    expect(screen.getByTestId("sidebar-state").textContent).toBe(
+      "collapsed/false"
+    );
+  }
+);
