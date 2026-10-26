@@ -2326,8 +2326,16 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(document.querySelectorAll('button[aria-label^="Preview "][aria-label$=" for Complete system"]').length === 9, "All eight system originals and legacy Hero visible in one gallery");
       check(!document.querySelector('select[aria-label="Gallery for Complete system"]'), "Represented chassis options are not nested in the parent gallery");
       check(document.body.textContent?.includes("Chassis Option"), "Independent component card is labeled Chassis Option");
-      if (which !== "gallery-elements-app") check(document.body.textContent?.includes("Review needed"), "Pending component is visible but awaiting review");
+      if (which === "gallery-elements-video") check(document.body.textContent?.includes("Review needed"), "Pending component still requires review for video");
       const state = () => document.querySelector('[data-testid="gallery-selection"]')?.textContent;
+      if (which === "gallery-elements-image") {
+        check(document.body.textContent?.includes("Available for image drafting"), "Pending component shows a non-blocking review notice");
+        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use 1 for Chassis: Printed enclosure"]');
+        check(!!pendingPhoto && !pendingPhoto.disabled, "Pending component photo is enabled for image drafting");
+        pendingPhoto!.click();
+        await pause();
+        check(JSON.parse(state() || "[]").some((product: any) => product.productId === 3 && product.imageId === 5), "Pending component saves the exact product and photo reference");
+      }
       const before = state();
       document.querySelector<HTMLButtonElement>('button[aria-label="Preview 4 for Complete system"]')!.click();
       await pause();
