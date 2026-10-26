@@ -378,7 +378,7 @@ export const creativeSetupSchema = z
           imageIds: z
             .array(z.number().int().positive())
             .min(1)
-            .max(4)
+            .max(12)
             .optional(),
           featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20),
           includePrice: z.boolean().default(false),

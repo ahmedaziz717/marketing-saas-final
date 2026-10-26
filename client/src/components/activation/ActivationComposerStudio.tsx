@@ -1,4 +1,5 @@
-import { ConnectedAccountIdentity } from "../AccountIdentity";
+import { StudioAccountPicker } from "./StudioAccountPicker";
+import { Button } from "../ui/button";
 import {
   StudioJourney,
   StudioSummary,
@@ -50,7 +51,12 @@ import {
   type ActivationSection,
 } from "./ActivationNavigation";
 
-type Account = { id: string; name: string; details: ConnectionDetails };
+type Account = {
+  id: string;
+  name: string;
+  accountId?: string;
+  details: ConnectionDetails;
+};
 type Props = {
   organizationId: number;
   draftId?: string;
@@ -313,7 +319,8 @@ export function ActivationComposerStudio(p: Props) {
                     key={item.title}
                     type="button"
                     onClick={() => {
-                      if (item.category === "channel" && !p.channelChoices) p.onChangeChannel?.();
+                      if (item.category === "channel" && !p.channelChoices)
+                        p.onChangeChannel?.();
                       else {
                         journey.navigate(item.section, item.category);
                       }
@@ -374,48 +381,40 @@ export function ActivationComposerStudio(p: Props) {
                     {p.connectionsError && (
                       <p role="alert">
                         Connections could not be loaded.{" "}
-                        <button onClick={p.retryConnections}>Try again</button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={p.retryConnections}
+                        >
+                          Retry loading accounts
+                        </Button>
                       </p>
                     )}
-                    <div className="cfg-card-grid activation-account-grid">
-                      {p.accounts.map(a => (
-                        <StudioCard
-                          key={a.id}
-                          title={a.name}
-                          description={
-                            a.details.pageName || channelNames[p.channel]
-                          }
-                          badge={
-                            a.details.capabilities.includes("publish")
-                              ? "Connected"
-                              : "Read only"
-                          }
-                          selected={a.id === p.connectionId}
-                          disabled={!a.details.capabilities.includes("publish")}
-                          media={
-                            <div className="activation-choice-symbol">
-                              <ConnectedAccountIdentity
-                                organizationId={p.organizationId}
-                                id={a.id}
-                                name={a.name}
-                                imageUrl={a.details.imageUrl}
-                                source={a.details.imageSource}
-                              />
-                            </div>
-                          }
-                          onSelect={() => {
-                            if (a.id !== p.connectionId) {
-                              p.setConnection(a.id);
-                              p.setContent(previous => ({
-                                ...previous,
-                                metaCampaignId: "",
-                                adSetId: "",
-                              }));
-                            }
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <StudioAccountPicker
+                      accounts={p.accounts.map(a => ({
+                        id: a.id,
+                        name: a.name,
+                        accountId: a.accountId,
+                        currency: a.details.currency,
+                        timezone: a.details.timezone,
+                        description: a.details.pageName,
+                        disabled: !a.details.capabilities.includes("publish"),
+                        disabledReason: "Publishing permission required",
+                      }))}
+                      channelLabel={channelNames[p.channel]}
+                      value={p.connectionId}
+                      disabled={p.pending}
+                      onChange={id => {
+                        if (id !== p.connectionId) {
+                          p.setConnection(id);
+                          p.setContent(previous => ({
+                            ...previous,
+                            metaCampaignId: "",
+                            adSetId: "",
+                          }));
+                        }
+                      }}
+                    />
                     {!!p.connectionId && !account && (
                       <p role="alert">
                         The previous account is unavailable. Reconnect it or

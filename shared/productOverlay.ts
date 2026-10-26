@@ -6,10 +6,39 @@ export function originalProductSelections(
   metadata?: {
     productIds: number[];
     requestedSetup?: CreativeSetup;
+    renderedProductImages?: Array<{
+      productId: number;
+      imageId: number | null;
+    }>;
   } | null
 ) {
   const ids = metadata?.productIds ?? [];
   if (!ids.length || ids.length > 3) return [];
+  if (metadata?.renderedProductImages !== undefined) {
+    const exact = metadata.renderedProductImages;
+    if (
+      exact.length !== ids.length ||
+      new Set(ids).size !== ids.length ||
+      exact.some(
+        (item, i) =>
+          item.productId !== ids[i] ||
+          !Number.isInteger(item.imageId) ||
+          (item.imageId ?? 0) <= 0
+      )
+    )
+      return [];
+    return exact.map(item => ({
+      featuredSpecKeys: [],
+      includePrice: false,
+      ...metadata.requestedSetup?.products.find(
+        p => p.productId === item.productId
+      ),
+      productId: item.productId,
+      imageId: item.imageId!,
+      imageIds: [item.imageId!],
+    }));
+  }
+
   const selected = ids.map(id =>
     metadata?.requestedSetup?.products.find(p => p.productId === id)
   );
@@ -107,6 +136,57 @@ export function constrainProductLayer(
     ...(layer.height === undefined ? {} : { height }),
     left: Math.max(0, Math.min(Math.round(layer.left), canvas.width - width)),
     top: Math.max(0, Math.min(Math.round(layer.top), canvas.height - height)),
+  };
+}
+
+/** Resize in full-resolution canvas pixels, never CSS preview pixels. */
+export function resizeProductLayer(
+  layer: ProductOverlayPlacement,
+  width: number,
+  aspect: number,
+  canvas: { width: number; height: number }
+) {
+  const next = constrainProductLayer(
+    { left: layer.left, top: layer.top, width },
+    aspect,
+    canvas
+  );
+  return { ...next, height: Math.max(1, Math.round(next.width / aspect)) };
+}
+
+export type ProductResizeCorner = "nw" | "ne" | "sw" | "se";
+
+/** Corner resizing keeps the opposite corner fixed and preserves source proportions. */
+export function resizeProductLayerFromCorner(
+  layer: ProductOverlayPlacement,
+  corner: ProductResizeCorner,
+  delta: { x: number; y: number },
+  aspect: number,
+  canvas: { width: number; height: number }
+) {
+  const height = layer.height ?? layer.width / aspect;
+  const west = corner.includes("w"),
+    north = corner.includes("n");
+  const anchorX = west ? layer.left + layer.width : layer.left;
+  const anchorY = north ? layer.top + height : layer.top;
+  const dx = (west ? -1 : 1) * delta.x;
+  const dy = (north ? -1 : 1) * delta.y;
+  // Project the pointer onto the fixed-aspect diagonal, so either axis is usable.
+  const requested = layer.width + (dx + dy / aspect) / (1 + 1 / aspect ** 2);
+  const maxWidth = Math.min(
+    west ? anchorX : canvas.width - anchorX,
+    (north ? anchorY : canvas.height - anchorY) * aspect
+  );
+  const width = Math.max(
+    1,
+    Math.min(Math.round(requested), Math.floor(maxWidth))
+  );
+  const nextHeight = Math.max(1, Math.round(width / aspect));
+  return {
+    width,
+    height: nextHeight,
+    left: Math.round(west ? anchorX - width : anchorX),
+    top: Math.round(north ? anchorY - nextHeight : anchorY),
   };
 }
 

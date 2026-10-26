@@ -6,6 +6,7 @@ import {
   type GoogleCreativeFormat,
 } from "./GoogleCreativeFormat";
 import { AdEditor, AssetEditor } from "./GoogleAdEditor";
+import { StudioAccountPicker } from "../activation/StudioAccountPicker";
 import { GooglePmaxAi } from "./GooglePmaxAi";
 import { Field, label } from "./GoogleCampaignFields";
 import { GoogleDeliverySettings } from "./GoogleDeliverySettings";
@@ -643,30 +644,30 @@ export function GoogleCampaignComposer({
                     account to continue.
                   </p>
                 )}
-                <div className="cfg-card-grid">
-                  {available.map(c => (
-                    <StudioCard
-                      key={c.id}
-                      title={c.name}
-                      description={`${c.accountId} · ${c.details.currency} · ${c.details.timezone}`}
-                      badge="Google Ads"
-                      selected={c.id === connectionId}
-                      disabled={busy}
-                      onSelect={() => {
-                        if (c.id !== connectionId) {
-                          setChosen(c.id);
-                          setCampaignId("");
-                          setPendingRestore(null);
-                          setDraft(null);
-                          setChange(newCampaign());
-                          setConfirmed(false);
-                          setError("");
-                        }
-                        setSection("campaign");
-                      }}
-                    />
-                  ))}
-                </div>
+                <StudioAccountPicker
+                  accounts={available.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    accountId: c.accountId,
+                    currency: c.details.currency,
+                    timezone: c.details.timezone,
+                  }))}
+                  channelLabel="Google Ads"
+                  value={connectionId}
+                  disabled={busy}
+                  onChange={id => {
+                    if (id !== connectionId) {
+                      setChosen(id);
+                      setCampaignId("");
+                      setPendingRestore(null);
+                      setDraft(null);
+                      setChange(newCampaign());
+                      setConfirmed(false);
+                      setError("");
+                    }
+                    setSection("campaign");
+                  }}
+                />
                 {!connections.isLoading && !available.length && (
                   <p>
                     <Link href="/app/settings/integrations">
@@ -939,9 +940,7 @@ export function GoogleCampaignComposer({
                                           adGroupId: String(group.id),
                                           type: current.campaign
                                             .advertisingChannelType as
-                                            | "SEARCH"
-                                            | "DISPLAY"
-                                            | "DEMAND_GEN",
+                                            "SEARCH" | "DISPLAY" | "DEMAND_GEN",
                                           ad: {
                                             ...emptyAd(),
                                             name: group.name,
@@ -1140,8 +1139,7 @@ export function GoogleCampaignComposer({
                                         adGroupId: String(group.id),
                                         type: current.campaign
                                           .advertisingChannelType as
-                                          | "DISPLAY"
-                                          | "DEMAND_GEN",
+                                          "DISPLAY" | "DEMAND_GEN",
                                         ad: { ...emptyAd(), name: group.name },
                                       },
                                   "creative"

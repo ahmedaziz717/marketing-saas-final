@@ -104,6 +104,7 @@ export type VideoImageChoice = {
   componentKind?: string | null;
   representedGroupIds?: string[];
   unavailableReason?: string;
+  reviewNotice?: string;
   isPrimary?: boolean;
   media?: import("./catalogMedia").CatalogImageMedia | null;
   mediaGroups?: import("./catalogMedia").CatalogMediaGroupSummary[] | null;

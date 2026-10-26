@@ -106,10 +106,20 @@ describe("creative setup and trusted catalog inputs", () => {
       creativeSetupSchema.safeParse({ ...multiple, productMode: "together" })
         .success
     ).toBe(false);
+    const moreViews = creativeSetupSchema.parse({
+      ...multiple,
+      products: [{ ...multiple.products[0], imageIds: [21, 22, 23, 24, 25] }],
+    });
+    expect(outputCount(moreViews)).toBe(5 * moreViews.formatIds.length);
     expect(
       creativeSetupSchema.safeParse({
         ...multiple,
-        products: [{ ...multiple.products[0], imageIds: [21, 22, 23, 24, 25] }],
+        products: [
+          {
+            ...multiple.products[0],
+            imageIds: Array.from({ length: 13 }, (_, index) => 21 + index),
+          },
+        ],
       }).success
     ).toBe(false);
     expect(
@@ -600,7 +610,6 @@ it("sends selected feature and availability facts while retaining image creative
   );
 });
 
-
 it("drafts a pending product with a photo and no optional metadata without approving it", () => {
   const pending = { ...product, status: "pending" as const, specifications: {}, price: null, currency: null, description: null, productUrl: "" };
   const input = { ...setup(), products: [{ ...setup().products[0], featuredSpecKeys: [], includePrice: false }] };
@@ -611,3 +620,4 @@ it("drafts a pending product with a photo and no optional metadata without appro
   expect(prompt).toContain("Category handling: neutral.");
   expect(() => resolveBuilderInputs(1, input, [pending], [], [logo])).toThrow(/unavailable/);
 });
+

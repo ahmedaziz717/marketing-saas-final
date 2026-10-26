@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "@/components/ui/button";
 import { StudioCard } from "@/components/configurator/StudioCard";
+import { ChoiceField, VisualSelect } from "@/components/choices/VisualSelect";
 import { AssetUploadDialog } from "@/components/AssetUploadDialog";
 import { mayCreateAssets } from "@shared/assetWorkflow";
 import {
@@ -103,10 +104,11 @@ export function AssetEditor({
   format?: GoogleCreativeFormat;
 }) {
   const { membership } = useWorkspace();
-  const library = trpc.assetLibrary.list.useQuery({ organizationId });
-  const remote = trpc.googleAds.campaigns.resources.useQuery(
-    { organizationId, connectionId, kind: "assets" },
-    { enabled: !!connectionId, staleTime: 60000 }
+  // The EvokeLoop library belongs to the workspace, not the selected Google account.
+  // Refresh when returning from Creative Studio so newly approved outputs appear.
+  const library = trpc.assetLibrary.list.useQuery(
+    { organizationId },
+    { refetchOnMount: "always" }
   );
   const fields = googleAssetFieldSchema.options.filter(
     f =>
@@ -123,6 +125,10 @@ export function AssetEditor({
   const [source, setSource] = useState<
     "library" | "upload" | "existing" | "youtube" | "text"
   >(media === "text" ? "text" : "library");
+  const remote = trpc.googleAds.campaigns.resources.useQuery(
+    { organizationId, connectionId, kind: "assets" },
+    { enabled: !!connectionId && source === "existing", staleTime: 60000 }
+  );
   const [value, setValue] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -239,6 +245,12 @@ export function AssetEditor({
   const activeSource = sources.some(s => s.id === source)
     ? source
     : sources[0].id;
+  const sourceQuery = activeSource === "library" ? library : remote;
+  useEffect(() => {
+    setOffset(0);
+    setSearch("");
+    setError("");
+  }, [organizationId, connectionId, activeSource, media]);
   const selected = (candidate: GoogleAssetInput) =>
     assets.some(a => JSON.stringify(a) === JSON.stringify(candidate));
   function add(candidate: GoogleAssetInput, toggle = false) {
@@ -277,6 +289,14 @@ export function AssetEditor({
           description: label(a.type),
         }))
   ).filter(a => !query || a.name.toLowerCase().includes(query));
+  // A refresh or asset-type change can shrink the results while a later page is open.
+  const pageOffset = Math.min(
+    offset,
+    Math.max(0, Math.ceil(items.length / 12) - 1) * 12
+  );
+  useEffect(() => {
+    if (offset !== pageOffset) setOffset(pageOffset);
+  }, [offset, pageOffset]);
   return (
     <div className="google-assets">
       <h3>Asset source</h3>
@@ -296,6 +316,7 @@ export function AssetEditor({
               setSearch("");
               setOffset(0);
               setError("");
+              if (id === "library") void library.refetch();
             }}
             media={
               <div className="activation-channel-art">
@@ -331,8 +352,11 @@ export function AssetEditor({
       ) : (
         <>
           <div className="google-form-grid">
-            <Field title="Placement">
-              <select
+            <ChoiceField className="cfg-field">
+              <span>Placement</span>
+              <VisualSelect
+                density="compact"
+                aria-label="Placement"
                 value={activeField}
                 onChange={e => {
                   setField(e.target.value as typeof field);
@@ -344,8 +368,8 @@ export function AssetEditor({
                     {fieldNames[f] || label(f)}
                   </option>
                 ))}
-              </select>
-            </Field>
+              </VisualSelect>
+            </ChoiceField>
             {(activeSource === "library" || activeSource === "existing") && (
               <Field title="Search assets">
                 <input
@@ -362,29 +386,46 @@ export function AssetEditor({
           </div>
           {(activeSource === "library" || activeSource === "existing") && (
             <>
-              {(activeSource === "library"
-                ? library.isLoading
-                : remote.isLoading) && <p role="status">Loading assets…</p>}
-              {(activeSource === "library" ? library.error : remote.error) && (
+              <div className="google-actions">
+                <p role="status">
+                  {sourceQuery.isLoading
+                    ? "Loading assets…"
+                    : sourceQuery.isFetching
+                      ? "Refreshing assets…"
+                      : `${items.length} ${activeSource === "library" ? "approved EvokeLoop" : "Google"} assets`}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sourceQuery.isFetching}
+                  onClick={() => void sourceQuery.refetch()}
+                >
+                  {activeSource === "library"
+                    ? "Refresh EvokeLoop library"
+                    : "Refresh Google library"}
+                </Button>
+              </div>
+              {activeSource === "library" && (
+                <p className="activation-help">
+                  Approved Creative Studio outputs and uploads from this
+                  workspace. These assets are not limited to the selected Google
+                  account.
+                </p>
+              )}
+              {sourceQuery.error && (
                 <p role="alert">
-                  {
-                    (activeSource === "library" ? library.error : remote.error)
-                      ?.message
-                  }
+                  {sourceQuery.error.message}
                   <Button
+                    type="button"
                     variant="outline"
-                    onClick={() =>
-                      void (activeSource === "library"
-                        ? library.refetch()
-                        : remote.refetch())
-                    }
+                    onClick={() => void sourceQuery.refetch()}
                   >
                     Retry loading assets
                   </Button>
                 </p>
               )}
               <div className="cfg-card-grid google-asset-picker">
-                {items.slice(offset, offset + 12).map(item => {
+                {items.slice(pageOffset, pageOffset + 12).map(item => {
                   const candidate: GoogleAssetInput = {
                     field: activeField,
                     source:
@@ -428,45 +469,44 @@ export function AssetEditor({
                   );
                 })}
               </div>
-              {!items.length && (
-                <p>
-                  No matching{" "}
-                  {activeSource === "library" ? "approved EvokeLoop" : "Google"}{" "}
-                  assets.{" "}
-                  {activeSource === "library"
-                    ? "Choose Upload to add a file, or review assets in the Library."
-                    : "Try another search or source."}
-                </p>
-              )}
+              {!sourceQuery.isLoading &&
+                !sourceQuery.error &&
+                !items.length && (
+                  <p>
+                    No matching{" "}
+                    {activeSource === "library"
+                      ? "approved EvokeLoop"
+                      : "Google"}{" "}
+                    assets.{" "}
+                    {activeSource === "library"
+                      ? "Choose Upload to add a file, or review assets in the Library."
+                      : "Try another search or source."}
+                  </p>
+                )}
               {items.length > 12 && (
                 <div className="google-actions">
                   <Button
                     variant="outline"
-                    disabled={offset === 0}
-                    onClick={() => setOffset(Math.max(0, offset - 12))}
+                    disabled={pageOffset === 0}
+                    onClick={() => setOffset(Math.max(0, pageOffset - 12))}
                   >
                     Previous assets
                   </Button>
                   <span>
-                    {offset + 1}–{Math.min(offset + 12, items.length)} of{" "}
-                    {items.length}
+                    {pageOffset + 1}–{Math.min(pageOffset + 12, items.length)}{" "}
+                    of {items.length}
                   </span>
                   <Button
                     variant="outline"
-                    disabled={offset + 12 >= items.length}
-                    onClick={() => setOffset(offset + 12)}
+                    disabled={pageOffset + 12 >= items.length}
+                    onClick={() => setOffset(pageOffset + 12)}
                   >
                     Next assets
                   </Button>
                 </div>
               )}
               {activeSource === "existing" && (
-                <p>
-                  Showing up to the 200 most recent Google assets.{" "}
-                  <button type="button" onClick={() => void remote.refetch()}>
-                    Refresh Google library
-                  </button>
-                </p>
+                <p>Showing up to the 200 most recent Google assets.</p>
               )}
               {activeSource === "library" && media === "video" && video && (
                 <GoogleVideoTransfer
@@ -516,11 +556,7 @@ export function AssetEditor({
           )}
         </>
       )}
-      {(error || library.error || remote.error) && (
-        <p role="alert">
-          {error || library.error?.message || remote.error?.message}
-        </p>
-      )}
+      {error && <p role="alert">{error}</p>}
       {!!assets.length && (
         <>
           <h3>Selected for this draft · {assets.length}</h3>

@@ -10,16 +10,22 @@ import {
   type CreativeSetup,
 } from "@shared/creativeBuilder";
 import { defaultVideoSetup } from "@shared/videoCreation";
+const catalogQuery = vi.hoisted(() =>
+  vi.fn(() => ({ data: { items: [], nextOffset: 60 } }))
+);
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    video: { catalogImages: { useQuery: () => ({ data: { items: [] } }) } },
+    video: { catalogImages: { useQuery: catalogQuery } },
   },
 }));
 vi.mock("@/components/AssetUploadDialog", () => ({
   AssetUploadDialog: () => null,
 }));
 vi.mock("./PageUrlSource", () => ({ PageUrlSource: () => null }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 let latest: CreativeSetup;
 const products = Array.from({ length: 4 }, (_, i) => ({
   id: i + 1,
@@ -82,13 +88,15 @@ it("shows one preview per product, keeps actual Hero stable, and wires multiple 
     screen.getByRole("button", { name: "Preview Hero for Product 1" })
   ).toBeTruthy();
 });
-it("limits separate mode to four views per product and twelve total, but permits removal", () => {
+it("allows more than four views per product and limits the total to twelve, while permitting removal", () => {
   render(<Harness />);
-  for (const product of [1, 2, 3])
-    for (const label of ["Hero", "2", "3", "4"])
+  for (const product of [1, 2])
+    for (const label of ["Hero", "2", "3", "4", "5"])
       fireEvent.click(check(label, product));
+  expect(latest.products[0].imageIds).toHaveLength(5);
+  for (const label of ["Hero", "2"]) fireEvent.click(check(label, 3));
   expect(creativeProductViewCount(latest)).toBe(12);
-  expect(check("5").disabled).toBe(true);
+  expect(check("3", 3).disabled).toBe(true);
   expect(check("Hero", 4).disabled).toBe(true);
   fireEvent.click(check("2"));
   expect(creativeProductViewCount(latest)).toBe(11);
@@ -261,4 +269,70 @@ it("filters in-stock image choices while retaining previously selected products"
     screen.queryByRole("checkbox", { name: /Use Hero for Product 3/ })
   ).toBeNull();
   expect(latest.products.map(p => p.productId)).toEqual([2]);
+});
+
+it.each(["catalog", "assets", "business"])(
+  "restores the saved %s source tab without turning it into URL",
+  tab => {
+    localStorage.setItem("source-restore:tab", JSON.stringify(tab));
+    render(
+      <StudioSources
+        draftKey="source-restore"
+        organizationId={1}
+        role="owner"
+        kind="image"
+        image={defaultCreativeSetup()}
+        video={defaultVideoSetup}
+        products={products}
+        assets={[]}
+        search=""
+        updateImage={vi.fn()}
+        updateVideo={vi.fn()}
+        onUploaded={async () => {}}
+      />
+    );
+    const names = {
+      catalog: "Product catalog",
+      assets: "Image assets",
+      business: "Describe manually",
+    };
+    expect(
+      screen
+        .getByRole("button", {
+          name: new RegExp(names[tab as keyof typeof names]),
+        })
+        .getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: /Page URL/ })
+        .getAttribute("aria-pressed")
+    ).toBe("false");
+  }
+);
+
+it("returns video catalog browsing to the first page when search changes", () => {
+  const props = {
+    organizationId: 1,
+    role: "owner",
+    kind: "video" as const,
+    image: defaultCreativeSetup(),
+    video: defaultVideoSetup,
+    products: [],
+    assets: [],
+    updateImage: vi.fn(),
+    updateVideo: vi.fn(),
+    onUploaded: async () => {},
+  };
+  const view = render(<StudioSources {...props} search="" />);
+  fireEvent.click(screen.getByRole("button", { name: "More product photos" }));
+  expect(catalogQuery).toHaveBeenCalledWith(
+    expect.objectContaining({ search: "", offset: 60 }),
+    expect.anything()
+  );
+  view.rerender(<StudioSources {...props} search="different product" />);
+  expect(catalogQuery).toHaveBeenCalledWith(
+    expect.objectContaining({ search: "different product", offset: 0 }),
+    expect.anything()
+  );
 });

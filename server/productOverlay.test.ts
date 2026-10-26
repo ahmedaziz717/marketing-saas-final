@@ -278,7 +278,11 @@ it("clears needs-adjustment on manual correction without changing the original v
     designUrl: "/base",
     applied: false,
     alignment: "needs_adjustment" as const,
-    automaticFailureDiagnostic: { stage: "alignment" as const, reason: "low_confidence" as const, confidence: 0.7 },
+    automaticFailureDiagnostic: {
+      stage: "alignment" as const,
+      reason: "low_confidence" as const,
+      confidence: 0.7,
+    },
     layers: [],
   };
   const corrected = manuallyAppliedProductOverlay(original, []);
@@ -311,7 +315,7 @@ it("rejects silent enlargement while allowing an explicitly accepted manual enla
     ).layers[0].width
   ).toBe(60);
 });
-it("fits a same-angle high-resolution cutout to the detected footprint with permitted resampling", async () => {
+it("covers a same-angle footprint proportionally without stretching the cutout", async () => {
   mocked.invoke.mockResolvedValue({
     choices: [
       {
@@ -355,9 +359,9 @@ it("fits a same-angle high-resolution cutout to the detected footprint with perm
   });
   expect(result.layers[0]).toMatchObject({
     left: 200,
-    top: 100,
+    top: 86,
     width: 525,
-    height: 700,
+    height: 728,
     sourceKey: "700px-original",
     sha256: "original-digest",
   });
@@ -409,3 +413,80 @@ it("requires enlargement consent for height-only stretch and rejects clipping", 
     )
   ).rejects.toThrow(/canvas/);
 });
+
+it("composites full-resolution output pixels rather than a smaller editor preview", async () => {
+  const fullDesign = await sharp({
+    create: { width: 1080, height: 1080, channels: 4, background: "blue" },
+  })
+    .png()
+    .toBuffer();
+  const cutout = await source(400);
+  const rendered = await renderProductOverlay(
+    fullDesign,
+    [cutout],
+    [{ left: 500, top: 100, width: 400, height: 800 }]
+  );
+  expect(await sharp(rendered.png).metadata()).toMatchObject({
+    width: 1080,
+    height: 1080,
+  });
+  expect(rendered.layers[0]).toMatchObject({
+    left: 500,
+    top: 100,
+    width: 400,
+    height: 800,
+  });
+  expect(
+    await sharp(rendered.png)
+      .extract({ left: 899, top: 899, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+  ).toEqual(Buffer.from([255, 0, 0, 255]));
+  expect(
+    await sharp(rendered.png)
+      .extract({ left: 900, top: 900, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+  ).toEqual(Buffer.from([0, 0, 255, 255]));
+});
+
+it.each([
+  { width: 1080, height: 1920 },
+  { width: 1920, height: 1080 },
+])(
+  "keeps full portrait/landscape canvas and exact original-source proportions: %j",
+  async canvas => {
+    const fullDesign = await sharp({
+      create: { ...canvas, channels: 4, background: "blue" },
+    })
+      .png()
+      .toBuffer();
+    const cutout = await source(400);
+    const rendered = await renderProductOverlay(
+      fullDesign,
+      [cutout],
+      [{ left: 300, top: 200, width: 350, height: 700 }]
+    );
+    expect(await sharp(rendered.png).metadata()).toMatchObject(canvas);
+    expect(rendered.layers[0]).toMatchObject({
+      left: 300,
+      top: 200,
+      width: 350,
+      height: 700,
+      sourceKey: cutout.sourceKey,
+      sha256: cutout.sha256,
+    });
+    expect(
+      await sharp(rendered.png)
+        .extract({ left: 649, top: 899, width: 1, height: 1 })
+        .raw()
+        .toBuffer()
+    ).toEqual(Buffer.from([255, 0, 0, 255]));
+    expect(
+      await sharp(rendered.png)
+        .extract({ left: 650, top: 900, width: 1, height: 1 })
+        .raw()
+        .toBuffer()
+    ).toEqual(Buffer.from([0, 0, 255, 255]));
+  }
+);

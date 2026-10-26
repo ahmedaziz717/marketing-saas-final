@@ -339,9 +339,12 @@ it("validates YouTube entries and keeps video/text sources separate", () => {
   click("Select Text");
   expect(screen.getByLabelText("Text")).toBeTruthy();
   expect(
-    within(screen.getByLabelText("Placement")).queryByRole("option", {
-      name: "Youtube Video",
-    })
+    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
+      "radio",
+      {
+        name: "Video",
+      }
+    )
   ).toBeNull();
 });
 it.each(["DISPLAY", "DEMAND_GEN"])(
@@ -359,9 +362,12 @@ it("keeps campaign-level brand assets out of the asset-group picker", () => {
   expect(screen.queryByRole("button", { name: "Select Logos" })).toBeNull();
   click("Select Text");
   expect(
-    within(screen.getByLabelText("Placement")).queryByRole("option", {
-      name: /Business/,
-    })
+    within(screen.getByRole("radiogroup", { name: "Placement" })).queryByRole(
+      "radio",
+      {
+        name: /Business/,
+      }
+    )
   ).toBeNull();
 });
 
@@ -705,9 +711,11 @@ it("carries an approved Creative Studio image into its selected asset group", ()
   click(/^Existing campaign /);
   section("Creative");
   click("Select Existing group");
-  expect((screen.getByLabelText("Placement") as HTMLSelectElement).value).toBe(
-    "SQUARE_MARKETING_IMAGE"
-  );
+  expect(
+    within(screen.getByRole("radiogroup", { name: "Placement" }))
+      .getByRole("radio", { name: "Square image · 1:1" })
+      .getAttribute("aria-checked")
+  ).toBe("true");
   expect(
     screen
       .getByRole("button", { name: "Select Studio square" })

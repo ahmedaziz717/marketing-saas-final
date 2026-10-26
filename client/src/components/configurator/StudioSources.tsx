@@ -27,6 +27,7 @@ import {
   PROMOTION_TYPES,
   selectedProductImageIds,
   creativeProductViewCount,
+  outputCount,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
 import { videoReferenceCount, type VideoSetup } from "@shared/videoCreation";
@@ -85,32 +86,45 @@ export function StudioSources({
   onModels?: () => void;
   onProductDetails?: () => void;
 }) {
-  const [tab, setTab] = useState(
-      (readStudioDraft(draftKey ? `${draftKey}:tab` : null, raw => {
+  const [tab, setTab] = useState(() => {
+    const restored = readStudioDraft(
+      draftKey ? `${draftKey}:tab` : null,
+      raw => {
         try {
           const value = JSON.parse(raw);
-          return ["url", "business", "catalog", "video", "upload"].includes(
-            value
-          )
+          return [
+            "url",
+            "business",
+            "catalog",
+            "assets",
+            "video",
+            "upload",
+          ].includes(value)
             ? value
             : null;
         } catch {
           return null;
         }
-      }) ??
-        (kind === "image"
-          ? image.promotion?.sourceUrl
-          : video.promotion?.sourceUrl))
-        ? "url"
-        : kind === "image" && image.promotionMode === "platform"
-          ? "business"
-          : "catalog"
-    ),
-    [upload, setUpload] = useState(false),
-    [offset, setOffset] = useState(0);
+      }
+    );
+    if (restored && !(kind === "image" && restored === "video"))
+      return restored;
+    if (
+      kind === "image" ? image.promotion?.sourceUrl : video.promotion?.sourceUrl
+    )
+      return "url";
+    return kind === "image" && image.promotionMode === "platform"
+      ? "business"
+      : "catalog";
+  });
+  const [upload, setUpload] = useState(false);
+  const [offset, setOffset] = useState(0);
   useEffect(() => {
     writeStudioDraft(draftKey ? `${draftKey}:tab` : null, tab);
   }, [draftKey, tab]);
+  useEffect(() => {
+    setOffset(0);
+  }, [search, organizationId, kind]);
   const isImage = kind === "image";
   const [stock, setStock] = useState("all");
   const visibleProducts = products.filter(
@@ -193,7 +207,7 @@ export function StudioSources({
     if (
       !removing &&
       (creativeProductViewCount(image) >= 12 ||
-        ids.length >= (image.productMode === "together" ? 1 : 4) ||
+        ids.length >= (image.productMode === "together" ? 1 : 12) ||
         (!current &&
           image.productMode === "together" &&
           image.products.length >= 3))
@@ -471,6 +485,16 @@ export function StudioSources({
               </VisualSelect>
             </ChoiceField>
           )}
+          {isImage &&
+            image.productMode === "separate" &&
+            image.products.length > 0 && (
+              <p className="cfg-help" role="status">
+                {creativeProductViewCount(image)} product views ×{" "}
+                {image.formatIds.length} sizes = {outputCount(image)} output
+                images. The credit estimate updates before you confirm
+                generation.
+              </p>
+            )}
           {isImage && (
             <ChoiceField className="cfg-field">
               <span>Stock availability</span>
@@ -579,7 +603,7 @@ export function StudioSources({
                         <p className="mb-2 text-xs text-muted-foreground">
                           {image.productMode === "together"
                             ? "Choose one view per product."
-                            : "Choose up to four views per product, twelve total."}{" "}
+                            : "Choose up to twelve views across your products. Each view creates a separate set, not extra references for one image."}{" "}
                           Preview without changing selection.
                         </p>
                         {selection &&
@@ -613,7 +637,7 @@ export function StudioSources({
                             creativeProductViewCount(image) >= 12 ||
                             (selection
                               ? selectedProductImageIds(selection).length >=
-                                (image.productMode === "together" ? 1 : 4)
+                                (image.productMode === "together" ? 1 : 12)
                               : image.productMode === "together" &&
                                 image.products.length >= 3)
                           }

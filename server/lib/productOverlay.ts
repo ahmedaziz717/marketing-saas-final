@@ -204,16 +204,8 @@ export async function suggestProductPlacement(
             width / aspect / 2
         ),
       };
-      // Fit the measured same-view footprint rather than centering an oversized
-      // aspect-locked rectangle. Keep legacy proportional placements unchanged.
-      const targetWidth = Math.round((box.width * canvas.width) / 1000);
-      const targetHeight = Math.round((box.height * canvas.height) / 1000);
-      if (Math.abs(targetWidth / targetHeight / aspect - 1) > 0.01) {
-        desired.width = targetWidth;
-        desired.height = targetHeight;
-        desired.left = Math.round((box.left * canvas.width) / 1000);
-        desired.top = Math.round((box.top * canvas.height) / 1000);
-      }
+      // Cover the detected footprint with the original proportions. Stretching to
+      // the model's rectangle changes the physical product and can make it narrower.
       const constrained = constrainProductLayer(desired, aspect, canvas);
       if (
         automatic &&

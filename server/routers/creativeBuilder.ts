@@ -605,6 +605,10 @@ export async function runBuilderJob(
           imageStorageKey: image.storageKey,
           renderMetadata: {
             requestedSetup: setup,
+            renderedProductImages: group.map(product => ({
+              productId: product.id,
+              imageId: product.image?.id ?? null,
+            })),
             ...(setup.enhancement
               ? {
                   enhancement: {
@@ -2021,3 +2025,4 @@ export const creativeBuilderRouter = router({
       };
     }),
 });
+
