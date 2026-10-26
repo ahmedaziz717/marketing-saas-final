@@ -1,3 +1,4 @@
+import { imageDraftProductStatuses } from "../../shared/catalogReadiness";
 import { catalogCardGallery } from "../../shared/catalogMedia";
 import type { DraftSaveHook } from "../lib/mcpDraftReceipt";
 import { productOverlayPreview } from "../lib/productOverlayPreview";
@@ -107,10 +108,7 @@ import { stableHash } from "../lib/policy";
 import { readGenerationSource } from "../lib/creativeImages";
 import { buildCreativeCopyMessages } from "../lib/creativeCopy";
 import { previewStudioPage } from "../lib/studioProductPage";
-import {
-  attachMarketingCategories,
-  assertCategorySelection,
-} from "../lib/catalogCategories";
+import { attachMarketingCategories } from "../lib/catalogCategories";
 import {
   CREATIVE_JOB_LEASE_MS,
   recoverExpiredBuilderJobs,
@@ -1404,11 +1402,6 @@ export const creativeBuilderRouter = router({
       ]);
       const db = (await getDb())!;
       const resolved = await loadInputs(db, input.organizationId, input.setup);
-      assertCategorySelection(
-        resolved.products,
-        input.setup.categoryHandling,
-        input.setup.productMode === "separate"
-      );
       const quote = await builderImageQuote(
         db,
         input.organizationId,
@@ -1595,7 +1588,7 @@ export const creativeBuilderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [
-        approvedCatalog,
+        draftCatalog,
         catalog,
         images,
         logos,
@@ -1609,7 +1602,7 @@ export const creativeBuilderRouter = router({
           .where(
             and(
               eq(products.organizationId, input.organizationId),
-              eq(products.status, "approved")
+              inArray(products.status, [...imageDraftProductStatuses])
             )
           )
           .orderBy(products.name)
@@ -1674,9 +1667,11 @@ export const creativeBuilderRouter = router({
         .from(productComponents)
         .where(eq(productComponents.organizationId, input.organizationId));
       const visibleCatalog = [
-        ...approvedCatalog,
+        ...draftCatalog,
         ...catalog.filter(
-          p => p.status !== "approved" && p.provenance?.["component.kind"]
+          p =>
+            !imageDraftProductStatuses.some(status => status === p.status) &&
+            p.provenance?.["component.kind"]
         ),
       ];
       return {
@@ -1718,7 +1713,6 @@ export const creativeBuilderRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const resolved = await loadInputs(db, input.organizationId, input.setup);
       // Older saved page briefs only contained metadata. Read their missing body
-      assertCategorySelection(resolved.products, input.setup.categoryHandling);
       // before a paid AI call, retaining the user's reviewed title and summary.
       let copySetup = input.setup;
       if (
@@ -1835,11 +1829,6 @@ export const creativeBuilderRouter = router({
           message: issues.join(" "),
         });
       const resolved = await loadInputs(db, input.organizationId, setup);
-      assertCategorySelection(
-        resolved.products,
-        setup.categoryHandling,
-        setup.productMode === "separate"
-      );
       const generationQuote = await builderImageQuote(
         db,
         input.organizationId,

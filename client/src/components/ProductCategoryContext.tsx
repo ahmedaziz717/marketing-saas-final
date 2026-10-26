@@ -6,6 +6,7 @@ export function ProductCategoryContext({
   products,
   handling,
   onChange,
+  allowUnmapped = false,
 }: {
   products: Array<{
     id: number;
@@ -13,6 +14,7 @@ export function ProductCategoryContext({
     marketingCategory?: ResolvedMarketingCategory;
   }>;
   handling?: "require_mapping" | "neutral";
+  allowUnmapped?: boolean;
   onChange: (value: "require_mapping" | "neutral") => void;
 }) {
   if (!products.length) return null;
@@ -29,7 +31,7 @@ export function ProductCategoryContext({
             {product.name}:{" "}
             <strong>
               {product.marketingCategory?.category?.name ??
-                "Unmapped — review needed"}
+                "No marketing category"}
             </strong>
           </li>
         ))}
@@ -40,9 +42,11 @@ export function ProductCategoryContext({
             {state.unmapped
               ? "Some products have no confirmed category."
               : "These products use different marketing categories."}{" "}
-            Assign categories in Catalog, split your selection, or explicitly
-            choose neutral wording. Existing copy is preserved; regenerate and
-            review it after changing categories.
+            {allowUnmapped
+              ? "You can create images now. AI automatically uses neutral wording based on supplied facts, without guessing category guidance."
+              : "Assign categories in Catalog, split your selection, or explicitly choose neutral wording."}
+            {" "}Existing copy is preserved; regenerate and review it after
+            changing categories.
           </p>
         </>
       ) : handling === "neutral" ? (
@@ -59,7 +63,7 @@ export function ProductCategoryContext({
           existing copy after category changes.
         </p>
       )}
-      {(state.requiresChoice || handling === "neutral") && (
+      {((state.requiresChoice && !allowUnmapped) || handling === "neutral") && (
         <label className="mt-2 flex gap-2">
           <input
             type="checkbox"

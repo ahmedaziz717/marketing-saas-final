@@ -41,7 +41,7 @@ it("rejects duplicate slots, generated references, and missing same-view confirm
     expect(productOverlayReplacementsSchema.safeParse(input).success).toBe(false);
 });
 
-it("restricts catalog lookup to workspace, approved product and the selected layer's product ID", async () => {
+it("restricts catalog lookup to workspace, draftable product and the selected layer's product ID", async () => {
   const where = vi.fn().mockResolvedValue([{image: {id: 733, productId: 712, storageKey: "new", url: "/new", media: null}, product: {id: 712, name: "Same product", updatedAtMs: 7, status: "approved"}}]);
   const db = {select: () => ({from: () => ({innerJoin: () => ({where})})})} as any;
   const candidates = await catalogOverlaySources(db, 3, [712]);
@@ -49,7 +49,7 @@ it("restricts catalog lookup to workspace, approved product and the selected lay
   const result = await readOverlaySources(db, 3, metadata, [replacement], [712, 724]);
   expect(result[0].sourceKey).toBe("new");
   const query = new PgDialect().sqlToQuery(where.mock.calls.at(-1)![0]);
-  expect(query.params).toEqual([3, 712, "approved"]);
+  expect(query.params).toEqual([3, 712, "approved", "pending"]);
   expect(query.sql).toContain('"organizationId"');
   expect(query.sql).toContain('"productId"');
   expect(mocks.read).not.toHaveBeenCalled();

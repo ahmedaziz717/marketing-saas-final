@@ -300,6 +300,12 @@ it("runs an approved video parent through a bound child and reserves only once",
       requestId: raw.requestId,
     });
   } finally {
+    // The mocked video child never completes. Retire this fixture's parent so
+    // its short retry lease cannot make later worker tests claim the wrong run.
+    await state.db
+      .update(creativeWorkflowRuns)
+      .set({ status: "stopped", leaseOwner: null, leaseUntilMs: 0 })
+      .where(eq(creativeWorkflowRuns.id, raw.requestId));
     await state.db.delete(brandKits).where(eq(brandKits.id, kit.id));
     await state.db
       .update(authoringOAuthGrants)

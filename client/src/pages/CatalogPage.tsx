@@ -103,6 +103,9 @@ function CatalogContent() {
       : "all"
   );
   const [category, setCategory] = useState("all");
+  const [stock, setStock] = useState<"all" | "in_stock" | "out_of_stock">(
+    "all"
+  );
   const [marketingCategory, setMarketingCategory] = useState("all");
   const categorySettings = trpc.catalogCategories.read.useQuery(
     { organizationId: organizationId! },
@@ -120,6 +123,7 @@ function CatalogContent() {
     status: status as "all" | "pending" | "approved" | "rejected",
     category,
     marketingCategory,
+    stock,
     kind: tab === "services" ? ("services" as const) : ("products" as const),
   };
   const query = trpc.catalog.overview.useQuery(
@@ -418,6 +422,21 @@ function CatalogContent() {
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
+        </VisualSelect>
+        <VisualSelect
+          density="compact"
+          aria-label="Stock availability"
+          value={stock}
+          disabled={bulk.isPending}
+          onValueChange={value => {
+            setStock(value as typeof stock);
+            setOffset(0);
+            clearSelection();
+          }}
+        >
+          <option value="all">All availability</option>
+          <option value="in_stock">In stock</option>
+          <option value="out_of_stock">Out of stock</option>
         </VisualSelect>
         <VisualSelect
           density="compact"

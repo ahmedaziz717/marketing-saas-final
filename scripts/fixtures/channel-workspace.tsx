@@ -273,9 +273,9 @@ const googleCampaignRows = [
   {
     campaign: {
       id: "13",
-      name: "Paused Search",
+      name: "Paused Display",
       status: "PAUSED",
-      advertisingChannelType: "SEARCH",
+      advertisingChannelType: "DISPLAY",
     },
     campaignBudget: { amountMicros: "10000000", period: "DAILY" },
   },
@@ -2097,8 +2097,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       await click("Select Demo Google Ads");
       if (innerWidth <= 700) await click("Open Campaign category");
       check(
-        document.querySelectorAll(".google-campaign-list button").length === 2,
-        "Inactive Google campaigns are off by default"
+        document.querySelectorAll(".google-campaign-list button").length === 1,
+        "Only active image-compatible Google campaigns appear"
       );
       const inactive = Array.from(
         document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
@@ -2109,8 +2109,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       inactive.click();
       await pause();
       check(
-        document.querySelectorAll(".google-campaign-list button").length === 3,
-        "Inactive campaign opt-in includes paused campaigns"
+        document.querySelectorAll(".google-campaign-list button").length === 2,
+        "Inactive opt-in retains creative compatibility"
       );
       if (which === "google-campaigns") {
         await clickPrefix("Active PMax");
@@ -2118,7 +2118,10 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.body.textContent?.includes("Core products"),
           "Existing asset groups are available"
         );
-        await click("Add images, videos & text");
+        await studioSection("Creative");
+        await click("Select Core products");
+        check(!!document.querySelector('[aria-label="Select EvokeLoop Library"]'), "Creative step opens the library after choosing its group");
+        await click("Choose another asset type");
         check(
           !!document.querySelector('[aria-label="Select Images"]') &&
             !!document.querySelector('[aria-label="Select Videos"]'),
@@ -2326,8 +2329,16 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       check(document.querySelectorAll('button[aria-label^="Preview "][aria-label$=" for Complete system"]').length === 9, "All eight system originals and legacy Hero visible in one gallery");
       check(!document.querySelector('select[aria-label="Gallery for Complete system"]'), "Represented chassis options are not nested in the parent gallery");
       check(document.body.textContent?.includes("Chassis Option"), "Independent component card is labeled Chassis Option");
-      if (which !== "gallery-elements-app") check(document.body.textContent?.includes("Review needed"), "Pending component is visible but awaiting review");
+      if (which === "gallery-elements-video") check(document.body.textContent?.includes("Review needed"), "Pending component still requires review for video");
       const state = () => document.querySelector('[data-testid="gallery-selection"]')?.textContent;
+      if (which === "gallery-elements-image") {
+        check(document.body.textContent?.includes("Available for image drafting"), "Pending component shows a non-blocking review notice");
+        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use Hero for Chassis: Printed enclosure"]');
+        check(!!pendingPhoto && !pendingPhoto.disabled, "Pending component photo is enabled for image drafting");
+        pendingPhoto!.click();
+        await pause();
+        check(JSON.parse(state() || "[]").some((product: any) => product.productId === 3 && product.imageId === 5), "Pending component saves the exact product and photo reference");
+      }
       const before = state();
       document.querySelector<HTMLButtonElement>('button[aria-label="Preview 4 for Complete system"]')!.click();
       await pause();

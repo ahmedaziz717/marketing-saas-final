@@ -792,3 +792,42 @@ it("persists person choices and rejects unapproved or cross-workspace person ass
     await db.delete(organizations).where(eq(organizations.id, otherOrg.id));
   }
 });
+
+
+it("creates a draft image from a pending product without category, price, URL, description or specs", async () => {
+  const db = await database();
+  const [pending] = await db.insert(products).values({
+    organizationId, name: "Incomplete imported product", status: "pending",
+    dedupeKey: "incomplete-" + suffix, productUrl: "", provenance: {}, createdAtMs: Date.now(),
+    specifications: {}, updatedAtMs: Date.now(),
+  }).returning();
+  const [photo] = await db.insert(productImages).values({
+    organizationId, productId: pending.id, storageKey: "test/incomplete.png",
+    url: "/manus-storage/test/incomplete.png", isPrimary: 1,
+    sourceUrl: "https://example.test/incomplete.png", createdAtMs: Date.now(),
+  }).returning();
+  const input = { ...defaultCreativeSetup(),
+    products: [{ productId: pending.id, imageId: photo.id, featuredSpecKeys: [], includePrice: false }],
+    formatIds: [defaultCreativeSetup().formatIds[0]],
+    copy: { headline: "Explore the design", subheadline: "", cta: "Explore" },
+  };
+  // Discovery, copy and quote must all work without manually opting into neutral wording.
+  const options = await caller.creativeBuilder.options({ organizationId });
+  expect(options.products.find(p => p.id === pending.id)?.status).toBe("pending");
+  await expect(caller.creativeBuilder.refreshCopy({ organizationId, setup: input })).resolves.toHaveProperty("headline");
+  const quote = await caller.creativeBuilder.quote({ organizationId, setup: input });
+  const saved = await caller.creativeBuilder.save({ organizationId, setup: input });
+  const started = await caller.creativeBuilder.generate({ organizationId,
+    briefId: saved.briefId, expectedUpdatedAtMs: saved.updatedAtMs,
+    requestId: randomUUID(), quotedCredits: quote.credits,
+  });
+  await processNextBuilderJob(db);
+  await vi.waitFor(async () => {
+    const overview = await caller.creatives.overview({ organizationId });
+    expect(overview.jobs.find(job => job.id === started.jobId)?.status).toBe("completed");
+    expect(overview.variants.filter(item => item.jobId === started.jobId).map(item => item.status)).toEqual(["pending"]);
+  }, { timeout: 10000 });
+  const [unchanged] = await db.select().from(products).where(eq(products.id, pending.id));
+  expect(unchanged.status).toBe("pending");
+  expect(unchanged.category).toBeNull();
+});

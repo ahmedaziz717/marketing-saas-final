@@ -226,3 +226,9 @@ it("uses shared workspace directions while preserving an explicit saved theme pr
     ).styleOnly.theme.prompt
   ).toBe("Saved custom direction");
 });
+
+
+it("uses neutral copy wording when category handling is omitted for unmapped products", () => {
+  const messages = buildCreativeCopyMessages(setup(), brand, [{ id: 1, name: "Unmapped" }] as any);
+  expect(JSON.parse(messages[1].content as string).categoryHandling).toBe("neutral");
+});

@@ -31,3 +31,9 @@ export function catalogReviewNotices(product: {
     notices.push("No product image imported. You can add one during review.");
   return notices;
 }
+
+/** Drafting images does not approve a catalog record or authorize publication. */
+export const imageDraftProductStatuses = ["approved", "pending"] as const;
+export function canDraftCatalogImage(status: string) {
+  return imageDraftProductStatuses.some(value => value === status);
+}

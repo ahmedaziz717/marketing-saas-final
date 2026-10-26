@@ -1,3 +1,5 @@
+import { canDraftCatalogImage } from "../../shared/catalogReadiness";
+import { imageCategoryHandling } from "../../shared/catalogCategories";
 import { catalogImageEligible } from "../../shared/catalogMedia";
 import { selectProductFacts } from "./productFacts";
 import {
@@ -59,7 +61,7 @@ export function resolveBuilderInputs(
     );
     if (
       !product ||
-      product.status !== "approved" ||
+      !canDraftCatalogImage(product.status) ||
       (image && !catalogImageEligible(image, product.mediaGroups)) ||
       (!image &&
         (product.recordType !== "service" || selection.imageId !== null))
@@ -67,7 +69,7 @@ export function resolveBuilderInputs(
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message:
-          "A selected product or image is unavailable. Choose approved products from your catalog.",
+          "A selected product or image is unavailable. Choose a current catalog product with a usable image.",
       });
     }
     return {
@@ -273,7 +275,7 @@ function renderCreativePrompt(input: CreativePromptInput) {
     "Render this customer-selected copy accurately: " +
       JSON.stringify(setup.copy),
     productFactsDirection,
-    `Category handling: ${setup.categoryHandling ?? "require_mapping"}.`,
+    `Category handling: ${imageCategoryHandling(products, setup.categoryHandling)}.`,
     "For EACH product, render only its selected featuredSpecifications and featuredFeatures as callouts, accurately associated with that product. Other specifications are factual context only. Never mix facts between products.",
     "Render a product price only if includePrice is true, using its exact catalog price and currency. Do not invent discounts or offers.",
     "All selected copy and featured specs must remain readable and within the canvas. When includeDescription is true, integrate a concise, faithful benefit from that product's description or service benefits. Adapt the arrangement for compact formats; do not silently omit selected facts or required claims. Add no unselected claims, words or badges beyond the selected copy and explicitly selected product facts.",
