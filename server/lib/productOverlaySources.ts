@@ -1,3 +1,4 @@
+import { imageDraftProductStatuses } from "../../shared/catalogReadiness";
 import { TRPCError } from "@trpc/server";
 import type { ProductOverlayMetadata, ProductOverlayReplacement } from "../../shared/productOverlay";
 import type { LibraryDatabase, LibraryTransaction } from "./assetLibrary";
@@ -12,7 +13,7 @@ export async function catalogOverlaySources(db: LibraryDatabase | LibraryTransac
   if (!productIds.length) return [];
   const rows = await db.select({image: productImages, product: products}).from(productImages).innerJoin(products,
     and(eq(products.id, productImages.productId), eq(products.organizationId, productImages.organizationId)))
-    .where(and(eq(productImages.organizationId, organizationId), inArray(productImages.productId, productIds), eq(products.status, "approved")));
+    .where(and(eq(productImages.organizationId, organizationId), inArray(productImages.productId, productIds), inArray(products.status, [...imageDraftProductStatuses])));
   return rows.filter(({image, product}) => catalogImageEligible(image, product.mediaGroups)).map(({image, product}) => ({
     key: `catalog-image:${image.id}`, name: `${product.name} — photo ${image.id}`, url: image.url,
     productId: product.id,

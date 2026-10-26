@@ -172,13 +172,13 @@ it("keeps represented component photos off parent cards, shows pending independe
     />
   );
   expect(
-    screen.getByText("Chassis Option - Review needed in Catalog")
+    screen.getByText("Chassis Option - Pending review; available for drafting")
   ).toBeTruthy();
   expect(
     screen
       .getByRole("checkbox", { name: /Use Hero for Case/ })
       .hasAttribute("disabled")
-  ).toBe(true);
+  ).toBe(false);
   expect(
     screen.queryByRole("button", { name: "Preview 2 for System" })
   ).toBeNull();
@@ -187,4 +187,19 @@ it("keeps represented component photos off parent cards, shows pending independe
   ).toBeTruthy();
   expect(latest.products[0].imageId).toBe(2);
   expect(screen.queryByText("System gallery")).toBeNull();
+});
+
+
+it("allows pending products with a photo but keeps rejected products and missing photos unavailable", () => {
+  render(<Harness catalog={[
+    { id: 1, name: "Pending", status: "pending", images: [{ id: 1, url: "/pending.png", isPrimary: 1 }] },
+    { id: 2, name: "Rejected", status: "rejected", images: [{ id: 2, url: "/rejected.png", isPrimary: 1 }] },
+    { id: 3, name: "No photo", status: "pending", images: [] },
+  ]} />);
+  const pending = screen.getByRole("checkbox", { name: /Use Hero for Pending/ }) as HTMLInputElement;
+  expect(pending.disabled).toBe(false);
+  fireEvent.click(pending);
+  expect(latest.products[0]).toMatchObject({ productId: 1, imageId: 1, includePrice: false, featuredSpecKeys: [] });
+  expect((screen.getByRole("checkbox", { name: /Use Hero for Rejected/ }) as HTMLInputElement).disabled).toBe(true);
+  expect(screen.getByText(/Add a usable product photo/)).toBeTruthy();
 });

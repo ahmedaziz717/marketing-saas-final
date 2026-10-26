@@ -1,3 +1,4 @@
+import { imageCategoryHandling } from "../../shared/catalogCategories";
 import { systemPromptContract } from "../../shared/promptContracts";
 import { productFactsDirection } from "../../shared/studioProductFacts";
 import { creativeMessaging } from "../../shared/creativeMessaging";
@@ -41,7 +42,7 @@ export function buildCreativeCopyMessages(
               type: "catalog",
               products: products.map(({ image, ...product }) => product),
             },
-        categoryHandling: setup.categoryHandling ?? "require_mapping",
+        categoryHandling: imageCategoryHandling(products, setup.categoryHandling),
         subjectRules: promotionContext(setup),
         campaign: creativeMessaging(setup.theme, themePrompt),
         brandBackground: {

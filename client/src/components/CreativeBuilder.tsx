@@ -360,6 +360,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
   return (
     <div className="space-y-5">
       <ProductCategoryContext
+        allowUnmapped
         products={catalog.filter(product =>
           setup.products.some(selection => selection.productId === product.id)
         )}

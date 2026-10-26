@@ -1,3 +1,4 @@
+import { canDraftCatalogImage } from "@shared/catalogReadiness";
 import { catalogCardGallery, catalogDefaultImage } from "@shared/catalogMedia";
 import { CatalogGallery } from "../CatalogGallery";
 import type {
@@ -476,7 +477,7 @@ export function StudioSources({
                     p.representedGroupIds
                   );
                   const unavailable =
-                    p.status != null && p.status !== "approved";
+                    p.status != null && !canDraftCatalogImage(p.status);
                   const primary =
                     gallery.images.find(
                       photo =>
@@ -495,7 +496,7 @@ export function StudioSources({
                       title={p.name}
                       description={
                         (p.componentKind
-                          ? `${p.componentKind} Option${unavailable ? " - Review needed in Catalog" : ""}`
+                          ? `${p.componentKind} Option${p.status === "pending" ? " - Pending review; available for drafting" : unavailable ? " - Unavailable" : ""}`
                           : p.sku) ||
                         (p.recordType === "service"
                           ? "Service"
@@ -535,6 +536,16 @@ export function StudioSources({
                       }
                       gallery={
                         <>
+                          {p.status === "pending" && (
+                            <p role="status" className="mb-2 text-xs text-muted-foreground">
+                              Available for image drafting. Catalog review is still pending; check product facts before publishing.
+                            </p>
+                          )}
+                          {!primary && p.recordType !== "service" && (
+                            <p role="status" className="mb-2 text-xs text-muted-foreground">
+                              Add a usable product photo in Catalog to create an image of this product.
+                            </p>
+                          )}
                           <p className="mb-2 text-xs text-muted-foreground">
                             {image.productMode === "together"
                               ? "Choose one view per product."
@@ -553,7 +564,7 @@ export function StudioSources({
                               >
                                 A saved view now belongs to a separate component
                                 card. Your selection is retained; choose an
-                                approved component card before generating.
+                                component card before generating.
                               </p>
                             )}
                           <CatalogGallery
@@ -623,7 +634,7 @@ export function StudioSources({
           )}
           {(isImage ? !products.length : catalog.data?.items.length === 0) && (
             <p className="cfg-empty">
-              No approved products yet. Add one using Product page URL, or
+              No catalog products available yet. Add one using Product page URL, or
               choose an image asset.
             </p>
           )}

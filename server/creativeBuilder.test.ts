@@ -344,7 +344,7 @@ describe("creative setup and trusted catalog inputs", () => {
 
   it.each([
     [{ ...product, organizationId: 2 }, image, logo],
-    [{ ...product, status: "pending" }, image, logo],
+    [{ ...product, status: "rejected" }, image, logo],
     [product, { ...image, organizationId: 2 }, logo],
     [product, { ...image, productId: 12 }, logo],
     [product, image, { ...logo, organizationId: 2 }],
@@ -598,4 +598,16 @@ it("sends selected feature and availability facts while retaining image creative
   expect(prompt).toContain(
     "Do not silently revert to a generic studio-ad aesthetic"
   );
+});
+
+
+it("drafts a pending product with a photo and no optional metadata without approving it", () => {
+  const pending = { ...product, status: "pending" as const, specifications: {}, price: null, currency: null, description: null, productUrl: "" };
+  const input = { ...setup(), products: [{ ...setup().products[0], featuredSpecKeys: [], includePrice: false }] };
+  const resolved = resolveBuilderInputs(1, input, [pending], [image], [logo]);
+  expect(resolved.products[0]).toMatchObject({ id: product.id, price: null, featuredSpecifications: {} });
+  expect(pending.status).toBe("pending");
+  const prompt = buildCreativePrompt({ setup: input, brand, products: resolved.products, formatId: input.formatIds[0], hasLogo: true });
+  expect(prompt).toContain("Category handling: neutral.");
+  expect(() => resolveBuilderInputs(1, input, [pending], [], [logo])).toThrow(/unavailable/);
 });
