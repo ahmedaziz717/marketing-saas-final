@@ -2438,9 +2438,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
     }
     if (which.startsWith("gallery-elements-")) {
       check(document.querySelectorAll('button[aria-label^="Preview "][aria-label$=" for Complete system"]').length === 9, "All eight system originals and legacy Hero visible in one gallery");
-      check(!document.querySelector('select[aria-label="Gallery for Complete system"]'), "Represented chassis options are not nested in the parent gallery");
+      check(!!document.querySelector('select[aria-label="Gallery for Complete system"]'), "Creation keeps owned optional views available regardless of represented classification");
+      for (const name of ["Chassis: Black enclosure", "Chassis: Printed enclosure"])
+        check(!!document.querySelector(`button[aria-label="Preview Hero for ${name}"]`), "Each chassis remains an independent card with its own original");
       check(document.body.textContent?.includes("Chassis Option"), "Independent component card is labeled Chassis Option");
-      if (which === "gallery-elements-video") check(document.body.textContent?.includes("Review needed"), "Pending component still requires review for video");
+      if (which !== "gallery-elements-image") check(document.body.textContent?.includes("Draft use allowed. Review product facts before publishing."), "Pending component has a non-blocking draft notice and retains publication review");
       const state = () => document.querySelector('[data-testid="gallery-selection"]')?.textContent;
       if (which === "gallery-elements-image") {
         check(document.body.textContent?.includes("Available for image drafting"), "Pending component shows a non-blocking review notice");
@@ -2450,6 +2452,32 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         await pause();
         check(JSON.parse(state() || "[]").some((product: any) => product.productId === 3 && product.imageId === 5), "Pending component saves the exact product and photo reference");
       }
+      if (which === "gallery-elements-video") {
+        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use Hero for Chassis: Printed enclosure"]');
+        check(!!pendingPhoto && !pendingPhoto.disabled, "Pending component photo is enabled for video drafting");
+        pendingPhoto!.click();
+        await pause();
+        check(JSON.parse(state() || "[]").includes("product_image:5"), "Video keeps exact pending component image reference");
+      }
+      if (which === "gallery-elements-app") {
+        const pendingPhoto = document.querySelector<HTMLInputElement>('input[aria-label^="Use Hero for Chassis: Printed enclosure"]');
+        check(!!pendingPhoto && !pendingPhoto.disabled, "Pending component remains selectable in the legacy single-image App field");
+        pendingPhoto!.click();
+        await pause();
+        const pendingSelection = JSON.parse(JSON.parse(state() || "null"));
+        check(pendingSelection.productId === 3 && pendingSelection.imageKey === "product_image:5", "App saves exact pending component identity without approval or remapping");
+      }
+      await fillControl('select[aria-label="Gallery for Complete system"]', "option:black");
+      const option = document.querySelector<HTMLInputElement>('input[aria-label^="Use 10 for Complete system"]');
+      check(!!option && !option.disabled, "Represented optional source remains selectable for creation");
+      option!.click();
+      await pause();
+      const optionSelection = JSON.parse(state() || "null");
+      check(which === "gallery-elements-image"
+        ? optionSelection.some((p: any) => p.productId === 1 && (p.imageId === 2 || p.imageIds?.includes(2)))
+        : which === "gallery-elements-video" ? optionSelection.includes("product_image:2")
+        : JSON.parse(optionSelection).imageKey === "product_image:2", "Optional source saves the exact owned photo without remapping it");
+      await fillControl('select[aria-label="Gallery for Complete system"]', "system");
       const before = state();
       document.querySelector<HTMLButtonElement>('button[aria-label="Preview 4 for Complete system"]')!.click();
       await pause();
@@ -2459,6 +2487,11 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       select!.click();
       await pause();
       check(state() !== before, "Selecting angle updates exact saved reference");
+      const systemSelection = JSON.parse(state() || "null");
+      check(which === "gallery-elements-image"
+        ? systemSelection.some((p: any) => p.productId === 1 && (p.imageId === 12 || p.imageIds?.includes(12)))
+        : which === "gallery-elements-video" ? systemSelection.includes("product_image:12")
+        : JSON.parse(systemSelection).productId === 1 && JSON.parse(systemSelection).imageKey === "product_image:12", "System angle selection keeps exact product1/photo12 identity");
       layout();
     }
     if (which === "catalog-gallery") {
