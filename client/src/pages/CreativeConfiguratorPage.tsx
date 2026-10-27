@@ -1,3 +1,4 @@
+import { modelInputGuidance } from "@shared/modelInputCompatibility";
 import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { StudioRunBar } from "@/components/configurator/StudioRunBar";
 import { TaskPromptField } from "@/components/TaskPromptField";
@@ -455,12 +456,8 @@ function Configurator({
   const referenceCount = isImage
     ? imageReferenceCount(image)
     : videoReferenceCount(video);
-  const automaticCapability =
-    !isImage && video.sourceVideoKey
-      ? "video"
-      : referenceCount > 0
-        ? "references"
-        : "all";
+  // Keep incompatible choices discoverable with reasons; filtering is an explicit choice.
+  const automaticCapability = "all";
   const capability = capabilityOverrides[config.kind] ?? automaticCapability;
   const setCapability = (value: string) =>
     setCapabilityOverrides(previous => ({ ...previous, [config.kind]: value }));
@@ -1046,6 +1043,9 @@ function Configurator({
               <button
                 className="cfg-choice"
                 disabled={!!c.reason}
+                aria-describedby={
+                  c.reason ? `choice-reason-${category}-${c.id}` : undefined
+                }
                 aria-pressed={selected.includes(c.id)}
                 aria-label={"Select " + c.title}
                 onClick={() => onSelect(c.id)}
@@ -1076,7 +1076,14 @@ function Configurator({
                   {c.footer && <div className="cfg-card-foot">{c.footer}</div>}
                 </div>
               </button>
-              {c.reason && <p className="cfg-disabled-reason">{c.reason}</p>}
+              {c.reason && (
+                <p
+                  id={`choice-reason-${category}-${c.id}`}
+                  className="cfg-disabled-reason"
+                >
+                  {c.reason}
+                </p>
+              )}
               {c.notice && <p className="cfg-disabled-reason">{c.notice}</p>}
               <div className="cfg-card-tools">
                 <button
@@ -1972,7 +1979,8 @@ function Configurator({
                 ? modelCompatibility(
                     d,
                     referenceCount,
-                    !isImage && !!video.sourceVideoKey
+                    !isImage && !!video.sourceVideoKey,
+                    true
                   )
                 : null;
               return {
@@ -1989,8 +1997,7 @@ function Configurator({
                   m.variant,
                 image: studioModelArtwork(m.routeId, config.kind),
                 art: config.kind,
-                reason: reason ?? undefined,
-                notice: notice ?? undefined,
+                reason: reason ?? notice ?? undefined,
                 footer: (
                   <>
                     {exactVideoQuoteFailed && m.id === setup.modelId
@@ -2002,8 +2009,7 @@ function Configurator({
                           (isImage ? "image" : String(m.estimatedSeconds) + "s")
                         : "See credits on selection"}
                     <br />
-                    {referenceCapacity(d)} image references{" "}
-                    {requiresVideo(d) ? "· Source video required" : ""}
+                    {modelInputGuidance(d)}
                   </>
                 ),
                 detail: (

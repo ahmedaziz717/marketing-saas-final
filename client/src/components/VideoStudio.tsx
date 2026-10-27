@@ -509,6 +509,10 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
               <ModelPicker
                 organizationId={organizationId!}
                 kind="video"
+                inputState={{
+                  images: videoReferenceCount(setup),
+                  hasVideo: !!setup.sourceVideoKey,
+                }}
                 value={setup.modelId}
                 disabled={locked || busy}
                 onChange={modelOptionsChanged}

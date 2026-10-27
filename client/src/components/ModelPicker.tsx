@@ -1,3 +1,8 @@
+import {
+  modelInputCompatibility,
+  modelInputGuidance,
+  type ModelInputSelection,
+} from "@shared/modelInputCompatibility";
 import { VisualSelect, ChoiceField } from "@/components/choices/VisualSelect";
 import { ModelSettingTiles } from "./configurator/ModelSettingTiles";
 import { useState } from "react";
@@ -27,12 +32,14 @@ export function ModelPicker({
   value,
   onChange,
   disabled = false,
+  inputState,
 }: {
   organizationId: number;
   kind: "image" | "video";
   value?: string;
   onChange: (id: string, options: ModelOptions) => void;
   disabled?: boolean;
+  inputState?: ModelInputSelection;
 }) {
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState(""),
@@ -51,6 +58,13 @@ export function ModelPicker({
     makers = Array.from(new Set(models.map(m => m.maker))).sort();
   const reason =
     choice?.reason ??
+    (model
+      ? modelInputCompatibility(
+          generationModel(choice?.routeId ?? model.id)!,
+          inputState ?? { images: null, hasVideo: null },
+          { discovery: true }
+        )
+      : null) ??
     (catalog.isSuccess && !choice
       ? "This model is no longer offered. Choose another model."
       : null);
@@ -128,63 +142,67 @@ export function ModelPicker({
             </VisualSelect>
           </div>
           <div className="grid min-h-0 auto-rows-max gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-            {visible.map(m => (
-              <button
-                type="button"
-                key={m.id}
-                disabled={!m.available}
-                onClick={() => {
-                  const definition = generationModel(m.routeId)!;
-                  onChange(m.id, modelDefaults(definition));
-                  setOpen(false);
-                }}
-                className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${m.id === selected ? "border-primary bg-primary/5" : "hover:border-primary hover:bg-muted/50"} disabled:opacity-50`}
-              >
-                <span className="mt-1 shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
-                  <Sparkles size={17} />
-                </span>
-                <span className="min-w-0 flex-1 break-words">
-                  <strong className="block text-sm">{m.name}</strong>
-                  <span className="block text-xs text-muted-foreground">
-                    {m.variant}
+            {visible.map(m => {
+              const definition = generationModel(m.routeId)!;
+              const inputReason = modelInputCompatibility(
+                definition,
+                inputState ?? { images: null, hasVideo: null },
+                { discovery: true }
+              );
+              const unavailable = m.reason ?? inputReason;
+              return (
+                <button
+                  type="button"
+                  key={m.id}
+                  disabled={!m.available || !!inputReason}
+                  onClick={() => {
+                    const definition = generationModel(m.routeId)!;
+                    onChange(m.id, modelDefaults(definition));
+                    setOpen(false);
+                  }}
+                  className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${m.id === selected ? "border-primary bg-primary/5" : "hover:border-primary hover:bg-muted/50"} disabled:opacity-50`}
+                >
+                  <span className="mt-1 shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
+                    <Sparkles size={17} />
                   </span>
-                  <span className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                    <span className="rounded bg-muted px-1.5 py-0.5">
-                      {m.maker}
+                  <span className="min-w-0 flex-1 break-words">
+                    <strong className="block text-sm">{m.name}</strong>
+                    <span className="block text-xs text-muted-foreground">
+                      {m.variant}
                     </span>
-                    {m.direct && (
-                      <span className="text-primary dark:text-primary">
-                        Great Value
+                    <span className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded bg-muted px-1.5 py-0.5">
+                        {m.maker}
+                      </span>
+                      {m.direct && (
+                        <span className="text-primary dark:text-primary">
+                          Great Value
+                        </span>
+                      )}
+                      {m.estimatedCredits != null && (
+                        <span>
+                          ≈ {m.estimatedCredits} credits /{" "}
+                          {m.kind === "image"
+                            ? "image"
+                            : `${m.estimatedSeconds}s`}
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      {modelInputGuidance(definition)}
+                    </span>
+                    {unavailable && (
+                      <span className="mt-1 block text-xs text-amber-600">
+                        {unavailable}
                       </span>
                     )}
-                    {m.estimatedCredits != null && (
-                      <span>
-                        ≈ {m.estimatedCredits} credits /{" "}
-                        {m.kind === "image"
-                          ? "image"
-                          : `${m.estimatedSeconds}s`}
-                      </span>
-                    )}
                   </span>
-                  <span className="mt-1 block text-[11px] text-muted-foreground">
-                    {referenceCapacity(generationModel(m.id)!)
-                      ? `Up to ${referenceCapacity(generationModel(m.id)!)} image references`
-                      : "Prompt input"}
-                    {requiresVideo(generationModel(m.id)!)
-                      ? " · Source video required"
-                      : ""}
-                  </span>
-                  {m.reason && (
-                    <span className="mt-1 block text-xs text-amber-600">
-                      {m.reason}
-                    </span>
+                  {m.id === selected && (
+                    <Check size={16} className="shrink-0 text-primary" />
                   )}
-                </span>
-                {m.id === selected && (
-                  <Check size={16} className="shrink-0 text-primary" />
-                )}
-              </button>
-            ))}
+                </button>
+              );
+            })}
             {catalog.isLoading && (
               <p className="p-4 text-sm">Loading model catalog…</p>
             )}

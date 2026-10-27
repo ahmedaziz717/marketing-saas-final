@@ -169,6 +169,7 @@ vi.mock("@/lib/trpc", () => ({
             "openai:gpt-image-2",
             "openai:gpt-image-1",
             DEFAULT_VIDEO_MODEL,
+            "higgsfield:bytedance/seedance-2.5/image-to-video",
             "higgsfield:bytedance/seedance-2.5/video-extend",
             "higgsfield:bytedance/seedance-2.5/text-to-video",
           ].map(id => ({
@@ -610,18 +611,34 @@ it("offers and saves Google responsive image sizes separately from fixed banners
   open();
   section(/Output & Review Bring it to life/);
   clickJourney(screen.getByRole("button", { name: "Google Ads" }));
-  expect(screen.getByRole("heading", { name: "Responsive image assets" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Fixed Display banners" })).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Responsive image assets" })
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Fixed Display banners" })
+  ).toBeTruthy();
   expect(screen.getByText("Ratio 1.91:1")).toBeTruthy();
   for (const name of ["Landscape", "Square", "Portrait"])
     clickJourney(screen.getByRole("button", { name: "Select " + name }));
-  expect(screen.getByRole("button", { name: "Select Medium rectangle" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Select Medium rectangle" })
+  ).toBeTruthy();
   clickJourney(screen.getByRole("button", { name: "Save draft" }));
-  await waitFor(() => expect(api.save).toHaveBeenCalledWith(expect.objectContaining({
-    setup: expect.objectContaining({ formatIds: expect.arrayContaining(["google_landscape", "google_square", "google_portrait"]) }),
-  })));
+  await waitFor(() =>
+    expect(api.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          formatIds: expect.arrayContaining([
+            "google_landscape",
+            "google_square",
+            "google_portrait",
+          ]),
+        }),
+      })
+    )
+  );
 });
-it("defaults to reference-image models for an image source and keeps a deliberate filter choice across categories", () => {
+it("keeps all models visible after adding sources and preserves deliberate filters across categories", () => {
   open();
   section(/AI Model Choose your engine/);
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
@@ -639,22 +656,22 @@ it("defaults to reference-image models for an image source and keeps a deliberat
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
   expect(
     screen
-      .getByRole("radio", { name: "Reference images" })
+      .getByRole("radio", { name: "All inputs" })
       .getAttribute("aria-checked")
   ).toBe("true");
-  clickJourney(screen.getByRole("radio", { name: "All inputs" }));
+  clickJourney(screen.getByRole("radio", { name: "Reference images" }));
   section(/Story & Sound Tell your story/);
   section(/AI Model Choose your engine/);
   clickJourney(screen.getByRole("tab", { name: /Input/ }));
   expect(
     screen
-      .getByRole("radio", { name: "All inputs" })
+      .getByRole("radio", { name: "Reference images" })
       .getAttribute("aria-checked")
   ).toBe("true");
   clickJourney(screen.getByRole("button", { name: "Reset model filters" }));
   expect(
     screen
-      .getByRole("radio", { name: "Reference images" })
+      .getByRole("radio", { name: "All inputs" })
       .getAttribute("aria-checked")
   ).toBe("true");
 });
@@ -1589,7 +1606,9 @@ it("routes photo-only video model browsing away from Extend without silently cha
     within(notice).getByRole("button", { name: "Choose Create from images" })
   );
   expect(
-    screen.queryByText(/Existing video required · ByteDance · Video Extend/)
+    screen.queryByText(
+      /Existing video required · ByteDance · Extend an existing video/
+    )
   ).toBeNull();
   clickJourney(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() =>
@@ -1685,6 +1704,53 @@ it("does not replace a failed exact video quote with a teaser planning price", a
         setup: expect.objectContaining({
           modelId: DEFAULT_VIDEO_MODEL,
           imageKeys: ["product_image:2"],
+        }),
+      })
+    )
+  );
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
+
+it("keeps incompatible seeded-video models visible and disabled with readable reasons", async () => {
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video = {
+    ...config.video,
+    modelId: DEFAULT_VIDEO_MODEL,
+    mode: "create",
+    imageKeys: Array.from({ length: 6 }, (_, i) => `asset:${i + 1}`),
+  };
+  openSaved(config);
+  section(/AI Model Choose your engine/);
+  const first = screen
+    .getByText(/Create a new video · ByteDance · First \/ last frame/)
+    .closest("article")!;
+  expect(first.textContent).toContain("Accepts up to 2 images; 6 selected");
+  expect(
+    (
+      within(first).getByRole("button", {
+        name: /Select Seedance/,
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  const extend = screen
+    .getByText(/Existing video required · ByteDance · Extend an existing video/)
+    .closest("article")!;
+  expect(extend.textContent).toContain("Requires an existing source video");
+  expect(
+    (
+      within(extend).getByRole("button", {
+        name: /Select Seedance/,
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          modelId: DEFAULT_VIDEO_MODEL,
+          imageKeys: config.video.imageKeys,
         }),
       })
     )

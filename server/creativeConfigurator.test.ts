@@ -116,9 +116,11 @@ it("counts image references using the server's per-output grouping", () => {
 });
 it("explains compatibility without silently discarding sources", () => {
   const model = generationModel(DEFAULT_IMAGE_MODEL)!;
-  expect(modelCompatibility(model, 17, false)).toMatch(/16 image references/);
+  expect(modelCompatibility(model, 17, false)).toMatch(
+    /16 images; 17 selected/
+  );
   expect(modelCompatibility(model, 1, true)).toMatch(
-    /does not accept a source video/
+    /Does not accept a source video/
   );
   expect(modelCompatibility(model, 1, false)).toBeNull();
   const audio: ModelDefinition = {

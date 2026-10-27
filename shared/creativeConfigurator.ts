@@ -1,3 +1,4 @@
+import { modelInputCompatibility } from "./modelInputCompatibility";
 import {
   creativeSetupSchema,
   defaultCreativeSetup,
@@ -110,18 +111,15 @@ export function videoWithSources(setup: VideoSetup): VideoSetup {
 export function modelCompatibility(
   model: ModelDefinition,
   references: number,
-  hasVideo: boolean
+  hasVideo: boolean,
+  discovery = false
 ): string | null {
-  if (requiresVideo(model) && !hasVideo)
-    return "Requires an existing source video. Photos and logos cannot replace a video clip; choose Create from images for a new video.";
-  if (references > referenceCapacity(model))
-    return `Supports ${referenceCapacity(model)} image references; your setup has ${references}. Remove references or choose another model.`;
-  if (
-    hasVideo &&
-    !model.inputSchema.properties.video_url &&
-    !model.inputSchema.properties.video_urls
-  )
-    return "This model does not accept a source video. Remove the source clip to use it.";
+  const problem = modelInputCompatibility(
+    model,
+    { images: references, hasVideo },
+    { discovery }
+  );
+  if (problem) return problem;
   const unsupported = (model.inputSchema.required ?? []).filter(
     k =>
       ![

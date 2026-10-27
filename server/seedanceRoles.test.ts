@@ -20,10 +20,8 @@ const urls = Array.from(
 );
 describe("Seedance role labels without endpoint conversion", () => {
   it("distinguishes first/last frames from optional-video multi-reference input", () => {
-    expect(firstLast.variant).toBe("First / last frame · 1–2 images");
-    expect(references.variant).toBe(
-      "Multiple reference images · up to 30 · video optional"
-    );
+    expect(firstLast.variant).toBe("First / last frame");
+    expect(references.variant).toBe("Multiple reference images");
     expect(referenceCapacity(firstLast)).toBe(2);
     expect(referenceCapacity(references)).toBe(30);
   });

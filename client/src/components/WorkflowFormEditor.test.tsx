@@ -304,7 +304,7 @@ it("adds Model selector in App form with one default, lets the designer allow al
   clickJourney(screen.getByRole("button", { name: "Toggle preview" }));
   expect(
     screen
-      .getByRole("radio", { name: "GPT Image 2.5 Flare" })
+      .getByRole("radio", { name: /^GPT Image 2.5 Flare/ })
       .getAttribute("aria-checked")
   ).toBe("true");
   expect(screen.queryByRole("radio", { name: /^GPT Image 1/ })).toBeNull();
@@ -313,7 +313,7 @@ it("adds Model selector in App form with one default, lets the designer allow al
   });
   expect(
     screen
-      .getByRole("radio", { name: "GPT Image 2.5 Sunburst" })
+      .getByRole("radio", { name: /^GPT Image 2.5 Sunburst/ })
       .getAttribute("aria-checked")
   ).toBe("true");
 });

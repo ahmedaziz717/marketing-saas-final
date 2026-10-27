@@ -94,9 +94,11 @@ const openaiModels: ModelDefinition[] = OPENAI_IMAGE_MODELS.map(model => ({
 /** Customer-facing roles, not provider endpoint names. IDs and input schemas stay intact. */
 export function modelVariantLabel(model: ModelDefinition): string {
   if (model.providerModel === "bytedance/seedance-2.5/image-to-video")
-    return "First / last frame · 1–2 images";
+    return "First / last frame";
   if (model.providerModel === "bytedance/seedance-2.5/reference-to-video")
-    return "Multiple reference images · up to 30 · video optional";
+    return "Multiple reference images";
+  if (model.providerModel === "bytedance/seedance-2.5/video-extend")
+    return "Extend an existing video";
   return model.variant;
 }
 export const generationModels: ModelDefinition[] = [
