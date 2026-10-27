@@ -94,6 +94,8 @@ import {
   requestUrl,
 } from "./lib/higgsfield";
 import { generationModel } from "../shared/modelCatalog";
+import { readVideoCatalogImage } from "./lib/videoCatalog";
+import { validateWorkflowValues } from "./lib/creativeWorkflows";
 import { mp4Info } from "./lib/videoMedia";
 import { defaultVideoRates, videoQuote } from "./lib/videoPricing";
 import { aiScope } from "./lib/aiMetering";
@@ -380,6 +382,247 @@ const accepted = {
 };
 
 describe("durable video generation", () => {
+  it("preserves catalog source geometry through descriptive image-to-video quote and the exact submitted request", async () => {
+    const model = generationModel(
+      "higgsfield:bytedance/seedance-2.0/image-to-video"
+    )!;
+    await state.db
+      .update(productImages)
+      .set({ media: { width: 640, height: 640, references: [] } })
+      .where(eq(productImages.id, catalogImageId));
+    try {
+      const settings = {
+        ...setup(),
+        modelId: model.id,
+        imageKeys: [`product_image:${catalogImageId}`],
+        modelOptions: { duration: 5, resolution: "720p", generate_audio: true },
+      };
+      const refs = await resolveVideoReferences(state.db, org, settings);
+      expect(refs[0]).toMatchObject({ width: 640, height: 640 });
+      state.estimate.mockRejectedValue(
+        new HiggsfieldQuoteUnavailableError(model.pricingNote)
+      );
+      const job = await queued(settings);
+      expect(job.credits).toBeGreaterThan(0);
+      const [saved] = await state.db
+        .select()
+        .from(videoJobs)
+        .where(eq(videoJobs.id, job.id));
+      const prepared = saved.requestBody;
+      expect(prepared.image_url).toBeTruthy();
+      expect(prepared.duration).toBe(5);
+      await tick();
+      state.submit.mockResolvedValue(accepted);
+      await tick();
+      expect(state.submit).toHaveBeenCalledTimes(1);
+      expect(state.submit.mock.calls[0][1]).toEqual(prepared);
+      expect(
+        state.estimate.mock.calls.every(
+          call => JSON.stringify(call[1]) === JSON.stringify(prepared)
+        )
+      ).toBe(true);
+    } finally {
+      await state.db
+        .update(productImages)
+        .set({ media: null })
+        .where(eq(productImages.id, catalogImageId));
+    }
+  });
+  it("does not guess missing catalog geometry or reserve credits when an adaptive quote cannot be calculated", async () => {
+    const model = generationModel(
+      "higgsfield:bytedance/seedance-2.0/image-to-video"
+    )!;
+    const settings = {
+      ...setup(),
+      modelId: model.id,
+      imageKeys: [`product_image:${catalogImageId}`],
+      modelOptions: { duration: 5, resolution: "720p" },
+    };
+    const refs = await resolveVideoReferences(state.db, org, settings);
+    expect(refs[0].width).toBeUndefined();
+    expect(refs[0].height).toBeUndefined();
+    state.estimate.mockRejectedValue(
+      new HiggsfieldQuoteUnavailableError(model.pricingNote)
+    );
+    await expect(
+      owner.video.quote({ organizationId: org, setup: settings })
+    ).rejects.toThrow(/upfront credit price/);
+    expect(await state.db.select().from(creditLedger)).toEqual([]);
+    expect(state.submit).not.toHaveBeenCalled();
+  });
+  it("resumes a queued pre-versioned catalog job using its accepted request snapshot", async () => {
+    await state.db
+      .update(productImages)
+      .set({ media: { width: 640, height: 640, references: [] } })
+      .where(eq(productImages.id, catalogImageId));
+    try {
+      const settings = {
+        ...setup(),
+        imageKeys: [`product_image:${catalogImageId}`],
+      };
+      const job = await queued(settings);
+      const [saved] = await state.db
+        .select()
+        .from(videoJobs)
+        .where(eq(videoJobs.id, job.id));
+      const current = await readVideoCatalogImage(
+        state.db,
+        org,
+        settings.imageKeys[0]
+      );
+      const legacy = saved.references.map((ref: any) => {
+        const { catalogSourceVersion: _v, width: _w, height: _h, ...old } = ref;
+        return { ...old, fingerprint: current.legacyFingerprint };
+      });
+      await state.db
+        .update(videoJobs)
+        .set({ references: legacy })
+        .where(eq(videoJobs.id, job.id));
+      await tick();
+      state.submit.mockResolvedValue(accepted);
+      await tick();
+      expect(state.submit).toHaveBeenCalledTimes(1);
+      expect(state.submit.mock.calls[0][1]).toEqual(saved.requestBody);
+    } finally {
+      await state.db
+        .update(productImages)
+        .set({ media: null })
+        .where(eq(productImages.id, catalogImageId));
+    }
+  });
+  it("accepts an unchanged pre-versioned job identity without weakening new geometry fences", async () => {
+    const key = `product_image:${catalogImageId}`;
+    try {
+      await state.db
+        .update(productImages)
+        .set({ media: { width: 640, height: 640, references: [] } })
+        .where(eq(productImages.id, catalogImageId));
+      const current = await readVideoCatalogImage(state.db, org, key);
+      const {
+        catalogSourceVersion: _version,
+        width: _w,
+        height: _h,
+        ...fields
+      } = current.reference;
+      const legacy = { ...fields, fingerprint: current.legacyFingerprint };
+      const oldValue = {
+        type: "image" as const,
+        key,
+        url: "/media/original",
+        name: "Original",
+        fingerprint: legacy.fingerprint,
+      };
+      const newValue = {
+        ...oldValue,
+        fingerprint: current.reference.fingerprint,
+        catalogSourceVersion: 2 as const,
+      };
+      await expect(
+        validateWorkflowValues(state.db, org, [oldValue])
+      ).resolves.toBeUndefined();
+      await expect(
+        validateWorkflowValues(state.db, org, [{ ...oldValue, type: "video" }])
+      ).rejects.toThrow();
+      await expect(
+        validateWorkflowValues(state.db, org, [newValue])
+      ).resolves.toBeUndefined();
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: [legacy],
+        })
+      ).resolves.toBeUndefined();
+      await state.db
+        .update(productImages)
+        .set({ media: { width: 640, height: 480, references: [] } })
+        .where(eq(productImages.id, catalogImageId));
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: [legacy],
+        })
+      ).resolves.toBeUndefined();
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: [current.reference],
+        })
+      ).rejects.toThrow(/reference changed/);
+      await expect(
+        validateWorkflowValues(state.db, org, [oldValue])
+      ).resolves.toBeUndefined();
+      await expect(
+        validateWorkflowValues(state.db, org, [newValue])
+      ).rejects.toThrow(/input changed/);
+      await state.db
+        .update(productImages)
+        .set({ storageKey: "org-test/replaced.png" })
+        .where(eq(productImages.id, catalogImageId));
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: [legacy],
+        })
+      ).rejects.toThrow(/reference changed/);
+      await state.db
+        .update(productImages)
+        .set({ storageKey: current.reference.storageKey })
+        .where(eq(productImages.id, catalogImageId));
+      await state.db
+        .update(productImages)
+        .set({
+          media: { width: 640, height: 480, references: [], retired: true },
+        })
+        .where(eq(productImages.id, catalogImageId));
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: [legacy],
+        })
+      ).rejects.toThrow(/unavailable/);
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: otherOrg,
+          references: [legacy],
+        })
+      ).rejects.toThrow(/unavailable/);
+    } finally {
+      await state.db
+        .update(productImages)
+        .set({ media: null })
+        .where(eq(productImages.id, catalogImageId));
+    }
+  });
+  it("invalidates a catalog quote when its measured source dimensions change", async () => {
+    const settings = {
+      ...setup(),
+      imageKeys: [`product_image:${catalogImageId}`],
+    };
+    try {
+      await state.db
+        .update(productImages)
+        .set({ media: { width: 640, height: 640, references: [] } })
+        .where(eq(productImages.id, catalogImageId));
+      const before = await resolveVideoReferences(state.db, org, settings);
+      await state.db
+        .update(productImages)
+        .set({ media: { width: 640, height: 480, references: [] } })
+        .where(eq(productImages.id, catalogImageId));
+      const after = await resolveVideoReferences(state.db, org, settings);
+      expect(after[0].fingerprint).not.toBe(before[0].fingerprint);
+      await expect(
+        validateVideoReferences(state.db, {
+          organizationId: org,
+          references: before,
+        })
+      ).rejects.toThrow();
+    } finally {
+      await state.db
+        .update(productImages)
+        .set({ media: null })
+        .where(eq(productImages.id, catalogImageId));
+    }
+  });
   it("locks a descriptive token estimate through submission and measured-cost reconciliation", async () => {
     const model = generationModel(
       "higgsfield:bytedance/seedance-2.5/reference-to-video"

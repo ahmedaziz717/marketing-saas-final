@@ -149,3 +149,11 @@ it("uses each video model's defaults but keeps user sources and prompt for revie
   );
   expect(after.modelId).toBe(model.id);
 });
+
+it("distinguishes extending a video from creating one from photos without changing the selected model", () => {
+  const extend = generationModel(
+    "higgsfield:bytedance/seedance-2.5/video-extend"
+  )!;
+  expect(modelCompatibility(extend, 2, false)).toMatch(/existing source video/);
+  expect(modelCompatibility(extend, 2, true)).toBeNull();
+});

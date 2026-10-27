@@ -33,6 +33,7 @@ import {
 const api = vi.hoisted(() => ({
   save: vi.fn(),
   generate: vi.fn(),
+  videoQuoteError: null as Error | null,
   videoSave: vi.fn(),
   videoGenerate: vi.fn(),
   role: "owner",
@@ -168,6 +169,7 @@ vi.mock("@/lib/trpc", () => ({
             "openai:gpt-image-2",
             "openai:gpt-image-1",
             DEFAULT_VIDEO_MODEL,
+            "higgsfield:bytedance/seedance-2.5/video-extend",
             "higgsfield:bytedance/seedance-2.5/text-to-video",
           ].map(id => ({
             ...generationModel(id),
@@ -233,7 +235,11 @@ vi.mock("@/lib/trpc", () => ({
       generate: { useMutation: () => ({ mutateAsync: api.videoGenerate }) },
       draftPrompt: { useMutation: () => ({ mutateAsync: api.draftPrompt }) },
       quote: {
-        useQuery: () => ({ data: { credits: 200 }, isFetching: false }),
+        useQuery: () => ({
+          data: { credits: 200 },
+          isFetching: false,
+          error: api.videoQuoteError,
+        }),
       },
     },
   },
@@ -243,6 +249,7 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.clear();
   vi.clearAllMocks();
+  api.videoQuoteError = null;
   api.role = "owner";
   api.org = 1;
   api.drafts = [];
@@ -1557,3 +1564,130 @@ it.each(["image", "video"] as const)(
     expect(api.videoGenerate).not.toHaveBeenCalled();
   }
 );
+
+it("routes photo-only video model browsing away from Extend without silently changing an existing choice", async () => {
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video = {
+    ...config.video,
+    modelId: "higgsfield:bytedance/seedance-2.5/video-extend",
+    mode: "extend",
+    prompt: "Animate the lamp",
+    imageKeys: ["product_image:2"],
+  };
+  openSaved(config);
+  const notice = screen.getByRole("status", { name: "Video input required" });
+  expect(notice.textContent).toContain("existing video clip");
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Generate video",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  clickJourney(
+    within(notice).getByRole("button", { name: "Choose Create from images" })
+  );
+  expect(
+    screen.queryByText(/Existing video required · ByteDance · Video Extend/)
+  ).toBeNull();
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          modelId: config.video.modelId,
+          mode: "extend",
+          imageKeys: ["product_image:2"],
+        }),
+      })
+    )
+  );
+  const referenceCard = screen
+    .getByText(/Create a new video · ByteDance · Multiple reference images/)
+    .closest("article")!;
+  clickJourney(
+    within(referenceCard).getByRole("button", { name: /Select Seedance/ })
+  );
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          modelId: DEFAULT_VIDEO_MODEL,
+          mode: "create",
+          imageKeys: ["product_image:2"],
+        }),
+      })
+    )
+  );
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
+it("keeps a valid Extend setup with an existing clip usable", async () => {
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video = {
+    ...config.video,
+    modelId: "higgsfield:bytedance/seedance-2.5/video-extend",
+    mode: "extend",
+    prompt: "Continue this clip",
+    imageKeys: [],
+    sourceVideoKey: "asset:99",
+  };
+  openSaved(config);
+  expect(
+    screen.queryByRole("status", { name: "Video input required" })
+  ).toBeNull();
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Generate video",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  );
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});
+
+it("does not replace a failed exact video quote with a teaser planning price", async () => {
+  api.videoQuoteError = new Error(
+    "Upfront credit pricing is not available for this request."
+  );
+  const config = newConfiguration();
+  config.kind = "video";
+  config.video = {
+    ...config.video,
+    modelId: DEFAULT_VIDEO_MODEL,
+    prompt: "Animate this lamp",
+    imageKeys: ["product_image:2"],
+  };
+  openSaved(config);
+  await waitFor(() =>
+    expect(screen.getByText("Exact quote unavailable")).toBeTruthy()
+  );
+  expect(screen.queryByText("≈ 31 credits")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Generate video",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  section(/AI Model Choose your engine/);
+  expect(
+    screen.getByText(/Exact price unavailable for this setup/)
+  ).toBeTruthy();
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() =>
+    expect(api.videoSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          modelId: DEFAULT_VIDEO_MODEL,
+          imageKeys: ["product_image:2"],
+        }),
+      })
+    )
+  );
+  expect(api.videoGenerate).not.toHaveBeenCalled();
+});

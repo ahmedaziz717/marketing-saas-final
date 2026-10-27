@@ -1,3 +1,4 @@
+import { GoogleFieldErrors } from "./GoogleValidation";
 import { googleCopyCapabilities } from "@shared/googleCopy";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -336,9 +337,10 @@ export function AssetEditor({
     if (offset !== pageOffset) setOffset(pageOffset);
   }, [offset, pageOffset]);
   return (
-    <div className="google-assets">
+    <div className="google-assets" data-google-field="ad.assets" tabIndex={-1}>
+      <GoogleFieldErrors path="ad.assets" />
       {adType === "DISPLAY" && media === "image" && (
-        <div className="cfg-note" data-google-field="ad.assets" tabIndex={-1}>
+        <div className="cfg-note">
           <strong>Required Display images</strong>
           <p>
             Responsive Display ads need both image shapes. Fixed banner sizes do
@@ -942,14 +944,14 @@ export function AdEditor({
           )}
           {type === "SEARCH" && (
             <div className="google-form-grid">
-              <Field title="Display path 1">
+              <Field path="ad.path1" title="Display path 1">
                 <input
                   maxLength={15}
                   value={ad.path1}
                   onChange={e => patch({ path1: e.target.value })}
                 />
               </Field>
-              <Field title="Display path 2">
+              <Field path="ad.path2" title="Display path 2">
                 <input
                   maxLength={15}
                   value={ad.path2}

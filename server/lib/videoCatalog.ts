@@ -240,24 +240,40 @@ export async function readVideoCatalogImage(
   const marketingCategory = (
     await attachMarketingCategories(db, organizationId, [row.product])
   )[0].marketingCategory;
+  // Preserve server-owned source geometry for adaptive image-to-video quotes.
+  // Missing dimensions must remain unknown, never substitute a guessed canvas.
+  const width = row.image.media?.width;
+  const height = row.image.media?.height;
+  const dimensions =
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width! > 0 &&
+    height! > 0
+      ? { width, height }
+      : {};
+  const identity = {
+    id: row.image.id,
+    productId: row.image.productId,
+    storageKey: row.image.storageKey,
+    url: row.image.url,
+    name: row.product.name,
+    description: row.product.description,
+  };
   const reference: VideoReference = {
     key,
     storageKey: row.image.storageKey,
     name: row.product.name,
     mimeType: "image/*",
-    fingerprint: stableHash({
-      id: row.image.id,
-      productId: row.image.productId,
-      storageKey: row.image.storageKey,
-      url: row.image.url,
-      name: row.product.name,
-      description: row.product.description,
-    }),
+    ...dimensions,
+    catalogSourceVersion: 2,
+    fingerprint: stableHash({ ...identity, ...dimensions }),
+
     catalogFingerprint: stableHash(productFacts(row)),
     categoryFingerprint: stableHash(marketingCategory),
   };
   return {
     reference,
+    legacyFingerprint: stableHash(identity),
     choice: choice(row),
     facts: { ...productFacts(row), marketingCategory },
   };

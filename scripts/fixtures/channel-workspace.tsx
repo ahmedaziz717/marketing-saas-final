@@ -601,10 +601,14 @@ function respond(path: string, input: any) {
 
   if (path === "catalogSources.list" && which.startsWith("google-")) return [];
   if (path === "googleAds.campaigns.drafts") return googleActivationDraft ? [googleActivationDraft] : [];
+  // Match PostgreSQL JSONB key ordering in the synthetic transport. Array order
+  // is deliberately preserved, so real edit/replacement semantics are unchanged.
+  const jsonb = (value: any): any => Array.isArray(value) ? value.map(jsonb)
+    : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, jsonb(value[key])])) : value;
   // Synthetic transport only: these responses never reach Google or application APIs.
   if (path === "googleAds.campaigns.save") {
     mutations.push(path);
-    googleActivationDraft = { ...input, id: "77777777-7777-4777-8777-777777777777", revision: (googleActivationDraft?.revision ?? 0) + 1, state: "draft" };
+    googleActivationDraft = { ...input, change: jsonb(input.change), id: "77777777-7777-4777-8777-777777777777", revision: (googleActivationDraft?.revision ?? 0) + 1, state: "draft" };
     return googleActivationDraft;
   }
   if (path === "googleAds.campaigns.validate") {
@@ -2256,6 +2260,13 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         await pause();
         await click("Continue to Copy →");
         check(!!document.querySelector('[aria-label="Headlines draft editor"]'), "Copy has separate editable Google text roles before review");
+        const proposed = document.querySelector<HTMLElement>(".google-copy-proposed")!;
+        const selected = document.querySelector<HTMLElement>(".google-copy-selected")!;
+        check(!!proposed && !!selected, "Proposed and selected copy have explicit comparison regions");
+        const proposedBox = proposed.getBoundingClientRect(), selectedBox = selected.getBoundingClientRect();
+        check(innerWidth > 767 ? selectedBox.left >= proposedBox.right : selectedBox.top >= proposedBox.bottom,
+          "Copy comparison is side by side on desktop and stacked on mobile");
+
         await click("Review change →");
         for (let attempt = 0; attempt < 30 && googleActivationDraft?.state !== "validated"; attempt++) await pause();
         await pause();
@@ -2263,12 +2274,12 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         check(
           googleActivationDraft?.state === "validated" && !!activateReplacement && activateReplacement.disabled &&
             googleActivationApprovals.length === 0 &&
-            JSON.stringify(googleActivationDraft.change.remove) === JSON.stringify([{ assetId: "100", field: "MARKETING_IMAGE" }]) &&
+            googleActivationDraft.change.remove.length === 1 && googleActivationDraft.change.remove[0].assetId === "100" && googleActivationDraft.change.remove[0].field === "MARKETING_IMAGE" &&
             googleActivationDraft.change.add.length === 1 && googleActivationDraft.change.add[0].source.id === "41",
           "Automatic review prepares only the selected image replacement and cannot activate before confirmation"
         );
         const approval = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find(input => input.parentElement?.textContent?.includes("I confirm the new creative and only the replacements listed above"))!;
-        check(!!approval && !approval.checked, "Replacement requires a fresh explicit confirmation");
+        check(!!approval && !approval.disabled && !approval.checked, "Validated JSONB replacement allows a fresh explicit confirmation");
         approval.click();
         await pause();
         await click("Confirm replacement & activate");

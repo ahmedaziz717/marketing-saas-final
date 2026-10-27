@@ -1,0 +1,105 @@
+/* Shared Display / Performance Max comparison editor. Keep all rules scoped. */
+.google-copy-workspace.google-pmax-ai {
+  padding: 12px;
+  margin: 8px 0;
+  min-width: 0;
+}
+.google-copy-workspace .google-copy-help,
+.google-copy-workspace .google-copy-empty {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  margin: 4px 0 8px;
+}
+.google-copy-workspace .google-copy-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+  margin-top: 12px;
+}
+.google-copy-workspace .google-copy-comparison.is-proposals-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.google-copy-workspace .google-copy-proposed,
+.google-copy-workspace .google-copy-selected {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.google-copy-workspace h3 {
+  font-size: 14px;
+  margin: 0;
+}
+.google-copy-workspace h4 {
+  font-size: 13px;
+  margin: 0 0 5px;
+}
+.google-copy-workspace .google-copy-field-group {
+  margin: 12px 0;
+}
+.google-copy-workspace .google-field {
+  margin: 5px 0;
+  gap: 3px;
+}
+.google-copy-workspace .google-field :is(input, select, textarea) {
+  padding: 7px 9px;
+  border-radius: 7px;
+  line-height: 1.4;
+  min-width: 0;
+}
+.google-copy-workspace .google-copy-suggestion {
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 8px;
+  min-width: 0;
+}
+.google-copy-workspace .google-copy-suggestion textarea {
+  min-height: 34px;
+  resize: vertical;
+}
+.google-copy-workspace .google-copy-suggestion > button {
+  margin: 4px 5px 0 0;
+}
+.google-copy-workspace .google-copy-suggestion button {
+  min-height: 32px;
+  height: auto;
+  padding: 5px 8px;
+  font-size: 12px;
+  white-space: normal;
+}
+.google-copy-workspace small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.google-copy-workspace .google-copy-counts {
+  gap: 8px;
+  margin: 8px 0;
+}
+.google-copy-workspace .google-copy-counts > .google-field {
+  flex: 1 1 135px;
+}
+.google-copy-workspace .google-copy-replacement {
+  margin-top: 5px;
+}
+.google-copy-workspace .google-copy-replacement select {
+  text-overflow: ellipsis;
+}
+.google-copy-workspace details {
+  margin: 6px 0;
+}
+.google-copy-workspace summary {
+  padding: 4px 0;
+  font-size: 12px;
+}
+.google-copy-workspace .google-copy-selected li {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 767px) {
+  .google-copy-workspace .google-copy-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .google-copy-workspace .google-copy-suggestion button {
+    min-height: 40px;
+  }
+}

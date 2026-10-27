@@ -105,6 +105,9 @@ export function WorkflowModelInput({
             return (
               <option key={id} value={id} disabled={!model?.available}>
                 {workflowModel(id)?.name ?? id}
+                {generationModel(id)
+                  ? ` · ${generationModel(id)!.variant}`
+                  : ""}
                 {model?.available ? "" : " · unavailable"}
               </option>
             );

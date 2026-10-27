@@ -21,7 +21,15 @@ export async function workflowPublicationAsset(
   if (!image.key.startsWith("product_image:"))
     return readLibraryAsset(db, organizationId, image.key);
   const source = await readVideoCatalogImage(db, organizationId, image.key);
-  if (source.reference.fingerprint !== image.fingerprint)
+  const expected =
+    image.catalogSourceVersion === undefined
+      ? source.legacyFingerprint
+      : source.reference.fingerprint;
+  if (
+    (image.catalogSourceVersion !== undefined &&
+      image.catalogSourceVersion !== 2) ||
+    expected !== image.fingerprint
+  )
     throw new Error(
       "This product image changed. Run the workflow again with the updated image."
     );

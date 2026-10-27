@@ -16,6 +16,7 @@ import {
   modelDefaults,
   modelVideoMode,
   referenceCapacity,
+  requiresVideo,
   type ModelDefinition,
   type ModelOptions,
 } from "./modelCatalog";
@@ -111,6 +112,8 @@ export function modelCompatibility(
   references: number,
   hasVideo: boolean
 ): string | null {
+  if (requiresVideo(model) && !hasVideo)
+    return "Requires an existing source video. Photos and logos cannot replace a video clip; choose Create from images for a new video.";
   if (references > referenceCapacity(model))
     return `Supports ${referenceCapacity(model)} image references; your setup has ${references}. Remove references or choose another model.`;
   if (

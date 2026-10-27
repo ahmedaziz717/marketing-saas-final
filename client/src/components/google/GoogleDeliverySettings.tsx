@@ -34,13 +34,16 @@ export function GoogleDeliverySettings({
         change.kind === "campaign_update" ? (
           <>
             <div className="google-form-grid">
-              <Field title="Campaign name">
+              <Field path="name" title="Campaign name">
                 <input
                   value={change.name}
                   onChange={e => edit({ ...change, name: e.target.value })}
                 />
               </Field>
-              <Field title={`Daily budget · ${currency ?? "account currency"}`}>
+              <Field
+                path="dailyBudget"
+                title={`Daily budget · ${currency ?? "account currency"}`}
+              >
                 <input
                   type="number"
                   min="0.01"
@@ -54,7 +57,7 @@ export function GoogleDeliverySettings({
                   }
                 />
               </Field>
-              <Field title="Launch status">
+              <Field path="status" title="Launch status">
                 <select
                   value={change.status}
                   onChange={e =>
@@ -82,7 +85,7 @@ export function GoogleDeliverySettings({
         <>
           {section === "settings" && (
             <div className="google-form-grid">
-              <Field title="Bidding strategy">
+              <Field path="bidding.strategy" title="Bidding strategy">
                 <select
                   value={change.bidding.strategy}
                   onChange={e =>
@@ -102,6 +105,7 @@ export function GoogleDeliverySettings({
                 </select>
               </Field>
               <Field
+                path="bidding.target"
                 title={
                   change.bidding.strategy.includes("ROAS") ||
                   change.bidding.strategy.includes("VALUE")
@@ -126,7 +130,7 @@ export function GoogleDeliverySettings({
                   }
                 />
               </Field>
-              <Field title="Start date · optional">
+              <Field path="startDate" title="Start date · optional">
                 <input
                   type="date"
                   value={change.startDate ?? ""}
@@ -137,7 +141,7 @@ export function GoogleDeliverySettings({
                   }
                 />
               </Field>
-              <Field title="End date · optional">
+              <Field path="endDate" title="End date · optional">
                 <input
                   type="date"
                   value={change.endDate ?? ""}
@@ -168,7 +172,10 @@ export function GoogleDeliverySettings({
           )}
           {section === "options" && (
             <>
-              <Field title="EU political advertising declaration">
+              <Field
+                path="politicalAdvertising"
+                title="EU political advertising declaration"
+              >
                 <select
                   value={change.politicalAdvertising}
                   onChange={e =>
@@ -210,7 +217,7 @@ export function GoogleDeliverySettings({
                     />{" "}
                     Display expansion
                   </label>
-                  <Field title="Keyword match type">
+                  <Field path="keywords" title="Keyword match type">
                     <select
                       value={
                         change.keywords.find(k => !k.negative)?.match ?? "EXACT"
@@ -236,7 +243,7 @@ export function GoogleDeliverySettings({
                       <option value="BROAD">Broad</option>
                     </select>
                   </Field>
-                  <Field title="Keywords · one per line">
+                  <Field path="keywords" title="Keywords · one per line">
                     <textarea
                       rows={4}
                       value={change.keywords
@@ -259,7 +266,10 @@ export function GoogleDeliverySettings({
                       }
                     />
                   </Field>
-                  <Field title="Negative keywords · one per line">
+                  <Field
+                    path="keywords"
+                    title="Negative keywords · one per line"
+                  >
                     <textarea
                       rows={2}
                       value={change.keywords
@@ -309,7 +319,7 @@ export function GoogleDeliverySettings({
                     value={change.merchantId ? [change.merchantId] : []}
                     onChange={v => patch({ merchantId: v[0] })}
                   />
-                  <Field title="Feed label">
+                  <Field path="feedLabel" title="Feed label">
                     <input
                       value={change.feedLabel ?? ""}
                       onChange={e => patch({ feedLabel: e.target.value })}
@@ -327,7 +337,7 @@ export function GoogleDeliverySettings({
                     value={change.audienceId ? [change.audienceId] : []}
                     onChange={v => patch({ audienceId: v[0] })}
                   />
-                  <Field title="Demand Gen surfaces">
+                  <Field path="demandChannels" title="Demand Gen surfaces">
                     <select
                       value={
                         change.demandChannels?.length === 1 &&
@@ -364,13 +374,13 @@ export function GoogleDeliverySettings({
               )}
               {change.type === "APP" && (
                 <>
-                  <Field title="App ID">
+                  <Field path="appId" title="App ID">
                     <input
                       value={change.appId ?? ""}
                       onChange={e => patch({ appId: e.target.value })}
                     />
                   </Field>
-                  <Field title="App store">
+                  <Field path="appStore" title="App store">
                     <select
                       value={change.appStore ?? ""}
                       onChange={e =>

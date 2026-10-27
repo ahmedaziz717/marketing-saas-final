@@ -1,0 +1,37 @@
+.google-campaign-studio .google-field-error {
+  color: var(--destructive, #b42318);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+.google-campaign-studio [aria-invalid="true"] {
+  border-color: var(--destructive, #b42318);
+}
+.google-campaign-studio .google-field-error p {
+  margin: 0;
+}
+
+.google-campaign-studio .google-required-summary {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--destructive, #b42318);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.google-campaign-studio .google-required-summary h3 {
+  margin: 0 0 5px;
+  font-size: 14px;
+}
+.google-campaign-studio .google-required-summary ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.google-campaign-studio .google-required-summary button {
+  height: auto;
+  min-height: 28px;
+  white-space: normal;
+  text-align: left;
+  padding: 2px 0;
+  line-height: 1.4;
+  font-size: 12px;
+}

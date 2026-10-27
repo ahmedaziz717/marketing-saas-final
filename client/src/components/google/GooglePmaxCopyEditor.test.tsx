@@ -6,10 +6,11 @@ const f = vi.hoisted(() => ({ ai: null as any }));
 vi.mock("./GooglePmaxAi", () => ({
   GooglePmaxAi: (props: any) => {
     f.ai = props;
-    return <div>AI suggestions</div>;
+    return <div>AI suggestions{props.selectedCopy}</div>;
   },
 }));
 import { GooglePmaxCopyEditor } from "./GooglePmaxCopyEditor";
+import { GoogleValidationProvider } from "./GoogleValidation";
 afterEach(cleanup);
 beforeEach(() => {
   f.ai = null;
@@ -245,4 +246,29 @@ it("shares explicit Display acceptance while preserving text and format-specific
   expect(next.filter(a => a.field === "HEADLINE")).toHaveLength(5);
   expect(next.find(a => a.field === "LONG_HEADLINE")).toEqual(assets[1]);
   expect(next.find(a => a.field === "HEADLINE")).toEqual(assets[0]);
+});
+
+it("connects required copy feedback to selected fields without invalidating unaccepted proposals", () => {
+  render(
+    <GoogleValidationProvider
+      issues={[
+        { path: ["ad", "headlines"], message: "Add at least one headline." },
+      ]}
+    >
+      <GooglePmaxCopyEditor
+        organizationId={7}
+        connectionId="account"
+        adType="DISPLAY"
+        assets={[text("HEADLINE", "")]}
+        onChange={vi.fn()}
+      />
+    </GoogleValidationProvider>
+  );
+  const input = screen.getByRole("textbox", { name: "Headlines 1" });
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  const messageId = input.getAttribute("aria-describedby");
+  expect(document.getElementById(messageId!)?.textContent).toContain(
+    "Add at least one headline."
+  );
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
 });
