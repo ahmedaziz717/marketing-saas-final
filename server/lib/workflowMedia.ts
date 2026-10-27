@@ -247,7 +247,7 @@ export async function resolveWorkflowMedia(
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
-        "This catalog item is unavailable for drafting in this workspace.",
+        "This catalog item is unavailable in this workspace for drafting.",
     });
   if (selectedProductImage?.media?.retired)
     throw new TRPCError({

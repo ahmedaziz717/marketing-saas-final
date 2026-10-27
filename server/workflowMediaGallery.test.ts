@@ -154,7 +154,7 @@ it("rejects an unavailable product or an image outside the tenant", async () => 
   const pending = resolutionDatabase([[{ ...parentImage, productId: 90 }], []]);
   await expect(
     resolveWorkflowMedia(pending as any, 3, executionField, "product_image:800")
-  ).rejects.toThrow("unavailable for drafting");
+  ).rejects.toThrow("unavailable in this workspace");
   expect(pending.predicates[1].params).toEqual([3, 90, "approved", "pending"]);
   const foreign = resolutionDatabase([[]]);
   await expect(
