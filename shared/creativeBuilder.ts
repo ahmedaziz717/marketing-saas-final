@@ -30,7 +30,7 @@ export type {
 
 export const CREATIVE_CHANNELS = [
   { id: "meta", name: "Meta" },
-  { id: "google_display", name: "Google Ads · Display" },
+  { id: "google_display", name: "Google Ads" },
   { id: "microsoft", name: "Microsoft Ads" },
 ] as const;
 export type CreativeChannel = (typeof CREATIVE_CHANNELS)[number]["id"];
@@ -187,6 +187,33 @@ export const CREATIVE_FORMATS = [
     name: "Stories",
     width: 1080,
     height: 1920,
+  },
+  {
+    id: "google_landscape",
+    channel: "google_display",
+    name: "Landscape",
+    width: 1200,
+    height: 628,
+    group: "Responsive image assets",
+    usage: "Display · Performance Max · Demand Gen",
+  },
+  {
+    id: "google_square",
+    channel: "google_display",
+    name: "Square",
+    width: 1200,
+    height: 1200,
+    group: "Responsive image assets",
+    usage: "Display · Performance Max · Demand Gen",
+  },
+  {
+    id: "google_portrait",
+    channel: "google_display",
+    name: "Portrait",
+    width: 960,
+    height: 1200,
+    group: "Responsive image assets",
+    usage: "Performance Max · Demand Gen",
   },
   {
     id: "google_rectangle",

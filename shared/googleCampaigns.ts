@@ -1,4 +1,5 @@
 import { googleCopyCapabilities } from "./googleCopy";
+import { googleDisplayRequiredImages } from "./googleImagePlacement";
 import { z } from "zod";
 
 export const googleCampaignTypes = {
@@ -265,13 +266,27 @@ export const googleCampaignCreateSchema = z
     if (v.type === "DEMAND_GEN" && !v.audienceId)
       issue("Choose an audience for the Demand Gen ad group.");
     if (
-      ["DISPLAY", "DEMAND_GEN"].includes(v.type) &&
+      v.type === "DEMAND_GEN" &&
       (!v.ad.businessName ||
         !v.ad.assets.some(a => a.field === "MARKETING_IMAGE") ||
         !v.ad.assets.some(a => a.field === "SQUARE_MARKETING_IMAGE"))
     )
       issue("Provide a business name, landscape image and square image.");
     if (v.type === "DISPLAY") {
+      for (const spec of googleDisplayRequiredImages) {
+        if (!v.ad.assets.some(a => a.field === spec.field))
+          ctx.addIssue({
+            code: "custom",
+            path: ["ad", "assets"],
+            message: `Add a required Display image: ${spec.label} recommended (${spec.minimum} px minimum). Fixed Display banners do not replace responsive image assets.`,
+          });
+      }
+      if (!v.ad.businessName)
+        ctx.addIssue({
+          code: "custom",
+          path: ["ad", "businessName"],
+          message: "Provide a business name.",
+        });
       const caps = googleCopyCapabilities("DISPLAY");
       if (v.ad.headlines.length > caps.specs.headlines.maximum || v.ad.descriptions.length > caps.specs.descriptions.maximum) issue("Display accepts up to 5 headlines and 5 descriptions.");
       if (v.ad.assets.some(a => a.field === "LONG_HEADLINE")) issue("Display accepts one long headline in its long headline field.");

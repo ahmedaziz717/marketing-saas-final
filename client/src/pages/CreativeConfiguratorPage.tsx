@@ -2014,7 +2014,48 @@ function Configurator({
           )}
         </div>
       );
-    if (category === "format")
+    if (category === "format") {
+      const formats = CREATIVE_FORMATS.filter(
+        f => tab === "all" || f.channel === tab
+      );
+      const formatCards = (items: typeof formats) =>
+        cards(
+          items.map(f => ({
+            id: f.id,
+            title: f.name,
+            description:
+              (CREATIVE_CHANNELS.find(c => c.id === f.channel)?.name ?? "") +
+              " · " +
+              f.width +
+              " × " +
+              f.height +
+              " px" +
+              ("usage" in f
+                ? " · " + f.usage
+                : f.channel === "google_display"
+                  ? " · Fixed Display banner"
+                  : ""),
+            footer: "Ratio " + ratioLabel(f.width, f.height),
+            art: "format:" + f.width / f.height,
+          })),
+          image.formatIds,
+          id => {
+            const ids = image.formatIds.includes(id)
+              ? image.formatIds.filter(i => i !== id)
+              : [...image.formatIds, id];
+            updateImage({
+              formatIds: ids,
+              channels: Array.from(
+                new Set(
+                  CREATIVE_FORMATS.filter(f => ids.includes(f.id)).map(
+                    f => f.channel
+                  )
+                )
+              ),
+            });
+          },
+          true
+        );
       return (
         <>
           {tabs([{ id: "all", name: "All channels" }, ...CREATIVE_CHANNELS])}
@@ -2022,42 +2063,27 @@ function Configurator({
             Choose one or more output sizes. These are creative formats;
             selecting one does not connect an ad account or publish anything.
           </p>
-          {cards(
-            CREATIVE_FORMATS.filter(
-              f => tab === "all" || f.channel === tab
-            ).map(f => ({
-              id: f.id,
-              title: f.name,
-              description:
-                (CREATIVE_CHANNELS.find(c => c.id === f.channel)?.name ?? "") +
-                " · " +
-                f.width +
-                " × " +
-                f.height +
-                " px",
-              footer: "Ratio " + ratioLabel(f.width, f.height),
-              art: "format:" + f.width / f.height,
-            })),
-            image.formatIds,
-            id => {
-              const ids = image.formatIds.includes(id)
-                ? image.formatIds.filter(i => i !== id)
-                : [...image.formatIds, id];
-              updateImage({
-                formatIds: ids,
-                channels: Array.from(
-                  new Set(
-                    CREATIVE_FORMATS.filter(f => ids.includes(f.id)).map(
-                      f => f.channel
-                    )
-                  )
-                ),
-              });
-            },
-            true
+          {tab === "google_display" ? (
+            <>
+              <h3>Responsive image assets</h3>
+              <p className="cfg-help">
+                For responsive Display ads, select both Landscape and Square.
+                Portrait is for Performance Max and Demand Gen.
+              </p>
+              {formatCards(formats.filter(f => "group" in f))}
+              <h3>Fixed Display banners</h3>
+              <p className="cfg-help">
+                For uploaded banner ads. These do not replace the required
+                responsive image assets.
+              </p>
+              {formatCards(formats.filter(f => !("group" in f)))}
+            </>
+          ) : (
+            formatCards(formats)
           )}
         </>
       );
+    }
     return (
       <div className="cfg-review">
         <div className="cfg-note">
@@ -2805,6 +2831,7 @@ function Configurator({
   );
 }
 function ratioLabel(w: number, h: number) {
+  if (Math.abs(w / h - 1.91) < 0.01) return "1.91:1";
   const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   const g = gcd(w, h);
   return w / g + ":" + h / g;

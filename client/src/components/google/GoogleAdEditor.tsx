@@ -2,6 +2,7 @@ import { googleCopyCapabilities } from "@shared/googleCopy";
 import { useEffect, useRef, useState } from "react";
 import {
   googleImageMatches,
+  googleDisplayRequiredImages,
   googleMarketingImagePlacement,
 } from "@shared/googleImagePlacement";
 import { GooglePmaxCopyEditor } from "./GooglePmaxCopyEditor";
@@ -336,6 +337,23 @@ export function AssetEditor({
   }, [offset, pageOffset]);
   return (
     <div className="google-assets">
+      {adType === "DISPLAY" && media === "image" && (
+        <div className="cfg-note" data-google-field="ad.assets" tabIndex={-1}>
+          <strong>Required Display images</strong>
+          <p>
+            Responsive Display ads need both image shapes. Fixed banner sizes do
+            not replace them.
+          </p>
+          <ul aria-label="Display image requirements" aria-live="polite">
+            {googleDisplayRequiredImages.map(spec => (
+              <li key={spec.field}>
+                {assets.some(a => a.field === spec.field) ? "Added" : "Missing"}
+                : {spec.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <h3>Asset source</h3>
       {media === "image" && isPmax && (
         <p role="status">
@@ -761,7 +779,9 @@ export function AdEditor({
   onChange: (ad: GoogleAdContent) => void;
 }) {
   const patch = (p: Partial<GoogleAdContent>) => onChange({ ...ad, ...p });
-  const copyCapabilities=googleCopyCapabilities(type === "DISPLAY" ? "DISPLAY" : "PERFORMANCE_MAX");
+  const copyCapabilities = googleCopyCapabilities(
+    type === "DISPLAY" ? "DISPLAY" : "PERFORMANCE_MAX"
+  );
   return (
     <>
       {part === "creative" && (
@@ -793,13 +813,17 @@ export function AdEditor({
           {["PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <>
               <p aria-live="polite">
-                Headlines: {ad.headlines.filter(v => v.trim()).length}/{copyCapabilities.minimums.headlines}
-                required ({copyCapabilities.specs.headlines.maximum} maximum). Descriptions:{" "}
-                {ad.descriptions.filter(v => v.trim()).length}/{copyCapabilities.minimums.descriptions} required ({copyCapabilities.specs.descriptions.maximum}
+                Headlines: {ad.headlines.filter(v => v.trim()).length}/
+                {copyCapabilities.minimums.headlines}
+                required ({copyCapabilities.specs.headlines.maximum} maximum).
+                Descriptions: {ad.descriptions.filter(v => v.trim()).length}/
+                {copyCapabilities.minimums.descriptions} required (
+                {copyCapabilities.specs.descriptions.maximum}
                 maximum). Long headlines:{" "}
                 {(ad.longHeadline?.trim() ? 1 : 0) +
                   ad.assets.filter(a => a.field === "LONG_HEADLINE").length}
-                /1 required ({copyCapabilities.specs.longHeadlines.maximum} maximum).
+                /1 required ({copyCapabilities.specs.longHeadlines.maximum}{" "}
+                maximum).
               </p>
               <GooglePmaxCopyEditor
                 adType={type === "DISPLAY" ? "DISPLAY" : "PERFORMANCE_MAX"}

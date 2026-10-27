@@ -599,6 +599,21 @@ function section(name: RegExp) {
   });
   if (keep) clickJourney(keep);
 }
+it("offers and saves Google responsive image sizes separately from fixed banners", async () => {
+  open();
+  section(/Output & Review Bring it to life/);
+  clickJourney(screen.getByRole("button", { name: "Google Ads" }));
+  expect(screen.getByRole("heading", { name: "Responsive image assets" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Fixed Display banners" })).toBeTruthy();
+  expect(screen.getByText("Ratio 1.91:1")).toBeTruthy();
+  for (const name of ["Landscape", "Square", "Portrait"])
+    clickJourney(screen.getByRole("button", { name: "Select " + name }));
+  expect(screen.getByRole("button", { name: "Select Medium rectangle" })).toBeTruthy();
+  clickJourney(screen.getByRole("button", { name: "Save draft" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledWith(expect.objectContaining({
+    setup: expect.objectContaining({ formatIds: expect.arrayContaining(["google_landscape", "google_square", "google_portrait"]) }),
+  })));
+});
 it("defaults to reference-image models for an image source and keeps a deliberate filter choice across categories", () => {
   open();
   section(/AI Model Choose your engine/);

@@ -253,7 +253,7 @@ describe("Creative Builder controls", () => {
     render(<CreativeBuilder onGenerated={vi.fn()} />);
     expect(screen.queryByText("300 × 250")).toBeNull();
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Google Ads · Display" })
+      screen.getByRole("checkbox", { name: "Google Ads" })
     );
     expect(screen.getByText("300 × 250")).toBeTruthy();
     changeField(screen.getByLabelText("Headline"), {

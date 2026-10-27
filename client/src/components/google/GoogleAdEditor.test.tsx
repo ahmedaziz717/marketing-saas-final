@@ -48,6 +48,21 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("shows missing Display image shapes and updates the checklist when assets are added", () => {
+  const props = { organizationId: 1, connectionId: "google", adType: "DISPLAY", format: "image" as const, onChange: vi.fn() };
+  const view = render(<AssetEditor {...props} assets={[]} />);
+  expect(screen.getByText("Missing: Landscape · 1.91:1 · 1200 × 628 px")).toBeTruthy();
+  expect(screen.getByText("Missing: Square · 1:1 · 1200 × 1200 px")).toBeTruthy();
+  view.rerender(<AssetEditor {...props} assets={[
+    { field: "MARKETING_IMAGE", source: { kind: "existing", id: "1" } },
+    { field: "SQUARE_MARKETING_IMAGE", source: { kind: "existing", id: "2" } },
+  ]} />);
+  expect(screen.getByText("Added: Landscape · 1.91:1 · 1200 × 628 px")).toBeTruthy();
+  expect(screen.queryByText(/^Missing:/)).toBeNull();
+  view.rerender(<AssetEditor {...props} adType="PERFORMANCE_MAX" assets={[]} />);
+  expect(screen.queryByText("Required Display images")).toBeNull();
+});
+
 it("shows approved generated creatives independently of Google account resource failures and refreshes the EL source", () => {
   api.library = [
     {

@@ -1,5 +1,18 @@
 import type { GoogleAssetInput } from "./googleCampaigns";
 
+export const googleDisplayRequiredImages = [
+  {
+    field: "MARKETING_IMAGE",
+    label: "Landscape · 1.91:1 · 1200 × 628 px",
+    minimum: "600 × 314",
+  },
+  {
+    field: "SQUARE_MARKETING_IMAGE",
+    label: "Square · 1:1 · 1200 × 1200 px",
+    minimum: "300 × 300",
+  },
+] as const;
+
 // Google validates image dimensions when linking, not just when uploading.
 // https://developers.google.com/google-ads/api/performance-max/asset-requirements
 export const googleImageSpecs: Partial<
