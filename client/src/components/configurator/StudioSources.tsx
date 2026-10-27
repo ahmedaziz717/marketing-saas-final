@@ -136,9 +136,21 @@ export function StudioSources({
       (p.name + (p.sku ?? "")).toLowerCase().includes(search.toLowerCase()) &&
       (stock === "all" || catalogStockStatus(p) === stock)
   );
-  const videoBudget = videoImageSelectionBudget(video);
+  // The configurator switches this paired Seedance endpoint in updateVideo via
+  // videoWithSources when the first image is selected. Budget the destination
+  // model for selection only; execution still validates the actual endpoint.
+  const switchesToReferences =
+    video.mode === "create" &&
+    video.modelId === "higgsfield:bytedance/seedance-2.5/text-to-video";
+  const selectionVideo = switchesToReferences
+    ? {
+        ...video,
+        modelId: "higgsfield:bytedance/seedance-2.5/reference-to-video",
+      }
+    : video;
+  const videoBudget = videoImageSelectionBudget(selectionVideo);
   const referenceLimit = isImage ? 9 : videoBudget.available;
-  const videoModel = generationModel(video.modelId ?? "");
+  const videoModel = generationModel(selectionVideo.modelId ?? "");
   const catalog = trpc.video.catalogImages.useQuery(
     { organizationId, search, offset },
     { enabled: !isImage && tab === "catalog" }

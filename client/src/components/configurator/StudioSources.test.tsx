@@ -460,3 +460,44 @@ it("does not reserve a logo twice when it is already selected", () => {
     screen.getByText(/Up to 30 product or asset images; 0 reserved/)
   ).toBeTruthy();
 });
+
+it("allows the first reference for the configurator's auto-switching Seedance text mode", () => {
+  render(
+    <VideoBudgetHarness
+      initial={{
+        ...defaultVideoSetup,
+        modelId: "higgsfield:bytedance/seedance-2.5/text-to-video",
+        imageKeys: [],
+      }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Image assets/ }));
+  const first = screen.getByRole("button", {
+    name: "Select Budget image 1",
+  }) as HTMLButtonElement;
+  expect(first.disabled).toBe(false);
+  fireEvent.click(first);
+  expect(screen.getByText("1 image selected")).toBeTruthy();
+});
+it("does not bypass a different prompt-only model's zero-reference limit", () => {
+  const promptOnly = generationModels.find(
+    m =>
+      m.kind === "video" &&
+      imageReferenceBudget(m).total === 0 &&
+      m.id !== "higgsfield:bytedance/seedance-2.5/text-to-video"
+  )!;
+  expect(promptOnly).toBeTruthy();
+  render(
+    <VideoBudgetHarness
+      initial={{ ...defaultVideoSetup, modelId: promptOnly.id, imageKeys: [] }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Image assets/ }));
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Select Budget image 1",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+});
