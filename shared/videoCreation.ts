@@ -11,6 +11,7 @@ import {
 } from "./studioProductFacts";
 import {
   generationModel,
+  imageReferenceBudget,
   modelOptionsSchema,
   modelRequestBody,
   modelDefaults,
@@ -204,10 +205,31 @@ export function videoImageReferenceKeys(setup: VideoSetup): string[] {
 export function videoReferenceCount(setup: VideoSetup): number {
   return videoImageReferenceKeys(setup).length + (setup.people ?? []).length;
 }
+export function videoImageSelectionBudget(setup: VideoSetup) {
+  const model = setup.modelId ? generationModel(setup.modelId) : undefined;
+  const reserved =
+    (setup.people ?? []).length +
+    (setup.logoAssetId &&
+    !setup.imageKeys.includes(`asset:${setup.logoAssetId}`)
+      ? 1
+      : 0);
+  if (model)
+    return { ...imageReferenceBudget(model, reserved), modelName: model.name };
+  const total = setup.mode === "motion" ? 8 : 9;
+  return {
+    total,
+    reserved,
+    available: Math.max(0, total - reserved),
+    modelName: "Selected legacy video model",
+  };
+}
 export function videoSetupProblem(setup: VideoSetup): string | null {
   const count = videoReferenceCount(setup);
   if (count > 30)
     return "Use up to 30 total image references, including the logo and selected people.";
+  const budget = videoImageSelectionBudget(setup);
+  if (setup.imageKeys.length > budget.available)
+    return `${budget.modelName} allows ${budget.available} selected images with ${budget.reserved} slots reserved for logos and people (${budget.total} total). Remove references or choose a model with more capacity.`;
   if (!setup.prompt.trim() && setup.mode !== "motion")
     return "Describe what should happen in your video.";
   if (new Set(setup.imageKeys).size !== setup.imageKeys.length)

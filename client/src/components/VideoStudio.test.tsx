@@ -10,6 +10,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
+  search: "",
+  current: undefined as any,
   prompt: vi.fn(),
   save: vi.fn(),
   generate: vi.fn(),
@@ -34,7 +36,7 @@ const api = vi.hoisted(() => ({
   ],
 }));
 vi.mock("wouter", () => ({
-  useSearch: () => "",
+  useSearch: () => api.search,
   useLocation: () => ["/app/creatives/video", vi.fn()],
   Link: ({ children, href }: any) => <a href={href}>{children}</a>,
 }));
@@ -72,7 +74,7 @@ vi.mock("@/lib/trpc", () => ({
     video: {
       options: { useQuery: () => ({ data: { ready: true } }) },
       list: { useQuery: () => ({ data: [] }) },
-      get: { useQuery: () => ({ data: undefined }) },
+      get: { useQuery: () => ({ data: api.current }) },
       quote: { useQuery: () => ({ data: { credits: 105 } }) },
       catalogImages: {
         useQuery: (input: any) => ({
@@ -109,10 +111,18 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
+import { defaultVideoSetup } from "@shared/videoCreation";
+import {
+  DEFAULT_VIDEO_MODEL,
+  generationModels,
+  imageReferenceBudget,
+} from "@shared/modelCatalog";
 import { VideoStudio } from "./VideoStudio";
 import { VideoReferencePicker } from "./VideoReferencePicker";
 beforeEach(() => {
   vi.clearAllMocks();
+  api.search = "";
+  api.current = undefined;
   api.prompt.mockResolvedValue({
     prompt: "Orbit the lamp in Image 1 in a softly lit living room.",
   });
@@ -251,4 +261,72 @@ it("enforces a combined reference limit across sources", () => {
       }) as HTMLButtonElement
     ).disabled
   ).toBe(false);
+});
+
+it("retains ten references in the legacy Studio using selected provider budget", () => {
+  api.search = "?video=saved-budget";
+  api.current = {
+    id: "saved-budget",
+    revision: 1,
+    status: "draft",
+    setup: {
+      ...defaultVideoSetup,
+      modelId: DEFAULT_VIDEO_MODEL,
+      imageKeys: Array.from({ length: 10 }, (_, i) => `asset:${i + 1}`),
+    },
+  };
+  render(<VideoStudio />);
+  expect(screen.getByText("10 / 30")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Remove image 10" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Add images" })).toBeTruthy();
+});
+it("retains incompatible saved references with guidance, removal and logo/people reservation", () => {
+  const limited = generationModels.find(
+    m => m.kind === "video" && imageReferenceBudget(m).total === 8
+  )!;
+  api.search = "?video=saved-budget";
+  api.current = {
+    id: "saved-budget",
+    revision: 1,
+    status: "draft",
+    setup: {
+      ...defaultVideoSetup,
+      modelId: limited.id,
+      imageKeys: Array.from({ length: 7 }, (_, i) => `asset:${i + 1}`),
+      logoAssetId: 50,
+      people: [{ kind: "library", id: "female-black-0" }],
+    },
+  };
+  render(<VideoStudio />);
+  expect(screen.getByText("7 / 6")).toBeTruthy();
+  expect(
+    screen.getByText(/Your selected references are retained/)
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Add images" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Remove image 7" }));
+  expect(screen.getByText("6 / 6")).toBeTruthy();
+  expect(
+    screen.queryByText(/Your selected references are retained/)
+  ).toBeNull();
+});
+
+it("does not silently truncate a legacy draft when switching operation", () => {
+  api.search = "?video=saved-budget";
+  api.current = {
+    id: "saved-budget",
+    revision: 1,
+    status: "draft",
+    setup: {
+      ...defaultVideoSetup,
+      modelId: undefined,
+      imageKeys: Array.from({ length: 10 }, (_, i) => `asset:${i + 1}`),
+    },
+  };
+  render(<VideoStudio />);
+  fireEvent.click(screen.getByRole("button", { name: "Motion control" }));
+  expect(screen.getByRole("button", { name: "Remove image 10" })).toBeTruthy();
+  expect(screen.getByText("10 / 8")).toBeTruthy();
+  expect(
+    screen.getByText(/Your selected references are retained/)
+  ).toBeTruthy();
 });

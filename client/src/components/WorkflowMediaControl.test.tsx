@@ -72,12 +72,14 @@ function Harness({
   initial = "",
   kind = "asset",
   locked = false,
+  referenceBudget,
 }: {
   media?: any;
   preview?: boolean;
   initial?: string;
   kind?: "asset" | "product";
   locked?: boolean;
+  referenceBudget?: { limit: number; modelName: string; reserved: number };
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -88,6 +90,7 @@ function Harness({
         onChange={setValue}
         organizationId={1}
         preview={preview}
+        referenceBudget={referenceBudget}
       />
       <output data-testid="value">{value}</output>
     </>
@@ -154,7 +157,12 @@ it.each(["asset", "product"] as const)(
     );
     expect(JSON.parse(screen.getByTestId("value").textContent!)).toEqual({
       ...JSON.parse(initial),
-      imageKey: "product_image:10",
+      ...(kind === "product"
+        ? {
+            imageKey: "product_image:9",
+            imageKeys: ["product_image:9", "product_image:10"],
+          }
+        : { imageKey: "product_image:10" }),
     });
   }
 );
@@ -299,4 +307,52 @@ it("uses workflow source restrictions, fixed content settings, and optional uplo
     "disabled",
     true
   );
+});
+
+it("adds product views in order and removes a selected view without dropping others", () => {
+  render(
+    <Harness
+      kind="product"
+      initial={JSON.stringify({ productId: 7, imageKey: "product_image:9" })}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /Use 2 for Travel mug/ })
+  );
+  expect(
+    JSON.parse(screen.getByTestId("value").textContent!).imageKeys
+  ).toEqual(["product_image:9", "product_image:10"]);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /Use Hero for Travel mug/ })
+  );
+  expect(JSON.parse(screen.getByTestId("value").textContent!)).toMatchObject({
+    imageKey: "product_image:10",
+    imageKeys: ["product_image:10"],
+  });
+});
+it("retains an over-budget legacy selection, blocks additions and permits removal", () => {
+  render(
+    <Harness
+      kind="product"
+      referenceBudget={{ limit: 1, modelName: "One-frame model", reserved: 1 }}
+      initial={JSON.stringify({
+        productId: 7,
+        imageKey: "product_image:9",
+        imageKeys: ["product_image:9", "product_image:10"],
+      })}
+    />
+  );
+  expect(screen.getByText(/your selections have been retained/)).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /Use 2 for Travel mug/ })
+  );
+  expect(
+    JSON.parse(screen.getByTestId("value").textContent!).imageKeys
+  ).toEqual(["product_image:9"]);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /Use 2 for Travel mug/ })
+  );
+  expect(
+    JSON.parse(screen.getByTestId("value").textContent!).imageKeys
+  ).toEqual(["product_image:9"]);
 });

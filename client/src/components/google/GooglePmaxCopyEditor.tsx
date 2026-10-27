@@ -2,13 +2,15 @@ import type { GoogleAssetInput } from "@shared/googleCampaigns";
 import {
   emptyGoogleCopy,
   googleCopyFields,
-  googleCopySpecs,
+  googleCopyCapabilities,
+  type GoogleCopyAdType,
 } from "@shared/googleCopy";
 import { Button } from "@/components/ui/button";
 import { Field } from "./GoogleCampaignFields";
 import { GooglePmaxAi } from "./GooglePmaxAi";
 
-export function GooglePmaxCopyEditor({
+export function GoogleCopyEditor({
+  adType = "PERFORMANCE_MAX",
   organizationId,
   connectionId,
   assets,
@@ -16,6 +18,7 @@ export function GooglePmaxCopyEditor({
   existing = [],
   onReplaceExisting,
 }: {
+  adType?: GoogleCopyAdType;
   organizationId: number;
   connectionId: string;
   assets: GoogleAssetInput[];
@@ -26,6 +29,7 @@ export function GooglePmaxCopyEditor({
     replacement: GoogleAssetInput
   ) => void;
 }) {
+  const googleCopySpecs = googleCopyCapabilities(adType).specs;
   const occupied = [
     ...existing.map(a => a.field),
     ...assets
@@ -145,6 +149,7 @@ export function GooglePmaxCopyEditor({
   return (
     <div>
       <GooglePmaxAi
+        adType={adType}
         organizationId={organizationId}
         connectionId={connectionId}
         assets={assets}
@@ -261,3 +266,5 @@ export function GooglePmaxCopyEditor({
     </div>
   );
 }
+
+export const GooglePmaxCopyEditor = GoogleCopyEditor;

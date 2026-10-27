@@ -1,3 +1,4 @@
+import { googleCopyCapabilities } from "./googleCopy";
 import { z } from "zod";
 
 export const googleCampaignTypes = {
@@ -233,7 +234,7 @@ export const googleCampaignCreateSchema = z
     )
       issue("Add headlines and descriptions.");
     if (
-      ["DISPLAY", "DEMAND_GEN", "APP"].includes(v.type) &&
+      ["DEMAND_GEN", "APP"].includes(v.type) &&
       v.ad.headlines.length > 5
     )
       issue("This ad type accepts up to 5 headlines.");
@@ -270,6 +271,11 @@ export const googleCampaignCreateSchema = z
         !v.ad.assets.some(a => a.field === "SQUARE_MARKETING_IMAGE"))
     )
       issue("Provide a business name, landscape image and square image.");
+    if (v.type === "DISPLAY") {
+      const caps = googleCopyCapabilities("DISPLAY");
+      if (v.ad.headlines.length > caps.specs.headlines.maximum || v.ad.descriptions.length > caps.specs.descriptions.maximum) issue("Display accepts up to 5 headlines and 5 descriptions.");
+      if (v.ad.assets.some(a => a.field === "LONG_HEADLINE")) issue("Display accepts one long headline in its long headline field.");
+    }
     if (v.type === "DISPLAY" && !v.ad.longHeadline)
       issue("Display requires a long headline.");
     if (v.type === "PERFORMANCE_MAX") {
@@ -354,9 +360,9 @@ export const pmaxAssetLimits: Record<
   string,
   { label: string; min: number; max: number }
 > = {
-  HEADLINE: { label: "headlines", min: 3, max: 15 },
-  LONG_HEADLINE: { label: "long headlines", min: 1, max: 5 },
-  DESCRIPTION: { label: "descriptions", min: 2, max: 5 },
+  HEADLINE: {label:"headlines",min:googleCopyCapabilities().minimums.headlines,max:googleCopyCapabilities().specs.headlines.maximum},
+  LONG_HEADLINE: {label:"long headlines",min:googleCopyCapabilities().minimums.longHeadlines,max:googleCopyCapabilities().specs.longHeadlines.maximum},
+  DESCRIPTION: {label:"descriptions",min:googleCopyCapabilities().minimums.descriptions,max:googleCopyCapabilities().specs.descriptions.maximum},
   MARKETING_IMAGE: {
     label: "landscape images (at least 600 × 314)",
     min: 1,

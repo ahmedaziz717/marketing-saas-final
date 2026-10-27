@@ -23,6 +23,7 @@ export function WorkflowInputControl({
   preview = false,
   productIds = [],
   imageKeys = [],
+  referenceBudget,
 }: {
   field: AppField;
   title: string;
@@ -33,6 +34,7 @@ export function WorkflowInputControl({
   preview?: boolean;
   productIds?: number[];
   imageKeys?: string[];
+  referenceBudget?: { limit: number; modelName: string; reserved: number };
 }) {
   const [proposals, setProposals] = useState<InputChoice[]>([]);
   const assist = trpc.workflows.assistInput.useMutation();
@@ -85,6 +87,7 @@ export function WorkflowInputControl({
           onChange={onChange}
           organizationId={organizationId}
           preview={preview}
+          referenceBudget={referenceBudget}
         />
       ) : field.kind === "number" || field.kind === "url" ? (
         <input

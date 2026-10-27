@@ -41,12 +41,104 @@ import {
 import "@/styles/configurator.css";
 import "@/styles/workflowStudio.css";
 
+import { generationModel, imageReferenceBudget } from "@shared/modelCatalog";
+import { currentWorkflowModel } from "@shared/workflowModels";
+import { WORKFLOW_PRODUCT_IMAGE_LIMIT } from "@shared/imageReferences";
 const icons = {
   setup: SlidersHorizontal,
   direction: Sparkles,
   content: FileText,
 };
 
+export function workflowProductReferenceBudget(
+  graph: WorkflowGraph,
+  values: Record<string, string>,
+  productId: string
+) {
+  const marker = `input:${productId}`;
+  function sourceImages(id: string, seen = new Set<string>()): string[] {
+    if (id === productId) return [marker];
+    if (seen.has(id)) return [];
+    const node = graph.nodes.find(n => n.id === id);
+    if (!node) return [];
+    const next = new Set(seen).add(id);
+    if (node.type === "generate_image") return [`generated:${id}`];
+    const field = node.config.field;
+    if (field?.kind === "product" || field?.kind === "asset") {
+      const c = field.visibleWhen;
+      const parent = c && graph.nodes.find(n => n.id === c.fieldId);
+      if (c && (!parent || workflowFieldValue(parent, values) !== c.equals))
+        return [];
+      const selection = parseWorkflowMediaSelection(
+        workflowFieldValue(node, values),
+        field.kind
+      );
+      return (
+        selection?.imageKeys ??
+        (selection?.imageKey ? [selection.imageKey] : [])
+      );
+    }
+    if (node.type === "image") {
+      const key = workflowFieldValue(node, values);
+      return key ? [key] : [];
+    }
+    if (
+      !["app_input", "app_output", "review", "wait", "output"].includes(
+        node.type
+      )
+    )
+      return [];
+    return [
+      ...(node.config.imageKeys ??
+        (node.config.imageKey ? [node.config.imageKey] : [])),
+      ...graph.edges
+        .filter(e => e.target === id)
+        .flatMap(e => sourceImages(e.source, next)),
+    ];
+  }
+  const budgets = graph.nodes
+    .filter(n => n.type === "generate_video")
+    .flatMap(video => {
+      const images = graph.edges
+        .filter(e => e.target === video.id && e.port === "image")
+        .flatMap(e => sourceImages(e.source));
+      const occurrences = images.filter(key => key === marker).length;
+      if (!occurrences) return [];
+      const reserved = images.length - occurrences;
+      const selector = graph.edges
+        .filter(e => e.target === video.id && e.port === "model")
+        .map(e => graph.nodes.find(n => n.id === e.source))
+        .find(n => n?.config.field?.kind === "model");
+      const c = selector?.config.field?.visibleWhen;
+      const parent = c && graph.nodes.find(n => n.id === c.fieldId);
+      const modelValue = selector
+        ? c && (!parent || workflowFieldValue(parent, values) !== c.equals)
+          ? selector.config.field!.defaultValue
+          : workflowFieldValue(selector, values)
+        : currentWorkflowModel(video);
+      const model = generationModel(modelValue);
+      if (!model)
+        return [
+          {
+            limit: 0,
+            modelName: "Choose a supported video model",
+            reserved,
+          },
+        ];
+      const budget = imageReferenceBudget(model, reserved);
+      return [
+        {
+          limit: Math.min(
+            WORKFLOW_PRODUCT_IMAGE_LIMIT,
+            Math.floor(budget.available / occurrences)
+          ),
+          modelName: model.name,
+          reserved: budget.reserved,
+        },
+      ];
+    });
+  return budgets.sort((a, b) => a.limit - b.limit)[0];
+}
 /** One form renderer for the editor preview and every published App version. */
 export function WorkflowAppStudio({
   graph,
@@ -150,14 +242,15 @@ export function WorkflowAppStudio({
         ["asset", "product"].includes(n.config.field?.kind ?? "") ||
         n.type === "image"
     )
-    .map(
-      n =>
-        parseWorkflowMediaSelection(
-          value(n),
-          n.config.field?.kind === "product" ? "product" : "asset"
-        )?.imageKey
-    )
-    .filter((key): key is string => !!key);
+    .flatMap(n => {
+      const selected = parseWorkflowMediaSelection(
+        value(n),
+        n.config.field?.kind === "product" ? "product" : "asset"
+      );
+      return (
+        selected?.imageKeys ?? (selected?.imageKey ? [selected.imageKey] : [])
+      );
+    });
   const summarize = (node: WorkflowNode) => {
     const raw = value(node),
       field = node.config.field;
@@ -193,6 +286,11 @@ export function WorkflowAppStudio({
           onChange={() => {}}
           organizationId={organizationId}
           summary
+          referenceBudget={workflowProductReferenceBudget(
+            graph,
+            values,
+            node.id
+          )}
         />
       );
     if (node.type === "image")
@@ -381,6 +479,11 @@ export function WorkflowAppStudio({
                         context={context}
                         productIds={productIds}
                         imageKeys={imageKeys}
+                        referenceBudget={workflowProductReferenceBudget(
+                          graph,
+                          values,
+                          n.id
+                        )}
                       />
                     ) : n.type === "image" ? (
                       <VisualSelect

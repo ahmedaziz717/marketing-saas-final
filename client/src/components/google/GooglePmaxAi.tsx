@@ -7,13 +7,15 @@ import type { GoogleAssetInput } from "@shared/googleCampaigns";
 import {
   emptyGoogleCopy,
   googleCopyFields,
-  googleCopySpecs,
+  googleCopyCapabilities,
+  type GoogleCopyAdType,
   remainingGoogleCopy,
   type GoogleCopyField,
   type GoogleCopySet,
 } from "@shared/googleCopy";
 
-export function GooglePmaxAi({
+export function GoogleCopyAi({
+  adType = "PERFORMANCE_MAX",
   organizationId,
   connectionId,
   assets = [],
@@ -24,6 +26,7 @@ export function GooglePmaxAi({
   onAdd,
   onApply,
 }: {
+  adType?: GoogleCopyAdType;
   organizationId: number;
   connectionId?: string;
   assets?: GoogleAssetInput[];
@@ -38,6 +41,8 @@ export function GooglePmaxAi({
   onAdd: (asset: GoogleAssetInput) => void;
   onApply?: (assets: GoogleAssetInput[]) => void;
 }) {
+  const capabilities = googleCopyCapabilities(adType);
+  const googleCopySpecs = capabilities.specs;
   const { membership } = useWorkspace();
   const prompts = trpc.prompts.list.useQuery({ organizationId });
   const library = trpc.assetLibrary.list.useQuery({ organizationId });
@@ -70,6 +75,7 @@ export function GooglePmaxAi({
   const contextKey = JSON.stringify({
     organizationId,
     connectionId,
+    adType,
     media,
     productIds,
     neutralCategories,
@@ -83,7 +89,7 @@ export function GooglePmaxAi({
     setReplacementTargets({});
     setNotice("");
   }, [contextKey]);
-  const remaining = remainingGoogleCopy(occupiedFields);
+  const remaining = remainingGoogleCopy(occupiedFields, adType);
   const requested = Object.fromEntries(
     googleCopyFields.map(key => [
       key,
@@ -113,7 +119,7 @@ export function GooglePmaxAi({
         neutralCategories,
         direction,
         defaultInstructions: value,
-        copyRequest: { counts: countRequest, target, existingCopy },
+        copyRequest: { adType, counts: countRequest, target, existingCopy },
       });
       if (currentContext.current !== snapshot) return;
       if (target && index !== undefined)
@@ -156,7 +162,7 @@ export function GooglePmaxAi({
         expectedRevision: prompt.revision,
         action,
         ...(action === "save" ? { value } : {}),
-        reason: "PMax copy default updated from campaign composer",
+        reason: "Google copy default updated from campaign composer",
       });
       await prompts.refetch();
       setOverride(null);
@@ -172,7 +178,7 @@ export function GooglePmaxAi({
       className="google-pmax-ai"
       aria-label="Generate copy from selected assets"
     >
-      <h3>Create PMax copy with AI</h3>
+      <h3>Create {capabilities.label} copy with AI</h3>
       <p>
         Start with your selected creative. AI uses its imagery and saved copy,
         your Brand Kit and confirmed product facts. Review and edit every
@@ -222,6 +228,7 @@ export function GooglePmaxAi({
           <Field key={key} title={`${googleCopySpecs[key].label} to generate`}>
             <input
               type="number"
+              aria-label={`${googleCopySpecs[key].label} to generate`}
               min={0}
               max={googleCopySpecs[key].maximum}
               value={requested[key]}
@@ -242,7 +249,7 @@ export function GooglePmaxAi({
               {googleCopySpecs[key].characters} characters each ·{" "}
               {googleCopySpecs[key].maximum} suggestions maximum per run
             </small>
-            <small>{remaining[key]} slots available to add to this group</small>
+            <small>{remaining[key]} slots available to add to this {adType === "DISPLAY" ? "ad" : "group"}</small>
           </Field>
         ))}
       </div>
@@ -304,7 +311,7 @@ export function GooglePmaxAi({
       </details>
       <details>
         <summary>Prompt settings</summary>
-        <Field title="Shared PMax prompt — edits apply to this run until explicitly saved">
+        <Field title="Shared Google copy prompt — edits apply to this run until explicitly saved">
           <textarea
             rows={5}
             value={value}
@@ -534,3 +541,5 @@ export function GooglePmaxAi({
     </section>
   );
 }
+
+export const GooglePmaxAi = GoogleCopyAi;

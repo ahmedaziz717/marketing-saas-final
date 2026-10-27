@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   catalogCardGallery,
+  catalogCreationGallery,
+  galleryGroups,
   type CatalogImageMedia,
   type CatalogMediaGroupSummary,
 } from "../shared/catalogMedia";
@@ -62,4 +64,37 @@ describe("represented component eligibility", () => {
       ).images
     ).toEqual([]);
   });
+});
+
+it("creation ignores classification and stale grouping but not retirement, without mutating catalog policy", () => {
+  const classified = groups.map(group => ({
+    ...group,
+    eligible: false,
+    imageIds: ["old"],
+  }));
+  const orphan = {
+    ...image,
+    id: 2,
+    media: {
+      ...image.media,
+      references: [{ groupId: "unknown", imageId: "front", position: 0 }],
+    },
+  };
+  const retired = { ...image, id: 3, media: { ...image.media, retired: true } };
+  const gallery = catalogCreationGallery([image, orphan, retired], classified);
+  expect(gallery.images.map(i => i.id)).toEqual([1, 2]);
+  expect(
+    galleryGroups(gallery.images, gallery.groups).every(g => g.eligible)
+  ).toBe(true);
+  expect(
+    galleryGroups(gallery.images, gallery.groups)
+      .flatMap(g => g.images)
+      .some(i => i.id === 2)
+  ).toBe(true);
+  expect(classified.every(g => !g.eligible && g.imageIds[0] === "old")).toBe(
+    true
+  );
+  expect(
+    catalogCardGallery([image, orphan, retired], classified).images
+  ).toEqual([]);
 });

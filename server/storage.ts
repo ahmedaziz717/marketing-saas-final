@@ -35,11 +35,60 @@ export async function storageGet(relKey: string) {
   return { key, url: assetUrl(key) };
 }
 
+type SigningFailure = { category: 'transient' | 'access' | 'missing' | 'unknown'; status?: number; retryAfterMs?: number };
+
+// Never log the provider error: it can contain signed URLs, keys, or credentials.
+function signingFailure(error: unknown): SigningFailure {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const numericStatus = Number(value.status ?? value.statusCode);
+  const status = Number.isInteger(numericStatus) && numericStatus >= 100 && numericStatus <= 599 ? numericStatus : undefined;
+  const code = String(value.code ?? value.statusCode ?? '');
+  const message = typeof value.message === 'string' ? value.message : '';
+  if (status === 401 || status === 403 || /^(AccessDenied|Unauthorized|Forbidden)$/i.test(code)) return { category: 'access', status };
+  if (status === 404 || /^(NoSuchKey|NoSuchBucket|NotFound|ObjectNotFound)$/i.test(code) || /^Object not found$/i.test(message)) return { category: 'missing', status };
+  const transient = status === 429 || (status !== undefined && status >= 500) || code === '08P01' || (code === 'DatabaseError' && /\b08P01\b/.test(message));
+  if (!transient) return { category: 'unknown', status };
+  // Current storage SDK drops headers; respect Retry-After if a future version exposes it.
+  const headers = value.headers;
+  let retryAfter: unknown;
+  if (headers instanceof Headers) retryAfter = headers.get('retry-after');
+  else if (headers && typeof headers === 'object') retryAfter = (headers as Record<string, unknown>)['retry-after'] ?? (headers as Record<string, unknown>)['Retry-After'];
+  let retryAfterMs: number | undefined;
+  if (typeof retryAfter === 'string' || typeof retryAfter === 'number') {
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(String(retryAfter)) - Date.now();
+    if (Number.isFinite(delay)) retryAfterMs = Math.min(2000, Math.max(0, delay));
+  }
+  return { category: 'transient', status, retryAfterMs };
+}
+
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const key = normalizeStorageKey(relKey);
-  const { data, error } = await storageClient().storage.from(assetBucket()).createSignedUrl(key, 120);
-  if (error || !data?.signedUrl) throw new Error('Stored asset is unavailable');
-  return data.signedUrl;
+  const bucket = storageClient().storage.from(assetBucket());
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let failure: SigningFailure;
+    try {
+      const { data, error } = await bucket.createSignedUrl(key, 120);
+      if (!error && data?.signedUrl) return data.signedUrl;
+      failure = signingFailure(error);
+    } catch (error) {
+      failure = signingFailure(error);
+    }
+    console.warn('Asset signing failed', { category: failure.category, status: failure.status, attempt });
+    if (failure.category === 'transient' && attempt < 3) {
+      const delay = Math.min(2000, failure.retryAfterMs ?? (250 * 2 ** (attempt - 1) + Math.random() * 250));
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue;
+    }
+    const detail = {
+      transient: 'Asset storage is temporarily busy. Please try again shortly.',
+      access: 'Access to this asset was denied. Check its permissions.',
+      missing: 'This asset could not be found. Choose another asset or restore it.',
+      unknown: 'The asset could not be read. Please try again or contact support.',
+    }[failure.category];
+    throw new Error(`Stored asset is unavailable. ${detail}`);
+  }
+  throw new Error('Stored asset is unavailable');
 }
 
 export async function storageGetBase64(relKey: string, maxBytes = 15 * 1024 * 1024): Promise<string> {

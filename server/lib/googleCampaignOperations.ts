@@ -1,3 +1,4 @@
+import { googleCopyCapabilities } from "../../shared/googleCopy";
 import { TRPCError } from "@trpc/server";
 import {
   googleChangeSchema,
@@ -133,8 +134,10 @@ export function compileGoogleChange(
         path2: content.path2,
       };
     } else if (type === "DISPLAY") {
+      const caps = googleCopyCapabilities("DISPLAY");
       if (
-        headlines.length > 5 ||
+        headlines.length > caps.specs.headlines.maximum ||
+        descriptions.length > caps.specs.descriptions.maximum ||
         !content.longHeadline ||
         !content.businessName ||
         !images("MARKETING_IMAGE").length ||

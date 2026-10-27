@@ -85,6 +85,13 @@ it("uses measured target bounds instead of a fixed small box", async () => {
                 height: 800,
                 confidence: 0.95,
                 sameAngle: true,
+                sourceBody: {
+                  left: 0,
+                  top: 0,
+                  width: 1000,
+                  height: 1000,
+                  confidence: 0.99,
+                },
               },
             ],
           }),
@@ -124,6 +131,13 @@ it("uses measured target bounds instead of a fixed small box", async () => {
                 height: 800,
                 confidence: 0.3,
                 sameAngle: true,
+                sourceBody: {
+                  left: 0,
+                  top: 0,
+                  width: 1000,
+                  height: 1000,
+                  confidence: 0.99,
+                },
               },
             ],
           }),
@@ -191,6 +205,13 @@ it("automatically composites a confident matching product without a separate act
                 height: 600,
                 confidence: 0.95,
                 sameAngle: true,
+                sourceBody: {
+                  left: 0,
+                  top: 0,
+                  width: 1000,
+                  height: 1000,
+                  confidence: 0.99,
+                },
               },
             ],
           }),
@@ -244,9 +265,33 @@ it("automatically composites a confident matching product without a separate act
   );
 });
 it.each([
-  { confidence: 0.7, sameAngle: true, width: 300, height: 600 },
+  {
+    confidence: 0.7,
+    sameAngle: true,
+    sourceBody: {
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 1000,
+      confidence: 0.99,
+    },
+    width: 300,
+    height: 600,
+  },
   { confidence: 0.99, sameAngle: false, width: 300, height: 600 },
-  { confidence: 0.99, sameAngle: true, width: 600, height: 600 },
+  {
+    confidence: 0.99,
+    sameAngle: true,
+    sourceBody: {
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 1000,
+      confidence: 0.99,
+    },
+    width: 600,
+    height: 600,
+  },
 ])(
   "does not silently apply an uncertain or distorted automatic overlay: %j",
   async box => {
@@ -255,7 +300,20 @@ it.each([
         {
           message: {
             content: JSON.stringify({
-              products: [{ left: 100, top: 100, ...box }],
+              products: [
+                {
+                  left: 100,
+                  top: 100,
+                  sourceBody: {
+                    left: 0,
+                    top: 0,
+                    width: 1000,
+                    height: 1000,
+                    confidence: 0.99,
+                  },
+                  ...box,
+                },
+              ],
             }),
           },
         },
@@ -332,6 +390,13 @@ it("covers a same-angle footprint proportionally without stretching the cutout",
                 height: 700,
                 confidence: 0.99,
                 sameAngle: true,
+                sourceBody: {
+                  left: 0,
+                  top: 0,
+                  width: 1000,
+                  height: 1000,
+                  confidence: 0.99,
+                },
               },
             ],
           }),

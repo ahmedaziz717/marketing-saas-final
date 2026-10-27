@@ -43,10 +43,10 @@ export function ProductCategoryContext({
               ? "Some products have no confirmed category."
               : "These products use different marketing categories."}{" "}
             {allowUnmapped
-              ? "You can create images now. AI automatically uses neutral wording based on supplied facts, without guessing category guidance."
-              : "Assign categories in Catalog, split your selection, or explicitly choose neutral wording."}
-            {" "}Existing copy is preserved; regenerate and review it after
-            changing categories.
+              ? "You can create now. AI automatically uses neutral wording based on supplied facts, without guessing category guidance."
+              : "Assign categories in Catalog, split your selection, or explicitly choose neutral wording."}{" "}
+            Existing copy is preserved; regenerate and review it after changing
+            categories.
           </p>
         </>
       ) : handling === "neutral" ? (

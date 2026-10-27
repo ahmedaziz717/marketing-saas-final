@@ -9,6 +9,7 @@ import { optimizationSyncs } from "../../drizzle/optimizationSchema";
 import { publications } from "../../drizzle/channelSchema";
 import {
   workflowOrder,
+  workflowNodeImageKeys,
   workflowGraphProblem,
   type WorkflowSteps,
 } from "../../shared/creativeWorkflow";
@@ -62,9 +63,7 @@ export async function fireWorkflowTrigger(
   const references = await workflowImageReferences(
     db,
     trigger.organizationId,
-    graph.nodes
-      .filter(n => ["image", "app_input"].includes(n.type) && n.config.imageKey)
-      .map(n => n.config.imageKey!)
+    graph.nodes.flatMap(workflowNodeImageKeys)
   );
   const receiptId = stableHash({ triggerId, eventKey });
   return withOrganizationTransaction(db, trigger.organizationId, async tx => {

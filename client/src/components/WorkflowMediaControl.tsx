@@ -12,7 +12,8 @@ import {
 } from "@shared/workflowInputs";
 import { AssetUploadDialog } from "./AssetUploadDialog";
 import { CatalogGallery } from "./CatalogGallery";
-import { catalogCardGallery } from "@shared/catalogMedia";
+import { WORKFLOW_PRODUCT_IMAGE_LIMIT } from "@shared/imageReferences";
+import { catalogCreationGallery } from "@shared/catalogMedia";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ export function WorkflowMediaControl({
   organizationId,
   preview = false,
   summary = false,
+  referenceBudget,
 }: {
   field: AppField;
   value: string;
@@ -36,10 +38,17 @@ export function WorkflowMediaControl({
   organizationId: number;
   preview?: boolean;
   summary?: boolean;
+  referenceBudget?: { limit: number; modelName: string; reserved: number };
 }) {
   const kind = field.kind as "asset" | "product";
   const options = workflowMediaOptions(field);
   const selected = parseWorkflowMediaSelection(value, kind);
+  const selectedKeys =
+    selected?.imageKeys ?? (selected?.imageKey ? [selected.imageKey] : []);
+  const referenceLimit = Math.min(
+    WORKFLOW_PRODUCT_IMAGE_LIMIT,
+    referenceBudget?.limit ?? WORKFLOW_PRODUCT_IMAGE_LIMIT
+  );
   const [source, setSource] = useState<"products" | "assets">(
     kind === "product" ||
       (options.productImages &&
@@ -118,6 +127,23 @@ export function WorkflowMediaControl({
     imageKey?: string
   ) => {
     if (p.unavailableReason || field.locked) return;
+    const prior = product?.id === p.id ? selectedKeys : [];
+    const keys =
+      kind === "asset"
+        ? imageKey
+          ? [imageKey]
+          : []
+        : imageKey
+          ? prior.includes(imageKey)
+            ? prior.filter(key => key !== imageKey)
+            : [...prior, imageKey]
+          : [];
+    if (keys.length > referenceLimit && keys.length > prior.length) {
+      toast.error(
+        `Select up to ${referenceLimit} views of one product${referenceBudget ? ` for ${referenceBudget.modelName}` : ""}. Remove a selected view or choose a compatible model.`
+      );
+      return;
+    }
     onChange(
       JSON.stringify(
         product?.id === p.id && selected
@@ -125,11 +151,13 @@ export function WorkflowMediaControl({
               ...selected,
               ...(/^\d+$/.test(value) && !field.media ? content : {}),
               productId: p.id,
-              imageKey,
+              imageKey: keys[0],
+              imageKeys: kind === "product" && keys.length ? keys : undefined,
             }
           : {
               productId: p.id,
-              imageKey,
+              imageKey: keys[0],
+              imageKeys: kind === "product" && keys.length ? keys : undefined,
               featuredSpecKeys: [],
               includePrice: false,
               includeDescription: true,
@@ -298,6 +326,18 @@ export function WorkflowMediaControl({
               }}
             />
           )}
+          {tab === "products" && (
+            <p role="status">
+              {selectedKeys.length} selected · Up to {referenceLimit} views of
+              one product
+              {referenceBudget
+                ? ` for ${referenceBudget.modelName}; ${referenceBudget.reserved} other image references reserved.`
+                : "."}
+              {selectedKeys.length > referenceLimit
+                ? " Remove extra views or choose a compatible model; your selections have been retained."
+                : ""}
+            </p>
+          )}
           <div
             className={
               tab === "products" ? "wf-media-product-grid" : "wf-media-grid"
@@ -307,10 +347,9 @@ export function WorkflowMediaControl({
               ? data?.products
                   .filter(p => data.pageIds.includes(p.id))
                   .map(p => {
-                    const gallery = catalogCardGallery(
+                    const gallery = catalogCreationGallery(
                       p.images,
-                      p.mediaGroups,
-                      p.representedGroupIds
+                      p.mediaGroups
                     );
                     return (
                       <article
@@ -321,6 +360,9 @@ export function WorkflowMediaControl({
                         <h3>{p.name}</h3>
                         {p.unavailableReason && (
                           <p role="status">{p.unavailableReason}</p>
+                        )}
+                        {p.reviewNotice && (
+                          <p role="status">{p.reviewNotice}</p>
                         )}
                         {p.componentKind && (
                           <p className="mb-2 text-xs text-muted-foreground">
@@ -337,6 +379,9 @@ export function WorkflowMediaControl({
                             isPrimary: i.isPrimary,
                             media: i.media,
                           }))}
+                          selectedIds={selectedKeys
+                            .filter(k => k.startsWith("product_image:"))
+                            .map(k => Number(k.split(":")[1]))}
                           selected={
                             selected?.imageKey?.startsWith("product_image:")
                               ? Number(selected.imageKey.split(":")[1])
@@ -355,8 +400,8 @@ export function WorkflowMediaControl({
                         />
                         {!!p.representedGroupIds?.length && (
                           <p className="mt-2 text-xs text-muted-foreground">
-                            Component options have their own catalog cards. Only
-                            approved items can be used.
+                            Classification is optional for draft creation.
+                            Review details before publishing.
                           </p>
                         )}
                         {kind === "product" && !p.images.length && (

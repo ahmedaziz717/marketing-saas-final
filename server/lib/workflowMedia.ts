@@ -1,6 +1,9 @@
+import {
+  canDraftCatalogImage,
+  imageDraftProductStatuses,
+} from "../../shared/catalogReadiness";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { catalogCardGallery } from "../../shared/catalogMedia";
 import {
   productComponents,
   productImages,
@@ -49,7 +52,7 @@ export async function workflowMediaChoices(
   const owned = and(
     eq(products.organizationId, organizationId),
     or(
-      eq(products.status, "approved"),
+      inArray(products.status, [...imageDraftProductStatuses]),
       sql`${products.provenance}->>'component.kind' is not null`
     )
   );
@@ -124,8 +127,13 @@ export async function workflowMediaChoices(
       specifications: p.specifications,
       mediaGroups: p.mediaGroups,
       componentKind: p.provenance?.["component.kind"] ?? null,
-      unavailableReason:
-        p.status !== "approved" ? "Review needed in Catalog before use." : null,
+      unavailableReason: !canDraftCatalogImage(p.status)
+        ? "This product is unavailable for drafting."
+        : null,
+      reviewNotice:
+        p.status === "pending"
+          ? "Draft use allowed. Review product facts before publishing."
+          : null,
       representedGroupIds: componentLinks
         .filter(link => link.parentProductId === p.id)
         .map(link => link.groupId),
@@ -151,17 +159,37 @@ export async function workflowMediaChoices(
   };
 }
 
-/** Resolve choices from owned, approved records; never trust client-supplied facts or prices. */
+/** Resolve owned draft sources without approving records or trusting caller-supplied facts. */
 export async function resolveWorkflowMedia(
   db: LibraryDatabase,
   organizationId: number,
   field: AppField,
   value: string
-) {
+): Promise<{ imageKey: string | null; imageKeys?: string[]; text: string }> {
   const selected = parseWorkflowMediaSelection(
     value,
     field.kind as "asset" | "product"
   )!;
+  if (!selected)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose valid product images from this workspace.",
+    });
+  if (selected.imageKeys) {
+    const resolved = [];
+    for (const imageKey of selected.imageKeys) {
+      const { imageKeys: _keys, ...single } = selected;
+      resolved.push(
+        await resolveWorkflowMedia(
+          db,
+          organizationId,
+          field,
+          JSON.stringify({ ...single, imageKey })
+        )
+      );
+    }
+    return { ...resolved[0], imageKeys: selected.imageKeys };
+  }
   let productId = selected.productId;
   let selectedProductImage: typeof productImages.$inferSelect | undefined;
   if (selected.imageKey?.startsWith("product_image:")) {
@@ -212,38 +240,21 @@ export async function resolveWorkflowMedia(
       and(
         eq(products.organizationId, organizationId),
         eq(products.id, productId),
-        eq(products.status, "approved")
+        inArray(products.status, [...imageDraftProductStatuses])
       )
     );
   if (!product)
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
-        "This catalog item is unavailable in this workspace or has not been approved.",
+        "This catalog item is unavailable for drafting in this workspace.",
     });
-  if (selectedProductImage?.media?.references.length) {
-    const links = await db
-      .select()
-      .from(productComponents)
-      .where(
-        and(
-          eq(productComponents.organizationId, organizationId),
-          eq(productComponents.parentProductId, product.id)
-        )
-      );
-    if (
-      !catalogCardGallery(
-        [selectedProductImage],
-        product.mediaGroups,
-        links.map(link => link.groupId)
-      ).images.length
-    )
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "This saved photo now belongs to a separate component card. Select that component's approved card in Catalog before running this App or Workflow; your saved selection has not been changed.",
-      });
-  }
+  if (selectedProductImage?.media?.retired)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "This product image has been retired. Choose an available original.",
+    });
   // Existing numeric product defaults retain their original specification selection.
   if (/^[1-9][0-9]*$/.test(value) && !field.media)
     selected.featuredSpecKeys = Object.keys(product.specifications).slice(

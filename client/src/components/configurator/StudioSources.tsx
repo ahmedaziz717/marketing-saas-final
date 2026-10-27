@@ -1,6 +1,6 @@
 import { catalogStockStatus } from "@shared/catalogFacts";
 import { canDraftCatalogImage } from "@shared/catalogReadiness";
-import { catalogCardGallery, catalogDefaultImage } from "@shared/catalogMedia";
+import { catalogCreationGallery } from "@shared/catalogMedia";
 import { CatalogGallery } from "../CatalogGallery";
 import type {
   CatalogImageMedia,
@@ -30,7 +30,11 @@ import {
   outputCount,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
-import { videoReferenceCount, type VideoSetup } from "@shared/videoCreation";
+import {
+  videoReferenceCount,
+  videoImageSelectionBudget,
+  type VideoSetup,
+} from "@shared/videoCreation";
 import type { LibraryAsset } from "@shared/assetLibrary";
 import { generationModel, referenceCapacity } from "@shared/modelCatalog";
 import { AssetUploadDialog } from "@/components/AssetUploadDialog";
@@ -132,14 +136,8 @@ export function StudioSources({
       (p.name + (p.sku ?? "")).toLowerCase().includes(search.toLowerCase()) &&
       (stock === "all" || catalogStockStatus(p) === stock)
   );
-  const referenceLimit = isImage
-    ? 9
-    : 30 -
-      video.people.length -
-      (video.logoAssetId &&
-      !video.imageKeys.includes(`asset:${video.logoAssetId}`)
-        ? 1
-        : 0);
+  const videoBudget = videoImageSelectionBudget(video);
+  const referenceLimit = isImage ? 9 : videoBudget.available;
   const videoModel = generationModel(video.modelId ?? "");
   const catalog = trpc.video.catalogImages.useQuery(
     { organizationId, search, offset },
@@ -330,6 +328,18 @@ export function StudioSources({
                 : "Some models require an image or source clip."}
             </p>
           )}
+          <p>
+            Up to {videoBudget.available} product or asset images;{" "}
+            {videoBudget.reserved} reserved for people and logo.
+          </p>
+          {videoReferenceCount(video) > videoBudget.total && (
+            <p role="alert">
+              Your selected references are retained. {videoBudget.modelName}{" "}
+              supports {videoBudget.total} total image references, including
+              people and logo. Choose a compatible model or remove extra
+              references before generating.
+            </p>
+          )}
           <div className="cfg-actions">
             {videoReferenceCount(video) > 0 && (
               <button
@@ -517,22 +527,12 @@ export function StudioSources({
           <div className="cfg-card-grid">
             {isImage ? (
               visibleProducts.map(p => {
-                const gallery = catalogCardGallery(
-                  p.images,
-                  p.mediaGroups,
-                  p.representedGroupIds
-                );
+                const gallery = catalogCreationGallery(p.images, p.mediaGroups);
                 const unavailable =
                   p.status != null && !canDraftCatalogImage(p.status);
                 const primary =
-                  gallery.images.find(
-                    photo =>
-                      photo.isPrimary &&
-                      catalogDefaultImage(photo, p.mediaGroups)
-                  ) ??
-                  gallery.images.find(photo =>
-                    catalogDefaultImage(photo, p.mediaGroups)
-                  );
+                  gallery.images.find(photo => photo.isPrimary) ??
+                  gallery.images[0];
                 const selection = image.products.find(
                   i => i.productId === p.id
                 );
@@ -616,9 +616,9 @@ export function StudioSources({
                               role="status"
                               className="mb-2 text-xs text-amber-700"
                             >
-                              A saved view now belongs to a separate component
-                              card. Your selection is retained; choose a
-                              component card before generating.
+                              A saved view is no longer available. Your
+                              selection is retained; choose an available photo
+                              before generating.
                             </p>
                           )}
                         <CatalogGallery

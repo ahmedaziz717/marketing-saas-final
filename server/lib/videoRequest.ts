@@ -1,3 +1,4 @@
+import { imageCategoryHandling } from "../../shared/catalogCategories";
 import { createHash } from "node:crypto";
 import {
   applicationPromptForRun,
@@ -24,7 +25,7 @@ export function videoCatalogContext(
         : []
     );
   return products.length
-    ? `${productFactsDirection}\nCategory handling: ${setup.categoryHandling ?? "require_mapping"}.\nSelected catalog products: ${JSON.stringify(products)}`
+    ? `${productFactsDirection}\nCategory handling: ${imageCategoryHandling(products, setup.categoryHandling)}.\nSelected catalog products: ${JSON.stringify(products)}`
     : "";
 }
 

@@ -267,7 +267,11 @@ export function workflowAuthoring(
           config.connectionId,
           config.performanceRequest?.connectionId,
         ];
-        const mediaKeys = [config.imageKey, config.sourceVideoKey];
+        const mediaKeys = [
+          config.imageKey,
+          ...(config.imageKeys ?? []),
+          config.sourceVideoKey,
+        ];
         const productIds: number[] = [];
         for (const value of [
           config.field?.defaultValue,
@@ -285,7 +289,10 @@ export function workflowAuthoring(
               config.field.kind
             );
             if (selection?.productId) productIds.push(selection.productId);
-            mediaKeys.push(selection?.imageKey);
+            mediaKeys.push(
+              selection?.imageKey,
+              ...(selection?.imageKeys ?? [])
+            );
           }
         }
         for (const id of Array.from(

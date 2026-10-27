@@ -8,6 +8,7 @@ import { publications } from "../../drizzle/channelSchema";
 import { users } from "../../drizzle/schema";
 import {
   workflowNodes,
+  workflowNodeImageKeys,
   type WorkflowNode,
   type WorkflowStep,
   type WorkflowValue,
@@ -129,28 +130,30 @@ export async function executeWorkflowBusinessStep(
       message: "Nested workflow input does not match its declared type.",
     });
   if (node.type === "app_input") {
-    const ref = node.config.imageKey
-      ? run.references.find(r => r.key === node.config.imageKey)
-      : undefined;
-    const media = ref
-      ? ref.key.startsWith("product_image:")
+    const images: WorkflowValue[] = [];
+    for (const key of workflowNodeImageKeys(node)) {
+      const ref = run.references.find(r => r.key === key);
+      if (!ref)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "A selected product image is no longer available. Review this App's image selection.",
+        });
+      const media = ref.key.startsWith("product_image:")
         ? (await readVideoCatalogImage(db, run.organizationId, ref.key)).choice
-        : await readLibraryAsset(db, run.organizationId, ref.key)
-      : undefined;
+        : await readLibraryAsset(db, run.organizationId, ref.key);
+      images.push({
+        type: "image",
+        key: ref.key,
+        url: media.url,
+        name: ref.name,
+        fingerprint: ref.fingerprint,
+        context: node.config.text || undefined,
+      });
+    }
     return complete([
       ...input,
-      ...(ref && media
-        ? [
-            {
-              type: "image" as const,
-              key: ref.key,
-              url: media.url,
-              name: ref.name,
-              fingerprint: ref.fingerprint,
-              context: node.config.text || undefined,
-            },
-          ]
-        : []),
+      ...images,
       ...(node.config.text
         ? [{ type: "text" as const, text: node.config.text }]
         : []),

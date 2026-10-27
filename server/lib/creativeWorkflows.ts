@@ -23,6 +23,7 @@ import { defaultVideoSetup, type VideoSetup } from "../../shared/videoCreation";
 import {
   isGenerationNode,
   workflowAncestors,
+  workflowNodeImageKeys,
   workflowNodes,
   workflowOrder,
   workflowRunProblem,
@@ -260,15 +261,14 @@ export async function prepareWorkflowRun(
   // Capture source fingerprints before considering cached upstream results.
   const references: Awaited<ReturnType<typeof workflowImageReferences>> = [];
   for (const node of graph.nodes.filter(
-    n =>
-      selected.has(n.id) &&
-      ["image", "app_input"].includes(n.type) &&
-      n.config.imageKey
+    n => selected.has(n.id) && workflowNodeImageKeys(n).length
   )) {
     references.push(
-      ...(await workflowImageReferences(db, organizationId, [
-        node.config.imageKey!,
-      ]))
+      ...(await workflowImageReferences(
+        db,
+        organizationId,
+        workflowNodeImageKeys(node)
+      ))
     );
   }
   for (const node of graph.nodes.filter(
@@ -338,10 +338,7 @@ export async function prepareWorkflowRun(
       const sourceKeys = graph.nodes
         .filter(n => ancestors.has(n.id))
         .flatMap(n =>
-          [
-            ["image", "app_input"].includes(n.type) ? n.config.imageKey : null,
-            n.config.sourceVideoKey,
-          ].filter(Boolean)
+          [...workflowNodeImageKeys(n), n.config.sourceVideoKey].filter(Boolean)
         );
       const prior = previous.find(
         run =>

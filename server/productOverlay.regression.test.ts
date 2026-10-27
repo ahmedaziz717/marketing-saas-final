@@ -74,7 +74,20 @@ it.each([
         {
           message: {
             content: JSON.stringify({
-              products: [{ ...fixture.box, confidence: 0.99, sameAngle: true }],
+              products: [
+                {
+                  ...fixture.box,
+                  confidence: 0.99,
+                  sameAngle: true,
+                  sourceBody: {
+                    left: 0,
+                    top: 0,
+                    width: 1000,
+                    height: 1000,
+                    confidence: 0.99,
+                  },
+                },
+              ],
             }),
           },
         },

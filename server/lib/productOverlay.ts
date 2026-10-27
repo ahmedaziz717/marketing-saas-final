@@ -145,6 +145,13 @@ export async function suggestProductPlacement(
           height: z.number().int().min(1).max(1000),
           confidence: z.number().min(0).max(1),
           sameAngle: z.boolean(),
+          sourceBody: z.object({
+            left: z.number().int().min(0).max(1000),
+            top: z.number().int().min(0).max(1000),
+            width: z.number().int().min(1).max(1000),
+            height: z.number().int().min(1).max(1000),
+            confidence: z.number().min(0).max(1),
+          }),
         })
       )
       .length(sources.length),
@@ -168,7 +175,7 @@ export async function suggestProductPlacement(
       sameAngle: box.sameAngle,
     };
     const reason =
-      box.confidence < 0.85
+      box.confidence < 0.85 || box.sourceBody.confidence < 0.85
         ? "low_confidence"
         : !box.sameAngle
           ? "camera_angle"
@@ -182,8 +189,10 @@ export async function suggestProductPlacement(
       box,
       sources[i],
       canvas,
-      preserveSizes?.[i]
+      preserveSizes?.[i],
+      box.sourceBody
     );
+    result.measurement.targetConfidence = box.confidence;
     if (result.reason)
       throw new ProductOverlayFailureError(
         result.reason === "size_mismatch"
@@ -298,12 +307,13 @@ export async function automaticProductOverlay(
     const originalQuality = sources.every((source, i) =>
       automaticProductUpscaleAllowed(source, placement.layers[i])
     );
-    return await renderProductOverlay(
+    const rendered = await renderProductOverlay(
       design,
       sources,
       placement.layers,
       originalQuality
     );
+    return { ...rendered, measurements: placement.measurements };
   } catch (error) {
     if (error instanceof ProductOverlayResolutionError) {
       error.placements = placement.layers;

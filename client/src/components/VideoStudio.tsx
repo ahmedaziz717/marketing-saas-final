@@ -47,6 +47,8 @@ import {
   videoRatios,
   videoResolutions,
   videoSetupProblem,
+  videoImageSelectionBudget,
+  videoReferenceCount,
   videoStatusLabels,
   type VideoSetup,
 } from "@shared/videoCreation";
@@ -380,7 +382,8 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
   const source = setup.sourceVideoKey
     ? assetMap.get(setup.sourceVideoKey)
     : undefined;
-  const maxImages = setup.mode === "motion" ? 8 : 9;
+  const referenceBudget = videoImageSelectionBudget(setup);
+  const maxImages = referenceBudget.available;
   return (
     <section aria-labelledby="video-studio-title" className="min-w-0">
       <ProductCategoryContext
@@ -393,6 +396,7 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
               .map(item => [item.product!.id, item.product!])
           ).values()
         )}
+        allowUnmapped
         handling={setup.categoryHandling}
         onChange={categoryHandling => update({ categoryHandling })}
       />
@@ -535,10 +539,6 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                         onClick={() =>
                           update({
                             mode: mode.id,
-                            imageKeys: setup.imageKeys.slice(
-                              0,
-                              mode.id === "motion" ? 8 : 9
-                            ),
                           })
                         }
                         className={`rounded-xl border px-3 py-2.5 text-sm ${setup.mode === mode.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
@@ -610,6 +610,17 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
                     {references.length} / {maxImages}
                   </span>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {referenceBudget.modelName}: {referenceBudget.total} total
+                  image references; {referenceBudget.reserved} reserved for
+                  people and logo.
+                </p>
+                {videoReferenceCount(setup) > referenceBudget.total && (
+                  <p role="alert" className="mt-2 text-sm text-destructive">
+                    Your selected references are retained. Choose a compatible
+                    model or remove extra references before generating.
+                  </p>
+                )}
                 <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {references.map(({ key, asset }, i) => (
                     <div
@@ -1219,13 +1230,13 @@ export function VideoStudio({ initialPlanId }: { initialPlanId?: number }) {
         onSaved={() => utils.assetLibrary.studioList.invalidate(scope)}
         onComplete={key => {
           if (uploadKind === "video") update({ sourceVideoKey: key });
+          else if (setup.imageKeys.includes(key)) return;
+          else if (setup.imageKeys.length < maxImages)
+            update({ imageKeys: [...setup.imageKeys, key] });
           else
-            update({
-              imageKeys: Array.from(new Set([...setup.imageKeys, key])).slice(
-                0,
-                maxImages
-              ),
-            });
+            toast.info(
+              "Image saved to Asset Library. Choose a compatible model or remove a reference before adding it."
+            );
         }}
       />
     </section>

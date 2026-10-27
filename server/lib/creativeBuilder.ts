@@ -1,7 +1,7 @@
 import { artStyleInfluenceDirection } from "../../shared/artStyleInfluence";
 import { canDraftCatalogImage } from "../../shared/catalogReadiness";
 import { imageCategoryHandling } from "../../shared/catalogCategories";
-import { catalogImageEligible } from "../../shared/catalogMedia";
+import { catalogCreationImageEligible } from "../../shared/catalogMedia";
 import { selectProductFacts } from "./productFacts";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -63,7 +63,7 @@ export function resolveBuilderInputs(
     if (
       !product ||
       !canDraftCatalogImage(product.status) ||
-      (image && !catalogImageEligible(image, product.mediaGroups)) ||
+      (image && !catalogCreationImageEligible(image)) ||
       (!image &&
         (product.recordType !== "service" || selection.imageId !== null))
     ) {

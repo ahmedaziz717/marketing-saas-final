@@ -183,7 +183,7 @@ describe("creative setup and trusted catalog inputs", () => {
         [selectedImage],
         [logo]
       )
-    ).toThrow(/unavailable/);
+    ).not.toThrow();
   });
   it("provides an expanded collection of uniquely identified icon-led themes across always-on, evergreen, and all twelve months", () => {
     expect(CREATIVE_THEME_LIST.length).toBeGreaterThan(100);

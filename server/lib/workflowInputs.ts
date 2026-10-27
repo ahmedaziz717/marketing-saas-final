@@ -65,6 +65,7 @@ export async function resolveWorkflowInputs(
           : (await resolveModel(db, value, f.modelKind!)).id;
       n.config.text = "";
       n.config.imageKey = null;
+      delete n.config.imageKeys;
       n.config.fieldValue = value;
       for (const edge of graph.edges.filter(e => e.source === n.id)) {
         const target = graph.nodes.find(t => t.id === edge.target)!;
@@ -95,6 +96,7 @@ export async function resolveWorkflowInputs(
       const channel = f.connectionChannel ?? "facebook";
       n.config.text = "";
       n.config.imageKey = null;
+      delete n.config.imageKeys;
       delete n.config.connectionId;
       const destinations = graph.edges.filter(e => e.source === n.id);
       for (const edge of destinations) {
@@ -158,6 +160,7 @@ export async function resolveWorkflowInputs(
     }
     n.config.text = "";
     n.config.imageKey = null;
+    delete n.config.imageKeys;
     if (!value) {
       // An optional or hidden image contributes no value, not a missing-image error.
       if (n.type === "image") n.type = "app_input";
@@ -167,6 +170,15 @@ export async function resolveWorkflowInputs(
     if (f.kind === "asset" || f.kind === "product") {
       const resolved = await resolveWorkflowMedia(db, organizationId, f, value);
       n.config.imageKey = resolved.imageKey;
+      n.config.imageKeys = resolved.imageKeys;
+      // Legacy image nodes may declare a product field; an App input can emit
+      // every selected view while the old image executor is deliberately scalar.
+      if (
+        n.type === "image" &&
+        f.kind === "product" &&
+        resolved.imageKeys?.length
+      )
+        n.type = "app_input";
       text = resolved.text;
     }
     n.config.text = text ? `${n.title}: ${text}` : "";

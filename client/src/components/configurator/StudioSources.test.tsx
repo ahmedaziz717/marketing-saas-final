@@ -9,7 +9,12 @@ import {
   outputCount,
   type CreativeSetup,
 } from "@shared/creativeBuilder";
-import { defaultVideoSetup } from "@shared/videoCreation";
+import {
+  DEFAULT_VIDEO_MODEL,
+  generationModels,
+  imageReferenceBudget,
+} from "@shared/modelCatalog";
+import { defaultVideoSetup, type VideoSetup } from "@shared/videoCreation";
 const catalogQuery = vi.hoisted(() =>
   vi.fn(() => ({ data: { items: [], nextOffset: 60 } }))
 );
@@ -128,7 +133,7 @@ it("limits together mode to one view and three products and supports legacy draf
   expect(latest.products.find(p => p.productId === 1)?.imageIds).toEqual([1]);
 });
 
-it("keeps represented component photos off parent cards, shows pending independent options and retains saved selections", () => {
+it("allows represented component photos and pending independent options without changing saved selections", () => {
   const group = {
     id: "option:case",
     name: "Case",
@@ -187,12 +192,23 @@ it("keeps represented component photos off parent cards, shows pending independe
       .getByRole("checkbox", { name: /Use Hero for Case/ })
       .hasAttribute("disabled")
   ).toBe(false);
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Gallery for System" }),
+    { target: { value: group.id } }
+  );
   expect(
-    screen.queryByRole("button", { name: "Preview 2 for System" })
-  ).toBeNull();
-  expect(
-    screen.getByText(/A saved view now belongs to a separate component/)
+    screen.getByRole("button", { name: "Preview 2 for System" })
   ).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: /Use 2 for System/,
+      }) as HTMLInputElement
+    ).disabled
+  ).toBe(false);
+  expect(
+    screen.queryByText(/A saved view now belongs to a separate component/)
+  ).toBeNull();
   expect(latest.products[0].imageId).toBe(2);
   expect(screen.queryByText("System gallery")).toBeNull();
 });
@@ -335,4 +351,112 @@ it("returns video catalog browsing to the first page when search changes", () =>
     expect.objectContaining({ search: "different product", offset: 0 }),
     expect.anything()
   );
+});
+
+const budgetAssets = Array.from({ length: 31 }, (_, i) => ({
+  key: `asset:${i + 1}`,
+  name: `Budget image ${i + 1}`,
+  url: `/budget-${i}.png`,
+  mediaType: "image",
+  mimeType: "image/png",
+  state: "approved",
+  origin: "uploaded",
+}));
+function VideoBudgetHarness({ initial }: { initial: VideoSetup }) {
+  const [video, setVideo] = useState(initial);
+  return (
+    <StudioSources
+      organizationId={1}
+      role="owner"
+      kind="video"
+      image={defaultCreativeSetup()}
+      video={video}
+      products={[]}
+      assets={budgetAssets as any}
+      search=""
+      updateImage={vi.fn()}
+      updateVideo={patch => setVideo(old => ({ ...old, ...patch }))}
+      onUploaded={async () => {}}
+    />
+  );
+}
+it.each([1, 8, 9, 10])(
+  "allows %i images using the default provider's 30 slots",
+  count => {
+    render(
+      <VideoBudgetHarness
+        initial={{
+          ...defaultVideoSetup,
+          modelId: DEFAULT_VIDEO_MODEL,
+          imageKeys: budgetAssets.slice(0, count - 1).map(a => a.key),
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Image assets/ }));
+    const next = screen.getByRole("button", {
+      name: `Select Budget image ${count}`,
+    }) as HTMLButtonElement;
+    expect(next.disabled).toBe(false);
+    fireEvent.click(next);
+    expect(next.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen.getByText(`${count} ${count === 1 ? "image" : "images"} selected`)
+    ).toBeTruthy();
+  }
+);
+it("reserves people and a separate logo, blocks additions and allows removing retained refs on an eight-slot model", () => {
+  const limited = generationModels.find(
+    m => m.kind === "video" && imageReferenceBudget(m).total === 8
+  )!;
+  expect(limited).toBeTruthy();
+  render(
+    <VideoBudgetHarness
+      initial={{
+        ...defaultVideoSetup,
+        modelId: limited.id,
+        imageKeys: budgetAssets.slice(0, 7).map(a => a.key),
+        logoAssetId: 30,
+        people: [{ kind: "library", id: "female-black-0" }],
+      }}
+    />
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Image assets/ }));
+  expect(screen.getByRole("alert").textContent).toContain(
+    "selected references are retained"
+  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Select Budget image 8",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  const selected = screen.getByRole("button", {
+    name: "Select Budget image 7",
+  }) as HTMLButtonElement;
+  expect(selected.disabled).toBe(false);
+  fireEvent.click(selected);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Select Budget image 8",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+});
+it("does not reserve a logo twice when it is already selected", () => {
+  render(
+    <VideoBudgetHarness
+      initial={{
+        ...defaultVideoSetup,
+        modelId: DEFAULT_VIDEO_MODEL,
+        imageKeys: ["asset:1"],
+        logoAssetId: 1,
+      }}
+    />
+  );
+  expect(
+    screen.getByText(/Up to 30 product or asset images; 0 reserved/)
+  ).toBeTruthy();
 });

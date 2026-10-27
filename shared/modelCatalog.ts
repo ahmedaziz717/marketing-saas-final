@@ -121,6 +121,16 @@ export function referenceCapacity(model: ModelDefinition) {
         ? 2
         : 0;
 }
+/** Provider capacity shared by selection, quote and execution. */
+export function imageReferenceBudget(
+  model: ModelDefinition,
+  reserved = 0,
+  maximum = 30
+) {
+  const total = Math.max(0, Math.min(maximum, referenceCapacity(model)));
+  const used = Math.max(0, Math.ceil(reserved));
+  return { total, reserved: used, available: Math.max(0, total - used) };
+}
 export function requiresVideo(model: ModelDefinition) {
   return (model.inputSchema.required ?? []).some(k =>
     ["video_url", "video_urls"].includes(k)
@@ -206,9 +216,9 @@ export function modelRequestBody(
   if (body.multi_shots === true)
     throw new Error("Build multiple shots with individual workflow steps.");
   if (properties.prompt) body.prompt = input.prompt;
-  if (input.images.length > referenceCapacity(model))
+  if (input.images.length > imageReferenceBudget(model).total)
     throw new Error(
-      `${model.name} supports ${referenceCapacity(model)} reference images. Choose a compatible model or remove extra references.`
+      `${model.name} supports ${imageReferenceBudget(model).total} total reference images, including logos and people. Choose a compatible model or remove extra references.`
     );
   if (input.images.length) {
     if (properties.image_urls) body.image_urls = input.images;
