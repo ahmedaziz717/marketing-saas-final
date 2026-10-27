@@ -1,4 +1,4 @@
-import { catalogCardGallery } from "@shared/catalogMedia";
+import { catalogCreationGallery } from "@shared/catalogMedia";
 import { CatalogGallery } from "./CatalogGallery";
 import type { VideoImageChoice } from "@shared/videoCreation";
 
@@ -26,11 +26,7 @@ export function ProductPhotoGroups({
   return (
     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
       {Array.from(groups.entries()).map(([key, photos]) => {
-        const gallery = catalogCardGallery(
-          photos,
-          photos[0].mediaGroups,
-          photos[0].representedGroupIds
-        );
+        const gallery = catalogCreationGallery(photos, photos[0].mediaGroups);
         const unavailable = gallery.images[0]?.unavailableReason;
         const retained = photos.filter(
           photo =>
@@ -66,7 +62,7 @@ export function ProductPhotoGroups({
               >
                 Saved reference retained:{" "}
                 {photo.unavailableReason ??
-                  "Choose the separate component card before use."}{" "}
+                  "Choose an available photo before use."}{" "}
                 <button type="button" onClick={() => onToggle(photo.key)}>
                   Remove saved reference
                 </button>

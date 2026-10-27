@@ -216,3 +216,13 @@ it("counts all visual references when preparing a complete creative with editabl
     })
   ).toBe(1);
 });
+
+
+it("stops unavailable source preflight before model lookup or paid generation", async () => {
+  mocks.read.mockRejectedValueOnce(new Error("Stored asset is unavailable. Asset storage is temporarily busy. Please try again shortly."));
+  await expect(builderImageQuote({} as any, 1, {
+    ...defaultCreativeSetup(), preserveProduct: true, sourceAssetKeys: ["asset:1"],
+  }, { products: [], references: [{ key: "asset:1", storageKey: "org-1/source.png" }] } as any))
+    .rejects.toThrow(/temporarily busy/);
+  expect(mocks.resolve).not.toHaveBeenCalled();
+});

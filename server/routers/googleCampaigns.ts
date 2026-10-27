@@ -83,7 +83,7 @@ export const googleCampaignsRouter = router({
       if (!brand)
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Set up your Brand Kit before generating PMax copy.",
+          message: "Set up your Brand Kit before generating Google ad copy.",
         });
       const selected = await googleCopyContext(
         db,

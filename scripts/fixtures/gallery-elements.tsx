@@ -5,6 +5,7 @@ import { ProductPhotoGroups } from "../../client/src/components/ProductPhotoGrou
 import { WorkflowMediaControl } from "../../client/src/components/WorkflowMediaControl";
 import { defaultCreativeSetup } from "../../shared/creativeBuilder";
 import { defaultVideoSetup } from "../../shared/videoCreation";
+import { canDraftCatalogImage } from "../../shared/catalogReadiness";
 import { appFieldSchema } from "../../shared/workflowInputs";
 export function galleryElementProducts() {
   const rows: any[] = componentCatalogFixture().products;
@@ -30,7 +31,7 @@ export function galleryElementProducts() {
   return rows;
 }
 export function galleryElementChoices() {
-  return galleryElementProducts().flatMap(p =>
+  return galleryElementProducts().filter(p => canDraftCatalogImage(p.status)).flatMap(p =>
     p.images.map((i: any) => ({
       ...i,
       key: `product_image:${i.id}`,
@@ -40,18 +41,19 @@ export function galleryElementChoices() {
       mediaGroups: p.mediaGroups,
       representedGroupIds: p.representedGroupIds,
       componentKind: p.componentKind,
-      ...(p.status !== "approved"
-        ? { unavailableReason: "Review needed in Catalog before use." }
+      ...(p.status === "pending"
+        ? { reviewNotice: "Draft use allowed. Review product facts before publishing." }
         : {}),
     }))
   );
 }
 export function galleryWorkflowChoices() {
   const products = galleryElementProducts()
-    .filter(p => p.status === "approved")
+    .filter(p => canDraftCatalogImage(p.status))
     .map(p => ({
       ...p,
       primaryImageId: p.images.find((i: any) => i.isPrimary)?.id,
+      reviewNotice: p.status === "pending" ? "Draft use allowed. Review product facts before publishing." : null,
       images: p.images.map((i: any) => ({
         ...i,
         key: `product_image:${i.id}`,

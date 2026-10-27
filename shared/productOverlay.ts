@@ -126,6 +126,7 @@ export type ProductOverlayMetadata = {
   alignment?: "automatic" | "manual" | "needs_adjustment";
   automaticFailure?: "source_resolution" | "alignment_unavailable";
   automaticFailureDiagnostic?: ProductOverlayFailureDiagnostic;
+  measurements?: ProductAlignmentMeasurement[];
   layers: Array<
     ProductOverlayPlacement & {
       sourceKey: string;
@@ -222,6 +223,7 @@ export function manuallyAppliedProductOverlay(
     ...metadata,
     applied: true,
     alignment: "manual",
+    measurements: undefined,
     automaticFailure: undefined,
     automaticFailureDiagnostic: undefined,
     layers,
@@ -237,6 +239,23 @@ export type ProductAlignmentMeasurement = {
   };
   detectedBounds: { left: number; top: number; width: number; height: number };
   renderedBounds?: { left: number; top: number; width: number; height: number };
+  sourceBody?: { left: number; top: number; width: number; height: number };
+  normalizedSourceBody?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    confidence: number;
+  };
+  renderedBodyBounds?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  anchorMode?: "physical_body" | "legacy_full_cutout";
+  sourceConfidence?: number;
+  targetConfidence?: number;
   aspectDifference: number;
   sizeMode: "preserve" | "fit";
 };
@@ -247,7 +266,14 @@ export function resolveProductAlignment(
   box: ProductAlignmentMeasurement["normalizedBounds"],
   source: { width: number; height: number },
   canvas: { width: number; height: number },
-  preserveSize?: Pick<ProductOverlayPlacement, "width" | "height">
+  preserveSize?: Pick<ProductOverlayPlacement, "width" | "height">,
+  sourceBody?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    confidence: number;
+  }
 ): {
   placement?: ProductOverlayPlacement;
   measurement: ProductAlignmentMeasurement;
@@ -259,6 +285,14 @@ export function resolveProductAlignment(
     width: (box.width * canvas.width) / 1000,
     height: (box.height * canvas.height) / 1000,
   };
+  const body = sourceBody
+    ? {
+        left: (sourceBody.left * source.width) / 1000,
+        top: (sourceBody.top * source.height) / 1000,
+        width: (sourceBody.width * source.width) / 1000,
+        height: (sourceBody.height * source.height) / 1000,
+      }
+    : { left: 0, top: 0, width: source.width, height: source.height };
   const aspect = source.width / source.height;
   const measurement: ProductAlignmentMeasurement = {
     normalizedBounds: {
@@ -268,12 +302,33 @@ export function resolveProductAlignment(
       height: box.height,
     },
     detectedBounds,
+    sourceBody: body,
+    normalizedSourceBody: sourceBody,
+    sourceConfidence: sourceBody?.confidence,
+    anchorMode: sourceBody ? "physical_body" : "legacy_full_cutout",
     aspectDifference: Math.abs(
-      detectedBounds.width / detectedBounds.height / aspect - 1
+      detectedBounds.width /
+        detectedBounds.height /
+        (body.width / body.height) -
+        1
     ),
     sizeMode: preserveSize ? "preserve" : "fit",
   };
   if (
+    ![source.width, source.height, canvas.width, canvas.height].every(
+      v => Number.isFinite(v) && v > 0
+    ) ||
+    (sourceBody &&
+      (!Object.values(sourceBody).every(Number.isFinite) ||
+        sourceBody.confidence < 0.85 ||
+        sourceBody.confidence > 1 ||
+        sourceBody.left < 0 ||
+        sourceBody.top < 0 ||
+        sourceBody.width <= 0 ||
+        sourceBody.height <= 0 ||
+        sourceBody.left + sourceBody.width > 1000 ||
+        sourceBody.top + sourceBody.height > 1000)) ||
+    ![box.left, box.top, box.width, box.height].every(Number.isFinite) ||
     !Number.isFinite(measurement.aspectDifference) ||
     box.left < 0 ||
     box.top < 0 ||
@@ -285,34 +340,50 @@ export function resolveProductAlignment(
     return { measurement, reason: "invalid_geometry" };
   if (measurement.aspectDifference > 0.15)
     return { measurement, reason: "aspect_mismatch" };
-  const width =
-    preserveSize?.width ??
-    Math.round(Math.max(detectedBounds.width, detectedBounds.height * aspect));
+  const scale = Math.max(
+    detectedBounds.width / body.width,
+    detectedBounds.height / body.height
+  );
+  const width = preserveSize?.width ?? Math.round(source.width * scale);
   const height = preserveSize?.height ?? Math.round(width / aspect);
+  if (
+    ![width, height].every(
+      v => Number.isFinite(v) && Number.isInteger(v) && v >= 1
+    )
+  )
+    return { measurement, reason: "invalid_geometry" };
   if (
     preserveSize &&
     (Math.abs(height - width / aspect) > 1 ||
-      width + 1 < detectedBounds.width ||
-      height + 1 < detectedBounds.height)
+      (body.width * width) / source.width + 1 < detectedBounds.width ||
+      (body.height * height) / source.height + 1 < detectedBounds.height)
   )
     return { measurement, reason: "size_mismatch" };
   // Retain legacy aspect-preserving cover geometry; use the unrounded cover width
   // for its center so rounding does not move historical verified placements.
-  const centerWidth = preserveSize
-    ? width
-    : Math.max(detectedBounds.width, detectedBounds.height * aspect);
+  const centerWidth = preserveSize ? width : source.width * scale;
   const centerHeight = preserveSize ? height : centerWidth / aspect;
   const placement: ProductOverlayPlacement = {
     width,
     ...(preserveSize ? { height } : {}),
     left: Math.round(
-      detectedBounds.left + detectedBounds.width / 2 - centerWidth / 2
+      detectedBounds.left +
+        detectedBounds.width / 2 -
+        ((body.left + body.width / 2) * centerWidth) / source.width
     ),
     top: Math.round(
-      detectedBounds.top + detectedBounds.height / 2 - centerHeight / 2
+      detectedBounds.top +
+        detectedBounds.height / 2 -
+        ((body.top + body.height / 2) * centerHeight) / source.height
     ),
   };
   measurement.renderedBounds = { ...placement, height };
+  measurement.renderedBodyBounds = {
+    left: placement.left + (body.left * width) / source.width,
+    top: placement.top + (body.top * height) / source.height,
+    width: (body.width * width) / source.width,
+    height: (body.height * height) / source.height,
+  };
   if (
     placement.left < 0 ||
     placement.top < 0 ||

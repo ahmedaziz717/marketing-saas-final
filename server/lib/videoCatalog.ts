@@ -3,10 +3,7 @@ import {
   imageDraftProductStatuses,
 } from "../../shared/catalogReadiness";
 import { componentIdentityContext } from "../../shared/studioProductFacts";
-import {
-  catalogCardGallery,
-  catalogImageEligible,
-} from "../../shared/catalogMedia";
+import { catalogCreationImageEligible } from "../../shared/catalogMedia";
 import { attachMarketingCategories } from "./catalogCategories";
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -85,15 +82,11 @@ function choice(
     componentKind: row.product.provenance?.["component.kind"] ?? null,
     representedGroupIds,
     ...(!canDraftCatalogImage(row.product.status) ||
-    !catalogCardGallery(
-      [row.image],
-      row.product.mediaGroups,
-      representedGroupIds
-    ).images.length
+    !catalogCreationImageEligible(row.image)
       ? {
           unavailableReason: !canDraftCatalogImage(row.product.status)
             ? "This product is unavailable for drafting."
-            : "This saved view now belongs to a separate component card. Select its separate card in Catalog.",
+            : "This saved photo has been retired. Choose an available photo.",
         }
       : {}),
     reviewNotice:
@@ -238,27 +231,7 @@ export async function readVideoCatalogImage(
         )
         .limit(1)
     : [];
-  const represented = row
-    ? await db
-        .select()
-        .from(productComponents)
-        .where(
-          and(
-            eq(productComponents.organizationId, organizationId),
-            eq(productComponents.parentProductId, row.product.id)
-          )
-        )
-    : [];
-  if (
-    !row ||
-    !row.image.storageKey ||
-    !catalogCardGallery(
-      [row.image],
-      row.product.mediaGroups,
-      represented.map(link => link.groupId)
-    ).images.length ||
-    !catalogImageEligible(row.image, row.product.mediaGroups)
-  )
+  if (!row || !row.image.storageKey || !catalogCreationImageEligible(row.image))
     throw new TRPCError({
       code: "NOT_FOUND",
       message:

@@ -215,3 +215,34 @@ it("replaces retained Google copy only through the explicit association callback
   );
   expect(onChange).not.toHaveBeenCalled();
 });
+
+it("shares explicit Display acceptance while preserving text and format-specific capacity", () => {
+  const onChange = vi.fn();
+  const assets = [
+    text("HEADLINE", "Keep me"),
+    text("LONG_HEADLINE", "Keep long"),
+  ];
+  render(
+    <GooglePmaxCopyEditor
+      adType="DISPLAY"
+      organizationId={7}
+      connectionId="account"
+      assets={assets}
+      onChange={onChange}
+    />
+  );
+  expect(f.ai.adType).toBe("DISPLAY");
+  expect(screen.getByText("Long headlines · 1/1")).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Add long headline" })
+  ).toHaveProperty("disabled", true);
+  expect(onChange).not.toHaveBeenCalled();
+  f.ai.onApply([
+    ...Array.from({ length: 8 }, (_, i) => text("HEADLINE", `Idea ${i}`)),
+    text("LONG_HEADLINE", "Do not overwrite"),
+  ]);
+  const next = onChange.mock.calls[0][0] as GoogleAssetInput[];
+  expect(next.filter(a => a.field === "HEADLINE")).toHaveLength(5);
+  expect(next.find(a => a.field === "LONG_HEADLINE")).toEqual(assets[1]);
+  expect(next.find(a => a.field === "HEADLINE")).toEqual(assets[0]);
+});

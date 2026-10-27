@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { assertCategorySelection } from "../lib/catalogCategories";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -161,10 +160,6 @@ export async function enqueueVideoGeneration(
     db,
     input.organizationId,
     initial.setup
-  );
-  assertCategorySelection(
-    refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
-    initial.setup.categoryHandling
   );
   const prepare = () =>
     quotedVideoRequest(db, input.organizationId, initial.setup, refs);
@@ -383,10 +378,6 @@ export const videoRouter = router({
           input.organizationId,
           input.setup
         );
-      assertCategorySelection(
-        refs.flatMap(ref => (ref.productFacts ? [ref.productFacts] : [])),
-        input.setup.categoryHandling
-      );
       const { quote } = await quotedVideoRequest(
         db,
         input.organizationId,

@@ -192,3 +192,36 @@ export function catalogCardGallery<
     ),
   };
 }
+
+/** Creation eligibility is distinct from catalog approval and publishing.
+ * Callers must independently enforce workspace ownership and storage access. */
+export function catalogCreationImageEligible(image: {
+  media?: CatalogImageMedia | null;
+}) {
+  return !image.media?.retired;
+}
+export function catalogCreationGallery<
+  T extends { media?: CatalogImageMedia | null },
+>(images: T[], groups: CatalogMediaGroupSummary[] | null | undefined) {
+  const usable = images.filter(catalogCreationImageEligible);
+  const creationGroups: CatalogMediaGroupSummary[] = (groups ?? []).map(
+    group => {
+      const { imageIds: _imageIds, ...summary } = group;
+      return { ...summary, eligible: true };
+    }
+  );
+  const known = new Set(creationGroups.map(group => group.id));
+  for (const image of usable)
+    for (const ref of image.media?.references ?? []) {
+      if (known.has(ref.groupId)) continue;
+      known.add(ref.groupId);
+      creationGroups.push({
+        id: ref.groupId,
+        name: "Product photos",
+        role: "optional_component",
+        eligible: true,
+        declaredImages: 0,
+      });
+    }
+  return { images: usable, groups: creationGroups };
+}

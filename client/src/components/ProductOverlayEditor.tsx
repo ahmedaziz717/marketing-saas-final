@@ -578,10 +578,20 @@ function OverlayControls({
             operation="creativeBuilder.alignProductOverlay"
           />
         </Button>
-        {alignmentMeasurements.length > 0 && (
+        {(alignmentMeasurements.length > 0 ||
+          (!placements && (data.measurements?.length ?? 0) > 0)) && (
           <details className="text-xs">
             <summary>Alignment measurements (full canvas pixels)</summary>
-            {alignmentMeasurements.map((measurement, index) => (
+            <p>
+              Physical-body bounds exclude reflections; the complete original
+              cutout and its proportions are retained.
+            </p>
+            {(alignmentMeasurements.length
+              ? alignmentMeasurements
+              : !placements
+                ? (data.measurements ?? [])
+                : []
+            ).map((measurement, index) => (
               <p key={index}>
                 Product {index + 1}: detected x
                 {Math.round(measurement.detectedBounds.left)}, y

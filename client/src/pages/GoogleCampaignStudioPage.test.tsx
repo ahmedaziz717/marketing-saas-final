@@ -157,7 +157,7 @@ it.each([
     section("Copy");
     if (type === "Shopping")
       expect(screen.getByText(/Shopping ads use titles/)).toBeTruthy();
-    else if (type === "Performance Max")
+    else if (["Performance Max", "Display"].includes(type))
       expect(
         screen.getByRole("region", { name: "Headlines draft editor" })
       ).toBeTruthy();

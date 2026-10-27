@@ -6,7 +6,7 @@ import { readEnhancementSource } from "./imageEnhancement";
 import { readProductCutout } from "./productPreservation";
 import { and, eq, inArray } from "drizzle-orm";
 import { products, productImages } from "../../drizzle/schema";
-import { catalogImageEligible } from "../../shared/catalogMedia";
+import { catalogCreationImageEligible } from "../../shared/catalogMedia";
 import { stableHash } from "./policy";
 
 export async function catalogOverlaySources(db: LibraryDatabase | LibraryTransaction, organizationId: number, productIds: number[]) {
@@ -14,7 +14,7 @@ export async function catalogOverlaySources(db: LibraryDatabase | LibraryTransac
   const rows = await db.select({image: productImages, product: products}).from(productImages).innerJoin(products,
     and(eq(products.id, productImages.productId), eq(products.organizationId, productImages.organizationId)))
     .where(and(eq(productImages.organizationId, organizationId), inArray(productImages.productId, productIds), inArray(products.status, [...imageDraftProductStatuses])));
-  return rows.filter(({image, product}) => catalogImageEligible(image, product.mediaGroups)).map(({image, product}) => ({
+  return rows.filter(({image}) => catalogCreationImageEligible(image)).map(({image, product}) => ({
     key: `catalog-image:${image.id}`, name: `${product.name} — photo ${image.id}`, url: image.url,
     productId: product.id,
     revision: stableHash({image, productRevision: product.updatedAtMs, status: product.status}), storageKey: image.storageKey,

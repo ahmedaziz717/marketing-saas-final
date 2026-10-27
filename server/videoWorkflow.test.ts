@@ -497,7 +497,7 @@ describe("durable video generation", () => {
     expect(job.credits).toBeGreaterThan(0);
   });
 
-  it("allows pending component drafts without approving records and rejects represented parent references", async () => {
+  it("allows pending component drafts without approving records and allows represented parent references", async () => {
     const now = Date.now();
     const group = {
       id: "case:test",
@@ -593,7 +593,7 @@ describe("durable video generation", () => {
           ],
         },
       })
-    ).rejects.toThrow(/unavailable/);
+    ).resolves.toBeDefined();
     const choices = (await owner.video.catalogImages({ organizationId: org }))
       .items;
     expect(
@@ -615,8 +615,8 @@ describe("durable video generation", () => {
     ).items;
     expect(retained[0]).toMatchObject({
       key: `product_image:${nestedImage.id}`,
-      unavailableReason: expect.stringMatching(/separate component/),
     });
+    expect(retained[0].unavailableReason).toBeUndefined();
     expect(
       await resolveVideoReferences(state.db, org, {
         ...setup(),
@@ -636,7 +636,7 @@ describe("durable video generation", () => {
         ...setup(),
         imageKeys: [`product_image:${nestedImage.id}`],
       })
-    ).rejects.toThrow(/unavailable/);
+    ).resolves.toBeDefined();
     expect(
       await resolveVideoReferences(state.db, org, {
         ...setup(),
@@ -655,8 +655,7 @@ describe("durable video generation", () => {
         })
       ).items
     ).toEqual([]);
-    // A second, ineligible/unmapped reference must not turn the represented
-    // component's eligibility into approval of a different system role.
+    // Classification does not block an owned non-retired source.
     const withdrawn = {
       ...group,
       id: "withdrawn-system",
@@ -684,7 +683,7 @@ describe("durable video generation", () => {
         ...setup(),
         imageKeys: [`product_image:${nestedImage.id}`],
       })
-    ).rejects.toThrow(/unavailable/);
+    ).resolves.toBeDefined();
     await expect(
       owner.creativeBuilder.quote({
         organizationId: org,
@@ -700,7 +699,7 @@ describe("durable video generation", () => {
           ],
         },
       })
-    ).rejects.toThrow(/unavailable/);
+    ).resolves.toBeDefined();
     // A genuinely approved system view sharing those bytes remains available.
     await state.db
       .update(products)
@@ -820,29 +819,37 @@ describe("durable video generation", () => {
       .where(eq(products.id, productId));
   });
 
-  it("requires a Studio category choice before provider work while keeping shared App reference resolution compatible", async () => {
+  it("allows unmapped Studio products with neutral factual wording without category approval", async () => {
     const settings = {
       ...setup(),
       categoryHandling: undefined,
       imageKeys: [`product_image:${catalogImageId}`],
     };
-    await expect(
-      owner.video.quote({ organizationId: org, setup: settings })
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    await expect(
-      owner.video.draftPrompt({ organizationId: org, setup: settings })
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    expect(state.estimate).not.toHaveBeenCalled();
-    expect(state.llm).not.toHaveBeenCalled();
+    await owner.video.quote({ organizationId: org, setup: settings });
+    expect(state.estimate).toHaveBeenCalledTimes(1);
+    expect(state.estimate.mock.calls[0][1].prompt).toContain(
+      "Category handling: neutral"
+    );
+    state.llm.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              prompt:
+                "Reveal the lamp with a slow camera orbit using only supplied facts.",
+            }),
+          },
+        },
+      ],
+    });
+    await owner.video.draftPrompt({ organizationId: org, setup: settings });
+    expect(state.llm).toHaveBeenCalledTimes(1);
     expect(
       (await resolveVideoReferences(state.db, org, settings))[0].productFacts
         ?.marketingCategory?.status
     ).toBe("unmapped");
-    await owner.video.quote({
-      organizationId: org,
-      setup: { ...settings, categoryHandling: "neutral" },
-    });
-    expect(state.estimate).toHaveBeenCalledTimes(1);
+    const job = await queued(settings);
+    expect(job.credits).toBeGreaterThan(0);
   });
 
   it("saves and sends an approved brand logo after subject images and before people", async () => {

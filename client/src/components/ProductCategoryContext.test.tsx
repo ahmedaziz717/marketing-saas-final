@@ -95,11 +95,22 @@ it.each([
   }
 );
 
-
-it("explains automatic image fallback without requiring a category choice", () => {
-  const view = render(<ProductCategoryContext products={[unmapped]} allowUnmapped onChange={() => {}} />);
-  expect(screen.getByText(/You can create images now/)).toBeTruthy();
+it("explains automatic creation fallback without requiring a category choice", () => {
+  const view = render(
+    <ProductCategoryContext
+      products={[unmapped]}
+      allowUnmapped
+      onChange={() => {}}
+    />
+  );
+  expect(screen.getByText(/You can create now/)).toBeTruthy();
   expect(screen.queryByRole("checkbox")).toBeNull();
-  view.rerender(<ProductCategoryContext products={[confirmed(1)]} allowUnmapped onChange={() => {}} />);
+  view.rerender(
+    <ProductCategoryContext
+      products={[confirmed(1)]}
+      allowUnmapped
+      onChange={() => {}}
+    />
+  );
   expect(screen.getByText(/Confirmed category guidance controls/)).toBeTruthy();
 });

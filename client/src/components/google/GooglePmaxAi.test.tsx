@@ -380,3 +380,50 @@ it("discards an in-flight suggestion response after selected creative changes", 
   expect(screen.queryByDisplayValue("Stale response")).toBeNull();
   expect(add).not.toHaveBeenCalled();
 });
+
+it("uses shared Display generation with 5/1/5 counts and selected asset context", async () => {
+  const onAdd = vi.fn();
+  render(
+    <GooglePmaxAi
+      organizationId={7}
+      connectionId="account"
+      adType="DISPLAY"
+      assets={[
+        {
+          field: "SQUARE_MARKETING_IMAGE",
+          source: { kind: "library", key: "asset:1" },
+        },
+      ]}
+      onAdd={onAdd}
+    />
+  );
+  expect(
+    screen.getByText("Create Responsive Display copy with AI")
+  ).toBeTruthy();
+  expect(screen.getByLabelText("Headlines to generate")).toHaveProperty(
+    "value",
+    "5"
+  );
+  expect(screen.getByLabelText("Long headlines to generate")).toHaveProperty(
+    "value",
+    "1"
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await waitFor(() => expect(f.generate).toHaveBeenCalled());
+  expect(f.generate.mock.calls[0][0]).toMatchObject({
+    connectionId: "account",
+    selectedAssets: [
+      {
+        field: "SQUARE_MARKETING_IMAGE",
+        source: { kind: "library", key: "asset:1" },
+      },
+    ],
+    copyRequest: {
+      adType: "DISPLAY",
+      counts: { headlines: 5, longHeadlines: 1, descriptions: 5 },
+    },
+  });
+  expect(onAdd).not.toHaveBeenCalled();
+});

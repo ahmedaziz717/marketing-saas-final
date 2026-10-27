@@ -419,7 +419,7 @@ it("blocks incompatible workflow inputs before running upstream generation", () 
       { id: "reference", source: "photo", target: "generated", port: "image" },
     ],
   };
-  expect(workflowRunProblem(graph)).toMatch(/supports 0 reference images/);
+  expect(workflowRunProblem(graph)).toMatch(/supports 0 total reference images/);
   generated.config.modelId = "higgsfield:alibaba/qwen-image-3/edit";
   expect(workflowRunProblem({ ...graph, edges: [] })).toMatch(
     /Connect a reference image/

@@ -585,6 +585,7 @@ it.each([
                     ),
                     confidence: 0.98,
                     sameAngle: true,
+                    sourceBody: { left: 0, top: 0, width: 1000, height: 1000, confidence: 0.98 },
                   },
                 ],
               }),
@@ -628,6 +629,8 @@ it.each([
           : storageFailure ? { stage: "storage", reason: "storage_failed" }
           : { stage: "alignment", reason: "invalid_response" },
       });
+      if (applied) expect(preservation.measurements[0]).toMatchObject({ anchorMode: "physical_body", sourceConfidence: 0.98 });
+      else expect(preservation.measurements).toBeUndefined();
       if (matched && lowResolution) {
         // Retain the confidently detected footprint across resolution failure,
         // covering it proportionally rather than preserving a distorted height.

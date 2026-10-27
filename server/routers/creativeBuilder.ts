@@ -1,5 +1,5 @@
 import { imageDraftProductStatuses } from "../../shared/catalogReadiness";
-import { catalogCardGallery } from "../../shared/catalogMedia";
+import { catalogCreationImageEligible } from "../../shared/catalogMedia";
 import type { DraftSaveHook } from "../lib/mcpDraftReceipt";
 import { productOverlayPreview } from "../lib/productOverlayPreview";
 import {
@@ -310,27 +310,7 @@ export async function loadInputs(
         )
       ).source
     : undefined;
-  const represented = ids.length
-    ? await db
-        .select()
-        .from(productComponents)
-        .where(
-          and(
-            eq(productComponents.organizationId, organizationId),
-            inArray(productComponents.parentProductId, ids)
-          )
-        )
-    : [];
-  const selectableImages = images.filter(
-    image =>
-      catalogCardGallery(
-        [image],
-        catalog.find(p => p.id === image.productId)?.mediaGroups,
-        represented
-          .filter(link => link.parentProductId === image.productId)
-          .map(link => link.groupId)
-      ).images.length > 0
-  );
+  const selectableImages = images.filter(catalogCreationImageEligible);
   return {
     ...(enhancement ? { enhancement } : {}),
     references: [
@@ -517,6 +497,7 @@ export async function runBuilderJob(
           })
         );
         let productOverlayApplied = false;
+        let productMeasurements: import("../../shared/productOverlay").ProductAlignmentMeasurement[] | undefined;
         let automaticFailure:
           | "source_resolution"
           | "alignment_unavailable"
@@ -547,6 +528,7 @@ export async function runBuilderJob(
             image = { ...image, storageKey: stored.key, url: stored.url };
             preparedProductLayers = finished.layers;
             productOverlayApplied = true;
+            productMeasurements = finished.measurements;
           } catch (error) {
             automaticFailureDiagnostic = productOverlayFailureDiagnostic(
               error,
@@ -647,6 +629,7 @@ export async function runBuilderJob(
                     applied: productOverlayApplied,
                     automaticFailure,
                     automaticFailureDiagnostic,
+                    measurements: productMeasurements,
                     alignment: productOverlayApplied
                       ? "automatic"
                       : "needs_adjustment",
@@ -1142,6 +1125,7 @@ export const creativeBuilderRouter = router({
         applied: metadata.applied,
         automaticFailure: metadata.automaticFailure,
         automaticFailureDiagnostic: metadata.automaticFailureDiagnostic,
+        measurements: input.replacements.length ? undefined : metadata.measurements,
         alignment: metadata.alignment,
         layers,
         replacementSources: (

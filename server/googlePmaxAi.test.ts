@@ -245,3 +245,35 @@ it("rejects excessive or empty requested sets before calling the generator", asy
   }
   expect(mock.generate).not.toHaveBeenCalled();
 });
+
+it("uses shared Display generation without the PMAX short-headline requirement", async () => {
+  const output = {
+    headlines: ["A longer display headline"],
+    longHeadlines: ["Display long headline"],
+    descriptions: ["Display description"],
+  };
+  mock.generate.mockImplementation((_instruction, _context, schema) =>
+    schema.parse(output)
+  );
+  const context = {
+    brand: { name: "Brand" },
+    products: [{ name: "Verified product" }],
+  };
+  await expect(
+    generatePmaxCopy(
+      context,
+      undefined,
+      {
+        adType: "DISPLAY",
+        counts: { headlines: 1, longHeadlines: 1, descriptions: 1 },
+      },
+      ["image-data"]
+    )
+  ).resolves.toEqual(output);
+  expect(mock.generate.mock.calls[0][0]).toContain("Responsive Display");
+  expect(mock.generate.mock.calls[0][0]).not.toContain(
+    "Include at least one headline of at most 15"
+  );
+  expect(mock.generate.mock.calls[0][1].context).toBe(context);
+  expect(mock.generate.mock.calls[0][3]).toEqual(["image-data"]);
+});

@@ -1232,7 +1232,7 @@ function Configurator({
       return (
         <>
           <ProductCategoryContext
-            allowUnmapped={isImage}
+            allowUnmapped
             products={factProducts}
             handling={isImage ? image.categoryHandling : video.categoryHandling}
             onChange={value =>
@@ -1276,7 +1276,7 @@ function Configurator({
       return (
         <>
           <ProductCategoryContext
-            allowUnmapped={isImage}
+            allowUnmapped
             products={factProducts}
             handling={isImage ? image.categoryHandling : video.categoryHandling}
             onChange={value =>
@@ -1614,7 +1614,7 @@ function Configurator({
         <div className="cfg-form">
           <GenerationBrandContext organizationId={organizationId} />
           <ProductCategoryContext
-            allowUnmapped={isImage}
+            allowUnmapped
             products={factProducts}
             handling={isImage ? image.categoryHandling : video.categoryHandling}
             onChange={value =>

@@ -181,6 +181,9 @@ function executionReviewConfig(graph: WorkflowGraph) {
         modelId: n.config.modelId ?? null,
         modelOptions: n.config.modelOptions ?? null,
         imageKey: n.config.imageKey,
+        ...(n.config.imageKeys?.length
+          ? { imageKeys: n.config.imageKeys }
+          : {}),
         field: n.config.field ?? null,
         fieldValue: n.config.fieldValue ?? null,
         inputType: n.config.inputType ?? null,

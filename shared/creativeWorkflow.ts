@@ -2,6 +2,7 @@ import { analysisQuerySchema, optimizerSchema } from "./optimization";
 import { optimizationStudioSchema } from "./optimizationStudioSchema";
 import { copyComparisonSchema } from "./copyEvidence";
 import { z } from "zod";
+import { WORKFLOW_PRODUCT_IMAGE_LIMIT } from "./imageReferences";
 import { performanceInputSchema, appFieldSchema } from "./workflowInputs";
 import {
   rangeSchema,
@@ -25,7 +26,7 @@ export const workflowRoles = [
 import {
   generationModel,
   modelOptionsSchema,
-  referenceCapacity,
+  imageReferenceBudget,
   requiresVideo,
 } from "./modelCatalog";
 import { videoDirectionSchema, defaultVideoDirection } from "./videoCreation";
@@ -580,6 +581,23 @@ export const workflowNodeSchema = z.object({
       .regex(/^(asset|creative|product_image):[1-9][0-9]*$/)
       .nullable()
       .default(null),
+    imageKeys: z
+      .array(
+        z
+          .string()
+          .regex(/^product_image:[1-9][0-9]*$/)
+          .refine(
+            key => Number(key.split(":")[1]) <= 2147483647,
+            "Invalid image reference"
+          )
+      )
+      .min(1)
+      .max(WORKFLOW_PRODUCT_IMAGE_LIMIT)
+      .refine(
+        keys => new Set(keys).size === keys.length,
+        "Choose each image once"
+      )
+      .optional(),
     ratio: z.string().max(20).default("1:1"),
     duration: z.number().int().min(1).max(120).default(5),
     resolution: z.string().max(20).default("720p"),
@@ -767,6 +785,41 @@ export function workflowSignature(graph: WorkflowGraph, nodeId: string) {
       .map(({ source, target, port }) => ({ source, target, port })),
   });
 }
+export function workflowNodeImageKeys(node: WorkflowNode): string[] {
+  if (!["image", "app_input"].includes(node.type)) return [];
+  return node.type === "app_input" && node.config.imageKeys?.length
+    ? node.config.imageKeys
+    : node.config.imageKey
+      ? [node.config.imageKey]
+      : [];
+}
+/** Count expanded references before paid work, including pass-through nodes. */
+export function workflowImageOutputCount(
+  graph: WorkflowGraph,
+  id: string,
+  seen = new Set<string>()
+): number {
+  if (seen.has(id)) return 0;
+  const node = graph.nodes.find(n => n.id === id);
+  if (!node) return 0;
+  const own = workflowNodeImageKeys(node).length;
+  if (
+    ["app_input", "app_output", "review", "wait", "output"].includes(node.type)
+  ) {
+    const next = new Set(seen).add(id);
+    return (
+      own +
+      graph.edges
+        .filter(e => e.target === id)
+        .reduce(
+          (n, e) => n + workflowImageOutputCount(graph, e.source, next),
+          0
+        )
+    );
+  }
+  if (node.type === "image") return own || 1;
+  return node.type === "generate_image" ? 1 : 0;
+}
 export function workflowRunProblem(
   graph: WorkflowGraph,
   selected?: Set<string>
@@ -792,14 +845,17 @@ export function workflowRunProblem(
     ) {
       if (!model || `generate_${model.kind}` !== node.type)
         return `Choose a compatible model for “${node.title}”.`;
-      const images = graph.edges.filter(
-        e => e.target === node.id && e.port === "image"
-      ).length;
+      const images = graph.edges
+        .filter(e => e.target === node.id && e.port === "image")
+        .reduce(
+          (count, edge) => count + workflowImageOutputCount(graph, edge.source),
+          0
+        );
       const video =
         !!node.config.sourceVideoKey ||
         graph.edges.some(e => e.target === node.id && e.port === "video");
-      if (images > referenceCapacity(model))
-        return `${model.name} supports ${referenceCapacity(model)} reference images. Remove extra connections from “${node.title}” or choose another model.`;
+      if (images > imageReferenceBudget(model).total)
+        return `${model.name} supports ${imageReferenceBudget(model).total} total reference images. Remove extra selected views or connections from “${node.title}” or choose another model.`;
       if (
         !images &&
         (model.inputSchema.required ?? []).some(k =>

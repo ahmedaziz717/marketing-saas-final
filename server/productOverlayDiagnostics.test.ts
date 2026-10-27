@@ -17,8 +17,14 @@ const base = {
   height: 600,
   confidence: 0.99,
   sameAngle: true,
+  sourceBody: { left: 0, top: 0, width: 1000, height: 1000, confidence: 0.99 },
 };
 it.each([
+  [{ ...base, sourceBody: undefined }, "invalid_response"],
+  [
+    { ...base, sourceBody: { ...base.sourceBody, confidence: 0.5 } },
+    "low_confidence",
+  ],
   [{ ...base, confidence: 0.7 }, "low_confidence"],
   [{ ...base, sameAngle: false }, "camera_angle"],
   [{ ...base, width: 600 }, "aspect_mismatch"],
@@ -119,3 +125,37 @@ it.each([
     });
   }
 );
+
+it("uses one included analysis call and retains bounded body diagnostics", async () => {
+  mocks.invoke.mockClear();
+  mocks.invoke.mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify({ products: [base] }) } }],
+  });
+  const design = await sharp({
+    create: { width: 1000, height: 1000, channels: 4, background: "blue" },
+  })
+    .png()
+    .toBuffer();
+  const png = await sharp({
+    create: { width: 400, height: 800, channels: 4, background: "red" },
+  })
+    .png()
+    .toBuffer();
+  const result = await automaticProductOverlay(
+    design,
+    [{ png, width: 400, height: 800, sourceKey: "private", sha256: "hash" }],
+    { width: 1000, height: 1000 }
+  );
+  expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  expect(mocks.invoke.mock.calls[0][0].includedInAction).toBe(true);
+  expect(result.measurements[0]).toMatchObject({
+    anchorMode: "physical_body",
+    sourceConfidence: 0.99,
+    targetConfidence: 0.99,
+    normalizedSourceBody: base.sourceBody,
+  });
+  expect(result.layers[0]).toMatchObject({
+    sourceKey: "private",
+    sha256: "hash",
+  });
+});

@@ -77,7 +77,7 @@ it("does not confuse asset and catalog IDs", () => {
   expect(check.disabled).toBe(true);
 });
 
-it("presents pending chassis separately without selecting represented parent images", () => {
+it("allows represented parent images alongside pending chassis", () => {
   const toggle = vi.fn();
   const group = {
     id: "case",
@@ -109,7 +109,6 @@ it("presents pending chassis separately without selecting represented parent ima
           media,
           representedGroupIds: ["case"],
           mediaGroups: [group],
-          unavailableReason: "Choose the separate component card.",
         },
         {
           ...photo("product_image:3", 8, "/case.png"),
@@ -130,12 +129,12 @@ it("presents pending chassis separately without selecting represented parent ima
     )
   ).toBeTruthy();
   expect(screen.getAllByRole("checkbox")).toHaveLength(2);
-  expect(
-    (screen.getAllByRole("checkbox")[1] as HTMLInputElement).disabled
-  ).toBe(false);
-  expect(toggle).not.toHaveBeenCalled();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Remove saved reference" })
-  );
+  fireEvent.change(screen.getAllByRole("combobox")[0], {
+    target: { value: "case" },
+  });
+  const selected = screen.getAllByRole("checkbox")[0] as HTMLInputElement;
+  expect(selected.disabled).toBe(false);
+  expect(selected.checked).toBe(true);
+  fireEvent.click(selected);
   expect(toggle).toHaveBeenCalledWith("product_image:2");
 });

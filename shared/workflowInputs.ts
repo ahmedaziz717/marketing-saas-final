@@ -3,6 +3,7 @@ import {
   artStyleInfluenceDirection,
 } from "./artStyleInfluence";
 import { z } from "zod";
+import { WORKFLOW_PRODUCT_IMAGE_LIMIT } from "./imageReferences";
 import { rangeSchema, connectionChannelSchema } from "./channels";
 export const performanceInputSchema = z.object({
   connectionId: z.string().uuid(),
@@ -100,12 +101,41 @@ export const workflowMediaSelectionSchema = z
         "Invalid image reference"
       )
       .optional(),
+    imageKeys: z
+      .array(
+        z
+          .string()
+          .regex(/^product_image:[1-9][0-9]*$/)
+          .refine(
+            value => Number(value.split(":")[1]) <= 2147483647,
+            "Invalid image reference"
+          )
+      )
+      .min(1)
+      .max(WORKFLOW_PRODUCT_IMAGE_LIMIT)
+      .refine(
+        keys => new Set(keys).size === keys.length,
+        "Choose each image once"
+      )
+      .optional(),
     featuredSpecKeys: z.array(z.string().min(1).max(500)).max(20).default([]),
     includePrice: z.boolean().default(false),
     includeDescription: z.boolean().default(true),
     includeLink: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.imageKeys &&
+      (!value.productId ||
+        (value.imageKey && value.imageKey !== value.imageKeys[0]))
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Choose ordered views of one product; the primary image must be first.",
+      });
+  });
 export type WorkflowMediaSelection = z.infer<
   typeof workflowMediaSelectionSchema
 >;
@@ -153,7 +183,13 @@ export function parseWorkflowMediaSelection(
   )
     return workflowMediaSelectionSchema.safeParse({ imageKey: value }).data;
   try {
-    return workflowMediaSelectionSchema.safeParse(JSON.parse(value)).data;
+    const selected = workflowMediaSelectionSchema.safeParse(
+      JSON.parse(value)
+    ).data;
+    if (kind === "asset" && selected?.imageKeys) return undefined;
+    return selected?.imageKeys
+      ? { ...selected, imageKey: selected.imageKeys[0] }
+      : selected;
   } catch {
     return undefined;
   }

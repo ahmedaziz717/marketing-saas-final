@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
@@ -119,13 +120,18 @@ beforeAll(async () => {
     },
   ]);
   await db.insert(products).values(
-    [1, 2, 3].map(productId => ({
+    [1, 2, 3, 4].map(productId => ({
       id: productId,
       organizationId: productId === 2 ? 2 : 1,
       name: `Product ${productId}`,
       productUrl: `https://products.example/${productId}`,
       dedupeKey: `runtime-${productId}`,
-      status: productId === 3 ? ("pending" as const) : ("approved" as const),
+      status:
+        productId === 3
+          ? ("pending" as const)
+          : productId === 4
+            ? ("rejected" as const)
+            : ("approved" as const),
       specifications: { Color: "Black" },
       provenance: {},
       createdAtMs: 1,
@@ -145,6 +151,37 @@ beforeAll(async () => {
   );
 });
 afterAll(() => engine.close());
+it("expands a legacy image node product field into a multi-view App input", async () => {
+  await db
+    .insert(productImages)
+    .values({
+      id: 3,
+      organizationId: 1,
+      productId: 1,
+      url: "https://images.example/alternate.png",
+      sourceUrl: "https://images.example/alternate.png",
+      storageKey: "org-1/products/alternate.png",
+      createdAtMs: 1,
+    });
+  const node = newWorkflowNode("image", "legacy-product");
+  node.config.field = appFieldSchema.parse({ kind: "product" });
+  node.config.fieldValue = JSON.stringify({
+    productId: 1,
+    imageKey: "product_image:1",
+    imageKeys: ["product_image:1", "product_image:3"],
+  });
+  const result = await resolveWorkflowInputs(db as any, 1, {
+    nodes: [node],
+    edges: [],
+  });
+  expect(result.nodes[0].type).toBe("app_input");
+  expect(result.nodes[0].config.imageKeys).toEqual([
+    "product_image:1",
+    "product_image:3",
+  ]);
+  expect(result.nodes[0].config.imageKey).toBe("product_image:1");
+});
+
 it("bounds strict input contracts and rejects duplicate IDs, conflicting payloads and unknown fields", () => {
   const base = { organizationId: 1, id, revision: 1 };
   expect(
@@ -238,7 +275,7 @@ it("keeps legacy text/image payload compatibility while rejecting wrong payload 
     applyWorkflowRunInputs(graph, [{ id: "copy", imageKey: "asset:1" }])
   ).toThrow("text");
 });
-it("resolves only approved owned product facts and matching image IDs", async () => {
+it("resolves owned draft facts without approving pending records and rejects foreign/rejected/mismatched references", async () => {
   const graph: WorkflowGraph = {
     nodes: [typed("product", { kind: "product" })],
     edges: [],
@@ -249,9 +286,18 @@ it("resolves only approved owned product facts and matching image IDs", async ()
     applyWorkflowRunInputs(graph, [{ id: "product", value: "1" }])
   );
   expect(resolved.nodes[0].config.text).toContain("Product 1");
+  const pending = await resolveWorkflowInputs(
+    db as any,
+    1,
+    applyWorkflowRunInputs(graph, [{ id: "product", value: "3" }])
+  );
+  expect(pending.nodes[0].config.text).toContain("Product 3");
+  expect(
+    (await db.select().from(products).where(eq(products.id, 3)))[0].status
+  ).toBe("pending");
   for (const value of [
     "2",
-    "3",
+    "4",
     JSON.stringify({ productId: 1, imageKey: "product_image:2" }),
   ])
     await expect(

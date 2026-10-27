@@ -66,7 +66,7 @@ const approvedParent = {
   ],
 };
 
-it("includes tenant-owned pending components for browsing with an unavailable reason", async () => {
+it("includes tenant-owned pending components for draft use without approving them", async () => {
   const pending = {
     ...approvedParent,
     status: "pending",
@@ -81,25 +81,19 @@ it("includes tenant-owned pending components for browsing with an unavailable re
   });
   expect(result.products[0]).toMatchObject({
     componentKind: "Chassis",
-    unavailableReason: "Review needed in Catalog before use.",
+    unavailableReason: null,
+    reviewNotice: "Draft use allowed. Review product facts before publishing.",
   });
-  expect(db.predicates[0].params).toEqual([3, "approved"]);
+  expect(db.predicates[0].params).toEqual([3, "approved", "pending"]);
   expect(db.predicates[0].sql).toContain("->>'component.kind' is not null");
 });
 
-it("rejects represented parent component photos at execution without rewriting legacy selections", async () => {
-  const db = resolutionDatabase([
-    [parentImage],
-    [approvedParent],
-    [{ groupId: "chassis:case" }],
-  ]);
+it("allows represented component photos for creation without rewriting their identity", async () => {
+  const db = resolutionDatabase([[parentImage], [approvedParent]]);
   await expect(
     resolveWorkflowMedia(db as any, 3, executionField, "product_image:800")
-  ).rejects.toThrow("separate component card");
-  expect(db.predicates[2].sql).toContain(
-    '"product_components"."organizationId"'
-  );
-  expect(db.predicates[2].params).toEqual([3, 7]);
+  ).resolves.toMatchObject({ imageKey: "product_image:800" });
+  expect(db.predicates[0].params).toEqual([3, 800]);
 });
 
 it("keeps a shared genuine system view eligible when only its component reference is represented", async () => {
@@ -123,7 +117,7 @@ it("keeps a shared genuine system view eligible when only its component referenc
 });
 
 it.each(["ineligible", "withdrawn", "missing"])(
-  "rejects a represented option when its shared system reference is %s",
+  "allows creation regardless of represented system reference classification: %s",
   async state => {
     const image = {
       ...parentImage,
@@ -152,16 +146,16 @@ it.each(["ineligible", "withdrawn", "missing"])(
     ]);
     await expect(
       resolveWorkflowMedia(db as any, 3, executionField, "product_image:800")
-    ).rejects.toThrow("separate component card");
+    ).resolves.toMatchObject({ imageKey: "product_image:800" });
   }
 );
 
-it("does not accept a pending component or an image outside the tenant", async () => {
+it("rejects an unavailable product or an image outside the tenant", async () => {
   const pending = resolutionDatabase([[{ ...parentImage, productId: 90 }], []]);
   await expect(
     resolveWorkflowMedia(pending as any, 3, executionField, "product_image:800")
-  ).rejects.toThrow("has not been approved");
-  expect(pending.predicates[1].params).toEqual([3, 90, "approved"]);
+  ).rejects.toThrow("unavailable in this workspace");
+  expect(pending.predicates[1].params).toEqual([3, 90, "approved", "pending"]);
   const foreign = resolutionDatabase([[]]);
   await expect(
     resolveWorkflowMedia(foreign as any, 3, executionField, "product_image:800")
@@ -321,4 +315,53 @@ it("returns original gallery identity and primary metadata without flattening or
       media,
     },
   ]);
+});
+
+it("resolves all ten ordered views of one pending SKU with per-view tenant and product guards", async () => {
+  const keys = Array.from({ length: 10 }, (_, i) => `product_image:${800 + i}`);
+  const db = resolutionDatabase(
+    keys.flatMap((_, i) => [
+      [{ ...parentImage, id: 800 + i }],
+      [{ ...approvedParent, status: "pending" }],
+    ])
+  );
+  const field = appFieldSchema.parse({ kind: "product" });
+  const result = await resolveWorkflowMedia(
+    db as any,
+    3,
+    field,
+    JSON.stringify({ productId: 7, imageKey: keys[0], imageKeys: keys })
+  );
+  expect(result.imageKeys).toEqual(keys);
+  expect(result.imageKey).toBe(keys[0]);
+  for (let i = 0; i < 10; i++) {
+    expect(db.predicates[i * 2].params).toEqual([3, 800 + i]);
+    expect(db.predicates[i * 2 + 1].params).toEqual([
+      3,
+      7,
+      "approved",
+      "pending",
+    ]);
+  }
+});
+it("rejects a mismatched or retired later image rather than silently dropping it", async () => {
+  const field = appFieldSchema.parse({ kind: "product" });
+  const value = JSON.stringify({
+    productId: 7,
+    imageKeys: ["product_image:800", "product_image:801"],
+  });
+  for (const second of [
+    { ...parentImage, id: 801, productId: 99 },
+    { ...parentImage, id: 801, media: { ...parentImage.media, retired: true } },
+  ]) {
+    const db = resolutionDatabase([
+      [parentImage],
+      [approvedParent],
+      [second],
+      [approvedParent],
+    ]);
+    await expect(
+      resolveWorkflowMedia(db as any, 3, field, value)
+    ).rejects.toThrow(/belonging|retired/);
+  }
 });

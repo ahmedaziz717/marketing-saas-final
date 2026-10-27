@@ -1,3 +1,4 @@
+import { googleCopyCapabilities } from "@shared/googleCopy";
 import { useEffect, useRef, useState } from "react";
 import {
   googleImageMatches,
@@ -760,6 +761,7 @@ export function AdEditor({
   onChange: (ad: GoogleAdContent) => void;
 }) {
   const patch = (p: Partial<GoogleAdContent>) => onChange({ ...ad, ...p });
+  const copyCapabilities=googleCopyCapabilities(type === "DISPLAY" ? "DISPLAY" : "PERFORMANCE_MAX");
   return (
     <>
       {part === "creative" && (
@@ -788,18 +790,19 @@ export function AdEditor({
       )}
       {part === "copy" && (
         <>
-          {type === "PERFORMANCE_MAX" && (
+          {["PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <>
               <p aria-live="polite">
-                Headlines: {ad.headlines.filter(v => v.trim()).length}/3
-                required (15 maximum). Descriptions:{" "}
-                {ad.descriptions.filter(v => v.trim()).length}/2 required (5
+                Headlines: {ad.headlines.filter(v => v.trim()).length}/{copyCapabilities.minimums.headlines}
+                required ({copyCapabilities.specs.headlines.maximum} maximum). Descriptions:{" "}
+                {ad.descriptions.filter(v => v.trim()).length}/{copyCapabilities.minimums.descriptions} required ({copyCapabilities.specs.descriptions.maximum}
                 maximum). Long headlines:{" "}
                 {(ad.longHeadline?.trim() ? 1 : 0) +
                   ad.assets.filter(a => a.field === "LONG_HEADLINE").length}
-                /1 required (5 maximum).
+                /1 required ({copyCapabilities.specs.longHeadlines.maximum} maximum).
               </p>
               <GooglePmaxCopyEditor
+                adType={type === "DISPLAY" ? "DISPLAY" : "PERFORMANCE_MAX"}
                 organizationId={organizationId}
                 connectionId={connectionId}
                 assets={[
@@ -858,7 +861,7 @@ export function AdEditor({
               />
             </>
           )}
-          {!["SHOPPING", "PERFORMANCE_MAX"].includes(type) && (
+          {!["SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <div aria-live="polite">
               {(
                 [
@@ -879,7 +882,7 @@ export function AdEditor({
               )}
             </div>
           )}
-          {!["SHOPPING", "PERFORMANCE_MAX"].includes(type) && (
+          {!["SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <>
               <Field title="Headlines · one per line · 30 characters each">
                 <textarea
@@ -902,16 +905,6 @@ export function AdEditor({
                 />
               </Field>
             </>
-          )}
-          {type === "DISPLAY" && (
-            <Field title="Long headline · up to 90 characters">
-              <input
-                maxLength={90}
-                data-google-field="ad.longHeadline"
-                value={ad.longHeadline ?? ""}
-                onChange={e => patch({ longHeadline: e.target.value })}
-              />
-            </Field>
           )}
           {["DISPLAY", "PERFORMANCE_MAX", "DEMAND_GEN"].includes(type) && (
             <Field title="Business name · up to 25 characters">
