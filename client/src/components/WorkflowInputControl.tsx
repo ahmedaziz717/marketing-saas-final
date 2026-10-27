@@ -1,3 +1,4 @@
+import type { ModelInputSelection } from "@shared/modelInputCompatibility";
 import { WorkflowChoiceInput } from "./WorkflowChoiceInput";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
 import { WorkflowConnectionInput } from "./WorkflowConnectionInput";
@@ -24,6 +25,7 @@ export function WorkflowInputControl({
   productIds = [],
   imageKeys = [],
   referenceBudget,
+  modelInputStates,
 }: {
   field: AppField;
   title: string;
@@ -35,6 +37,7 @@ export function WorkflowInputControl({
   productIds?: number[];
   imageKeys?: string[];
   referenceBudget?: { limit: number; modelName: string; reserved: number };
+  modelInputStates?: ModelInputSelection[];
 }) {
   const [proposals, setProposals] = useState<InputChoice[]>([]);
   const assist = trpc.workflows.assistInput.useMutation();
@@ -45,6 +48,7 @@ export function WorkflowInputControl({
       {field.kind === "model" ? (
         <WorkflowModelInput
           field={field}
+          inputStates={modelInputStates}
           title={title}
           value={value}
           onChange={onChange}

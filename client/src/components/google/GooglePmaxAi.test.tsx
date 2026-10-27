@@ -85,6 +85,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 import { GooglePmaxAi } from "./GooglePmaxAi";
+import { GoogleCopyEditor } from "./GooglePmaxCopyEditor";
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
@@ -427,3 +428,49 @@ it("uses shared Display generation with 5/1/5 counts and selected asset context"
   });
   expect(onAdd).not.toHaveBeenCalled();
 });
+
+it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
+  "compares proposed and selected %s copy without implicit acceptance",
+  async adType => {
+    const onChange = vi.fn();
+    render(
+      <GoogleCopyEditor
+        organizationId={7}
+        connectionId="account"
+        adType={adType}
+        assets={[
+          {
+            field: "HEADLINE",
+            source: { kind: "text", text: "Selected headline" },
+          },
+        ]}
+        onChange={onChange}
+      />
+    );
+    const proposed = screen.getByRole("region", { name: "Proposed copy" });
+    const selected = screen.getByRole("region", {
+      name: "Selected copy for this draft",
+    });
+    expect(proposed.parentElement).toBe(selected.parentElement);
+    expect(proposed.parentElement?.className).toBe("google-copy-comparison");
+    expect(
+      within(selected).getByDisplayValue("Selected headline")
+    ).toHaveProperty("rows", 1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create suggestions with AI" })
+    );
+    await within(proposed).findByDisplayValue("New headline");
+    expect(within(selected).queryByDisplayValue("New headline")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(proposed).getAllByRole("button", { name: "Add to draft" })[0]
+    );
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        field: "HEADLINE",
+        source: { kind: "text", text: "Selected headline" },
+      },
+      { field: "HEADLINE", source: { kind: "text", text: "New headline" } },
+    ]);
+  }
+);

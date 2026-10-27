@@ -632,6 +632,7 @@ export type WorkflowValue =
       url: string;
       name: string;
       fingerprint: string;
+      catalogSourceVersion?: 2;
       context?: string;
     };
 export type WorkflowStep = {

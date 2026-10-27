@@ -13,11 +13,18 @@ import {
   defaultWorkflowModel,
   type WorkflowModelKind,
 } from "@shared/workflowModelCatalog";
+import { workflowModelFieldDefaults } from "@shared/workflowModels";
 import {
-  workflowModelCompatibility,
-  workflowModelFieldDefaults,
-} from "@shared/workflowModels";
-import { generationModel, modelDefaults } from "@shared/modelCatalog";
+  generationModel,
+  modelDefaults,
+  modelOptionsProblem,
+} from "@shared/modelCatalog";
+import {
+  modelInputCompatibility,
+  modelInputGuidance,
+  type ModelInputSelection,
+} from "@shared/modelInputCompatibility";
+import { workflowTargetInputState } from "./WorkflowModelInputs";
 
 function useModelCatalog(organizationId: number, kind?: WorkflowModelKind) {
   const media = trpc.models.catalog.useQuery(
@@ -81,15 +88,31 @@ export function WorkflowModelInput({
   value,
   onChange,
   organizationId,
+  inputStates,
 }: {
   field: AppField;
   title: string;
   value: string;
   onChange: (value: string) => void;
   organizationId: number;
+  inputStates?: ModelInputSelection[];
 }) {
   const catalog = useModelCatalog(organizationId, field.modelKind);
   const allowed = field.allowedModelIds ?? [];
+  const routeModel = (id: string) => {
+    const route = catalog.data?.find(m => m.id === id);
+    return generationModel(route && "routeId" in route ? route.routeId : id);
+  };
+  const compatibility = (id: string) => {
+    const media = routeModel(id);
+    return media
+      ? (inputStates
+          ?.map(input =>
+            modelInputCompatibility(media, input, { discovery: true })
+          )
+          .find(Boolean) ?? null)
+      : null;
+  };
   return (
     <div className="wf-model-input space-y-2">
       <ChoiceField>
@@ -97,15 +120,28 @@ export function WorkflowModelInput({
           density="compact"
           aria-label={title}
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => {
+            if (!compatibility(e.target.value)) onChange(e.target.value);
+          }}
           disabled={field.locked || allowed.length === 1 || !catalog.data}
         >
           {allowed.map(id => {
             const model = catalog.data?.find(m => m.id === id);
             return (
-              <option key={id} value={id} disabled={!model?.available}>
+              <option
+                key={id}
+                value={id}
+                disabled={!model?.available || !!compatibility(id)}
+              >
                 {workflowModel(id)?.name ?? id}
-                {model?.available ? "" : " · unavailable"}
+                {generationModel(id)
+                  ? ` · ${generationModel(id)!.variant}`
+                  : ""}
+                {model?.available
+                  ? compatibility(id)
+                    ? " · incompatible with selected inputs"
+                    : ""
+                  : " · unavailable"}
               </option>
             );
           })}
@@ -116,6 +152,27 @@ export function WorkflowModelInput({
           ? "One model set by the App creator."
           : "Choose one model from the options allowed by the App creator. Credits update when you review the run."}
       </small>
+      <ul className="space-y-2 text-xs" aria-label="Model input compatibility">
+        {allowed.map(id => {
+          const media = generationModel(id);
+          const route = routeModel(id);
+          const reason = compatibility(id);
+          return media ? (
+            <li
+              key={id}
+              className={reason ? "text-muted-foreground" : undefined}
+            >
+              <strong>
+                {media.name} · {media.variant}
+              </strong>
+              <span className="block">
+                {modelInputGuidance(route ?? media)}
+              </span>
+              {reason && <span className="block">{reason}</span>}
+            </li>
+          ) : null;
+        })}
+      </ul>
       {catalog.error && (
         <p role="alert">Could not load model availability. Try again.</p>
       )}
@@ -298,12 +355,22 @@ export function WorkflowModelFieldEditor({
               const reason =
                 m.reason ||
                 (target
-                  ? workflowModelCompatibility(
-                      graph,
-                      target,
-                      "routeId" in m ? m.routeId : m.id,
-                      field.modelSettings?.[m.id]
-                    )
+                  ? (() => {
+                      const media = generationModel(
+                        "routeId" in m ? m.routeId : m.id
+                      );
+                      return media
+                        ? modelOptionsProblem(
+                            media,
+                            field.modelSettings?.[m.id] ?? modelDefaults(media)
+                          ) ||
+                            modelInputCompatibility(
+                              media,
+                              workflowTargetInputState(graph, target),
+                              { discovery: true }
+                            )
+                        : null;
+                    })()
                   : "Choose a generation step first.");
               return (
                 <label key={m.id}>
@@ -343,6 +410,15 @@ export function WorkflowModelFieldEditor({
                   />
                   <span>
                     {m.name}
+                    {generationModel(m.id) && (
+                      <small className="block">
+                        {generationModel(m.id)!.variant} ·{" "}
+                        {modelInputGuidance(
+                          generationModel("routeId" in m ? m.routeId : m.id) ??
+                            generationModel(m.id)!
+                        )}
+                      </small>
+                    )}
                     {reason && (
                       <small className="block text-muted-foreground">
                         {reason}

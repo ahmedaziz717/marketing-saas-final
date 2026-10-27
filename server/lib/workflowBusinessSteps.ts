@@ -148,6 +148,9 @@ export async function executeWorkflowBusinessStep(
         url: media.url,
         name: ref.name,
         fingerprint: ref.fingerprint,
+        ...(ref.catalogSourceVersion
+          ? { catalogSourceVersion: ref.catalogSourceVersion }
+          : {}),
         context: node.config.text || undefined,
       });
     }

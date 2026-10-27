@@ -1,3 +1,4 @@
+import { workflowTargetInputState } from "./WorkflowModelInputs";
 import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import {
   VisualSelect,
@@ -1362,6 +1363,10 @@ function WorkflowCanvasContent({
                   {!modelField && (
                     <>
                       <ModelPicker
+                        inputState={workflowTargetInputState(
+                          graph,
+                          selectedNode
+                        )}
                         organizationId={organizationId}
                         kind={
                           selectedNode.type === "generate_image"

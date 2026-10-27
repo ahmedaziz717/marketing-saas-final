@@ -828,7 +828,7 @@
 }
 .cfg-disabled-reason {
   color: var(--cfg-muted);
-  font-size: 10px;
+  font-size: 12px;
   margin: 6px 15px;
   line-height: 1.5;
 }

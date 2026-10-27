@@ -116,9 +116,11 @@ it("counts image references using the server's per-output grouping", () => {
 });
 it("explains compatibility without silently discarding sources", () => {
   const model = generationModel(DEFAULT_IMAGE_MODEL)!;
-  expect(modelCompatibility(model, 17, false)).toMatch(/16 image references/);
+  expect(modelCompatibility(model, 17, false)).toMatch(
+    /16 images; 17 selected/
+  );
   expect(modelCompatibility(model, 1, true)).toMatch(
-    /does not accept a source video/
+    /Does not accept a source video/
   );
   expect(modelCompatibility(model, 1, false)).toBeNull();
   const audio: ModelDefinition = {
@@ -148,4 +150,12 @@ it("uses each video model's defaults but keeps user sources and prompt for revie
     Number(model.inputSchema.properties.duration.default)
   );
   expect(after.modelId).toBe(model.id);
+});
+
+it("distinguishes extending a video from creating one from photos without changing the selected model", () => {
+  const extend = generationModel(
+    "higgsfield:bytedance/seedance-2.5/video-extend"
+  )!;
+  expect(modelCompatibility(extend, 2, false)).toMatch(/existing source video/);
+  expect(modelCompatibility(extend, 2, true)).toBeNull();
 });

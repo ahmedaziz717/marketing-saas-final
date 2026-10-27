@@ -91,10 +91,20 @@ const openaiModels: ModelDefinition[] = OPENAI_IMAGE_MODELS.map(model => ({
     "Token-based estimate; settled from reported input and output usage.",
   verifiedAt: Date.UTC(2026, 9, 5),
 }));
+/** Customer-facing roles, not provider endpoint names. IDs and input schemas stay intact. */
+export function modelVariantLabel(model: ModelDefinition): string {
+  if (model.providerModel === "bytedance/seedance-2.5/image-to-video")
+    return "First / last frame";
+  if (model.providerModel === "bytedance/seedance-2.5/reference-to-video")
+    return "Multiple reference images";
+  if (model.providerModel === "bytedance/seedance-2.5/video-extend")
+    return "Extend an existing video";
+  return model.variant;
+}
 export const generationModels: ModelDefinition[] = [
   ...openaiModels,
   ...(higgsfieldData as unknown as ModelDefinition[]),
-];
+].map(model => ({ ...model, variant: modelVariantLabel(model) }));
 export function generationModel(id: string) {
   return generationModels.find(m => m.id === id);
 }

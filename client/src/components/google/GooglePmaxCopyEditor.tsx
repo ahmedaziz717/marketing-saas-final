@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Field } from "./GoogleCampaignFields";
 import { GooglePmaxAi } from "./GooglePmaxAi";
+import { useGoogleFieldValidation } from "./GoogleValidation";
 
 export function GoogleCopyEditor({
   adType = "PERFORMANCE_MAX",
@@ -30,6 +31,11 @@ export function GoogleCopyEditor({
   ) => void;
 }) {
   const googleCopySpecs = googleCopyCapabilities(adType).specs;
+  const validation = {
+    headlines: useGoogleFieldValidation("ad.headlines"),
+    longHeadlines: useGoogleFieldValidation("ad.longHeadline"),
+    descriptions: useGoogleFieldValidation("ad.descriptions"),
+  };
   const occupied = [
     ...existing.map(a => a.field),
     ...assets
@@ -146,38 +152,45 @@ export function GoogleCopyEditor({
     }
     onChange(next);
   }
-  return (
-    <div>
-      <GooglePmaxAi
-        adType={adType}
-        organizationId={organizationId}
-        connectionId={connectionId}
-        assets={assets}
-        occupiedFields={occupied}
-        existingCopy={copy}
-        replacementOptions={replacements}
-        onReplace={replace}
-        onAdd={item => add([item])}
-        onApply={add}
-      />
-      <h3>Copy selected for this draft</h3>
-      <p>
-        Headlines are short titles; long headlines are Google's longer title
-        field, not a separate subheadline. Counts include retained Google
-        assets. Existing text stays in the campaign unless you explicitly select
-        it for replacement and activate the reviewed draft.
+  const selectedCopy = (
+    <section
+      className="google-copy-selected"
+      aria-label="Selected copy for this draft"
+    >
+      <h3>Selected for this draft</h3>
+      <p className="google-copy-help">
+        Counts include kept Google text. Nothing changes live until you review
+        and activate.
       </p>
       {googleCopyFields.map(key => {
         const spec = googleCopySpecs[key];
+        const errors = validation[key];
         const kept = existing.filter(a => a.field === spec.field);
         const drafted = assets
           .map((asset, index) => ({ asset, index }))
           .filter(({ asset }) => asset.field === spec.field);
         return (
-          <section key={key} aria-label={`${spec.label} draft editor`}>
+          <section
+            key={key}
+            className="google-copy-field-group"
+            aria-label={`${spec.label} draft editor`}
+            data-google-field={`ad.${key === "longHeadlines" ? "longHeadline" : key}`}
+            tabIndex={-1}
+          >
             <h4>
               {spec.label} · {kept.length + drafted.length}/{spec.maximum}
             </h4>
+            {errors.invalid && (
+              <div
+                id={errors.errorId}
+                className="google-field-error"
+                role="alert"
+              >
+                {errors.messages.map(message => (
+                  <p key={message}>{message}</p>
+                ))}
+              </div>
+            )}
             {!!kept.length && (
               <details>
                 <summary>
@@ -198,6 +211,14 @@ export function GoogleCopyEditor({
                 <div key={index} className="google-copy-suggestion">
                   <Field title={`${spec.label} ${order + 1}`}>
                     <textarea
+                      rows={key === "headlines" ? 1 : 2}
+                      aria-invalid={
+                        errors.invalid ||
+                        asset.source.text.length > spec.characters
+                      }
+                      aria-describedby={
+                        errors.invalid ? errors.errorId : undefined
+                      }
                       value={asset.source.text}
                       onChange={e =>
                         onChange(
@@ -263,7 +284,22 @@ export function GoogleCopyEditor({
           </section>
         );
       })}
-    </div>
+    </section>
+  );
+  return (
+    <GooglePmaxAi
+      adType={adType}
+      organizationId={organizationId}
+      connectionId={connectionId}
+      assets={assets}
+      occupiedFields={occupied}
+      existingCopy={copy}
+      replacementOptions={replacements}
+      onReplace={replace}
+      onAdd={item => add([item])}
+      onApply={add}
+      selectedCopy={selectedCopy}
+    />
   );
 }
 

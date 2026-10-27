@@ -1,3 +1,4 @@
+import { modelInputGuidance } from "@shared/modelInputCompatibility";
 import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { StudioRunBar } from "@/components/configurator/StudioRunBar";
 import { TaskPromptField } from "@/components/TaskPromptField";
@@ -450,15 +451,13 @@ function Configurator({
     : (video.direction ?? defaultVideoDirection);
   const selectedModel = models.data?.find(m => m.id === setup.modelId);
   const model = generationModel(selectedModel?.routeId ?? setup.modelId ?? "");
+  const missingVideoSource =
+    !isImage && !!model && requiresVideo(model) && !video.sourceVideoKey;
   const referenceCount = isImage
     ? imageReferenceCount(image)
     : videoReferenceCount(video);
-  const automaticCapability =
-    !isImage && video.sourceVideoKey
-      ? "video"
-      : referenceCount > 0
-        ? "references"
-        : "all";
+  // Keep incompatible choices discoverable with reasons; filtering is an explicit choice.
+  const automaticCapability = "all";
   const capability = capabilityOverrides[config.kind] ?? automaticCapability;
   const setCapability = (value: string) =>
     setCapabilityOverrides(previous => ({ ...previous, [config.kind]: value }));
@@ -578,6 +577,10 @@ function Configurator({
       issues.push(
         "Your current video request is still being processed. Follow its progress in the preview."
       );
+    if (missingVideoSource)
+      issues.push(
+        "This model needs an existing source video. Add a clip in Subject & sources, or choose Create from images."
+      );
     const problem = videoSetupProblem(video);
     if (problem) issues.push(problem);
     if (!video.prompt.trim())
@@ -680,21 +683,30 @@ function Configurator({
       ? quote.data?.credits
       : undefined;
   const ready = credits !== undefined && !busy && !(isImage && pendingImageJob);
+  const exactVideoQuoteFailed = !isImage && sameQuote && !!quote.error;
   const estimateCredits =
-    credits ?? planning.data?.credits ?? selectedModel?.estimatedCredits;
-  const quoteLabel =
-    estimateCredits != null
-      ? `${credits === undefined ? "≈ " : ""}${estimateCredits.toLocaleString()} credits`
-      : planning.error
-        ? "Credits unavailable"
-        : "Calculating credits…";
-  const creditDetail =
-    credits !== undefined
-      ? "Total for this creative"
-      : !sameQuote || planning.isFetching
-        ? "Updating with your choices…"
-        : (planning.data?.assumptions ??
-          "Select a model to see its credit estimate");
+    exactVideoQuoteFailed || missingVideoSource
+      ? undefined
+      : (credits ?? planning.data?.credits ?? selectedModel?.estimatedCredits);
+  const quoteLabel = exactVideoQuoteFailed
+    ? "Exact quote unavailable"
+    : missingVideoSource
+      ? "Source video required for pricing"
+      : estimateCredits != null
+        ? `${credits === undefined ? "≈ " : ""}${estimateCredits.toLocaleString()} credits`
+        : planning.error
+          ? "Credits unavailable"
+          : "Calculating credits…";
+  const creditDetail = exactVideoQuoteFailed
+    ? "This setup cannot currently be priced. Refresh credits or choose another model; no generation has started."
+    : missingVideoSource
+      ? "Add an existing clip or choose Create from images."
+      : credits !== undefined
+        ? "Total for this creative"
+        : !sameQuote || planning.isFetching
+          ? "Updating with your choices…"
+          : (planning.data?.assumptions ??
+            "Select a model to see its credit estimate");
   const comparisonModels = (models.data ?? []).filter(
     m =>
       m.kind === config.kind &&
@@ -1031,6 +1043,9 @@ function Configurator({
               <button
                 className="cfg-choice"
                 disabled={!!c.reason}
+                aria-describedby={
+                  c.reason ? `choice-reason-${category}-${c.id}` : undefined
+                }
                 aria-pressed={selected.includes(c.id)}
                 aria-label={"Select " + c.title}
                 onClick={() => onSelect(c.id)}
@@ -1061,7 +1076,14 @@ function Configurator({
                   {c.footer && <div className="cfg-card-foot">{c.footer}</div>}
                 </div>
               </button>
-              {c.reason && <p className="cfg-disabled-reason">{c.reason}</p>}
+              {c.reason && (
+                <p
+                  id={`choice-reason-${category}-${c.id}`}
+                  className="cfg-disabled-reason"
+                >
+                  {c.reason}
+                </p>
+              )}
               {c.notice && <p className="cfg-disabled-reason">{c.notice}</p>}
               <div className="cfg-card-tools">
                 <button
@@ -1822,16 +1844,23 @@ function Configurator({
       const makers = Array.from(new Set(list.map(m => m.maker))).sort();
       const inputChoices = [
         { id: "all", name: "All inputs" },
-        { id: "prompt", name: "Text prompt" },
-        { id: "references", name: "Reference images" },
-        ...(!isImage ? [{ id: "video", name: "Source video" }] : []),
+        {
+          id: "prompt",
+          name: isImage ? "Text prompt" : "Create from a prompt",
+        },
+        {
+          id: "references",
+          name: isImage ? "Reference images" : "Create from images",
+        },
+        ...(!isImage ? [{ id: "video", name: "Edit or extend a video" }] : []),
       ];
       const visible = list.filter(m => {
         const d = generationModel(m.routeId);
         return (
           d &&
           (maker === "all" || m.maker === maker) &&
-          (capability !== "references" || referenceCapacity(d) > 0) &&
+          (capability !== "references" ||
+            (referenceCapacity(d) > 0 && (isImage || !requiresVideo(d)))) &&
           (capability !== "video" || requiresVideo(d)) &&
           (capability !== "prompt" ||
             !(d.inputSchema.required ?? []).some(k => /_url/.test(k))) &&
@@ -1950,28 +1979,37 @@ function Configurator({
                 ? modelCompatibility(
                     d,
                     referenceCount,
-                    !isImage && !!video.sourceVideoKey
+                    !isImage && !!video.sourceVideoKey,
+                    true
                   )
                 : null;
               return {
                 id: m.id,
                 title: m.name,
-                description: m.maker + " · " + m.variant,
+                description:
+                  (!isImage
+                    ? requiresVideo(d)
+                      ? "Existing video required · "
+                      : "Create a new video · "
+                    : "") +
+                  m.maker +
+                  " · " +
+                  m.variant,
                 image: studioModelArtwork(m.routeId, config.kind),
                 art: config.kind,
-                reason: reason ?? undefined,
-                notice: notice ?? undefined,
+                reason: reason ?? notice ?? undefined,
                 footer: (
                   <>
-                    {m.estimatedCredits != null
-                      ? "≈ " +
-                        m.estimatedCredits +
-                        " credits / " +
-                        (isImage ? "image" : String(m.estimatedSeconds) + "s")
-                      : "See credits on selection"}
+                    {exactVideoQuoteFailed && m.id === setup.modelId
+                      ? "Exact price unavailable for this setup"
+                      : m.estimatedCredits != null
+                        ? "≈ " +
+                          m.estimatedCredits +
+                          " credits / " +
+                          (isImage ? "image" : String(m.estimatedSeconds) + "s")
+                        : "See credits on selection"}
                     <br />
-                    {referenceCapacity(d)} image references{" "}
-                    {requiresVideo(d) ? "· Source video required" : ""}
+                    {modelInputGuidance(d)}
                   </>
                 ),
                 detail: (
@@ -2642,6 +2680,32 @@ function Configurator({
       )}
       {!pendingImageJob && (
         <>
+          {missingVideoSource && (
+            <div
+              className="cfg-note"
+              role="status"
+              aria-label="Video input required"
+            >
+              <strong>
+                {selectedModel?.name} · {selectedModel?.variant} needs an
+                existing video clip.
+              </strong>
+              <p>
+                Your photos and logo are retained, but they cannot be extended
+                as a video. Add a clip in Subject & sources → Source video, or
+                choose a model that creates a new video from images.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCapability("references");
+                  go("model");
+                }}
+              >
+                Choose Create from images
+              </button>
+            </div>
+          )}
           {!ready && (issues.length > 0 || quote.error) && (
             <div className="cfg-ready-help" role="status">
               <button type="button" onClick={() => go("output", "review")}>

@@ -294,6 +294,8 @@ export type VideoReference = {
   height?: number;
   durationSeconds?: number;
   role?: "logo";
+  /** Version 2 fences server-measured catalog geometry as well as image identity. */
+  catalogSourceVersion?: 2;
   catalogFingerprint?: string;
   categoryFingerprint?: string;
   productFacts?: SelectedProductFacts;

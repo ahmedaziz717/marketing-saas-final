@@ -1,3 +1,4 @@
+import { workflowModelInputStates } from "./WorkflowModelInputs";
 import { StudioRunBar } from "./configurator/StudioRunBar";
 import { VisualSelect } from "@/components/choices/VisualSelect";
 import { WorkflowMediaControl } from "./WorkflowMediaControl";
@@ -471,6 +472,11 @@ export function WorkflowAppStudio({
                     {n.config.field ? (
                       <WorkflowInputControl
                         field={n.config.field}
+                        modelInputStates={workflowModelInputStates(
+                          graph,
+                          n.id,
+                          values
+                        )}
                         title={n.title}
                         value={value(n)}
                         onChange={v => onChange(n.id, v)}

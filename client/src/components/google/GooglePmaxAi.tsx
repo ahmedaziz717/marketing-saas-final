@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import "./googleCopy.css";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,9 @@ export function GoogleCopyAi({
   onReplace,
   onAdd,
   onApply,
+  selectedCopy,
 }: {
+  selectedCopy?: ReactNode;
   adType?: GoogleCopyAdType;
   organizationId: number;
   connectionId?: string;
@@ -175,15 +178,14 @@ export function GoogleCopyAi({
   }
   return (
     <section
-      className="google-pmax-ai"
+      className="google-pmax-ai google-copy-workspace"
       aria-label="Generate copy from selected assets"
     >
       <h3>Create {capabilities.label} copy with AI</h3>
-      <p>
-        Start with your selected creative. AI uses its imagery and saved copy,
-        your Brand Kit and confirmed product facts. Review and edit every
-        suggestion before adding it. Existing Google text is never replaced
-        automatically.
+      <p className="google-copy-help">
+        Generate from selected assets, your Brand Kit and confirmed facts. Edit
+        proposals, then add or explicitly replace selected text. Nothing is
+        applied automatically.
       </p>
       <div
         aria-label="Assets informing AI copy"
@@ -223,7 +225,7 @@ export function GoogleCopyAi({
         {media.length} selected assets inform this run. Videos use their saved
         metadata, not a video-content analysis.
       </p>
-      <div className="google-form-grid">
+      <div className="google-form-grid google-copy-counts">
         {googleCopyFields.map(key => (
           <Field key={key} title={`${googleCopySpecs[key].label} to generate`}>
             <input
@@ -249,7 +251,10 @@ export function GoogleCopyAi({
               {googleCopySpecs[key].characters} characters each ·{" "}
               {googleCopySpecs[key].maximum} suggestions maximum per run
             </small>
-            <small>{remaining[key]} slots available to add to this {adType === "DISPLAY" ? "ad" : "group"}</small>
+            <small>
+              {remaining[key]} slots available to add to this{" "}
+              {adType === "DISPLAY" ? "ad" : "group"}
+            </small>
           </Field>
         ))}
       </div>
@@ -384,160 +389,186 @@ export function GoogleCopyAi({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-      {suggestions &&
-        googleCopyFields.map(key => (
-          <div key={key}>
-            <h4>{googleCopySpecs[key].label}</h4>
-            {suggestions[key].map((text, index) => (
-              <div key={index} className="google-copy-suggestion">
-                <Field
-                  title={`${googleCopySpecs[key].label} suggestion ${index + 1}`}
-                >
-                  <textarea
-                    disabled={generate.isPending}
-                    value={text}
-                    onChange={e =>
-                      setSuggestions(v =>
-                        v
-                          ? {
-                              ...v,
-                              [key]: v[key].map((old, i) =>
-                                i === index ? e.target.value : old
-                              ),
-                            }
-                          : v
-                      )
-                    }
-                  />
-                </Field>
-                <small>
-                  {text.length}/{googleCopySpecs[key].characters} characters
-                </small>
-                <Button
-                  variant="outline"
-                  disabled={
-                    !text.trim() ||
-                    text.length > googleCopySpecs[key].characters ||
-                    !remaining[key] ||
-                    isDuplicate(key, text)
-                  }
-                  onClick={() => onAdd(assetFor(key, text))}
-                >
-                  {isDuplicate(key, text)
-                    ? "Already in draft"
-                    : !remaining[key]
-                      ? "All slots occupied"
-                      : "Add to draft"}
-                </Button>
-                {onReplace &&
-                  replacementOptions.some(option => option.field === key) && (
-                    <div>
-                      <Field
-                        title={`Text to replace with ${googleCopySpecs[key].label.toLowerCase()} suggestion ${index + 1}`}
-                      >
-                        <select
-                          value={replacementTargets[`${key}:${index}`] ?? ""}
-                          disabled={generate.isPending}
-                          onChange={e =>
-                            setReplacementTargets(previous => ({
-                              ...previous,
-                              [`${key}:${index}`]: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">Choose text to replace</option>
-                          {replacementOptions
-                            .filter(option => option.field === key)
-                            .map(option => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Button
-                        variant="outline"
-                        disabled={
-                          generate.isPending ||
-                          !text.trim() ||
-                          text.length > googleCopySpecs[key].characters ||
-                          isDuplicate(key, text) ||
-                          !replacementOptions.some(
-                            option =>
-                              option.field === key &&
-                              option.id ===
-                                replacementTargets[`${key}:${index}`]
+      <div
+        className={`google-copy-comparison${selectedCopy ? "" : " is-proposals-only"}`}
+      >
+        <section className="google-copy-proposed" aria-label="Proposed copy">
+          <h3>Proposed copy</h3>
+          <p className="google-copy-help">
+            Review proposals here; add or replace to move them into your draft.
+          </p>
+          {!suggestions && (
+            <p className="google-copy-empty">
+              Generate suggestions above, or write your own copy in the selected
+              column.
+            </p>
+          )}
+          {suggestions &&
+            googleCopyFields.map(key => (
+              <div key={key} className="google-copy-field-group">
+                <h4>{googleCopySpecs[key].label}</h4>
+                {suggestions[key].map((text, index) => (
+                  <div key={index} className="google-copy-suggestion">
+                    <Field
+                      title={`${googleCopySpecs[key].label} suggestion ${index + 1}`}
+                    >
+                      <textarea
+                        rows={key === "headlines" ? 1 : 2}
+                        aria-invalid={
+                          text.length > googleCopySpecs[key].characters
+                        }
+                        disabled={generate.isPending}
+                        value={text}
+                        onChange={e =>
+                          setSuggestions(v =>
+                            v
+                              ? {
+                                  ...v,
+                                  [key]: v[key].map((old, i) =>
+                                    i === index ? e.target.value : old
+                                  ),
+                                }
+                              : v
                           )
                         }
-                        onClick={() => {
-                          const id = replacementTargets[`${key}:${index}`];
-                          if (
-                            !replacementOptions.some(
-                              option => option.field === key && option.id === id
-                            )
-                          )
-                            return;
-                          onReplace(id, assetFor(key, text));
-                          setReplacementTargets(previous => ({
-                            ...previous,
-                            [`${key}:${index}`]: "",
-                          }));
-                          setNotice(
-                            "Replacement added to this draft. Review it before activating."
-                          );
-                        }}
-                      >
-                        Replace selected text in draft
-                      </Button>
-                    </div>
-                  )}
-                <Button
-                  variant="ghost"
-                  disabled={generate.isPending}
-                  onClick={() => void run(key, index)}
-                >
-                  Regenerate this{" "}
-                  {key === "descriptions" ? "description" : "headline"}
-                </Button>
+                      />
+                    </Field>
+                    <small>
+                      {text.length}/{googleCopySpecs[key].characters} characters
+                    </small>
+                    <Button
+                      variant="outline"
+                      disabled={
+                        !text.trim() ||
+                        text.length > googleCopySpecs[key].characters ||
+                        !remaining[key] ||
+                        isDuplicate(key, text)
+                      }
+                      onClick={() => onAdd(assetFor(key, text))}
+                    >
+                      {isDuplicate(key, text)
+                        ? "Already in draft"
+                        : !remaining[key]
+                          ? "All slots occupied"
+                          : "Add to draft"}
+                    </Button>
+                    {onReplace &&
+                      replacementOptions.some(
+                        option => option.field === key
+                      ) && (
+                        <div className="google-copy-replacement">
+                          <Field
+                            title={`Text to replace with ${googleCopySpecs[key].label.toLowerCase()} suggestion ${index + 1}`}
+                          >
+                            <select
+                              value={
+                                replacementTargets[`${key}:${index}`] ?? ""
+                              }
+                              disabled={generate.isPending}
+                              onChange={e =>
+                                setReplacementTargets(previous => ({
+                                  ...previous,
+                                  [`${key}:${index}`]: e.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Choose text to replace</option>
+                              {replacementOptions
+                                .filter(option => option.field === key)
+                                .map(option => (
+                                  <option key={option.id} value={option.id}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                            </select>
+                          </Field>
+                          <Button
+                            variant="outline"
+                            disabled={
+                              generate.isPending ||
+                              !text.trim() ||
+                              text.length > googleCopySpecs[key].characters ||
+                              isDuplicate(key, text) ||
+                              !replacementOptions.some(
+                                option =>
+                                  option.field === key &&
+                                  option.id ===
+                                    replacementTargets[`${key}:${index}`]
+                              )
+                            }
+                            onClick={() => {
+                              const id = replacementTargets[`${key}:${index}`];
+                              if (
+                                !replacementOptions.some(
+                                  option =>
+                                    option.field === key && option.id === id
+                                )
+                              )
+                                return;
+                              onReplace(id, assetFor(key, text));
+                              setReplacementTargets(previous => ({
+                                ...previous,
+                                [`${key}:${index}`]: "",
+                              }));
+                              setNotice(
+                                "Replacement added to this draft. Review it before activating."
+                              );
+                            }}
+                          >
+                            Replace selected text in draft
+                          </Button>
+                        </div>
+                      )}
+                    <Button
+                      variant="ghost"
+                      disabled={generate.isPending}
+                      onClick={() => void run(key, index)}
+                    >
+                      Regenerate this{" "}
+                      {key === "descriptions" ? "description" : "headline"}
+                    </Button>
+                  </div>
+                ))}
               </div>
             ))}
-          </div>
-        ))}
-      {suggestions && onApply && (
-        <Button
-          variant="outline"
-          onClick={() => {
-            const additions: GoogleAssetInput[] = [];
-            for (const key of googleCopyFields) {
-              const seen = new Set(
-                existingCopy[key].map(v => v.trim().toLowerCase())
-              );
-              const values = suggestions[key]
-                .map(v => v.trim())
-                .filter(
-                  text =>
-                    text &&
-                    text.length <= googleCopySpecs[key].characters &&
-                    !seen.has(text.toLowerCase()) &&
-                    !!seen.add(text.toLowerCase())
-                );
-              if (values.length > remaining[key]) {
+          {suggestions && onApply && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const additions: GoogleAssetInput[] = [];
+                for (const key of googleCopyFields) {
+                  const seen = new Set(
+                    existingCopy[key].map(v => v.trim().toLowerCase())
+                  );
+                  const values = suggestions[key]
+                    .map(v => v.trim())
+                    .filter(
+                      text =>
+                        text &&
+                        text.length <= googleCopySpecs[key].characters &&
+                        !seen.has(text.toLowerCase()) &&
+                        !!seen.add(text.toLowerCase())
+                    );
+                  if (values.length > remaining[key]) {
+                    setNotice(
+                      `Only ${remaining[key]} ${googleCopySpecs[key].label.toLowerCase()} slots remain. Add individual suggestions or edit your draft; nothing was replaced.`
+                    );
+                    return;
+                  }
+                  additions.push(...values.map(text => assetFor(key, text)));
+                }
+                onApply(additions);
                 setNotice(
-                  `Only ${remaining[key]} ${googleCopySpecs[key].label.toLowerCase()} slots remain. Add individual suggestions or edit your draft; nothing was replaced.`
+                  `${additions.length} suggestions added to this draft. Existing text was kept.`
                 );
-                return;
-              }
-              additions.push(...values.map(text => assetFor(key, text)));
-            }
-            onApply(additions);
-            setNotice(
-              `${additions.length} suggestions added to this draft. Existing text was kept.`
-            );
-          }}
-        >
-          Add all valid suggestions to draft
-        </Button>
-      )}
+              }}
+            >
+              Add all valid suggestions to draft
+            </Button>
+          )}
+        </section>
+        {selectedCopy}
+      </div>
     </section>
   );
 }

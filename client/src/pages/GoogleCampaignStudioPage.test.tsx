@@ -95,6 +95,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 import GoogleCampaignStudioPage from "./GoogleCampaignStudioPage";
+import { googleCampaignCreateSchema } from "@shared/googleCampaigns";
 import { GoogleCampaignComposer } from "@/components/google/GoogleCampaignComposer";
 const click = (name: RegExp | string) =>
   fireEvent.click(screen.getByRole("button", { name }));
@@ -319,7 +320,7 @@ it("adds images and videos to the selected existing asset group without changing
   }));
   api.validate.mockImplementation(async input => ({
     ...input,
-    change: api.mutate.mock.calls.at(-1)![0].change,
+    change: jsonbRoundTrip(api.mutate.mock.calls.at(-1)![0].change),
     state: "validated",
     reviewHash: "hash",
   }));
@@ -593,6 +594,16 @@ it("opens approved Creative Studio outputs directly from the Creative step", () 
   ).toBe("true");
   expect(api.publish).not.toHaveBeenCalled();
 });
+// JSONB round trips reorder keys recursively, unlike the old identity mocks.
+function jsonbRoundTrip(value: any): any {
+  if (Array.isArray(value)) return value.map(jsonbRoundTrip);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map(key => [key, jsonbRoundTrip(value[key])])
+  );
+}
 it("checks automatically and only publishes after explicit approval", async () => {
   existingCampaign();
   click("Select Images");
@@ -600,7 +611,13 @@ it("checks automatically and only publishes after explicit approval", async () =
   let saved: any;
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockImplementation(async () => ({
     ...saved,
@@ -655,7 +672,13 @@ it("keeps provider failures visible and retries the saved draft without publishi
   let saved: any;
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockRejectedValueOnce(new Error("Landscape image too small"));
   click("Continue to Copy →");
@@ -688,7 +711,13 @@ it("ignores a late check after switching accounts or leaving review", async () =
   let finish: (value: any) => void = () => {};
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockImplementation(
     () =>
@@ -767,7 +796,11 @@ it("shows incomplete details without submitting a Google check", async () => {
   click("Select Images");
   click("Continue to Copy →");
   click("Review change →");
-  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Required items before activation")
+    ).toBeTruthy()
+  );
   expect(api.mutate).not.toHaveBeenCalled();
   expect(api.validate).not.toHaveBeenCalled();
   expect(api.publish).not.toHaveBeenCalled();
@@ -819,7 +852,13 @@ it("requires explicit image replacement at capacity, and cancelling keeps all ex
   let saved: any;
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockImplementation(async () => ({
     ...saved,
@@ -919,7 +958,13 @@ it("generates copy for a full existing group and saves only the explicitly chose
   let saved: any;
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockImplementation(async () => ({
     ...saved,
@@ -951,7 +996,13 @@ it("submits only once for repeated activation clicks while a request is pending"
   let saved: any;
   api.mutate.mockImplementation(
     async input =>
-      (saved = { ...input, id: "draft", revision: 1, state: "draft" })
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "draft",
+        revision: 1,
+        state: "draft",
+      })
   );
   api.validate.mockImplementation(async () => ({
     ...saved,
@@ -1004,7 +1055,9 @@ it("shows approved assets immediately and preserves picks across format and sour
   expect(
     screen.getByRole("button", { name: "Select Approved image" })
   ).toBeTruthy();
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.queryByLabelText("Required items before activation")
+  ).toBeNull();
   click("Select Approved image");
   click("Select Videos");
   click("Select Google Ads Library");
@@ -1026,15 +1079,25 @@ it("shows approved assets immediately and preserves picks across format and sour
   expect(api.mutate).not.toHaveBeenCalled();
 });
 
-it("shows required-field summaries only in review, not over the asset picker or copy editor", async () => {
+it("keeps actionable required items visible while navigating back to fix them", async () => {
   existingCampaign();
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.queryByLabelText("Required items before activation")
+  ).toBeNull();
   click("Continue to Copy →");
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.getByLabelText("Required items before activation")
+  ).toBeTruthy();
   click("Review change →");
-  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Required items before activation")
+    ).toBeTruthy()
+  );
   section("Creative");
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.getByLabelText("Required items before activation")
+  ).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "Select Approved image" })
   ).toBeTruthy();
@@ -1085,7 +1148,7 @@ it("retains workspace picks on explicit account change but never retargets old G
   }));
   api.validate.mockImplementation(async input => ({
     ...input,
-    change: api.mutate.mock.calls.at(-1)![0].change,
+    change: jsonbRoundTrip(api.mutate.mock.calls.at(-1)![0].change),
     state: "validated",
     reviewHash: "hash",
   }));
@@ -1171,7 +1234,7 @@ it("creates a new group inside the existing PMax campaign without requiring new-
   }));
   api.validate.mockImplementation(async input => ({
     ...input,
-    change: api.mutate.mock.calls.at(-1)![0].change,
+    change: jsonbRoundTrip(api.mutate.mock.calls.at(-1)![0].change),
     state: "validated",
     reviewHash: "group-hash",
   }));
@@ -1215,10 +1278,14 @@ it("requires group name and landing page for new groups without showing new-camp
   click("Select Approved image");
   click("Continue to Copy →");
   click("Review change →");
-  await waitFor(() => expect(screen.getByText("Required fields")).toBeTruthy());
-  const required = screen.getByText("Required fields").parentElement!;
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Required items before activation")
+    ).toBeTruthy()
+  );
+  const required = screen.getByLabelText("Required items before activation");
   expect(required.textContent).toContain("name");
-  expect(required.textContent).toContain("finalUrl");
+  expect(required.textContent).toContain("Landing page");
   expect(required.textContent).not.toMatch(
     /dailyBudget|bidding|locationIds|languageIds/
   );
@@ -1250,7 +1317,9 @@ it("clears a prior review failure when switching to Saved drafts before choosing
   expect(
     screen.queryByText("Previous destination failed validation")
   ).toBeNull();
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.queryByLabelText("Required items before activation")
+  ).toBeNull();
   expect(api.publish).not.toHaveBeenCalled();
 });
 
@@ -1274,7 +1343,9 @@ it("does not expose placeholder new-campaign controls after switching back to ex
   expect(screen.queryByRole("button", { name: /^Copy / })).toBeNull();
   expect(screen.queryByRole("button", { name: /^Delivery / })).toBeNull();
   expect(screen.queryByLabelText("Campaign name")).toBeNull();
-  expect(screen.queryByText("Required fields")).toBeNull();
+  expect(
+    screen.queryByLabelText("Required items before activation")
+  ).toBeNull();
   expect(api.mutate).not.toHaveBeenCalled();
   expect(api.publish).not.toHaveBeenCalled();
 });
@@ -1319,4 +1390,118 @@ it("opens a saved new-campaign draft without attaching the previous existing des
     (screen.getByLabelText("Campaign name") as HTMLInputElement).value
   ).toBe("Saved launch");
   expect(api.mutate).not.toHaveBeenCalled();
+});
+
+it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
+  "allows confirmation for a valid saved %s campaign after JSONB key reordering, then invalidates a genuine edit",
+  async type => {
+    const change = googleCampaignCreateSchema.parse({
+      kind: "campaign_create",
+      type,
+      name: "Ready launch",
+      dailyBudget: 10,
+      bidding: { strategy: "MAXIMIZE_CONVERSIONS" },
+      politicalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+      locationIds: ["2840"],
+      languageIds: ["1000"],
+      ad: {
+        name: "Ready ad",
+        finalUrl: "https://example.com",
+        businessName: "CLX Gaming",
+        headlines: ["Find your PC", "Explore gaming PCs", "Shop CLX"],
+        longHeadline: "Explore CLX gaming PCs and choose your next system",
+        descriptions: ["Explore the collection.", "Find your next gaming PC."],
+        assets: ["MARKETING_IMAGE", "SQUARE_MARKETING_IMAGE", "LOGO"].map(
+          (field, i) => ({
+            field,
+            source: { kind: "existing", id: String(41 + i) },
+          })
+        ),
+      },
+    });
+    const saved = {
+      id: "ready-campaign",
+      revision: 2,
+      state: "draft",
+      change: jsonbRoundTrip(change),
+    };
+    api.drafts = [saved];
+    api.validate.mockResolvedValue({
+      ...saved,
+      state: "validated",
+      reviewHash: "exact-review",
+      validatedAtMs: Date.now(),
+    });
+    setup();
+    click("Saved drafts");
+    click(/Ready launch/);
+    section("Review");
+    const confirmation = () =>
+      screen.getByLabelText(
+        "I approve the settings, creative and budget shown above."
+      ) as HTMLInputElement;
+    await waitFor(() => expect(confirmation().disabled).toBe(false));
+    expect(api.mutate).not.toHaveBeenCalled();
+    expect(api.validate).toHaveBeenCalledWith({
+      organizationId: 1,
+      id: "ready-campaign",
+      revision: 2,
+    });
+    fireEvent.click(confirmation());
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Publish campaign to Google Ads",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false);
+    expect(api.publish).not.toHaveBeenCalled();
+    section("Delivery");
+    fireEvent.change(screen.getByLabelText(/Daily budget/), {
+      target: { value: "20" },
+    });
+    click("Review change →");
+    expect(confirmation().checked).toBe(false);
+    expect(confirmation().disabled).toBe(true);
+    expect(api.publish).not.toHaveBeenCalled();
+  }
+);
+
+it("keeps confirmation disabled with an actionable reason when a response lacks a review hash", async () => {
+  existingCampaign();
+  click("Select Approved image");
+  let saved: any;
+  api.mutate.mockImplementation(
+    async input =>
+      (saved = {
+        ...input,
+        change: jsonbRoundTrip(input.change),
+        id: "missing-hash",
+        revision: 1,
+        state: "draft",
+      })
+  );
+  api.validate.mockImplementation(async () => ({
+    ...saved,
+    state: "validated",
+    reviewHash: null,
+  }));
+  click("Continue to Copy →");
+  click("Review change →");
+  await waitFor(() => expect(api.validate).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(
+      screen.getByText(
+        "A successful Google compatibility check is required before confirming."
+      )
+    ).toBeTruthy()
+  );
+  const checkbox = screen.getByLabelText(
+    /I confirm adding this creative/
+  ) as HTMLInputElement;
+  expect(checkbox.disabled).toBe(true);
+  expect(checkbox.getAttribute("aria-describedby")).toBe(
+    "google-confirmation-blocker"
+  );
+  expect(api.publish).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { readVideoCatalogImage } from "./videoCatalog";
 import {
   withWorkflowMediaFields,
   workflowContentText,
@@ -215,6 +216,28 @@ export async function validateWorkflowValues(
 ) {
   for (const value of values) {
     if (value.type !== "image" && value.type !== "video") continue;
+    if (value.type === "image" && value.key.startsWith("product_image:")) {
+      const catalog = await readVideoCatalogImage(
+        db,
+        organizationId,
+        value.key
+      );
+      const expected =
+        value.catalogSourceVersion === undefined
+          ? catalog.legacyFingerprint
+          : catalog.reference.fingerprint;
+      if (
+        (value.catalogSourceVersion !== undefined &&
+          value.catalogSourceVersion !== 2) ||
+        expected !== value.fingerprint
+      )
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "An input changed or has review feedback. Select it again and rerun its step.",
+        });
+      continue;
+    }
     const current =
       value.type === "image"
         ? (await workflowImageReferences(db, organizationId, [value.key]))[0]

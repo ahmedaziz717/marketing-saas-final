@@ -424,6 +424,9 @@ async function executeStep(
         url: (await value).url,
         name: ref.name,
         fingerprint: ref.fingerprint,
+        ...(ref.catalogSourceVersion
+          ? { catalogSourceVersion: ref.catalogSourceVersion }
+          : {}),
         ...(node.config.text ? { context: node.config.text } : {}),
       },
     ];

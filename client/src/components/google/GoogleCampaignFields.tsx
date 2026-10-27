@@ -1,4 +1,11 @@
-import { useState, type ReactNode } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useState,
+  type ReactNode,
+} from "react";
+import { useGoogleFieldValidation } from "./GoogleValidation";
 import { trpc } from "@/lib/trpc";
 
 export const label = (value: string) =>
@@ -9,14 +16,47 @@ export const label = (value: string) =>
 export function Field({
   title,
   children,
+  path,
 }: {
+  path?: string;
   title: string;
   children: ReactNode;
 }) {
+  const child = Children.toArray(children).find(isValidElement);
+  const fieldPath =
+    path ??
+    ((child?.props as Record<string, unknown> | undefined)?.[
+      "data-google-field"
+    ] as string | undefined);
+  const { messages, errorId, invalid } = useGoogleFieldValidation(fieldPath);
   return (
     <label className="google-field">
       <span>{title}</span>
-      {children}
+      {Children.map(children, item =>
+        isValidElement(item) &&
+        typeof item.type === "string" &&
+        ["input", "select", "textarea"].includes(item.type)
+          ? cloneElement(item as React.ReactElement<Record<string, unknown>>, {
+              "data-google-field": fieldPath,
+              "aria-invalid":
+                invalid ||
+                (item.props as Record<string, unknown>)["aria-invalid"] ||
+                undefined,
+              "aria-describedby":
+                [
+                  (item.props as Record<string, unknown>)["aria-describedby"],
+                  invalid ? errorId : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined,
+            })
+          : item
+      )}
+      {invalid && (
+        <span id={errorId} className="google-field-error" role="alert">
+          {messages.join(" ")}
+        </span>
+      )}
     </label>
   );
 }
@@ -27,7 +67,9 @@ export function ResourcePicker({
   value,
   onChange,
   title,
+  path,
 }: {
+  path?: string;
   organizationId: number;
   connectionId: string;
   kind: "locations" | "languages" | "audiences" | "merchants";
@@ -35,6 +77,15 @@ export function ResourcePicker({
   onChange: (ids: string[]) => void;
   title: string;
 }) {
+  const fieldPath =
+    path ??
+    {
+      locations: "locationIds",
+      languages: "languageIds",
+      audiences: "audienceId",
+      merchants: "merchantId",
+    }[kind];
+  const { messages, errorId, invalid } = useGoogleFieldValidation(fieldPath);
   const [search, setSearch] = useState("");
   const resources = trpc.googleAds.campaigns.resources.useQuery(
     { organizationId, connectionId, kind, search },
@@ -59,6 +110,9 @@ export function ResourcePicker({
       )}
       <select
         aria-label={`Add ${title.toLowerCase()}`}
+        data-google-field={fieldPath}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? errorId : undefined}
         value=""
         onChange={e => {
           const item = resources.data?.find(r => r.id === e.target.value);
@@ -92,6 +146,11 @@ export function ResourcePicker({
           </button>
         ))}
       </div>
+      {invalid && (
+        <p id={errorId} className="google-field-error" role="alert">
+          {messages.join(" ")}
+        </p>
+      )}
       {resources.error && <p role="alert">{resources.error.message}</p>}
     </div>
   );

@@ -362,7 +362,17 @@ export async function validateVideoReferences(
         job.organizationId,
         ref.key
       );
-      if (current.reference.fingerprint !== ref.fingerprint)
+      // Pre-versioned jobs keep their accepted request snapshot and original
+      // identity fence. New quotes never fall back to the geometry-free hash.
+      const currentFingerprint =
+        ref.catalogSourceVersion === undefined
+          ? current.legacyFingerprint
+          : current.reference.fingerprint;
+      if (
+        (ref.catalogSourceVersion !== undefined &&
+          ref.catalogSourceVersion !== 2) ||
+        currentFingerprint !== ref.fingerprint
+      )
         throw new Error(
           "A product reference changed. Prepare a new draft with the current product images."
         );

@@ -1,3 +1,8 @@
+import {
+  GoogleValidationProvider,
+  GoogleFieldErrors,
+  googleIssuePresentation,
+} from "./GoogleValidation";
 import { resolveDestinationSelection } from "@shared/destinationSelection";
 import { GoogleAssetMetricsProvider } from "./GoogleAssetMetrics";
 import { GoogleAssetReplacement } from "./GoogleAssetReplacement";
@@ -252,16 +257,21 @@ export function GoogleCampaignComposer({
   const locked =
     !!draft && ["publishing", "published", "uncertain"].includes(draft.state);
   const normalizedChange = googleChangeSchema.safeParse(change);
+  // PostgreSQL JSONB reorders object keys. Normalize both sides through the
+  // same schema before comparing; array order and every actual edit still count.
+  const normalizedSavedChange = draft
+    ? googleChangeSchema.safeParse(draft.change)
+    : null;
   const dirty =
-    !draft ||
     !normalizedChange.success ||
-    JSON.stringify(draft.change) !== JSON.stringify(normalizedChange.data);
+    !normalizedSavedChange?.success ||
+    JSON.stringify(normalizedSavedChange.data) !==
+      JSON.stringify(normalizedChange.data);
   const canPublish = ["owner", "admin", "publisher"].includes(
     membership?.role ?? ""
   );
   const edit = (next: GoogleChange) => {
     setChange(next);
-    setShowValidation(false);
     setConfirmed(false);
     setError("");
   };
@@ -591,6 +601,10 @@ export function GoogleCampaignComposer({
   async function deliver() {
     if (
       !draft?.reviewHash ||
+      draft.state !== "validated" ||
+      checkFailed ||
+      !canPublish ||
+      !connections.data?.livePublishingEnabled ||
       dirty ||
       !confirmed ||
       busy ||
@@ -621,35 +635,38 @@ export function GoogleCampaignComposer({
       deliveryInFlight.current = false;
     }
   }
-  const localValidation =
-    showValidation && section === "review"
-      ? googleChangeSchema.safeParse(change)
-      : null;
   const fieldIssues =
-    localValidation && !localValidation.success
-      ? localValidation.error.issues
+    showValidation && !normalizedChange.success
+      ? normalizedChange.error.issues
       : [];
-  function goToIssue(path: PropertyKey[]) {
-    const key = path.join(".");
-    const target = key.startsWith("ad.")
-      ? ["ad.name", "ad.finalUrl", "ad.assets"].some(p => key.startsWith(p))
-        ? "creative"
-        : "copy"
-      : ["locationIds", "languageIds", "keywords"].some(p => key.startsWith(p))
-        ? "targeting"
-        : change.kind.startsWith("asset_group")
-          ? "creative"
-          : "settings";
-    setSection(target);
-    requestAnimationFrame(() =>
-      document
-        .querySelector<HTMLElement>(
-          `[data-google-field="${path.slice(0, 2).join(".")}"]`
-        )
-        ?.focus()
-    );
+  const confirmationBlocker = busy
+    ? "Wait for the compatibility check to finish."
+    : fieldIssues.length
+      ? `Complete ${fieldIssues.length} required item${fieldIssues.length === 1 ? "" : "s"} listed above before confirming.`
+      : needsReplacement
+        ? "Choose the required replacements or remove extra new images."
+        : checkFailed
+          ? "Google compatibility could not be confirmed. Resolve the reported issue and retry."
+          : dirty
+            ? "Your latest changes must be saved and checked before confirming."
+            : draft?.state !== "validated" || !draft.reviewHash
+              ? "A successful Google compatibility check is required before confirming."
+              : "";
+  function goToIssue(path: PropertyKey[], message = "") {
+    const issue = googleIssuePresentation({ path, message }, change);
+    setSection(issue.section);
+    requestAnimationFrame(() => {
+      const field = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-google-field]")
+      ).find(node => node.dataset.googleField === issue.field);
+      const control = field?.matches("input,select,textarea,button")
+        ? field
+        : field?.querySelector<HTMLElement>("input,select,textarea,button");
+      field?.scrollIntoView?.({ block: "nearest" });
+      (control ?? field)?.focus();
+    });
   }
-  return (
+  const content = (
     <div className="google-campaign-studio">
       <div className="cfg-workspace">
         <StudioSummary subtitle="Google Ads · campaign draft">
@@ -751,6 +768,39 @@ export function GoogleCampaignComposer({
         </StudioSummary>
         <StudioJourney journey={journey} label="Activation sections">
           <section className="cfg-body google-fields">
+            {fieldIssues.length > 0 && (
+              <div
+                className="google-required-summary"
+                role="alert"
+                aria-label="Required items before activation"
+              >
+                <h3>
+                  {fieldIssues.length} required item
+                  {fieldIssues.length === 1 ? "" : "s"} to complete
+                </h3>
+                <ul>
+                  {fieldIssues.map((issue, index) => {
+                    const item = googleIssuePresentation(issue, change);
+                    return (
+                      <li key={`${item.field}:${index}`}>
+                        <Button
+                          variant="link"
+                          onClick={() => goToIssue(issue.path, issue.message)}
+                        >
+                          {item.label}: {item.message}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+            {error && (
+              <p className="google-error" role="alert">
+                {error}
+              </p>
+            )}
+
             {selectionNotice && <p role="status">{selectionNotice}</p>}
             {section === "channel" && channelChoices}
             {section === "account" && (
@@ -1208,7 +1258,26 @@ export function GoogleCampaignComposer({
               section === "copy") &&
               destinationReady &&
               !!connection && (
-                <fieldset disabled={locked || busy}>
+                <fieldset
+                  data-google-field={
+                    change.kind === "asset_group_assets"
+                      ? "add"
+                      : change.kind === "asset_group_create"
+                        ? "assets"
+                        : undefined
+                  }
+                  disabled={locked || busy}
+                >
+                  {section !== "copy" &&
+                    change.kind.startsWith("asset_group") && (
+                      <GoogleFieldErrors
+                        path={
+                          change.kind === "asset_group_assets"
+                            ? "add"
+                            : "assets"
+                        }
+                      />
+                    )}
                   {section !== "copy" && hasAssets && choices.length > 0 && (
                     <GoogleFormatPicker
                       type={creativeType}
@@ -1376,7 +1445,7 @@ export function GoogleCampaignComposer({
                     (change.kind === "asset_group_create" ||
                       change.kind === "asset_group_update") && (
                       <>
-                        <Field title="Asset group name">
+                        <Field title="Asset group name" path="name">
                           <input
                             value={change.name}
                             onChange={e =>
@@ -1384,7 +1453,7 @@ export function GoogleCampaignComposer({
                             }
                           />
                         </Field>
-                        <Field title="Landing page">
+                        <Field title="Landing page" path="finalUrl">
                           <input
                             type="url"
                             value={change.finalUrl}
@@ -1581,7 +1650,8 @@ export function GoogleCampaignComposer({
                       >
                         Reset setup
                       </Button>
-                      {checkFailed && (
+                      {(checkFailed ||
+                        (draft && !draft.reviewHash && !checking)) && (
                         <Button
                           disabled={busy}
                           onClick={async () => {
@@ -1598,22 +1668,28 @@ export function GoogleCampaignComposer({
                         ? "Saving and checking compatibility with Google…"
                         : checkFailed
                           ? "Compatibility could not be confirmed. Check the issue below."
-                          : draft?.state === "validated" && !dirty
+                          : draft?.state === "validated" &&
+                              !!draft.reviewHash &&
+                              !dirty
                             ? "Compatibility checked. Ready for your review."
                             : "Your draft is saved and checked automatically when its required details are complete."}
                     </p>
                     <>
+                      {confirmationBlocker && (
+                        <p id="google-confirmation-blocker" role="status">
+                          {confirmationBlocker}
+                        </p>
+                      )}
                       <label>
                         <input
                           type="checkbox"
                           checked={confirmed}
-                          disabled={
-                            busy ||
-                            draft?.state !== "validated" ||
-                            dirty ||
-                            checkFailed ||
-                            needsReplacement
+                          aria-describedby={
+                            confirmationBlocker
+                              ? "google-confirmation-blocker"
+                              : undefined
                           }
+                          disabled={!!confirmationBlocker}
                           onChange={e => setConfirmed(e.target.checked)}
                         />{" "}
                         {change.kind === "asset_group_assets"
@@ -1629,6 +1705,7 @@ export function GoogleCampaignComposer({
                           busy ||
                           !confirmed ||
                           draft?.state !== "validated" ||
+                          !draft?.reviewHash ||
                           dirty ||
                           checkFailed ||
                           needsReplacement ||
@@ -1665,37 +1742,6 @@ export function GoogleCampaignComposer({
                 )}
               </>
             )}
-            {fieldIssues.length > 0 && (
-              <div role="alert">
-                <h3>Required fields</h3>
-                <ul>
-                  {fieldIssues.map((issue, index) => (
-                    <li key={index}>
-                      <Button
-                        variant="link"
-                        onClick={() => goToIssue(issue.path)}
-                      >
-                        {issue.path
-                          .join(" / ")
-                          .replaceAll(
-                            "ad / name",
-                            creativeType === "PERFORMANCE_MAX"
-                              ? "Asset group name"
-                              : "Ad name"
-                          )
-                          .replaceAll("ad /", "Copy /") || "Campaign settings"}
-                        : {issue.message}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {error && (
-              <p className="google-error" role="alert">
-                {error}
-              </p>
-            )}
             {!!connection &&
               destinationReady &&
               !(section === "creative" && change.kind === "campaign_update") &&
@@ -1704,6 +1750,7 @@ export function GoogleCampaignComposer({
               ) && (
                 <Button
                   onClick={() => {
+                    setShowValidation(true);
                     setSection(
                       ["creative", "format"].includes(section) && hasAssets
                         ? "copy"
@@ -1726,5 +1773,10 @@ export function GoogleCampaignComposer({
         </StudioJourney>
       </div>
     </div>
+  );
+  return (
+    <GoogleValidationProvider issues={fieldIssues} change={change}>
+      {content}
+    </GoogleValidationProvider>
   );
 }

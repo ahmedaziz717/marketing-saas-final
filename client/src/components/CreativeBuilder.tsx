@@ -1,3 +1,4 @@
+import { imageReferenceCount } from "@shared/creativeConfigurator";
 import { ArtStyleInfluenceControl } from "@/components/ArtStyleInfluenceControl";
 import { TaskPromptField } from "./TaskPromptField";
 import { ChoiceVisual } from "@/components/choices/ChoiceVisual";
@@ -372,6 +373,7 @@ export function CreativeBuilder({ onGenerated, initialPlanId }: Props) {
         <ModelPicker
           organizationId={organizationId!}
           kind="image"
+          inputState={{ images: imageReferenceCount(setup), hasVideo: false }}
           value={setup.modelId}
           disabled={busy}
           onChange={(modelId, modelOptions) =>
