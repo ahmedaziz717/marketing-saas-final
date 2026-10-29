@@ -379,23 +379,23 @@ export const pmaxAssetLimits: Record<
   LONG_HEADLINE: {label:"long headlines",min:googleCopyCapabilities().minimums.longHeadlines,max:googleCopyCapabilities().specs.longHeadlines.maximum},
   DESCRIPTION: {label:"descriptions",min:googleCopyCapabilities().minimums.descriptions,max:googleCopyCapabilities().specs.descriptions.maximum},
   MARKETING_IMAGE: {
-    label: "landscape images (at least 600 × 314)",
+    label: "landscape images (1.91:1; recommended 1200 × 628 px; minimum 600 × 314 px)",
     min: 1,
     max: 20,
   },
   SQUARE_MARKETING_IMAGE: {
-    label: "square images (at least 300 × 300)",
+    label: "square images (1:1; recommended 1200 × 1200 px; minimum 300 × 300 px)",
     min: 1,
     max: 20,
   },
   PORTRAIT_MARKETING_IMAGE: {
-    label: "portrait images (at least 480 × 600)",
+    label: "portrait images (4:5; recommended 960 × 1200 px; minimum 480 × 600 px)",
     min: 0,
     max: 20,
   },
-  LANDSCAPE_LOGO: { label: "landscape logos", min: 0, max: 20 },
+  LANDSCAPE_LOGO: { label: "landscape logos (4:1; recommended 1200 × 300 px; minimum 512 × 128 px)", min: 0, max: 20 },
   YOUTUBE_VIDEO: { label: "videos", min: 0, max: 15 },
-  LOGO: { label: "square logos (at least 128 × 128)", min: 1, max: 5 },
+  LOGO: { label: "square logos (1:1; recommended 1200 × 1200 px; minimum 128 × 128 px)", min: 1, max: 5 },
   BUSINESS_NAME: { label: "business name", min: 1, max: 1 },
 };
 export function pmaxMissingAssets(

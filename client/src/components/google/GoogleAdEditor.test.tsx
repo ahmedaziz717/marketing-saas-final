@@ -466,3 +466,49 @@ it("does not impose Performance Max asset-group messaging on display ads", () =>
   );
   expect(screen.queryByText(/images selected for this draft/)).toBeNull();
 });
+
+it("probes legacy logos, displays actual dimensions, and rejects the non-square canvas before review", () => {
+  api.library = [{
+    key: "asset:95", name: "Solid_Black.png", state: "approved",
+    mediaType: "image", url: "https://example.com/logo.png",
+  }];
+  const onChange = vi.fn();
+  const props = { organizationId: 1, connectionId: "google", format: "logo" as const, onChange };
+  const view = render(<AssetEditor {...props} assets={[]} />);
+  expect(screen.getByText(/Dimensions unavailable/)).toBeTruthy();
+  const logo = screen.getByAltText("Solid_Black.png");
+  Object.defineProperties(logo, {
+    naturalWidth: { value: 2511 }, naturalHeight: { value: 2349 },
+  });
+  fireEvent.load(logo);
+  expect(screen.getByText(/2511 × 2349.*matching canvas/)).toBeTruthy();
+  expect(screen.queryByText(/\? × \?/)).toBeNull();
+  click("Select Solid_Black.png");
+  expect(onChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain("1:1 ratio");
+  // A saved selection must remain removable after discovering its incompatible size.
+  view.rerender(<AssetEditor {...props} assets={[
+    { field: "LOGO", source: { kind: "library", key: "asset:95" } },
+  ]} />);
+  click("Select Solid_Black.png");
+  expect(onChange).toHaveBeenLastCalledWith([]);
+});
+
+it("accepts a loaded large square logo and displays its measured size even without stored metadata", () => {
+  api.library = [{
+    key: "asset:96", name: "Square logo", state: "approved",
+    mediaType: "image", url: "https://example.com/square.png",
+  }];
+  const onChange = vi.fn();
+  render(<AssetEditor organizationId={1} connectionId="google" format="logo" assets={[]} onChange={onChange} />);
+  const logo = screen.getByAltText("Square logo");
+  Object.defineProperties(logo, {
+    naturalWidth: { value: 1200 }, naturalHeight: { value: 1200 },
+  });
+  fireEvent.load(logo);
+  expect(screen.getByText("1200 × 1200 · Square logo · 1:1")).toBeTruthy();
+  click("Select Square logo");
+  expect(onChange).toHaveBeenCalledWith([
+    { field: "LOGO", source: { kind: "library", key: "asset:96" } },
+  ]);
+});

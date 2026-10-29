@@ -6,9 +6,21 @@ const f = vi.hoisted(() => ({ ai: null as any }));
 vi.mock("./GooglePmaxAi", () => ({
   GooglePmaxAi: (props: any) => {
     f.ai = props;
-    return <div>AI suggestions{props.selectedCopy}</div>;
+    return (
+      <AdCopyWorkspace
+        fields={props.draftFields}
+        busy={false}
+        generationKey="test"
+        onEditSuggestion={() => {}}
+        onAdd={() => {}}
+        onEditDraft={props.onEditDraft}
+        onRemoveDraft={props.onRemoveDraft}
+        onWrite={props.onWrite}
+      />
+    );
   },
 }));
+import { AdCopyWorkspace } from "../AdCopyWorkspace";
 import { GooglePmaxCopyEditor } from "./GooglePmaxCopyEditor";
 import { GoogleValidationProvider } from "./GoogleValidation";
 afterEach(cleanup);
@@ -52,7 +64,10 @@ it("forwards selected media and retained copy without changing anything on rende
   ).toHaveLength(2);
   expect(onChange).not.toHaveBeenCalled();
   expect(screen.getByText("Retained headline")).toBeTruthy();
-  expect(screen.queryByDisplayValue("Retained headline")).toBeNull();
+  expect(screen.getByDisplayValue("Retained headline")).toHaveProperty(
+    "readOnly",
+    true
+  );
 });
 
 it("explicit apply fills a blank slot, respects retained capacity, and preserves media and existing text", () => {
@@ -135,7 +150,11 @@ it("enforces 15/5/5 retained limits and allows editing/removing only draft entri
       onChange={onChange}
     />
   );
-  for (const name of ["Add headline", "Add long headline", "Add description"]) {
+  for (const name of [
+    "Write headline",
+    "Write long headline",
+    "Write description",
+  ]) {
     expect(
       (screen.getByRole("button", { name }) as HTMLButtonElement).disabled
     ).toBe(true);
@@ -144,7 +163,9 @@ it("enforces 15/5/5 retained limits and allows editing/removing only draft entri
     target: { value: "Edited" },
   });
   expect(onChange).toHaveBeenLastCalledWith([text("HEADLINE", "Edited")]);
-  fireEvent.click(screen.getByText("Remove draft headline 1"));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove draft headline 15" })
+  );
   expect(onChange).toHaveBeenLastCalledWith([]);
   expect(existing).toHaveLength(24);
 });
@@ -233,9 +254,9 @@ it("shares explicit Display acceptance while preserving text and format-specific
     />
   );
   expect(f.ai.adType).toBe("DISPLAY");
-  expect(screen.getByText("Long headlines · 1/1")).toBeTruthy();
+  expect(screen.getByLabelText("Long headlines draft count")).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: "Add long headline" })
+    screen.getByRole("button", { name: "Write long headline" })
   ).toHaveProperty("disabled", true);
   expect(onChange).not.toHaveBeenCalled();
   f.ai.onApply([
@@ -266,7 +287,12 @@ it("connects required copy feedback to selected fields without invalidating unac
   );
   const input = screen.getByRole("textbox", { name: "Headlines 1" });
   expect(input.getAttribute("aria-invalid")).toBe("true");
-  const messageId = input.getAttribute("aria-describedby");
+  const messageId = input
+    .getAttribute("aria-describedby")
+    ?.split(" ")
+    .find(id =>
+      document.getElementById(id)?.textContent?.includes("Add at least")
+    );
   expect(document.getElementById(messageId!)?.textContent).toContain(
     "Add at least one headline."
   );

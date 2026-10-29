@@ -309,3 +309,47 @@
   font-weight: 600;
   padding: 8px 0;
 }
+
+.google-resource-search {
+  position: relative;
+}
+.google-resource-search > input {
+  width: 100%;
+}
+.google-resource-results {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--background, #fff);
+  border: 1px solid var(--border, #dbe3e8);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+.google-resource-results [role="option"] {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.google-resource-results [role="option"][aria-selected="true"] {
+  background: var(--accent, #e5f4f4);
+}
+.google-resource-results > p,
+.google-resource-results > [role="alert"] {
+  padding: 10px 12px;
+  margin: 0;
+}
+.google-resource-results button[role="option"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.google-resource-results button[role="option"][aria-selected="true"] {
+  background: var(--accent, #e5f4f4);
+}

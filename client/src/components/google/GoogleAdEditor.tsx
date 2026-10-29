@@ -3,6 +3,7 @@ import { googleCopyCapabilities } from "@shared/googleCopy";
 import { useEffect, useRef, useState } from "react";
 import {
   googleImageMatches,
+  googleImageSpecs,
   googleDisplayRequiredImages,
   googleMarketingImagePlacement,
 } from "@shared/googleImagePlacement";
@@ -133,6 +134,7 @@ export function AssetEditor({
   const media = googleAssetFormat(activeField);
   const [automaticPlacement, setAutomaticPlacement] = useState(true);
   const automatic = media === "image" && automaticPlacement;
+  const isRaster = media === "image" || media === "logo";
   const [source, setSource] = useState<
     "library" | "upload" | "existing" | "youtube" | "text"
   >(media === "text" ? "text" : "library");
@@ -356,6 +358,22 @@ export function AssetEditor({
           </ul>
         </div>
       )}
+      {media === "image" && (
+        <p className="activation-help">
+          Minimum dimensions are not exact sizes. For landscape images (1.91:1),
+          use the recommended 1200 × 628 px or larger at the same ratio; the
+          minimum is 600 × 314 px. For square images (1:1), 1200 × 1200 px is
+          recommended and 300 × 300 px is the minimum.
+        </p>
+      )}
+      {media === "logo" && (
+        <p className="activation-help">
+          Square logos: 1:1, minimum 128 × 128 px; 1200 × 1200 px recommended.
+          Landscape logos: 4:1, minimum 512 × 128 px; 1200 × 300 px recommended.
+          Select the logo placement explicitly. Images selected as marketing
+          images remain separate from logos.
+        </p>
+      )}
       <h3>Asset source</h3>
       {media === "image" && isPmax && (
         <p role="status">
@@ -497,18 +515,16 @@ export function AssetEditor({
               <div className="cfg-card-grid google-asset-picker">
                 {items.slice(pageOffset, pageOffset + 12).map(item => {
                   const dimensions =
-                    item.width && item.height
-                      ? item
-                      : loadedDimensions[
-                          `${activeSource}:${item.id}:${item.url}`
-                        ];
+                    loadedDimensions[
+                      `${activeSource}:${item.id}:${item.url}`
+                    ] ?? (item.width && item.height ? item : undefined);
                   const inferred = googleMarketingImagePlacement(
                     dimensions?.width,
                     dimensions?.height
                   );
                   const placement = automatic ? inferred : activeField;
                   const supported =
-                    media !== "image" ||
+                    !isRaster ||
                     (!!placement &&
                       fields.includes(placement) &&
                       (!dimensions?.width ||
@@ -518,12 +534,21 @@ export function AssetEditor({
                           dimensions?.width,
                           dimensions?.height
                         )));
-                  const placementIssue =
-                    media !== "image" || supported
-                      ? ""
-                      : !dimensions?.width || !dimensions?.height
-                        ? "Dimensions unavailable. Select a placement explicitly; review will verify the image."
-                        : "This image does not meet the selected Google size. Use automatic size or a compatible image.";
+                  const placementIssue = !isRaster
+                    ? ""
+                    : !dimensions?.width || !dimensions?.height
+                      ? automatic
+                        ? "Dimensions unavailable. Select a placement explicitly; review will verify the original image before publishing."
+                        : "Dimensions unavailable. Review will verify the original image before publishing."
+                      : supported
+                        ? ""
+                        : media === "logo"
+                          ? `This logo is ${dimensions.width} × ${dimensions.height}. ${fieldNames[activeField]} requires a ${googleImageSpecs[activeField]?.[2]}:1 ratio and at least ${googleImageSpecs[activeField]?.[0]} × ${googleImageSpecs[activeField]?.[1]} px. Choose a logo with a matching canvas.`
+                          : "This image does not meet the selected Google size. Use automatic size or a compatible image.";
+                  const dimensionLabel =
+                    isRaster && dimensions?.width && dimensions?.height
+                      ? `${dimensions.width} × ${dimensions.height}`
+                      : item.description;
                   const candidate: GoogleAssetInput = {
                     field: placement ?? activeField,
                     source:
@@ -535,13 +560,13 @@ export function AssetEditor({
                     <StudioCard
                       key={item.id}
                       title={item.name}
-                      description={`${item.description}${supported && media === "image" && placement ? " · " + fieldNames[placement] : ""}${placementIssue ? " · " + placementIssue : ""}`}
+                      description={`${dimensionLabel}${supported && (media === "image" || media === "logo") && placement ? " · " + fieldNames[placement] : ""}${placementIssue ? " · " + placementIssue : ""}`}
                       image={item.video ? undefined : item.url}
                       contain
                       media={
                         item.video ? (
                           <video src={item.url} muted preload="metadata" />
-                        ) : item.url && media === "image" ? (
+                        ) : item.url && isRaster ? (
                           <img
                             src={item.url}
                             alt={item.name}
@@ -584,7 +609,7 @@ export function AssetEditor({
                       onSelect={() =>
                         item.video
                           ? setSelectedVideo(item.id)
-                          : supported
+                          : supported || selected(candidate)
                             ? add(candidate, true)
                             : setError(placementIssue)
                       }
@@ -764,6 +789,7 @@ export function AssetEditor({
   );
 }
 export function AdEditor({
+  businessNameSuggestion,
   organizationId,
   connectionId,
   type,
@@ -772,6 +798,7 @@ export function AdEditor({
   part,
   format,
 }: {
+  businessNameSuggestion?: string;
   part: "creative" | "copy";
   format?: GoogleCreativeFormat;
   organizationId: number;
@@ -940,6 +967,13 @@ export function AdEditor({
                 value={ad.businessName ?? ""}
                 onChange={e => patch({ businessName: e.target.value })}
               />
+              {(businessNameSuggestion?.length ?? 0) > 25 && (
+                <span>
+                  Your workspace business name “{businessNameSuggestion}”
+                  exceeds Google’s 25-character limit. Enter a shorter approved
+                  business name; it has not been shortened automatically.
+                </span>
+              )}
             </Field>
           )}
           {type === "SEARCH" && (

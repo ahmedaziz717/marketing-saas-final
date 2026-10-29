@@ -384,7 +384,7 @@ async function prepare(
       const spec = googleImageSpecs[item.field];
       if (!googleImageMatches(item.field, width, height))
         fail(
-          `${asset.name}: ${item.field.toLowerCase().replace(/_/g, " ")} requires at least ${spec?.[0]} × ${spec?.[1]} pixels and a ${spec?.[2]}:1 ratio. This image is ${width} × ${height}. Return to Creative and choose Automatic image size or a compatible placement; the size of the image being replaced does not determine the new image’s placement.`
+          `${asset.name}: ${item.field.toLowerCase().replace(/_/g, " ")} requires at least ${spec?.[0]} × ${spec?.[1]} pixels and a ${spec?.[2]}:1 ratio. This image is ${width} × ${height}. ${item.field.includes("LOGO") ? "Return to Creative → Logos and select a logo whose canvas matches this ratio. Larger dimensions alone do not satisfy the required aspect ratio." : "Return to Creative and choose Automatic image size or a compatible placement; the size of the image being replaced does not determine the new image’s placement."}`
         );
       const imageBytes = await image.rotate().png().toBuffer();
       if (imageBytes.length > 5 * 1024 * 1024)

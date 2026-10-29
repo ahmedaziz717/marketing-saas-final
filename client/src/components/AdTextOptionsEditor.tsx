@@ -1,31 +1,28 @@
 import { ActionCredits } from "./ActionCredits";
-import { useId, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, RefreshCw, Sparkles, Undo2 } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 import {
   adCopyFields,
   canGenerateAssetCopy,
-  copyContentFromSets,
   copyFieldLabels,
   copyFieldLimits,
   copySets,
   copyVariantKeys,
-  replaceCopyOption,
   type AdCopyField,
   type CopyContent,
+  type CopySet,
+  type CopyRegeneration,
 } from "@shared/adCopy";
 import type { PublicationContent } from "@shared/channels";
 import { useAssetCopy } from "@/hooks/useAssetCopy";
 import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { channelInput } from "./ChannelConnections";
+import { AdCopyWorkspace } from "./AdCopyWorkspace";
 
+// The Meta copy request and publication contract allow five options per field.
+const maximum = 5;
 export function AdTextOptionsEditor({
   organizationId,
   assetKeys,
@@ -38,7 +35,11 @@ export function AdTextOptionsEditor({
   generationTarget,
   instructions,
   onGenerated,
+  defaultInstructions,
+  onBusyChange,
 }: {
+  defaultInstructions?: string;
+  onBusyChange?: (busy: boolean) => void;
   generationTarget?: HTMLElement | null;
   instructions?: string;
   onGenerated?: () => void;
@@ -51,39 +52,42 @@ export function AdTextOptionsEditor({
   value: CopyContent;
   onChange: (value: CopyContent) => void;
 }) {
-  const uid = useId();
-  const fieldId = (field: AdCopyField, index: number) =>
-    studioCategory
-      ? `${uid}-${field}-${index}`
-      : index === 0
-        ? `pub-${field}`
-        : `pub-${field}-${index}`;
   const [localDirection, setDirection] = useState("");
   const direction = instructions ?? localDirection;
   const studio = generationTarget !== undefined;
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const [active, setActive] = useState<AdCopyField>("message");
   const shownField =
     studioCategory && studioCategory !== "setup" ? studioCategory : active;
-  const canGenerate = canGenerateAssetCopy({ assetKeys, promotion, direction });
-  const [undo, setUndo] = useState<{
-    before: CopyContent;
-    after: string;
-    context: string;
-  }>();
-  const options = copySets(value);
-  const snapshot: CopyContent = {
-    message: value.message,
-    headline: value.headline,
-    description: value.description,
-    textVariants: value.textVariants,
-  };
+  const [suggestions, setSuggestions] = useState<CopySet[]>([]);
+  const [revision, setRevision] = useState(0);
+  const [notice, setNotice] = useState("");
   const context = JSON.stringify({
     organizationId,
     assetKeys,
     promotion,
     copyDirection,
     callToAction,
+    direction,
+    defaultInstructions,
   });
+  const draftKey = JSON.stringify(value);
+  const latestDraft = useRef(draftKey);
+  latestDraft.current = draftKey;
+  const requestedDraft = useRef(draftKey);
+  useEffect(() => {
+    setSuggestions([]);
+    setRevision(r => r + 1);
+    setNotice("");
+  }, [context]);
   const generator = useAssetCopy(
     {
       organizationId,
@@ -93,280 +97,221 @@ export function AdTextOptionsEditor({
       copyDirection,
       callToAction,
       direction,
-      currentOptions: options,
+      defaultInstructions,
+      currentOptions: suggestions.length ? suggestions : copySets(value),
     },
     (generated, target) => {
-      const next = target
-        ? replaceCopyOption(snapshot, target, generated[0])
-        : copyContentFromSets(generated);
-      setUndo({ before: snapshot, after: JSON.stringify(next), context });
-      onChange(next);
+      if (latestDraft.current !== requestedDraft.current) {
+        setNotice(
+          "Your draft changed while copy was generating. Your edits were kept; generate again when ready."
+        );
+        return;
+      }
+      setSuggestions(previous =>
+        target
+          ? previous.map((option, index) =>
+              index === target.index
+                ? target.field === "set"
+                  ? generated[0]
+                  : { ...option, [target.field]: generated[0][target.field] }
+                : option
+            )
+          : generated
+      );
+      setRevision(r => r + 1);
       if (!target) onGenerated?.();
     }
   );
-  const canUndo =
-    undo?.context === context && undo.after === JSON.stringify(snapshot);
-  const hasCopy = options.some(option =>
-    adCopyFields.some(field => option[field].trim())
-  );
   const busy = generator.isPending;
-  const label = (field: AdCopyField, index: number) =>
-    `${copyFieldLabels[field]} option ${index + 1}`;
-  const generationControls = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h3 className="font-semibold">
-          {studio ? "Generate copy" : "Ad copy"}
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          {studio
-            ? "Uses your brief, brand, selected creative, and direction choices."
-            : "Five primary texts, five headlines, and five descriptions."}
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={!canGenerate || busy}
-        onClick={() => generator.generate()}
-      >
+  useLayoutEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  const canGenerate = canGenerateAssetCopy({ assetKeys, promotion, direction });
+  function generate(target?: CopyRegeneration) {
+    if (busy || !canGenerate) return;
+    requestedDraft.current = latestDraft.current;
+    setRevision(r => r + 1);
+    setNotice("");
+    generator.generate(target);
+  }
+  const valuesFor = (field: AdCopyField) => [
+    value[field],
+    ...(value.textVariants?.[copyVariantKeys[field]] ?? []),
+  ];
+  function update(field: AdCopyField, values: string[]) {
+    onChange({
+      ...value,
+      [field]: values[0] ?? "",
+      textVariants: {
+        messages: [],
+        headlines: [],
+        descriptions: [],
+        ...value.textVariants,
+        [copyVariantKeys[field]]: values.slice(1),
+      },
+    });
+  }
+  function add(fieldId: string, texts: string[]) {
+    const field = fieldId as AdCopyField;
+    const values = [...valuesFor(field)];
+    const seen = new Set(values.map(v => v.trim().toLowerCase()));
+    let added = false;
+    for (const raw of texts) {
+      const text = raw.trim();
+      if (
+        !text ||
+        text.length > copyFieldLimits[field] ||
+        seen.has(text.toLowerCase())
+      )
+        continue;
+      const blank = values.findIndex(v => !v.trim());
+      if (blank >= 0) values[blank] = text;
+      else if (values.length < maximum) values.push(text);
+      else break;
+      added = true;
+      seen.add(text.toLowerCase());
+    }
+    if (added) update(field, values);
+  }
+  const generateButton = (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={!canGenerate || busy}
+      onClick={() => generate()}
+    >
+      {suggestions.length ? (
+        <RefreshCw className="size-4" />
+      ) : (
         <Sparkles className="size-4" />
-        {busy && !generator.target
-          ? "Generating 5 copy sets…"
-          : studio
-            ? hasCopy
-              ? "Regenerate all"
-              : "Generate copy"
-            : hasCopy
-              ? "Regenerate all 5 sets"
-              : "Generate 5 copy sets"}{" "}
-        <ActionCredits
-          organizationId={organizationId}
-          operation="channels.draftAssetCopy"
-        />
-      </Button>
-    </div>
+      )}
+      {busy
+        ? "Creating suggestions…"
+        : suggestions.length
+          ? "Regenerate"
+          : "Generate copy"}
+      <ActionCredits
+        organizationId={organizationId}
+        operation="channels.draftAssetCopy"
+      />
+    </Button>
+  );
+  const workspace = (
+    <AdCopyWorkspace
+      fields={[
+        {
+          id: shownField,
+          label: copyFieldLabels[shownField],
+          singular: copyFieldLabels[shownField].toLowerCase(),
+          characters: copyFieldLimits[shownField],
+          maximum,
+          suggestions: suggestions.map(option => option[shownField]),
+          drafts: valuesFor(shownField).map((text, index) => ({
+            id: String(index),
+            text,
+          })),
+          occupied: valuesFor(shownField).filter(text => text.trim()).length,
+        },
+      ]}
+      busy={busy}
+      generationKey={`${context}:${revision}`}
+      headerAction={!studio ? generateButton : undefined}
+      onEditSuggestion={(field, index, text) =>
+        setSuggestions(previous =>
+          previous.map((option, i) =>
+            i === index ? { ...option, [field]: text } : option
+          )
+        )
+      }
+      onAdd={add}
+      onEditDraft={(field, id, text) =>
+        update(
+          field as AdCopyField,
+          valuesFor(field as AdCopyField).map((old, i) =>
+            i === Number(id) ? text : old
+          )
+        )
+      }
+      onRemoveDraft={(field, id) =>
+        update(
+          field as AdCopyField,
+          valuesFor(field as AdCopyField).filter((_, i) => i !== Number(id))
+        )
+      }
+      onWrite={field => {
+        const values = valuesFor(field as AdCopyField);
+        if (values.length < maximum)
+          update(field as AdCopyField, [...values, ""]);
+      }}
+      onRegenerate={(field, index) =>
+        generate({ field: field as AdCopyField, index })
+      }
+    />
   );
   return (
     <section
-      className="rounded-xl border p-4 space-y-4 min-w-0"
+      className="min-w-0 space-y-3"
       aria-label="Ad copy options"
       aria-busy={busy}
     >
-      {studio
-        ? generationTarget && createPortal(generationControls, generationTarget)
-        : generationControls}
-      {!studio && (
-        <>
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted-foreground">
-              Optional AI direction
-            </summary>
-            <textarea
-              aria-label="AI copy direction"
-              className={channelInput + " mt-2"}
-              value={direction}
-              onChange={e => setDirection(e.target.value)}
-              maxLength={2000}
-              placeholder="For example: focus on everyday elegance with a warm, concise voice."
-            />
-          </details>
-          <p className="text-xs text-muted-foreground">
-            {canGenerate
-              ? "Regenerate any option, or use its ⋯ menu for the full set."
-              : "Add your setup or select an approved image to generate copy, or write your own."}
-          </p>
-        </>
+      {studio &&
+        generationTarget &&
+        createPortal(generateButton, generationTarget)}
+      {!studio && instructions === undefined && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground">
+            Optional AI direction
+          </summary>
+          <textarea
+            aria-label="AI copy direction"
+            className={channelInput + " mt-2"}
+            value={direction}
+            onChange={e => setDirection(e.target.value)}
+            maxLength={2000}
+          />
+        </details>
       )}
-      <Tabs
-        value={shownField}
-        onValueChange={field => setActive(field as AdCopyField)}
-      >
-        {!studioCategory && (
-          <TabsList className="grid h-auto w-full grid-cols-3">
+      {!studioCategory ? (
+        <Tabs
+          value={shownField}
+          onValueChange={field => setActive(field as AdCopyField)}
+          orientation={narrow ? "horizontal" : "vertical"}
+          className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-[150px_minmax(0,1fr)]"
+        >
+          <TabsList
+            aria-label="Meta copy fields"
+            className="grid h-auto w-full grid-cols-3 gap-1 bg-transparent p-0 md:grid-cols-1"
+          >
             {adCopyFields.map(field => (
               <TabsTrigger
                 key={field}
                 value={field}
-                className="flex-col gap-0.5 px-1 py-2 text-xs sm:text-sm"
+                className="min-h-9 justify-start whitespace-normal rounded-md px-3 py-2 text-xs data-[state=active]:bg-accent data-[state=active]:text-primary data-[state=active]:shadow-none sm:text-sm"
               >
-                {field === "message"
-                  ? "Primary text"
-                  : field === "headline"
-                    ? "Headlines"
-                    : "Descriptions"}
-                <span className="text-xs text-muted-foreground">
-                  {options.filter(o => o[field].trim()).length}/5
-                </span>
+                {copyFieldLabels[field]}
               </TabsTrigger>
             ))}
           </TabsList>
-        )}
-        {adCopyFields.map(field => {
-          const variantKey = copyVariantKeys[field];
-          const values = [
-            value[field],
-            ...(value.textVariants?.[variantKey] ?? []),
-          ];
-          return (
-            <TabsContent
-              key={field}
-              value={field}
-              forceMount
-              hidden={shownField !== field || studioCategory === "setup"}
-              className="space-y-3 mt-4"
-            >
-              {values.map((text, index) => {
-                const regenerating =
-                  busy &&
-                  generator.target?.index === index &&
-                  (generator.target.field === field ||
-                    generator.target.field === "set");
-                return (
-                  <div
-                    key={index}
-                    className="rounded-lg border p-3 space-y-2 bg-background/60"
-                  >
-                    <div className="flex flex-wrap justify-between items-center gap-2">
-                      <label
-                        htmlFor={fieldId(field, index)}
-                        className="text-sm font-medium"
-                      >
-                        {label(field, index)}
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          aria-label={`Regenerate ${label(field, index).toLowerCase()}`}
-                          disabled={!canGenerate || busy}
-                          onClick={() => generator.generate({ index, field })}
-                        >
-                          <RefreshCw
-                            className={`size-3.5 ${regenerating ? "animate-spin" : ""}`}
-                          />
-                          {regenerating ? "Regenerating…" : "Regenerate"}
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-8"
-                              disabled={busy}
-                              aria-label={`More actions for ${label(field, index).toLowerCase()}`}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              disabled={!canGenerate}
-                              onSelect={() =>
-                                generator.generate({ index, field: "set" })
-                              }
-                            >
-                              Regenerate full set {index + 1} (all 3 fields){" "}
-                              <ActionCredits
-                                organizationId={organizationId}
-                                operation="channels.draftAssetCopy"
-                              />
-                            </DropdownMenuItem>
-                            {index > 0 && (
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  onChange({
-                                    ...snapshot,
-                                    textVariants: {
-                                      messages: [],
-                                      headlines: [],
-                                      descriptions: [],
-                                      ...value.textVariants,
-                                      [variantKey]: values
-                                        .slice(1)
-                                        .filter((_, i) => i !== index - 1),
-                                    },
-                                  })
-                                }
-                              >
-                                Remove this{" "}
-                                {copyFieldLabels[field].toLowerCase()} option
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                    <textarea
-                      id={fieldId(field, index)}
-                      aria-label={label(field, index)}
-                      className={
-                        channelInput +
-                        (field === "message" ? " min-h-24" : " min-h-16")
-                      }
-                      rows={field === "message" ? 3 : 2}
-                      maxLength={copyFieldLimits[field]}
-                      value={text}
-                      onChange={e =>
-                        onChange(
-                          replaceCopyOption(
-                            snapshot,
-                            { index, field },
-                            { ...options[index], [field]: e.target.value }
-                          )
-                        )
-                      }
-                    />
-                    <p className="text-right text-xs text-muted-foreground">
-                      {text.length}/{copyFieldLimits[field]}
-                    </p>
-                  </div>
-                );
-              })}
-              {values.length < 5 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    onChange({
-                      ...snapshot,
-                      textVariants: {
-                        messages: [],
-                        headlines: [],
-                        descriptions: [],
-                        ...value.textVariants,
-                        [variantKey]: [...values.slice(1), ""],
-                      },
-                    })
-                  }
-                >
-                  Add {copyFieldLabels[field].toLowerCase()} option
-                </Button>
-              )}
-            </TabsContent>
-          );
-        })}
-      </Tabs>
-      {canUndo && (
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            onChange(undo.before);
-            setUndo(undefined);
-          }}
-        >
-          <Undo2 className="size-4" />
-          Undo last generation
-        </Button>
+          <TabsContent
+            key={shownField}
+            value={shownField}
+            className="min-w-0 m-0"
+          >
+            {workspace}
+          </TabsContent>
+        </Tabs>
+      ) : studioCategory !== "setup" ? (
+        workspace
+      ) : null}
+      {(notice || generator.error) && (
+        <p role="status" className="text-sm">
+          {notice || generator.error}
+        </p>
       )}
-      <p className="text-xs text-muted-foreground" aria-live="polite">
-        {busy
-          ? "Creating fresh copy. Your edits will be kept if you change anything while it generates."
-          : "AI uses your brief, brand context, and selected images when available. Review all copy before approval. Meta may combine options and may not show every description."}
+      <p className="text-xs text-muted-foreground">
+        Suggestions never replace your draft automatically. Meta may combine
+        options and may not show every description. Text length guidance varies
+        by placement.
       </p>
     </section>
   );

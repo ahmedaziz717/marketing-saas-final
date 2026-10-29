@@ -97,27 +97,92 @@ beforeEach(() => {
   f.save.mockResolvedValue({});
   f.refetch.mockResolvedValue({});
 });
-it("keeps per-run prompt edits separate from explicit shared saves and suggestion acceptance", async () => {
-  const add = vi.fn();
-  render(<GooglePmaxAi organizationId={7} onAdd={add} />);
-  fireEvent.click(screen.getByText("Create PMax copy with AI"));
+
+it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
+  "stages %s suggestions and fills remaining slots without replacing manual copy",
+  async adType => {
+    const max = adType === "DISPLAY" ? 5 : 15;
+    const apply = vi.fn();
+    render(
+      <GooglePmaxAi
+        organizationId={7}
+        adType={adType}
+        onAdd={vi.fn()}
+        onApply={apply}
+        occupiedFields={Array(max - 1).fill("HEADLINE")}
+        existingCopy={{
+          headlines: ["Manual headline"],
+          longHeadlines: [],
+          descriptions: [],
+        }}
+      />
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create suggestions with AI" })
+    );
+    await screen.findByDisplayValue("New headline");
+    expect(apply).not.toHaveBeenCalled();
+    const field = within(
+      screen.getByRole("region", { name: "Headlines AI suggestions" })
+    );
+    fireEvent.click(field.getByRole("button", { name: "Add all that fit" }));
+    expect(apply).toHaveBeenCalledWith([
+      { field: "HEADLINE", source: { kind: "text", text: "New headline" } },
+    ]);
+    expect(
+      screen
+        .getAllByRole("status")
+        .map(e => e.textContent)
+        .join(" ")
+    ).toContain("no remaining slot");
+    expect(screen.getByDisplayValue("Manual headline")).toHaveProperty(
+      "readOnly",
+      true
+    );
+  }
+);
+it("adds only selected edited proposals and clears selection after acceptance and regeneration", async () => {
+  const apply = vi.fn();
+  render(<GooglePmaxAi organizationId={7} onAdd={vi.fn()} onApply={apply} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await screen.findByDisplayValue("New headline");
+  fireEvent.change(screen.getByLabelText("Headlines suggestion 2"), {
+    target: { value: "My edit" },
+  });
+  fireEvent.click(screen.getByLabelText("Select headline suggestion 2"));
+  fireEvent.click(screen.getByRole("button", { name: "Add selected (1)" }));
+  expect(apply).toHaveBeenCalledWith([
+    { field: "HEADLINE", source: { kind: "text", text: "My edit" } },
+  ]);
+  expect(screen.getByLabelText("Select headline suggestion 2")).toHaveProperty(
+    "checked",
+    false
+  );
+  fireEvent.click(screen.getByLabelText("Select headline suggestion 1"));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Regenerate all suggestions" })
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Select headline suggestion 1")
+    ).toHaveProperty("checked", false)
+  );
+});
+it("preserves per-run prompt changes until an explicit shared save", async () => {
+  render(<GooglePmaxAi organizationId={7} onAdd={vi.fn()} />);
   fireEvent.change(screen.getByDisplayValue("Saved brand prompt"), {
     target: { value: "Only this run" },
   });
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await screen.findByDisplayValue("New headline");
   expect(f.generate).toHaveBeenCalledWith(
-    expect.objectContaining({
-      organizationId: 7,
-      defaultInstructions: "Only this run",
-    })
+    expect.objectContaining({ defaultInstructions: "Only this run" })
   );
   expect(f.save).not.toHaveBeenCalled();
-  expect(add).not.toHaveBeenCalled();
-  fireEvent.click((await screen.findAllByText("Add to draft"))[0]);
-  expect(add).toHaveBeenCalledWith({
-    field: "HEADLINE",
-    source: { kind: "text", text: "New headline" },
-  });
   fireEvent.click(screen.getByText("Save as shared default"));
   await waitFor(() =>
     expect(f.save).toHaveBeenCalledWith(
@@ -129,225 +194,28 @@ it("keeps per-run prompt edits separate from explicit shared saves and suggestio
     )
   );
 });
-it("makes restoring the initial brand default explicit and revision checked", async () => {
-  render(<GooglePmaxAi organizationId={7} onAdd={() => {}} />);
-  fireEvent.click(screen.getByText("Create PMax copy with AI"));
-  fireEvent.click(screen.getByText("Restore initial Brand Kit default"));
-  await waitFor(() =>
-    expect(f.save).toHaveBeenCalledWith(
+it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
+  "uses %s channel generation limits",
+  async adType => {
+    render(<GooglePmaxAi organizationId={7} adType={adType} onAdd={vi.fn()} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create suggestions with AI" })
+    );
+    await screen.findByDisplayValue("New headline");
+    expect(f.generate).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "restore_brand_initial",
-        expectedRevision: 3,
+        copyRequest: expect.objectContaining({
+          adType,
+          counts:
+            adType === "DISPLAY"
+              ? { headlines: 5, longHeadlines: 1, descriptions: 5 }
+              : { headlines: 15, longHeadlines: 5, descriptions: 5 },
+        }),
       })
-    )
-  );
-  expect(f.generate).not.toHaveBeenCalled();
-});
-
-it("requests 15/5/5 maximum and forwards selected media, not draft text", async () => {
-  const assets = [
-    {
-      field: "SQUARE_MARKETING_IMAGE" as const,
-      source: { kind: "library" as const, key: "asset:1" },
-    },
-    {
-      field: "HEADLINE" as const,
-      source: { kind: "text" as const, text: "Keep my copy" },
-    },
-  ];
-  const add = vi.fn();
-  render(
-    <GooglePmaxAi
-      organizationId={7}
-      connectionId="connection"
-      assets={assets}
-      onAdd={add}
-    />
-  );
-  expect(screen.getByAltText("Selected creative")).toBeTruthy();
-  const inputs = screen.getAllByRole("spinbutton") as HTMLInputElement[];
-  expect(inputs.map(i => Number(i.value))).toEqual([15, 5, 5]);
-  fireEvent.change(inputs[0], { target: { value: "99" } });
-  expect(inputs[0].value).toBe("15");
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
-  await screen.findByDisplayValue("New headline");
-  expect(f.generate).toHaveBeenCalledWith(
-    expect.objectContaining({
-      connectionId: "connection",
-      selectedAssets: [assets[0]],
-      copyRequest: expect.objectContaining({
-        counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
-      }),
-    })
-  );
-  expect(add).not.toHaveBeenCalled();
-});
-
-it("edits suggestions before explicit acceptance and regenerates only one suggestion", async () => {
-  const add = vi.fn(),
-    apply = vi.fn();
-  render(<GooglePmaxAi organizationId={7} onAdd={add} onApply={apply} />);
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
-  const suggestion = await screen.findByDisplayValue("New headline");
-  fireEvent.change(suggestion, { target: { value: "My edited headline" } });
-  expect(add).not.toHaveBeenCalled();
-  expect(apply).not.toHaveBeenCalled();
-  fireEvent.click(
-    within(
-      suggestion.closest(".google-copy-suggestion") as HTMLElement
-    ).getByText("Add to draft")
-  );
-  expect(add).toHaveBeenCalledWith({
-    field: "HEADLINE",
-    source: { kind: "text", text: "My edited headline" },
-  });
-  f.generate.mockResolvedValueOnce({
-    headlines: ["Replacement"],
-    longHeadlines: [],
-    descriptions: [],
-  });
-  fireEvent.click(
-    within(
-      suggestion.closest(".google-copy-suggestion") as HTMLElement
-    ).getByText("Regenerate this headline")
-  );
-  await screen.findByDisplayValue("Replacement");
-  expect(f.generate).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      copyRequest: expect.objectContaining({
-        target: "headlines",
-        counts: { headlines: 1, longHeadlines: 0, descriptions: 0 },
-      }),
-    })
-  );
-  expect(screen.getByDisplayValue("Second headline")).toBeTruthy();
-  expect(screen.getByDisplayValue("New description")).toBeTruthy();
-  expect(add).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByText("Add all valid suggestions to draft"));
-  expect(apply).toHaveBeenCalledWith(
-    expect.arrayContaining([
-      { field: "HEADLINE", source: { kind: "text", text: "Replacement" } },
-    ])
-  );
-});
-
-it("generates alternatives at full capacity without adding or replacing existing copy", async () => {
-  const occupied = [
-    ...Array(14).fill("HEADLINE"),
-    ...Array(4).fill("LONG_HEADLINE"),
-    ...Array(5).fill("DESCRIPTION"),
-  ];
-  const add = vi.fn(),
-    apply = vi.fn();
-  const { rerender } = render(
-    <GooglePmaxAi
-      organizationId={7}
-      occupiedFields={occupied}
-      onAdd={add}
-      onApply={apply}
-    />
-  );
-  expect(
-    (screen.getAllByRole("spinbutton") as HTMLInputElement[]).map(i =>
-      Number(i.value)
-    )
-  ).toEqual([15, 5, 5]);
-  rerender(
-    <GooglePmaxAi
-      organizationId={7}
-      occupiedFields={[...occupied, "HEADLINE", "LONG_HEADLINE"]}
-      onAdd={add}
-      onApply={apply}
-    />
-  );
-  expect(
-    (screen.getByText("Create suggestions with AI") as HTMLButtonElement)
-      .disabled
-  ).toBe(false);
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
-  await screen.findByDisplayValue("New headline");
-  expect(f.generate).toHaveBeenCalledWith(
-    expect.objectContaining({
-      copyRequest: expect.objectContaining({
-        counts: { headlines: 15, longHeadlines: 5, descriptions: 5 },
-      }),
-    })
-  );
-  expect(
-    screen
-      .getAllByText("All slots occupied")
-      .every(button => (button as HTMLButtonElement).disabled)
-  ).toBe(true);
-  fireEvent.click(screen.getByText("Add all valid suggestions to draft"));
-  expect(add).not.toHaveBeenCalled();
-  expect(apply).not.toHaveBeenCalled();
-});
-
-it("requires choosing and explicitly accepting a same-field replacement", async () => {
-  const replace = vi.fn(),
-    add = vi.fn();
-  const { rerender } = render(
-    <GooglePmaxAi
-      organizationId={7}
-      onAdd={add}
-      onReplace={replace}
-      replacementOptions={[
-        {
-          id: "headline-1",
-          field: "headlines",
-          label: "Google: Original headline",
-        },
-        {
-          id: "description-1",
-          field: "descriptions",
-          label: "Google: Original description",
-        },
-      ]}
-    />
-  );
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
-  const suggestion = await screen.findByDisplayValue("New headline");
-  const row = within(
-    suggestion.closest(".google-copy-suggestion") as HTMLElement
-  );
-  const button = row.getByText(
-    "Replace selected text in draft"
-  ) as HTMLButtonElement;
-  expect(button.disabled).toBe(true);
-  expect(row.queryByText("Google: Original description")).toBeNull();
-  fireEvent.change(row.getByRole("combobox"), {
-    target: { value: "headline-1" },
-  });
-  expect(replace).not.toHaveBeenCalled();
-  fireEvent.click(button);
-  expect(replace).toHaveBeenCalledWith("headline-1", {
-    field: "HEADLINE",
-    source: { kind: "text", text: "New headline" },
-  });
-  expect(add).not.toHaveBeenCalled();
-  fireEvent.change(row.getByRole("combobox"), {
-    target: { value: "headline-1" },
-  });
-  rerender(
-    <GooglePmaxAi
-      organizationId={7}
-      onAdd={add}
-      onReplace={replace}
-      replacementOptions={[
-        {
-          id: "headline-2",
-          field: "headlines",
-          label: "Google: Changed headline",
-        },
-      ]}
-    />
-  );
-  expect(button.disabled).toBe(true);
-  fireEvent.click(button);
-  expect(replace).toHaveBeenCalledTimes(1);
-});
-
-it("discards an in-flight suggestion response after selected creative changes", async () => {
+    );
+  }
+);
+it("discards in-flight responses after a manual draft edit", async () => {
   let resolve!: (value: unknown) => void;
   f.generate.mockImplementationOnce(
     () =>
@@ -355,122 +223,116 @@ it("discards an in-flight suggestion response after selected creative changes", 
         resolve = r;
       })
   );
-  const add = vi.fn();
-  const { rerender } = render(<GooglePmaxAi organizationId={7} onAdd={add} />);
-  fireEvent.click(screen.getByText("Create suggestions with AI"));
+  const { rerender } = render(
+    <GooglePmaxAi organizationId={7} onAdd={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
   rerender(
     <GooglePmaxAi
       organizationId={7}
+      onAdd={vi.fn()}
+      existingCopy={{
+        headlines: ["Manual edit"],
+        longHeadlines: [],
+        descriptions: [],
+      }}
+    />
+  );
+  await act(async () =>
+    resolve({
+      headlines: ["Stale response"],
+      longHeadlines: [],
+      descriptions: [],
+    })
+  );
+  expect(screen.queryByDisplayValue("Stale response")).toBeNull();
+});
+it("keeps explicit replacement opt-in and rejects stale targets", async () => {
+  const replace = vi.fn();
+  const props = { organizationId: 7, onAdd: vi.fn(), onReplace: replace };
+  const { rerender } = render(
+    <GooglePmaxAi
+      {...props}
+      replacementOptions={[
+        { id: "one", field: "headlines", label: "Original" },
+      ]}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await screen.findByDisplayValue("New headline");
+  const select = screen.getByLabelText(
+    "Text to replace with headlines suggestion 1"
+  );
+  fireEvent.change(select, { target: { value: "one" } });
+  expect(replace).not.toHaveBeenCalled();
+  rerender(
+    <GooglePmaxAi
+      {...props}
+      replacementOptions={[{ id: "two", field: "headlines", label: "Edited" }]}
+    />
+  );
+  expect(
+    screen.getAllByText("Replace selected text in draft")[0]
+  ).toHaveProperty("disabled", true);
+});
+it("keeps uncategorized products optional and generates without confirmation", async () => {
+  render(<GooglePmaxAi organizationId={7} onAdd={vi.fn()} />);
+  fireEvent.click(
+    screen.getByLabelText("Approved product — Product facts only")
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await screen.findByDisplayValue("New headline");
+  expect(f.generate).toHaveBeenCalledWith(
+    expect.objectContaining({ productIds: [4] })
+  );
+  expect(f.generate.mock.calls[0][0]).not.toHaveProperty("neutralCategories");
+});
+
+it("discards superseded responses and clears proposals after the creative context changes", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  f.generate.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        resolveFirst = resolve;
+      })
+  );
+  const { rerender } = render(
+    <GooglePmaxAi organizationId={7} onAdd={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create suggestions with AI" })
+  );
+  await screen.findByDisplayValue("New headline");
+  await act(async () =>
+    resolveFirst({
+      headlines: ["Older response"],
+      longHeadlines: [],
+      descriptions: [],
+    })
+  );
+  expect(screen.queryByDisplayValue("Older response")).toBeNull();
+  fireEvent.click(screen.getByLabelText("Select headline suggestion 1"));
+  rerender(
+    <GooglePmaxAi
+      organizationId={7}
+      onAdd={vi.fn()}
       assets={[
         {
           field: "MARKETING_IMAGE",
           source: { kind: "library", key: "asset:1" },
         },
       ]}
-      onAdd={add}
     />
   );
-  await act(async () => {
-    resolve({
-      headlines: ["Stale response"],
-      longHeadlines: [],
-      descriptions: [],
-    });
-  });
-  await waitFor(() => expect(f.generate).toHaveBeenCalledTimes(1));
-  expect(screen.queryByDisplayValue("Stale response")).toBeNull();
-  expect(add).not.toHaveBeenCalled();
+  expect(screen.queryByDisplayValue("New headline")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Add selected (1)" })).toBeNull();
 });
-
-it("uses shared Display generation with 5/1/5 counts and selected asset context", async () => {
-  const onAdd = vi.fn();
-  render(
-    <GooglePmaxAi
-      organizationId={7}
-      connectionId="account"
-      adType="DISPLAY"
-      assets={[
-        {
-          field: "SQUARE_MARKETING_IMAGE",
-          source: { kind: "library", key: "asset:1" },
-        },
-      ]}
-      onAdd={onAdd}
-    />
-  );
-  expect(
-    screen.getByText("Create Responsive Display copy with AI")
-  ).toBeTruthy();
-  expect(screen.getByLabelText("Headlines to generate")).toHaveProperty(
-    "value",
-    "5"
-  );
-  expect(screen.getByLabelText("Long headlines to generate")).toHaveProperty(
-    "value",
-    "1"
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Create suggestions with AI" })
-  );
-  await waitFor(() => expect(f.generate).toHaveBeenCalled());
-  expect(f.generate.mock.calls[0][0]).toMatchObject({
-    connectionId: "account",
-    selectedAssets: [
-      {
-        field: "SQUARE_MARKETING_IMAGE",
-        source: { kind: "library", key: "asset:1" },
-      },
-    ],
-    copyRequest: {
-      adType: "DISPLAY",
-      counts: { headlines: 5, longHeadlines: 1, descriptions: 5 },
-    },
-  });
-  expect(onAdd).not.toHaveBeenCalled();
-});
-
-it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
-  "compares proposed and selected %s copy without implicit acceptance",
-  async adType => {
-    const onChange = vi.fn();
-    render(
-      <GoogleCopyEditor
-        organizationId={7}
-        connectionId="account"
-        adType={adType}
-        assets={[
-          {
-            field: "HEADLINE",
-            source: { kind: "text", text: "Selected headline" },
-          },
-        ]}
-        onChange={onChange}
-      />
-    );
-    const proposed = screen.getByRole("region", { name: "Proposed copy" });
-    const selected = screen.getByRole("region", {
-      name: "Selected copy for this draft",
-    });
-    expect(proposed.parentElement).toBe(selected.parentElement);
-    expect(proposed.parentElement?.className).toBe("google-copy-comparison");
-    expect(
-      within(selected).getByDisplayValue("Selected headline")
-    ).toHaveProperty("rows", 1);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create suggestions with AI" })
-    );
-    await within(proposed).findByDisplayValue("New headline");
-    expect(within(selected).queryByDisplayValue("New headline")).toBeNull();
-    expect(onChange).not.toHaveBeenCalled();
-    fireEvent.click(
-      within(proposed).getAllByRole("button", { name: "Add to draft" })[0]
-    );
-    expect(onChange).toHaveBeenCalledWith([
-      {
-        field: "HEADLINE",
-        source: { kind: "text", text: "Selected headline" },
-      },
-      { field: "HEADLINE", source: { kind: "text", text: "New headline" } },
-    ]);
-  }
-);

@@ -1,3 +1,4 @@
+import { AdTextOptionsEditor } from "../AdTextOptionsEditor";
 import { TaskPromptField } from "../TaskPromptField";
 import { useState, useEffect, useLayoutEffect, type ReactNode } from "react";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
@@ -26,7 +27,7 @@ function fingerprint(value: unknown) {
     hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
   return `v1-${(hash >>> 0).toString(16)}`;
 }
-export function StudioCopyComposer({
+function SocialStudioCopyComposer({
   organizationId,
   channel,
   assetKeys,
@@ -163,7 +164,14 @@ export function StudioCopyComposer({
       aria-label="Compose copy"
       aria-busy={busy}
     >
-      <TaskPromptField promptId="copy.asset" label="Copy generation instructions" value={content.copyDefaultInstructions} onChange={copyDefaultInstructions => onChange({ ...content, copyDefaultInstructions })} />
+      <TaskPromptField
+        promptId="copy.asset"
+        label="Copy generation instructions"
+        value={content.copyDefaultInstructions}
+        onChange={copyDefaultInstructions =>
+          onChange({ ...content, copyDefaultInstructions })
+        }
+      />
       <div className="studio-copy-context">
         <div className="studio-copy-context-heading">
           <strong>Your copy direction</strong>
@@ -439,6 +447,150 @@ export function StudioCopyComposer({
           ))}
         </details>
       )}
+    </section>
+  );
+}
+
+/** Activation Studio's Meta route uses the same review-before-acceptance editor as Google. */
+export function StudioCopyComposer(
+  props: Parameters<typeof SocialStudioCopyComposer>[0]
+) {
+  if (props.channel !== "meta_ads")
+    return <SocialStudioCopyComposer {...props} />;
+  return <MetaStudioCopyComposer {...props} />;
+}
+function MetaStudioCopyComposer({
+  organizationId,
+  assetKeys,
+  content,
+  onChange,
+  errors,
+  onEditChoices,
+  onEditBrief,
+  preview,
+  onBusyChange,
+}: Parameters<typeof SocialStudioCopyComposer>[0]) {
+  const [busy, setBusy] = useState(false);
+  useLayoutEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  const choices = copyDirectionBrief(content.copyDirection);
+  const context = fingerprint({
+    organizationId,
+    channel: "meta_ads",
+    assetKeys,
+    choices,
+    promotion: content.promotion,
+    instructions: content.copyInstructions ?? "",
+    defaultInstructions: content.copyDefaultInstructions,
+    cta: content.callToAction,
+  });
+  const changed =
+    !!content.copyGenerationContext &&
+    content.copyGenerationContext !== context;
+  return (
+    <section
+      className="studio-copy-compose"
+      aria-label="Compose copy"
+      aria-busy={busy}
+    >
+      <details className="studio-copy-context">
+        <summary>Your copy direction and instructions</summary>
+        <p>
+          {choices.length
+            ? choices
+                .map(
+                  choice =>
+                    `${choice.attribute}: ${choice.values.map(value => value.label).join(", ")}`
+                )
+                .join(" · ")
+            : "AI uses your brief and brand."}
+        </p>
+        <button type="button" onClick={onEditChoices}>
+          Edit choices
+        </button>
+        <button type="button" onClick={onEditBrief}>
+          Edit brief
+        </button>
+        <TaskPromptField
+          promptId="copy.asset"
+          label="Copy generation instructions"
+          value={content.copyDefaultInstructions}
+          onChange={copyDefaultInstructions =>
+            onChange({ ...content, copyDefaultInstructions })
+          }
+        />
+      </details>
+      {changed && (
+        <p role="status" className="studio-copy-changed">
+          Your directions changed since this draft's saved generation. Existing
+          draft copy is kept. Generate suggestions and review before adding.
+        </p>
+      )}
+      <AdTextOptionsEditor
+        organizationId={organizationId}
+        assetKeys={assetKeys}
+        promotion={content.promotion}
+        copyDirection={content.copyDirection}
+        callToAction={content.callToAction}
+        instructions={content.copyInstructions ?? ""}
+        defaultInstructions={content.copyDefaultInstructions}
+        value={content}
+        onChange={copy => onChange({ ...content, ...copy })}
+        onBusyChange={setBusy}
+      />
+      {Object.entries(errors).map(
+        ([field, message]) =>
+          message && (
+            <p key={field} role="alert">
+              {message}
+            </p>
+          )
+      )}
+      <div className="studio-copy-context">
+        <label className="cfg-field">
+          <span>Destination URL</span>
+          <input
+            type="url"
+            placeholder="https://"
+            value={content.link}
+            onChange={e => onChange({ ...content, link: e.target.value })}
+          />
+        </label>
+        <details className="studio-copy-cta">
+          <summary>
+            Call to action: {content.callToAction.replaceAll("_", " ")}
+          </summary>
+          <MetaCallToActionTiles
+            value={content.callToAction}
+            onChange={callToAction => onChange({ ...content, callToAction })}
+          />
+        </details>
+      </div>
+      {!!content.copyAlternatives?.length && (
+        <details className="studio-copy-context">
+          <summary>Previously saved AI alternatives</summary>
+          <p>
+            Reference only; these alternatives are not in your draft and may use
+            older directions.
+          </p>
+          {content.copyAlternatives.map((copy, index) => (
+            <article key={index}>
+              <strong>Saved alternative {index + 1}</strong>
+              {adCopyFields.map(field => (
+                <p key={field}>
+                  <strong>{copyFieldLabels[field]}: </strong>
+                  {copy[field]}
+                </p>
+              ))}
+            </article>
+          ))}
+        </details>
+      )}
+      <details className="studio-copy-context">
+        <summary>Live preview</summary>
+        {preview}
+      </details>
     </section>
   );
 }

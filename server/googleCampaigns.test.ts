@@ -36,6 +36,7 @@ import { googleLibraryVideo } from "./lib/googleVideoUploads";
 import { readLibraryAsset } from "./lib/assetLibrary";
 import {
   brandAssets,
+  catalogCategorySettings,
   brandKits,
   users,
   organizations,
@@ -207,7 +208,7 @@ beforeEach(() => {
     }));
 });
 
-it("scopes PMax AI products server-side and requires explicit neutral category handling", async () => {
+it("scopes Google AI products server-side and automatically handles unmapped categories", async () => {
   await f.db
     .insert(brandKits)
     .values({
@@ -249,18 +250,15 @@ it("scopes PMax AI products server-side and requires explicit neutral category h
       })
     ).rejects.toThrow("approved products from this workspace");
   }
-  await expect(
-    caller.draftPmaxCopy({ organizationId: org, productIds: [rows[0].id] })
-  ).rejects.toThrow("mixed or unmapped");
   expect(f.generate).not.toHaveBeenCalled();
   await caller.draftPmaxCopy({
     organizationId: org,
     productIds: [rows[0].id],
-    neutralCategories: true,
     defaultInstructions: "Per-run instructions",
   });
   expect(f.generate).toHaveBeenCalledWith(
     expect.objectContaining({
+      neutralCategories: true,
       products: [
         expect.objectContaining({
           id: rows[0].id,
@@ -274,6 +272,99 @@ it("scopes PMax AI products server-side and requires explicit neutral category h
   expect(f.mutate).not.toHaveBeenCalled();
   expect(f.videoUpload).not.toHaveBeenCalled();
 });
+it.each(["DISPLAY", "PERFORMANCE_MAX"] as const)(
+  "generates %s copy for mixed confirmed categories without opting in",
+  async adType => {
+    const categories = ["Office", "Outdoor"].map(name => ({
+      id: randomUUID(),
+      name,
+      audience: "",
+      useCases: "",
+      vocabulary: "",
+      cta: "",
+      avoid: "",
+    }));
+    await f.db
+      .insert(catalogCategorySettings)
+      .values({
+        organizationId: org,
+        revision: 1,
+        settings: {
+          categories,
+          mappings: categories.map(c => ({
+            sourceId: null,
+            sourceCategory: c.name,
+            categoryId: c.id,
+          })),
+        },
+        updatedByUserId: owner,
+        updatedAtMs: 1,
+      })
+      .onConflictDoUpdate({
+        target: catalogCategorySettings.organizationId,
+        set: {
+          settings: {
+            categories,
+            mappings: categories.map(c => ({
+              sourceId: null,
+              sourceCategory: c.name,
+              categoryId: c.id,
+            })),
+          },
+        },
+      });
+    const rows = await f.db
+      .insert(products)
+      .values(
+        categories.map(c => ({
+          organizationId: org,
+          name: `${c.name} product`,
+          category: c.name,
+          status: "approved",
+          productUrl: "https://example.test/product",
+          dedupeKey: randomUUID(),
+          specifications: {},
+          provenance: {},
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        }))
+      )
+      .returning();
+    const caller = googleCampaignsRouter.createCaller({
+      user: { id: owner },
+    } as any);
+    await caller.draftPmaxCopy({
+      organizationId: org,
+      productIds: rows.map((r: any) => r.id),
+      neutralCategories: false,
+      copyRequest: {
+        adType,
+        counts: { headlines: 1, longHeadlines: 0, descriptions: 0 },
+      },
+    });
+    expect(f.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        neutralCategories: true,
+        products: expect.arrayContaining(
+          rows.map((r: any, index: number) =>
+            expect.objectContaining({
+              id: r.id,
+              marketingCategory: expect.objectContaining({
+                status: "confirmed",
+                category: expect.objectContaining({ id: categories[index].id }),
+              }),
+            })
+          )
+        ),
+      }),
+      undefined,
+      expect.objectContaining({ adType }),
+      []
+    );
+    expect(f.mutate).not.toHaveBeenCalled();
+    expect(f.videoUpload).not.toHaveBeenCalled();
+  }
+);
 it("grounds draft copy in an approved workspace image and forwards exact generation controls without activation", async () => {
   const kit = (
     await f.db.select().from(brandKits).where(eq(brandKits.organizationId, org))
@@ -937,4 +1028,26 @@ it("keeps Google provider validation authoritative for incompatible added images
     "ASPECT_RATIO_NOT_ALLOWED"
   );
   expect(f.mutate.mock.calls.every(call => call[3] === true)).toBe(true);
+});
+
+it("reports the original non-square logo canvas without suggesting automatic marketing placement", async () => {
+  mockPmaxImages(() => pmaxImageFixture());
+  const kit = (await f.db.select().from(brandKits).where(eq(brandKits.organizationId, org)))[0];
+  const [row] = await f.db.insert(brandAssets).values({
+    organizationId: org, brandKitId: kit.id, name: "Solid_Black.png", type: "logo",
+    storageKey: `org-${org}/non-square-logo.png`, url: "https://example.test/logo.png",
+    mimeType: "image/png", status: "approved", uploadedByUserId: owner,
+    createdAtMs: 1, metadata: { library: { purpose: "finished" } },
+  }).returning();
+  const bytes = await sharp({
+    create: { width: 2511, height: 2349, channels: 3, background: "#000000" },
+  }).png().toBuffer();
+  f.storage.mockResolvedValue(bytes.toString("base64"));
+  const result = reviewed({
+    kind: "asset_group_assets", campaignId: "11", assetGroupId: "22",
+    add: [{ field: "LOGO", source: { kind: "library", key: `asset:${row.id}` } }],
+    remove: [],
+  });
+  await expect(result).rejects.toThrow("This image is 2511 × 2349. Return to Creative → Logos");
+  expect(f.mutate).not.toHaveBeenCalled();
 });

@@ -111,3 +111,13 @@ it("points new Display campaigns to missing responsive images before Google subm
   if (!square.success)
     expect(square.error.issues[0].message).toContain("Square · 1:1");
 });
+
+it("accepts recommended and larger images without requiring exact minimum dimensions", () => {
+  expect(googleImageMatches("MARKETING_IMAGE", 600, 314)).toBe(true);
+  expect(googleImageMatches("MARKETING_IMAGE", 1200, 628)).toBe(true);
+  expect(googleImageMatches("MARKETING_IMAGE", 2400, 1256)).toBe(true);
+  expect(googleImageMatches("LOGO", 1080, 1080)).toBe(true);
+  expect(googleImageMatches("LOGO", 1200, 1200)).toBe(true);
+  expect(googleImageMatches("LOGO", 127, 127)).toBe(false);
+  expect(googleImageMatches("MARKETING_IMAGE", 1200, 1200)).toBe(false);
+});

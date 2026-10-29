@@ -26,6 +26,8 @@ const api = vi.hoisted(() => ({
   resources: [] as any[],
   drafts: [] as any[],
   accounts: [] as any[],
+  brand: null as any,
+  brandLoading: false,
 }));
 const account = {
   id: "google",
@@ -40,6 +42,11 @@ vi.mock("@/hooks/useWorkspace", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    brand: {
+      get: {
+        useQuery: () => ({ data: api.brand, isLoading: api.brandLoading }),
+      },
+    },
     prompts: {
       list: { useQuery: () => ({ data: api.prompts, refetch: vi.fn() }) },
       change: { useMutation: () => ({ mutateAsync: vi.fn() }) },
@@ -60,6 +67,9 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       campaigns: {
+        merchantFeedLabels: {
+          useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
+        },
         assetMetrics: {
           useQuery: () => ({
             data: undefined,
@@ -117,6 +127,8 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   api.accounts = [account];
+  api.brand = null;
+  api.brandLoading = false;
   api.prompts = [];
   api.library = [];
   api.resources = [];
@@ -132,9 +144,9 @@ beforeEach(() => {
 afterEach(cleanup);
 it.each([
   ["Search", "Keyword match type"],
-  ["Performance Max", "Feed label"],
+  ["Performance Max", "Product feed label"],
   ["Display", "EU political advertising declaration"],
-  ["Shopping", "Feed label"],
+  ["Shopping", "Product feed label"],
   ["Demand Gen", "Demand Gen surfaces"],
   ["App installs", "App ID"],
 ])(
@@ -143,6 +155,15 @@ it.each([
     setup();
     click("New campaign");
     click(`Select ${type}`);
+    const draftKey = Object.keys(localStorage).find(key =>
+      key.includes("activation:google")
+    )!;
+    expect(
+      JSON.parse(localStorage.getItem(draftKey)!).value.change
+    ).toMatchObject({
+      locationIds: ["2840"],
+      languageIds: ["1000"],
+    });
     fireEvent.change(screen.getByLabelText("Campaign name"), {
       target: { value: `${type} launch` },
     });
@@ -361,7 +382,7 @@ it("validates YouTube entries and keeps video/text sources separate", () => {
   click("Add asset");
   expect(screen.queryByRole("alert")).toBeNull();
   section("Copy");
-  click("Add headline");
+  click("Write headline");
   expect(screen.getByLabelText("Headlines 1")).toBeTruthy();
   expect(screen.queryByLabelText("YouTube link or video ID")).toBeNull();
 });
@@ -938,9 +959,8 @@ it("generates copy for a full existing group and saves only the explicitly chose
       }),
     })
   );
-  const row = within(
-    suggestion.closest(".google-copy-suggestion") as HTMLElement
-  );
+  const row = within(suggestion.closest(".ad-copy-proposal") as HTMLElement);
+  fireEvent.click(row.getByText("Replace existing text…"));
   const option = row.getByRole("option", {
     name: "Google: Existing headline 0",
   }) as HTMLOptionElement;
@@ -1201,17 +1221,17 @@ it("creates a new group inside the existing PMax campaign without requiring new-
   click("Continue to Copy →");
   const textFields = [
     [
-      "Add headline",
+      "Write headline",
       "Headlines",
       ["Shop seasonal", "Explore seasonal products", "Find your next favorite"],
     ],
     [
-      "Add long headline",
+      "Write long headline",
       "Long headlines",
       ["Explore seasonal products for your next project"],
     ],
     [
-      "Add description",
+      "Write description",
       "Descriptions",
       [
         "Browse the seasonal collection.",
@@ -1389,6 +1409,13 @@ it("opens a saved new-campaign draft without attaching the previous existing des
   expect(
     (screen.getByLabelText("Campaign name") as HTMLInputElement).value
   ).toBe("Saved launch");
+  const key = Object.keys(localStorage).find(key =>
+    key.includes("activation:google")
+  )!;
+  expect(JSON.parse(localStorage.getItem(key)!).value.change).toMatchObject({
+    locationIds: [],
+    languageIds: [],
+  });
   expect(api.mutate).not.toHaveBeenCalled();
 });
 
@@ -1504,4 +1531,230 @@ it("keeps confirmation disabled with an actionable reason when a response lacks 
     "google-confirmation-blocker"
   );
   expect(api.publish).not.toHaveBeenCalled();
+});
+
+it.each([
+  { locationIds: [], languageIds: [] },
+  { locationIds: ["2124"], languageIds: ["1002"] },
+])("preserves local targeting choices on restoration: %j", targeting => {
+  const view = setup();
+  click("New campaign");
+  click("Select Search");
+  const key = Object.keys(localStorage).find(key =>
+    key.includes("activation:google")
+  )!;
+  const entry = JSON.parse(localStorage.getItem(key)!);
+  view.unmount();
+  Object.assign(entry.value.change, targeting);
+  localStorage.setItem(key, JSON.stringify(entry));
+  setup();
+  section("Delivery");
+  click("Open Locations & languages category");
+  expect(JSON.parse(localStorage.getItem(key)!).value.change).toMatchObject(
+    targeting
+  );
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("does not reapply defaults after the user removes both targeting selections", () => {
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  click("Open Locations & languages category");
+  click("Remove United States");
+  click("Remove English");
+  click("Open Budget & bidding category");
+  click("Open Locations & languages category");
+  expect(
+    screen.queryByRole("button", { name: "Remove United States" })
+  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Remove English" })).toBeNull();
+  const key = Object.keys(localStorage).find(key =>
+    key.includes("activation:google")
+  )!;
+  expect(JSON.parse(localStorage.getItem(key)!).value.change).toMatchObject({
+    locationIds: [],
+    languageIds: [],
+  });
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+it("routes the missing-logo hint to Logos and keeps a 1080 square image in both explicit roles", async () => {
+  api.library = [
+    {
+      key: "asset:95",
+      name: "Square brand mark",
+      mediaType: "image",
+      state: "approved",
+      width: 1080,
+      height: 1080,
+    },
+  ];
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  fireEvent.click(
+    within(
+      screen.getByRole("navigation", { name: "Activation sections" })
+    ).getByRole("button", { name: /^Creative / })
+  );
+  click("Open Assets & details category");
+  click("Select Square brand mark");
+  click("Continue to Copy →");
+  fireEvent.click(
+    within(
+      screen.getByRole("navigation", { name: "Activation sections" })
+    ).getByRole("button", { name: /^Creative / })
+  );
+  expect(
+    screen.getByText(/A square image is not automatically a logo/)
+  ).toBeTruthy();
+  click("Choose Logos");
+  expect(
+    screen
+      .getByRole("button", { name: "Select Logos" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  expect(
+    screen.getByText(/minimum 128 × 128 px; 1200 × 1200 px recommended/)
+  ).toBeTruthy();
+  click("Select Images");
+  const required = screen.getByLabelText("Required items before activation");
+  expect(required.textContent).toContain(
+    "recommended 1200 × 628 px; minimum 600 × 314 px"
+  );
+  fireEvent.click(
+    within(required).getByRole("button", { name: /square logos/ })
+  );
+  expect(
+    screen
+      .getByRole("button", { name: "Select Logos" })
+      .getAttribute("aria-pressed")
+  ).toBe("true");
+  click("Select Square brand mark");
+  const selected = screen.getByText(
+    "Selected for this draft · 2"
+  ).parentElement!;
+  expect(selected.textContent).toContain("Square image · 1:1");
+  expect(selected.textContent).toContain("Square logo · 1:1");
+  expect(screen.queryByRole("button", { name: "Choose Logos" })).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(api.publish).not.toHaveBeenCalled();
+});
+
+function currentGoogleAdDraft() {
+  const key = Object.keys(localStorage).find(key =>
+    key.includes("activation:google")
+  )!;
+  return JSON.parse(localStorage.getItem(key)!).value.change.ad;
+}
+it("defaults a fresh campaign's business identity and landing page from its workspace brand", () => {
+  api.brand = {
+    organizationId: 1,
+    name: "CLX Gaming",
+    businessProfile: { website: "clxgaming.com" },
+  };
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  expect(currentGoogleAdDraft()).toMatchObject({
+    businessName: "CLX Gaming",
+    finalUrl: "https://clxgaming.com",
+  });
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it("does not default another workspace's business identity", () => {
+  api.brand = {
+    organizationId: 2,
+    name: "Other business",
+    businessProfile: { website: "other.example" },
+  };
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  expect(currentGoogleAdDraft().businessName).toBeUndefined();
+  expect(currentGoogleAdDraft().finalUrl).toBe("");
+});
+it("does not overwrite a restored campaign with current business defaults", () => {
+  const view = setup();
+  click("New campaign");
+  click("Select Performance Max");
+  view.unmount();
+  api.brand = {
+    organizationId: 1,
+    name: "CLX Gaming",
+    businessProfile: { website: "clxgaming.com" },
+  };
+  setup();
+  expect(currentGoogleAdDraft().finalUrl).toBe("");
+  expect(currentGoogleAdDraft().businessName ?? "").toBe("");
+});
+it("fills untouched fields after business data loads but preserves a user-edited then cleared landing page", () => {
+  api.brand = undefined;
+  api.brandLoading = true;
+  setup();
+  click("New campaign");
+  click("Select Performance Max");
+  section("Creative");
+  click("Open Assets & details category");
+  fireEvent.change(screen.getByLabelText("Landing page"), {
+    target: { value: "https://my.example" },
+  });
+  fireEvent.change(screen.getByLabelText("Landing page"), {
+    target: { value: "" },
+  });
+  api.brand = {
+    organizationId: 1,
+    name: "CLX Gaming",
+    businessProfile: { website: "clxgaming.com" },
+  };
+  api.brandLoading = false;
+  section("Delivery");
+  expect(currentGoogleAdDraft()).toMatchObject({
+    businessName: "CLX Gaming",
+    finalUrl: "",
+  });
+});
+
+it.each(["Search", "Shopping", "App installs"])(
+  "does not insert a hidden business name for %s",
+  type => {
+    api.brand = {
+      organizationId: 1,
+      name: "A very long business name requiring approval",
+      businessProfile: { website: "example.com" },
+    };
+    setup();
+    click("New campaign");
+    click(`Select ${type}`);
+    expect(currentGoogleAdDraft().businessName).toBeUndefined();
+    if (type !== "Search") expect(currentGoogleAdDraft().finalUrl).toBe("");
+  }
+);
+it("shows an overlong business name as guidance without poisoning draft restoration", () => {
+  const name = "A very long business name requiring approval";
+  api.brand = {
+    organizationId: 1,
+    name,
+    businessProfile: { website: "example.com" },
+  };
+  const view = setup();
+  click("New campaign");
+  click("Select Performance Max");
+  fireEvent.change(screen.getByLabelText("Campaign name"), {
+    target: { value: "Keep my draft" },
+  });
+  section("Copy");
+  expect(
+    screen.getByText(/exceeds Google’s 25-character limit/).textContent
+  ).toContain(name);
+  expect(currentGoogleAdDraft().businessName).toBeUndefined();
+  view.unmount();
+  setup();
+  section("Delivery");
+  expect(
+    (screen.getByLabelText("Campaign name") as HTMLInputElement).value
+  ).toBe("Keep my draft");
 });
