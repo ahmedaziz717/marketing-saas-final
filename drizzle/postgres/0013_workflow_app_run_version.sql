@@ -1,0 +1,1 @@
+ALTER TABLE "app_private"."creative_workflow_runs" ADD COLUMN "appVersionId" varchar(36);

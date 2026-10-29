@@ -1,0 +1,206 @@
+.optimization-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.optimization-header-actions select {
+  max-width: 19rem;
+  min-width: 0;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--background);
+}
+.optimization-explainer,
+.optimization-evidence-card,
+.optimization-run-banner {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--cfg-accent) 7%, var(--background));
+}
+.optimization-explainer {
+  display: flex;
+  gap: 0.8rem;
+  align-items: start;
+}
+.optimization-explainer svg {
+  flex-shrink: 0;
+}
+.optimization-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.optimization-focus {
+  display: flex;
+  align-items: start;
+  gap: 0.8rem;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  cursor: pointer;
+}
+.optimization-focus[data-selected="true"] {
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 9%, var(--background));
+}
+.optimization-focus input {
+  margin-top: 0.25rem;
+  accent-color: var(--cfg-accent);
+}
+.optimization-focus strong,
+.optimization-focus small {
+  display: block;
+}
+.optimization-focus small {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin-top: 0.4rem;
+}
+.optimization-summary {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.optimization-summary > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.optimization-summary dt {
+  color: var(--muted-foreground);
+}
+.optimization-summary dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.optimization-run-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+}
+.optimization-run-banner p {
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+.optimization-progress {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+.optimization-progress li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 1rem;
+  background: var(--muted);
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+}
+.optimization-progress span {
+  color: var(--muted-foreground);
+}
+.optimization-recommendation,
+.optimization-experiment {
+  padding: 1.4rem;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  min-width: 0;
+}
+.optimization-recommendation-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: 1.5rem;
+}
+.optimization-recommendation-action p {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+.optimization-experiment > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+.optimization-history {
+  display: grid;
+  gap: 0.5rem;
+}
+.optimization-history > button {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+.optimization-history > button > span {
+  flex: 1;
+}
+.optimization-history small {
+  display: block;
+  color: var(--muted-foreground);
+  margin-top: 0.3rem;
+}
+.optimization-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.optimization-footer > span {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+@media (max-width: 1000px) {
+  .optimization-focus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .optimization-focus-grid {
+    grid-template-columns: 1fr;
+  }
+  .optimization-header-actions,
+  .optimization-header-actions select {
+    width: 100%;
+    max-width: 100%;
+  }
+  .optimization-summary > div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .optimization-run-banner,
+  .optimization-recommendation-action {
+    flex-direction: column;
+  }
+  .optimization-recommendation,
+  .optimization-experiment {
+    padding: 1rem;
+  }
+  .optimization-footer {
+    gap: 0.5rem;
+  }
+  .optimization-footer > span {
+    display: none;
+  }
+}

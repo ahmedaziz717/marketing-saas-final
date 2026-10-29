@@ -1,0 +1,355 @@
+.google-campaign-studio {
+  min-width: 0;
+}
+.google-account-bar,
+.google-form-grid,
+.google-actions,
+.google-mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+  margin: 16px 0;
+}
+.google-account-bar {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  align-items: center;
+}
+.google-account-bar a {
+  font-size: 13px;
+  text-decoration: underline;
+}
+.google-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 13px;
+  min-width: 0;
+  flex: 1 1 190px;
+}
+.google-field > span {
+  font-weight: 600;
+}
+.google-field input,
+.google-field select,
+.google-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+.google-field textarea {
+  resize: vertical;
+}
+.google-fields {
+  min-width: 0;
+  padding: 24px;
+}
+.google-fields fieldset {
+  border: 0;
+  min-width: 0;
+}
+.google-fields fieldset:disabled {
+  opacity: 0.65;
+}
+.google-fields h2,
+.google-fields h3 {
+  margin: 12px 0;
+  font-weight: 600;
+}
+.google-fields p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+.google-fields label:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.google-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.google-preview-ad {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+.google-preview-ad .cfg-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.google-preview-summary {
+  min-width: 0;
+}
+.google-preview h2 {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 6px 0;
+}
+.google-preview h3 {
+  font-size: 18px;
+  line-height: 1.4;
+  margin: 12px 0 4px;
+  color: var(--primary);
+}
+.google-preview p,
+.google-preview small {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.google-preview p {
+  margin: 6px 0;
+}
+.google-summary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.google-summary-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.google-campaign-studio .cfg-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+.google-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.google-chips button {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 10px;
+}
+.google-campaign-list,
+.google-current-assets {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+.google-campaign-list button,
+.google-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left;
+  width: 100%;
+}
+.google-campaign-list button.is-selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.google-campaign-list span,
+.google-draft span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.google-existing-detail,
+.google-group,
+.google-assets,
+.google-review {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.google-existing-detail > button {
+  margin: 4px 8px 4px 0;
+}
+.google-current-assets img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.google-asset-list {
+  list-style: none;
+  padding: 0;
+}
+.google-asset-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.google-asset-list button {
+  flex-shrink: 0;
+  text-decoration: underline;
+}
+.google-error {
+  white-space: pre-line;
+  color: #b82942 !important;
+  padding: 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+}
+.google-review dl {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 2fr;
+  gap: 10px 20px;
+  font-size: 13px;
+}
+.google-review dt {
+  color: var(--muted-foreground);
+}
+.google-review dd {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .google-preview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .google-fields {
+    padding: 16px;
+  }
+  .google-account-bar {
+    align-items: stretch;
+  }
+  .google-field {
+    flex-basis: 100%;
+  }
+  .google-mode-tabs > button {
+    flex: 1;
+  }
+}
+
+.google-existing-assets {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.google-existing-assets summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.google-video-transfer {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.google-video-transfer video {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  margin: 12px 0;
+}
+.google-asset-picker video {
+  height: 120px;
+  width: 100%;
+  object-fit: contain;
+}
+.google-inline-upload {
+  padding: 16px 0;
+  max-width: 760px;
+}
+
+/* Asset-first copy drafting uses the same compact card rhythm as inventory. */
+.google-pmax-ai,
+.google-copy-suggestion {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.google-pmax-ai > .google-current-assets {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.google-pmax-ai figure {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--muted);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.google-copy-suggestion > button {
+  margin: 8px 8px 0 0;
+}
+.google-current-assets > label {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.google-pmax-ai details {
+  margin: 12px 0;
+}
+.google-pmax-ai summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px 0;
+}
+
+.google-resource-search {
+  position: relative;
+}
+.google-resource-search > input {
+  width: 100%;
+}
+.google-resource-results {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--background, #fff);
+  border: 1px solid var(--border, #dbe3e8);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+.google-resource-results [role="option"] {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.google-resource-results [role="option"][aria-selected="true"] {
+  background: var(--accent, #e5f4f4);
+}
+.google-resource-results > p,
+.google-resource-results > [role="alert"] {
+  padding: 10px 12px;
+  margin: 0;
+}
+.google-resource-results button[role="option"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.google-resource-results button[role="option"][aria-selected="true"] {
+  background: var(--accent, #e5f4f4);
+}

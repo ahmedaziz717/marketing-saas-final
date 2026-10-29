@@ -1,0 +1,578 @@
+// @vitest-environment jsdom
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const calls = vi.hoisted(() => ({
+  save: vi.fn(),
+  align: vi.fn(),
+  refetch: vi.fn(),
+  sourceWidth: 600,
+  layerCount: 1,
+  layerHeight: undefined as number | undefined,
+  applied: true,
+  automaticFailure: undefined as "source_resolution" | undefined,
+  sources: [] as any[],
+  query: vi.fn(),
+}));
+vi.mock("./ActionCredits", () => ({ ActionCredits: () => null }));
+vi.mock("@/lib/trpc", () => ({
+  trpc: {
+    assetLibrary: { studioList: { useQuery: () => ({ data: calls.sources }) } },
+    creativeBuilder: {
+      productOverlay: {
+        useQuery: (input: unknown) => {
+          calls.query(input);
+          return {
+            dataUpdatedAt: 1,
+            refetch: calls.refetch,
+            data: {
+              designUrl: "data:image/png;base64,preview",
+              width: 1000,
+              height: 1000,
+              applied: calls.applied,
+              automaticFailure: calls.automaticFailure,
+              revision: "revision",
+              layers: Array.from({ length: calls.layerCount }, () => ({
+                left: 100,
+                top: 100,
+                width: 400,
+                height: calls.layerHeight,
+                sourceWidth: calls.sourceWidth,
+                sourceHeight: calls.sourceWidth * 2,
+                aspect: 0.5,
+                preview: "data:image/png;base64,product",
+              })),
+            },
+          };
+        },
+      },
+      saveProductOverlay: { useMutation: () => ({ mutateAsync: calls.save }) },
+      alignProductOverlay: {
+        useMutation: () => ({ mutateAsync: calls.align }),
+      },
+    },
+  },
+}));
+import { ProductOverlayEditor } from "./ProductOverlayEditor";
+it("keeps an unprepared design unchanged until explicit manual placement, and reset removes the fallback", () => {
+  calls.applied = false;
+  calls.sourceWidth = 145;
+  render(
+    <ProductOverlayEditor organizationId={3} variantId={98} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  expect(screen.getByText("Placement has not been prepared")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(screen.getByRole("alert").textContent).toContain("too small");
+  expect(
+    screen.getByText("Recover with a sharper original").closest("details")?.open
+  ).toBe(true);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Place manually at native size" })
+  );
+  expect(screen.getByAltText("Original product 1").style.width).toBe("14.5%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("29%");
+  fireEvent.change(screen.getByLabelText("left in pixels"), {
+    target: { value: "150" },
+  });
+  expect(screen.getByAltText("Original product 1").style.left).toBe("15%");
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(calls.save).not.toHaveBeenCalled();
+});
+afterEach(cleanup);
+beforeEach(() => {
+  calls.sourceWidth = 600;
+  calls.layerCount = 1;
+  calls.layerHeight = undefined;
+  calls.applied = true;
+  calls.automaticFailure = undefined;
+  calls.sources = [];
+  vi.clearAllMocks();
+});
+
+it("requires fresh source selection and confirmation after switching product layers by pointer", () => {
+  calls.layerCount = 2;
+  calls.sources = [
+    {
+      key: "asset:9",
+      revision: "a".repeat(64),
+      name: "Layer A original",
+      origin: "uploaded",
+      purpose: "source",
+      sourceType: "product",
+      state: "approved",
+      mimeType: "image/png",
+    },
+  ];
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  const choice = screen.getByLabelText(
+    "Higher-resolution product source"
+  ) as HTMLSelectElement;
+  const confirmation = screen.getByLabelText(
+    "I verified the same product, configuration and camera view."
+  ) as HTMLInputElement;
+  const preview = screen.getByRole("button", {
+    name: "Preview replacement",
+  }) as HTMLButtonElement;
+  fireEvent.change(choice, { target: { value: "asset:9" } });
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  const layerA = {
+    index: 0,
+    key: "asset:9",
+    revision: "a".repeat(64),
+    sameViewConfirmed: true,
+  };
+  const layerBImage = screen.getByAltText("Original product 2");
+  Object.defineProperty(layerBImage, "setPointerCapture", { value: vi.fn() });
+  fireEvent.pointerDown(layerBImage, {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 100,
+  });
+  expect(choice.value).toBe("");
+  expect(confirmation.checked).toBe(false);
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({
+    organizationId: 1,
+    variantId: 2,
+    replacements: [layerA],
+  });
+  // Even the same uploaded asset must be deliberately selected and confirmed for B.
+  fireEvent.change(choice, { target: { value: "asset:9" } });
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(confirmation);
+  fireEvent.click(preview);
+  expect(calls.query).toHaveBeenLastCalledWith({
+    organizationId: 1,
+    variantId: 2,
+    replacements: [layerA, { ...layerA, index: 1 }],
+  });
+  expect(calls.save).not.toHaveBeenCalled();
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("previews an explicitly confirmed source without alignment and saves a bound replacement", async () => {
+  calls.sources = [
+    {
+      key: "asset:9",
+      revision: "a".repeat(64),
+      name: "Same view original",
+      origin: "uploaded",
+      purpose: "source",
+      sourceType: "product",
+      state: "approved",
+      mimeType: "image/png",
+    },
+  ];
+  calls.save.mockResolvedValue({ key: "creative:3" });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.change(screen.getByLabelText("Higher-resolution product source"), {
+    target: { value: "asset:9" },
+  });
+  const preview = screen.getByRole("button", {
+    name: "Preview replacement",
+  }) as HTMLButtonElement;
+  expect(preview.disabled).toBe(true);
+  fireEvent.click(
+    screen.getByLabelText(
+      "I verified the same product, configuration and camera view."
+    )
+  );
+  fireEvent.click(preview);
+  const replacement = {
+    index: 0,
+    key: "asset:9",
+    revision: "a".repeat(64),
+    sameViewConfirmed: true,
+  };
+  expect(calls.query).toHaveBeenLastCalledWith({
+    organizationId: 1,
+    variantId: 2,
+    replacements: [replacement],
+  });
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+  await waitFor(() =>
+    expect(calls.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replacements: [replacement],
+        allowUpscale: false,
+      })
+    )
+  );
+});
+
+it("explains a recorded resolution failure without starting another paid alignment", () => {
+  calls.applied = false;
+  calls.automaticFailure = "source_resolution";
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  expect(
+    screen.getByText(/sharper source or accepted enlargement/)
+  ).toBeTruthy();
+  expect(screen.getByText(/complete design is unchanged/)).toBeTruthy();
+  expect(screen.queryByAltText("Original product 1")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("separates unsaved alignment from saved state and resets without spending credits", async () => {
+  calls.applied = false;
+  calls.sourceWidth = 164;
+  calls.align.mockResolvedValue({
+    sameAngle: true,
+    layers: [{ left: 443, top: 211, width: 525 }],
+  });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  expect(screen.getByText(/Saved cutout: 164/)).toBeTruthy();
+  expect(calls.align).not.toHaveBeenCalled();
+  expect(
+    screen.getByText(/No original-product overlay is applied/)
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() =>
+    expect(screen.getByText(/Alignment suggested/)).toBeTruthy()
+  );
+  expect(
+    screen.queryByText(/No original-product overlay is applied/)
+  ).toBeNull();
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Save as new version",
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.queryByText(/Alignment suggested/)).toBeNull();
+  expect(
+    screen.getByText(/No original-product overlay is applied/)
+  ).toBeTruthy();
+  expect(
+    (screen.getByLabelText("Compare with original design") as HTMLInputElement)
+      .checked
+  ).toBe(false);
+  expect(
+    (
+      screen.getByLabelText(
+        "Accept enlargement for this version"
+      ) as HTMLInputElement
+    ).checked
+  ).toBe(false);
+  expect(calls.align).toHaveBeenCalledTimes(1);
+  expect(calls.align).toHaveBeenCalledWith(
+    expect.objectContaining({ preserveSizes: undefined })
+  );
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("requires the original background to load before alignment or saving", () => {
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  const save = screen.getByRole("button", {
+    name: "Save as new version",
+  }) as HTMLButtonElement;
+  const align = screen.getByRole("button", {
+    name: "Suggest alignment",
+  }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  expect(align.disabled).toBe(true);
+  const design = screen.getByAltText("Original complete creative design");
+  fireEvent.load(design);
+  expect(save.disabled).toBe(false);
+  expect(align.disabled).toBe(false);
+  fireEvent.error(design);
+  expect(save.disabled).toBe(true);
+  expect(align.disabled).toBe(true);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "could not be displayed"
+  );
+  expect(
+    screen.getByRole("button", { name: "Reload original design" })
+  ).toBeTruthy();
+  expect(calls.save).not.toHaveBeenCalled();
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("requires explicit acceptance when a manual placement exceeds the measured source resolution", () => {
+  calls.sourceWidth = 300;
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  const save = screen.getByRole("button", {
+    name: "Save as new version",
+  }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
+  expect(save.disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText("width in pixels"), {
+    target: { value: "450" },
+  });
+  expect(save.disabled).toBe(true);
+  expect(calls.save).not.toHaveBeenCalled();
+});
+it("allows accepted enlargement of a verified replacement and keeps width and height proportional", async () => {
+  calls.sourceWidth = 300;
+  calls.sources = [
+    {
+      key: "asset:9",
+      revision: "a".repeat(64),
+      name: "Same view original",
+      origin: "uploaded",
+      purpose: "source",
+      sourceType: "product",
+      state: "approved",
+      mimeType: "image/png",
+    },
+  ];
+  calls.save.mockResolvedValue({ key: "creative:3" });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.change(screen.getByLabelText("Higher-resolution product source"), {
+    target: { value: "asset:9" },
+  });
+  fireEvent.click(
+    screen.getByLabelText(
+      "I verified the same product, configuration and camera view."
+    )
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Preview replacement" }));
+  fireEvent.change(screen.getByLabelText("height in pixels"), {
+    target: { value: "700" },
+  });
+  expect(
+    (screen.getByAltText("Original product 1") as HTMLImageElement).style.height
+  ).toBe("70%");
+  const save = screen.getByRole("button", {
+    name: "Save as new version",
+  }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText("Accept enlargement for this version"));
+  fireEvent.click(save);
+  await waitFor(() =>
+    expect(calls.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowUpscale: true,
+        layers: [{ left: 100, top: 100, width: 350, height: 700 }],
+        replacements: [expect.objectContaining({ key: "asset:9" })],
+      })
+    )
+  );
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("resizes from a corner in full canvas coordinates on a scaled preview, then saves the same geometry", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  calls.save.mockResolvedValue({ key: "creative:3" });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  const canvas = screen.getByLabelText("Product placement canvas");
+  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+    width: 500,
+    height: 500,
+    left: 0,
+    top: 0,
+    right: 500,
+    bottom: 500,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const corner = screen.getByRole("button", {
+    name: "Resize product from se corner",
+  });
+  Object.defineProperty(corner, "setPointerCapture", { value: vi.fn() });
+  fireEvent.pointerDown(corner, { clientX: 250, clientY: 450, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 275, clientY: 500, pointerId: 1 });
+  fireEvent.pointerUp(canvas);
+  expect(screen.getByAltText("Original product 1").style.width).toBe("45%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("90%");
+  // A new gesture starts from the new layer, never a stale initial rectangle.
+  fireEvent.pointerDown(corner, { clientX: 275, clientY: 500, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 225, clientY: 400, pointerId: 2 });
+  fireEvent.pointerCancel(canvas);
+  fireEvent.pointerMove(canvas, { clientX: 400, clientY: 400, pointerId: 2 });
+  expect(screen.getByAltText("Original product 1").style.width).toBe("35%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("70%");
+  fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+  await waitFor(() =>
+    expect(calls.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layers: [{ left: 100, top: 100, width: 350, height: 700 }],
+      })
+    )
+  );
+  vi.unstubAllGlobals();
+});
+
+it("offers keyboard resizing and links numeric width to height without stretching", () => {
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.change(screen.getByLabelText("width in pixels"), {
+    target: { value: "300" },
+  });
+  expect(screen.getByAltText("Original product 1").style.height).toBe("60%");
+  fireEvent.keyDown(
+    screen.getByRole("button", { name: "Resize product from se corner" }),
+    { key: "ArrowDown", shiftKey: true }
+  );
+  expect(screen.getByLabelText("width in pixels")).toHaveProperty(
+    "value",
+    "304"
+  );
+  expect(screen.getByLabelText("height in pixels")).toHaveProperty(
+    "value",
+    "608"
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Reset placement" }));
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("restores source proportions for a legacy stretched layer as an unsaved correction", () => {
+  calls.layerHeight = 600;
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(screen.getByAltText("Original product 1").style.height).toBe("80%");
+  expect(screen.getByAltText("Original product 1").style.objectFit).toBe(
+    "contain"
+  );
+  expect(screen.getByText(/previewing an unsaved placement/)).toBeTruthy();
+  expect(calls.save).not.toHaveBeenCalled();
+  expect(calls.align).not.toHaveBeenCalled();
+});
+
+it("suggests position only by default for an accepted size and retains placement on rejection", async () => {
+  calls.applied = true;
+  calls.layerHeight = 800;
+  calls.align.mockRejectedValue(
+    new Error("Current size cannot cover the detected product")
+  );
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() =>
+    expect(calls.align).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preserveSizes: [{ left: 100, top: 100, width: 400, height: 800 }],
+      })
+    )
+  );
+  await screen.findByText("Current size cannot cover the detected product");
+  expect(screen.getByAltText("Original product 1").style.width).toBe("40%");
+  expect(screen.getByAltText("Original product 1").style.top).toBe("10%");
+  expect(calls.save).not.toHaveBeenCalled();
+});
+
+it("allows size-and-position fitting only after explicit size-preservation opt-out", async () => {
+  calls.applied = true;
+  calls.align.mockResolvedValue({
+    sameAngle: true,
+    layers: [{ left: 200, top: 200, width: 300 }],
+  });
+  render(
+    <ProductOverlayEditor organizationId={1} variantId={2} onSaved={vi.fn()} />
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Adjust original product" })
+  );
+  fireEvent.load(screen.getByAltText("Original complete creative design"));
+  fireEvent.click(
+    screen.getByLabelText("Keep current size; suggest position only")
+  );
+  expect(
+    screen.getByText(/Size and position: fit the original proportionally/)
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest alignment" }));
+  await waitFor(() =>
+    expect(calls.align).toHaveBeenCalledWith(
+      expect.objectContaining({ preserveSizes: undefined })
+    )
+  );
+  await waitFor(() =>
+    expect(screen.getByAltText("Original product 1").style.width).toBe("30%")
+  );
+  expect(calls.save).not.toHaveBeenCalled();
+});

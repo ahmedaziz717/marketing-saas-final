@@ -1,0 +1,531 @@
+import { useEffect, useRef, useState } from "react";
+import "./googleCopy.css";
+import { AdCopyWorkspace, type CopyWorkspaceField } from "../AdCopyWorkspace";
+import { trpc } from "@/lib/trpc";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { Button } from "@/components/ui/button";
+import { Field } from "./GoogleCampaignFields";
+import type { GoogleAssetInput } from "@shared/googleCampaigns";
+import {
+  emptyGoogleCopy,
+  googleCopyFields,
+  googleCopyCapabilities,
+  type GoogleCopyAdType,
+  remainingGoogleCopy,
+  type GoogleCopyField,
+  type GoogleCopySet,
+} from "@shared/googleCopy";
+
+export function GoogleCopyAi({
+  adType = "PERFORMANCE_MAX",
+  organizationId,
+  connectionId,
+  assets = [],
+  occupiedFields = [],
+  existingCopy = emptyGoogleCopy(),
+  replacementOptions = [],
+  onReplace,
+  onAdd,
+  onApply,
+  draftFields,
+  onEditDraft,
+  onRemoveDraft,
+  onWrite,
+}: {
+  draftFields?: CopyWorkspaceField[];
+  onEditDraft?: (field: string, id: string, text: string) => void;
+  onRemoveDraft?: (field: string, id: string) => void;
+  onWrite?: (field: string) => void;
+  adType?: GoogleCopyAdType;
+  organizationId: number;
+  connectionId?: string;
+  assets?: GoogleAssetInput[];
+  occupiedFields?: string[];
+  existingCopy?: GoogleCopySet;
+  replacementOptions?: Array<{
+    id: string;
+    field: GoogleCopyField;
+    label: string;
+  }>;
+  onReplace?: (id: string, asset: GoogleAssetInput) => void;
+  onAdd: (asset: GoogleAssetInput) => void;
+  onApply?: (assets: GoogleAssetInput[]) => void;
+}) {
+  const capabilities = googleCopyCapabilities(adType);
+  const googleCopySpecs = capabilities.specs;
+  const { membership } = useWorkspace();
+  const prompts = trpc.prompts.list.useQuery({ organizationId });
+  const library = trpc.assetLibrary.list.useQuery({ organizationId });
+  const [search, setSearch] = useState("");
+  const catalog = trpc.catalog.overview.useQuery({
+    organizationId,
+    status: "approved",
+    search,
+  });
+  const [productIds, setProductIds] = useState<number[]>([]);
+  const [direction, setDirection] = useState("");
+  const [override, setOverride] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [suggestions, setSuggestions] = useState<GoogleCopySet | null>(null);
+  const [replacementTargets, setReplacementTargets] = useState<
+    Record<string, string>
+  >({});
+  const [counts, setCounts] = useState({
+    headlines: 15,
+    longHeadlines: 5,
+    descriptions: 5,
+  });
+  const generate = trpc.googleAds.campaigns.draftPmaxCopy.useMutation();
+  const save = trpc.prompts.change.useMutation();
+  const prompt = prompts.data?.find(p => p.id === "google.pmax.copy");
+  const value = override ?? prompt?.value ?? "";
+  const maySave = ["owner", "admin"].includes(membership?.role ?? "");
+  const media = assets.filter(a => a.source.kind !== "text");
+  const contextKey = JSON.stringify({
+    organizationId,
+    connectionId,
+    adType,
+    media,
+    productIds,
+    direction,
+    value,
+  });
+  const requestContext = JSON.stringify({ contextKey, existingCopy });
+  const currentContext = useRef(requestContext);
+  currentContext.current = requestContext;
+  const requestId = useRef(0);
+  const [generationVersion, setGenerationVersion] = useState(0);
+  useEffect(() => {
+    setSuggestions(null);
+    setReplacementTargets({});
+    setNotice("");
+  }, [contextKey]);
+  const remaining = remainingGoogleCopy(occupiedFields, adType);
+  const requested = Object.fromEntries(
+    googleCopyFields.map(key => [
+      key,
+      Math.min(counts[key], googleCopySpecs[key].maximum),
+    ])
+  ) as typeof counts;
+  const isDuplicate = (key: GoogleCopyField, text: string) =>
+    existingCopy[key].some(
+      v => v.trim().toLowerCase() === text.trim().toLowerCase()
+    );
+  const assetFor = (key: GoogleCopyField, text: string): GoogleAssetInput => ({
+    field: googleCopySpecs[key].field,
+    source: { kind: "text", text: text.trim() },
+  });
+  async function run(target?: GoogleCopyField, index?: number) {
+    const snapshot = requestContext;
+    const id = ++requestId.current;
+    setGenerationVersion(v => v + 1);
+    setReplacementTargets({});
+    setNotice("");
+    const countRequest = target
+      ? { headlines: 0, longHeadlines: 0, descriptions: 0, [target]: 1 }
+      : requested;
+    try {
+      const result = await generate.mutateAsync({
+        organizationId,
+        connectionId,
+        selectedAssets: media,
+        productIds,
+        direction,
+        defaultInstructions: value,
+        copyRequest: { adType, counts: countRequest, target, existingCopy },
+      });
+      if (currentContext.current !== snapshot || id !== requestId.current)
+        return;
+      if (target && index !== undefined)
+        setSuggestions(previous =>
+          previous
+            ? {
+                ...previous,
+                [target]: previous[target].map((v, i) =>
+                  i === index ? (result[target][0] ?? v) : v
+                ),
+              }
+            : previous
+        );
+      else {
+        setSuggestions(result);
+        setReplacementTargets({});
+      }
+    } catch (error) {
+      if (currentContext.current === snapshot && id === requestId.current)
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Suggestions could not be generated. Your draft is unchanged."
+        );
+    }
+  }
+  async function changeDefault(
+    action:
+      | "save"
+      | "restore_system"
+      | "restore_original"
+      | "restore_brand_initial"
+  ) {
+    if (!prompt) return;
+    setNotice("");
+    try {
+      await save.mutateAsync({
+        organizationId,
+        promptId: prompt.id,
+        expectedRevision: prompt.revision,
+        action,
+        ...(action === "save" ? { value } : {}),
+        reason: "Google copy default updated from campaign composer",
+      });
+      await prompts.refetch();
+      setOverride(null);
+      setNotice("Shared prompt default updated.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Could not update the prompt."
+      );
+    }
+  }
+  return (
+    <section
+      className="google-pmax-ai google-copy-workspace"
+      aria-label="Generate copy from selected assets"
+    >
+      <h3>Ad copy · {capabilities.label}</h3>
+      <p className="google-copy-help">
+        Choose suggestions or write your own. Your edits stay yours.
+      </p>
+      <details className="google-copy-settings">
+        <summary>
+          AI settings · selected assets, product facts and instructions
+        </summary>
+        <div
+          aria-label="Assets informing AI copy"
+          className="google-current-assets"
+        >
+          {media.map((asset, index) => {
+            const item =
+              asset.source.kind === "library"
+                ? library.data?.find(
+                    a => a.key === (asset.source as { key: string }).key
+                  )
+                : undefined;
+            return (
+              <figure key={JSON.stringify(asset)}>
+                {item?.mediaType === "image" && (
+                  <img src={item.url} alt={item.name} />
+                )}
+                <figcaption>
+                  {item?.name ??
+                    (asset.source.kind === "existing"
+                      ? `Google asset ${asset.source.id}`
+                      : asset.source.kind === "youtube"
+                        ? `Video ${asset.source.videoId}`
+                        : `Selected asset ${index + 1}`)}
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+        {!media.length && (
+          <p role="status">
+            No creative selected yet. Pick images in Creative first, or
+            explicitly generate brand-only copy.
+          </p>
+        )}
+        <p>
+          {media.length} selected assets inform this run. Videos use their saved
+          metadata, not a video-content analysis.
+        </p>
+        <div className="google-form-grid google-copy-counts">
+          {googleCopyFields.map(key => (
+            <Field
+              key={key}
+              title={`${googleCopySpecs[key].label} to generate`}
+            >
+              <input
+                type="number"
+                aria-label={`${googleCopySpecs[key].label} to generate`}
+                min={0}
+                max={googleCopySpecs[key].maximum}
+                value={requested[key]}
+                onChange={e =>
+                  setCounts(v => ({
+                    ...v,
+                    [key]: Math.max(
+                      0,
+                      Math.min(
+                        googleCopySpecs[key].maximum,
+                        Math.trunc(Number(e.target.value) || 0)
+                      )
+                    ),
+                  }))
+                }
+              />
+              <small>
+                {googleCopySpecs[key].characters} characters each ·{" "}
+                {googleCopySpecs[key].maximum} suggestions maximum per run
+              </small>
+              <small>
+                {remaining[key]} slots available to add to this{" "}
+                {adType === "DISPLAY" ? "ad" : "group"}
+              </small>
+            </Field>
+          ))}
+        </div>
+        {googleCopyFields.some(key => remaining[key] === 0) && (
+          <p role="status">
+            Some text slots are full. You can still generate alternatives. To
+            use one, choose the text to replace below and add that replacement
+            to your draft. Google changes only after you review and activate the
+            draft.
+          </p>
+        )}
+        <details>
+          <summary>Product facts and additional direction</summary>
+          <Field title="Find approved products (optional)">
+            <input value={search} onChange={e => setSearch(e.target.value)} />
+          </Field>
+          <p>
+            {productIds.length}/10 extra products selected. Products linked to
+            selected creatives are included when still approved.
+          </p>
+          <Button variant="ghost" onClick={() => setProductIds([])}>
+            Clear products
+          </Button>
+          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            {catalog.data?.products.map(p => (
+              <label key={p.id} style={{ display: "block" }}>
+                <input
+                  type="checkbox"
+                  checked={productIds.includes(p.id)}
+                  disabled={
+                    !productIds.includes(p.id) && productIds.length >= 10
+                  }
+                  onChange={e =>
+                    setProductIds(ids =>
+                      e.target.checked
+                        ? [...ids, p.id]
+                        : ids.filter(id => id !== p.id)
+                    )
+                  }
+                />
+                {p.name} —{" "}
+                {p.marketingCategory.category?.name ?? "Product facts only"}
+              </label>
+            ))}
+          </div>
+          {catalog.data?.hasMore && <p>Search to find more products.</p>}
+          <p>
+            Category setup is optional. Mixed or uncategorized products use
+            factual, neutral wording automatically; missing categories are never
+            guessed.
+          </p>
+          <Field title="Direction for this run">
+            <textarea
+              value={direction}
+              maxLength={2000}
+              onChange={e => setDirection(e.target.value)}
+            />
+          </Field>
+        </details>
+        <details>
+          <summary>Prompt settings</summary>
+          <Field title="Shared Google copy prompt — edits apply to this run until explicitly saved">
+            <textarea
+              rows={5}
+              value={value}
+              maxLength={6000}
+              onChange={e => setOverride(e.target.value)}
+            />
+          </Field>
+          <Button variant="ghost" onClick={() => setOverride(null)}>
+            Use saved default
+          </Button>
+          {maySave && (
+            <div>
+              <Button
+                variant="outline"
+                disabled={!prompt || save.isPending || !value.trim()}
+                onClick={() => void changeDefault("save")}
+              >
+                Save as shared default
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!prompt || save.isPending}
+                onClick={() => void changeDefault("restore_system")}
+              >
+                Restore system default
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!prompt || save.isPending}
+                onClick={() => void changeDefault("restore_original")}
+              >
+                Restore original default
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!prompt?.restorePoints?.brand || save.isPending}
+                onClick={() => void changeDefault("restore_brand_initial")}
+              >
+                Restore initial Brand Kit default
+              </Button>
+            </div>
+          )}
+        </details>
+      </details>
+      <p>
+        Uses workspace AI credits. Generation never activates anything.{" "}
+        {Object.values(requested).reduce((n, v) => n + v, 0)} suggestions
+        requested.
+      </p>
+      {(prompts.error || catalog.error || generate.error || library.error) && (
+        <p role="alert">
+          {
+            (prompts.error ?? catalog.error ?? generate.error ?? library.error)
+              ?.message
+          }
+        </p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      <AdCopyWorkspace
+        headerAction={
+          <Button
+            disabled={
+              !prompt ||
+              generate.isPending ||
+              !value.trim() ||
+              !Object.values(requested).some(Boolean)
+            }
+            onClick={() => void run()}
+          >
+            {generate.isPending
+              ? "Creating suggestions…"
+              : suggestions
+                ? "Regenerate all suggestions"
+                : "Create suggestions with AI"}
+          </Button>
+        }
+        fields={googleCopyFields.map(key => ({
+          ...(draftFields?.find(field => field.id === key) ?? {
+            id: key,
+            label: googleCopySpecs[key].label,
+            singular:
+              key === "descriptions"
+                ? "description"
+                : key === "longHeadlines"
+                  ? "long headline"
+                  : "headline",
+            characters: googleCopySpecs[key].characters,
+            maximum: googleCopySpecs[key].maximum,
+            occupied: googleCopySpecs[key].maximum - remaining[key],
+            drafts: existingCopy[key].map((text, index) => ({
+              id: String(index),
+              text,
+              readOnly: true,
+            })),
+          }),
+          suggestions: suggestions?.[key] ?? [],
+        }))}
+        busy={generate.isPending}
+        generationKey={`${contextKey}:${generationVersion}`}
+        onEditSuggestion={(field, index, text) => {
+          const key = field as GoogleCopyField;
+          setSuggestions(previous =>
+            previous
+              ? {
+                  ...previous,
+                  [key]: previous[key].map((v, i) => (i === index ? text : v)),
+                }
+              : previous
+          );
+        }}
+        onAdd={(field, texts) => {
+          const additions = texts.map(text =>
+            assetFor(field as GoogleCopyField, text)
+          );
+          if (onApply) onApply(additions);
+          else additions.forEach(onAdd);
+        }}
+        onEditDraft={onEditDraft ?? (() => {})}
+        onRemoveDraft={onRemoveDraft ?? (() => {})}
+        onWrite={onWrite ?? (() => {})}
+        onRegenerate={(field, index) =>
+          void run(field as GoogleCopyField, index)
+        }
+        renderSuggestionActions={(field, index) => {
+          const key = field as GoogleCopyField;
+          const text = suggestions?.[key][index] ?? "";
+          if (
+            !onReplace ||
+            !replacementOptions.some(option => option.field === key)
+          )
+            return null;
+          return (
+            <details className="google-copy-replacement">
+              <summary>Replace existing text…</summary>
+              <label>
+                Text to replace
+                <select
+                  aria-label={`Text to replace with ${googleCopySpecs[key].label.toLowerCase()} suggestion ${index + 1}`}
+                  value={replacementTargets[`${key}:${index}`] ?? ""}
+                  disabled={generate.isPending}
+                  onChange={e =>
+                    setReplacementTargets(previous => ({
+                      ...previous,
+                      [`${key}:${index}`]: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Choose text to replace</option>
+                  {replacementOptions
+                    .filter(option => option.field === key)
+                    .map(option => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <Button
+                variant="outline"
+                disabled={
+                  generate.isPending ||
+                  !text.trim() ||
+                  text.trim().length > googleCopySpecs[key].characters ||
+                  isDuplicate(key, text) ||
+                  !replacementOptions.some(
+                    option =>
+                      option.field === key &&
+                      option.id === replacementTargets[`${key}:${index}`]
+                  )
+                }
+                onClick={() => {
+                  const id = replacementTargets[`${key}:${index}`];
+                  if (
+                    !replacementOptions.some(
+                      option => option.field === key && option.id === id
+                    )
+                  )
+                    return;
+                  onReplace(id, assetFor(key, text));
+                  setReplacementTargets({});
+                  setNotice(
+                    "Replacement added to this draft. Review it before activating."
+                  );
+                }}
+              >
+                Replace selected text in draft
+              </Button>
+            </details>
+          );
+        }}
+      />
+    </section>
+  );
+}
+
+export const GooglePmaxAi = GoogleCopyAi;

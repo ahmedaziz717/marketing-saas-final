@@ -1,0 +1,297 @@
+/* One compact, channel-adapted comparison editor. All styles are scoped. */
+.ad-copy-workspace {
+  --copy-accent: #008b98;
+  --copy-accent-text: #007e89;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+}
+.dark .ad-copy-workspace {
+  --copy-accent: #007985;
+  --copy-accent-text: #62d7df;
+}
+.ad-copy-workspace-header,
+.ad-copy-field-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ad-copy-workspace .ad-copy-column-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+.ad-copy-workspace .ad-copy-column-heading + .ad-copy-column-heading,
+.ad-copy-workspace .ad-copy-drafts {
+  border-left: 1px solid var(--border);
+}
+.ad-copy-workspace .ad-copy-heading-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--copy-accent-text);
+  flex: none;
+}
+.ad-copy-workspace .ad-copy-column-heading:first-child .ad-copy-heading-icon {
+  color: #3974ee;
+}
+.ad-copy-workspace h3,
+.ad-copy-workspace h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+}
+.ad-copy-workspace .ad-copy-column-heading p {
+  font-size: 11px;
+  margin: 1px 0 0;
+  color: var(--muted-foreground);
+}
+.ad-copy-workspace .ad-copy-header-action {
+  margin-left: auto;
+}
+.ad-copy-workspace .ad-copy-protected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.ad-copy-workspace .ad-copy-protected svg {
+  width: 14px;
+  height: 14px;
+  color: #3974ee;
+}
+.ad-copy-workspace .ad-copy-field-heading {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 45%, var(--background));
+}
+.ad-copy-workspace .ad-copy-field-heading > span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.ad-copy-workspace .ad-copy-field-count {
+  margin-left: auto;
+}
+.ad-copy-workspace .ad-copy-proposals,
+.ad-copy-workspace .ad-copy-drafts {
+  min-width: 0;
+  padding: 5px 16px 12px;
+}
+.ad-copy-workspace .ad-copy-text-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ad-copy-workspace .ad-copy-proposal,
+.ad-copy-workspace .ad-copy-draft {
+  margin: 0 0 7px;
+  min-width: 0;
+}
+.ad-copy-workspace .ad-copy-checkbox {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--copy-accent);
+  cursor: pointer;
+}
+.ad-copy-workspace .ad-copy-text-control {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+}
+.ad-copy-workspace .ad-copy-text-control:focus-within {
+  outline: 2px solid var(--copy-accent);
+  outline-offset: 1px;
+}
+.ad-copy-workspace .ad-copy-text-control textarea {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  max-height: 180px;
+  padding: 7px 9px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  field-sizing: content;
+}
+.ad-copy-workspace .ad-copy-text-control textarea:read-only {
+  color: var(--muted-foreground);
+}
+.ad-copy-workspace .ad-copy-character-count {
+  padding: 0 9px 0 3px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  flex: none;
+}
+.ad-copy-workspace .ad-copy-row-action {
+  width: 26px;
+  height: 30px;
+  flex: none;
+  padding: 4px;
+}
+.ad-copy-workspace .ad-copy-row-action svg {
+  width: 14px;
+  height: 14px;
+}
+.ad-copy-workspace .ad-copy-retained {
+  width: 26px;
+  display: flex;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+.ad-copy-workspace .ad-copy-retained svg {
+  width: 14px;
+  height: 14px;
+}
+.ad-copy-workspace .ad-copy-row-hint {
+  font-size: 11px;
+  margin: 3px 0 0 28px;
+  color: var(--muted-foreground);
+}
+.ad-copy-workspace .ad-copy-draft .ad-copy-row-hint {
+  margin-left: 0;
+}
+.ad-copy-workspace .ad-copy-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ad-copy-workspace .ad-copy-field-actions button {
+  height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ad-copy-workspace .ad-copy-add-selected {
+  background: var(--copy-accent);
+  color: white;
+  border-color: transparent;
+}
+.ad-copy-workspace .ad-copy-add-selected:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.ad-copy-workspace .ad-copy-write {
+  color: var(--copy-accent-text);
+}
+.ad-copy-workspace .ad-copy-slots {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin-left: auto;
+}
+.ad-copy-workspace .is-invalid,
+.ad-copy-workspace .ad-copy-field-error {
+  color: var(--destructive);
+}
+.ad-copy-workspace .ad-copy-text-control.is-invalid {
+  border-color: var(--destructive);
+}
+.ad-copy-workspace .ad-copy-field-error {
+  font-size: 11px;
+  margin-left: auto;
+}
+.ad-copy-workspace .ad-copy-notice {
+  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+}
+.ad-copy-workspace .ad-copy-empty {
+  margin: 8px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.ad-copy-workspace :is(button, input):focus-visible {
+  outline: 2px solid var(--copy-accent);
+  outline-offset: 3px;
+}
+@media (max-width: 1100px) {
+  .ad-copy-workspace .ad-copy-protected {
+    font-size: 0;
+    gap: 0;
+  }
+}
+@media (max-width: 700px) {
+  .ad-copy-workspace-header,
+  .ad-copy-field-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ad-copy-workspace .ad-copy-column-heading + .ad-copy-column-heading {
+    display: none;
+  }
+  .ad-copy-workspace .ad-copy-drafts {
+    border-left: 0;
+    border-top: 1px dashed var(--border);
+    padding-top: 12px;
+  }
+  .ad-copy-workspace .ad-copy-drafts::before {
+    content: "Draft copy";
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .ad-copy-workspace .ad-copy-field-heading {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .ad-copy-workspace .ad-copy-proposals,
+  .ad-copy-workspace .ad-copy-drafts {
+    padding-inline: 12px;
+  }
+  .ad-copy-workspace .ad-copy-field-actions button {
+    min-height: 40px;
+  }
+  .ad-copy-workspace .ad-copy-checkbox {
+    width: 22px;
+    height: 22px;
+  }
+  .ad-copy-workspace .ad-copy-row-action {
+    width: 32px;
+    height: 36px;
+  }
+  /* Keep the complete line available for copy on narrow screens. The counter
+     remains associated through aria-describedby, but no longer steals a column. */
+  .ad-copy-workspace .ad-copy-text-control {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ad-copy-workspace .ad-copy-text-control textarea {
+    flex: none;
+    width: 100%;
+  }
+  .ad-copy-workspace .ad-copy-character-count {
+    align-self: flex-end;
+    font-size: 10px;
+    padding: 0 9px 6px;
+  }
+}

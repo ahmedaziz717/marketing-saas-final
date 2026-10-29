@@ -1,34 +1,144 @@
-name: Creative Builder checks
+name: Migration and Creative Builder checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, codex/render-supabase-migration]
 permissions:
   contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:17
         env:
-          MYSQL_ROOT_PASSWORD: ephemeral-test-password
-          MYSQL_DATABASE: creative_builder_test
-        ports: ["3306:3306"]
+          POSTGRES_PASSWORD: ephemeral-test-password
+          POSTGRES_DB: creative_builder_test
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -pephemeral-test-password"
+          --health-cmd="pg_isready -U postgres -d creative_builder_test"
           --health-interval=10s --health-timeout=5s --health-retries=10
     env:
-      DATABASE_URL: mysql://root:ephemeral-test-password@127.0.0.1:3306/creative_builder_test
+      DATABASE_URL: postgresql://postgres:ephemeral-test-password@127.0.0.1:5432/creative_builder_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec drizzle-kit migrate
+      # Render sets NODE_ENV=production during builds; retain the build and
+      # migration tools explicitly rather than relying on package-manager defaults.
+      - run: NODE_ENV=production pnpm install --frozen-lockfile --prod=false
+      - run: pnpm db:migrate
       - run: pnpm check
       - run: pnpm test
       - run: pnpm build
+      - run: node scripts/smoke-build.mjs
+      - name: Check appearance persistence in Chrome
+        run: node scripts/check-theme-persistence.mjs
+      - name: Check Studio draft navigation and reset in Chrome
+        run: node scripts/check-studio-persistence.mjs
+      - name: Check product overlay recovery on desktop and mobile
+        run: node scripts/check-product-overlay.mjs
+      - name: Save product overlay regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-overlay
+          path: artifacts/product-overlay/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save Studio persistence screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-persistence
+          path: artifacts/studio-persistence/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Check dialog layout and approval controls in Chrome
+        run: node scripts/check-dialog-layout.mjs
+      - name: Check additive Google image flow in Chrome
+        run: LAYOUT_PAGES=google-campaigns node scripts/check-channel-layout.mjs
+      - name: Check shared Google and Meta copy workspace in desktop/mobile light/dark
+        run: LAYOUT_PAGES=google-campaign-new,studio-ad-copy,studio-ad node scripts/check-channel-layout.mjs
+      - name: Save shared ad copy workspace screenshots and assertions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ad-copy-layout
+          path: artifacts/ad-copy-layout/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Check channel pages and publishing workflow in Chrome
+        run: node scripts/check-channel-layout.mjs
+      - name: Check public website without authentication or JavaScript
+        run: node scripts/check-public-website.mjs
+      - name: Save public website regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-website
+          path: artifacts/public-website/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save channel browser regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-layout
+          path: artifacts/channel-layout/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save dialog browser regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dialog-layout
+          path: artifacts/dialog-layout/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    needs: verify
+    concurrency:
+      group: evokeloop-production-release
+      cancel-in-progress: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/render-supabase-migration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      VERIFIED_RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check deployment credentials
+        id: credentials
+        run: |
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "::notice::RENDER_API_KEY is not configured. Use the authorized Render connector for this release."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.credentials.outputs.configured == 'true'
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        if: steps.credentials.outputs.configured == 'true'
+        with:
+          node-version: 22
+      - name: Skip a release superseded on the deployment branch
+        if: steps.credentials.outputs.configured == 'true'
+        id: current
+        run: |
+          latest=$(git ls-remote origin refs/heads/codex/render-supabase-migration | cut -f1)
+          if [ "$latest" = "$VERIFIED_RELEASE_SHA" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit exists. Waiting for its CI instead."
+          fi
+      - name: Deploy web, wait for database connections to drain, then deploy worker
+        if: steps.current.outputs.release == 'true'
+        run: node scripts/deploy-evokeloop.mjs "$VERIFIED_RELEASE_SHA"

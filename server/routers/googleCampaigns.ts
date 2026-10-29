@@ -1,0 +1,301 @@
+import { googleMerchantFeedLabels } from "../lib/googleMerchantFeedLabels";
+import { googleAssetMetrics } from "../lib/googleAssetMetrics";
+import { googleAssetMetricsDays } from "../../shared/googleAssetMetrics";
+import { googleLibraryVideo } from "../lib/googleVideoUploads";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure, router } from "../_core/trpc";
+import { scopeSchema } from "../../shared/channels";
+import {
+  googleAssetInputSchema,
+  googleChangeSchema,
+} from "../../shared/googleCampaigns";
+import { googleCopyRequestSchema } from "../../shared/googleCopy";
+import { requireOrganizationRole } from "../lib/access";
+import { libraryDatabase } from "../lib/assetLibrary";
+import { GoogleAdsError } from "../lib/googleAdsApi";
+import { GoogleMutationError } from "../lib/googleAdsMutate";
+import { and, eq, inArray } from "drizzle-orm";
+import { brandKits, products } from "../../drizzle/schema";
+import { generatePmaxCopy } from "../lib/googlePmaxAi";
+import { googleCopyContext } from "../lib/googleCopyContext";
+import { attachMarketingCategories } from "../lib/catalogCategories";
+import { selectProductFacts } from "../lib/productFacts";
+import { imageCategoryHandling } from "../../shared/catalogCategories";
+import {
+  getGoogleDraft,
+  googleCampaignInventory,
+  googleCampaignResources,
+  listGoogleDrafts,
+  publishGoogleDraft,
+  saveGoogleDraft,
+  validateGoogleDraft,
+} from "../lib/googleCampaigns";
+
+const account = scopeSchema.extend({ connectionId: z.string().uuid() });
+const draft = scopeSchema.extend({
+  id: z.string().uuid(),
+  revision: z.number().int().positive(),
+});
+async function safe<T>(work: () => Promise<T>) {
+  try {
+    return await work();
+  } catch (e) {
+    if (e instanceof TRPCError) throw e;
+    throw new TRPCError({
+      code: "BAD_GATEWAY",
+      message:
+        e instanceof GoogleAdsError || e instanceof GoogleMutationError
+          ? e.message
+          : "Google Ads could not complete this request. Try again.",
+    });
+  }
+}
+const libraryVideo = account.extend({
+  key: z.string().regex(/^asset:[1-9][0-9]*$/),
+  revision: z.string().min(1).max(200),
+});
+export const googleCampaignsRouter = router({
+  draftPmaxCopy: protectedProcedure
+    .input(
+      scopeSchema.extend({
+        productIds: z.array(z.number().int().positive()).max(10).default([]),
+        direction: z.string().trim().max(2000).default(""),
+        defaultInstructions: z.string().trim().min(1).max(6000).optional(),
+        neutralCategories: z.boolean().default(false),
+        selectedAssets: z.array(googleAssetInputSchema).max(50).default([]),
+        connectionId: z.string().uuid().optional(),
+        copyRequest: googleCopyRequestSchema.optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, [
+        "owner",
+        "admin",
+        "creator",
+        "publisher",
+      ]);
+      const db = await libraryDatabase();
+      const [brand] = await db
+        .select()
+        .from(brandKits)
+        .where(eq(brandKits.organizationId, input.organizationId))
+        .limit(1);
+      if (!brand)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set up your Brand Kit before generating Google ad copy.",
+        });
+      const selected = await googleCopyContext(
+        db,
+        input.organizationId,
+        input.selectedAssets,
+        input.connectionId
+      );
+      const productIds = Array.from(
+        new Set([...input.productIds, ...selected.productIds])
+      );
+      if (productIds.length > 50)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose fewer product creatives for one copy request.",
+        });
+      const catalog = productIds.length
+        ? await db
+            .select()
+            .from(products)
+            .where(
+              and(
+                eq(products.organizationId, input.organizationId),
+                eq(products.status, "approved"),
+                inArray(products.id, productIds)
+              )
+            )
+        : [];
+      if (
+        input.productIds.some(id => !catalog.some(product => product.id === id))
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose approved products from this workspace.",
+        });
+      const categorized = await attachMarketingCategories(
+        db,
+        input.organizationId,
+        catalog
+      );
+      const context = {
+        brand: {
+          name: brand.name,
+          businessProfile: brand.businessProfile,
+          voice: brand.voice,
+          requiredClaims: brand.requiredClaims,
+          prohibitedContent: brand.prohibitedContent,
+        },
+        products: categorized.map(product =>
+          selectProductFacts(product, {
+            productId: product.id,
+            featuredSpecKeys: [],
+            includePrice: false,
+            includeDescription: true,
+          })
+        ),
+        // Category setup is optional, as in Creative Builder and Meta copy.
+        // Keep confirmed guidance, but never guess unknown/mixed categories.
+        neutralCategories:
+          imageCategoryHandling(
+            categorized,
+            input.neutralCategories ? "neutral" : undefined
+          ) === "neutral",
+        direction: input.direction,
+        ...(selected.assets.length ? { assets: selected.assets } : {}),
+      };
+      // Preserve legacy callers while new requests carry exact output counts and
+      // authorized visual references. This mutation produces suggestions only.
+      if (!input.selectedAssets.length && !input.copyRequest)
+        return generatePmaxCopy(context, input.defaultInstructions);
+      return generatePmaxCopy(
+        context,
+        input.defaultInstructions,
+        input.copyRequest,
+        selected.images
+      );
+    }),
+  videoUploadStatus: protectedProcedure
+    .input(libraryVideo)
+    .query(({ ctx, input }) =>
+      safe(() => googleLibraryVideo(ctx.user.id, input))
+    ),
+  uploadVideo: protectedProcedure
+    .input(
+      libraryVideo.extend({ confirm: z.literal(true), generated: z.boolean() })
+    )
+    .mutation(({ ctx, input }) =>
+      safe(() => googleLibraryVideo(ctx.user.id, input, true))
+    ),
+  inventory: protectedProcedure
+    .input(
+      account.extend({
+        includeInactive: z.boolean().default(false),
+        campaignId: z
+          .string()
+          .regex(/^\d{1,20}$/)
+          .optional(),
+      })
+    )
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleCampaignInventory(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.includeInactive,
+          input.campaignId
+        );
+      })
+    ),
+  assetMetrics: protectedProcedure
+    .input(
+      account.extend({
+        campaignId: z.string().regex(/^\d{1,20}$/),
+        assetGroupId: z.string().regex(/^\d{1,20}$/),
+        days: googleAssetMetricsDays.default(30),
+      })
+    )
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleAssetMetrics(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.campaignId,
+          input.assetGroupId,
+          input.days
+        );
+      })
+    ),
+  merchantFeedLabels: protectedProcedure
+    .input(account.extend({ merchantId: z.string().regex(/^\d{1,20}$/) }))
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleMerchantFeedLabels(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.merchantId
+        );
+      })
+    ),
+  resources: protectedProcedure
+    .input(
+      account.extend({
+        kind: z.enum([
+          "assets",
+          "audiences",
+          "merchants",
+          "locations",
+          "languages",
+        ]),
+        search: z.string().trim().max(100).default(""),
+      })
+    )
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleCampaignResources(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.kind,
+          input.search
+        );
+      })
+    ),
+  drafts: protectedProcedure.input(account).query(async ({ ctx, input }) => {
+    await requireOrganizationRole(ctx.user.id, input.organizationId);
+    return listGoogleDrafts(
+      await libraryDatabase(),
+      input.organizationId,
+      input.connectionId
+    );
+  }),
+  draft: protectedProcedure
+    .input(scopeSchema.extend({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId);
+      return getGoogleDraft(
+        await libraryDatabase(),
+        input.organizationId,
+        input.id
+      );
+    }),
+  save: protectedProcedure
+    .input(
+      account.extend({
+        id: z.string().uuid().optional(),
+        revision: z.number().int().positive().optional(),
+        change: googleChangeSchema,
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      safe(() => saveGoogleDraft(ctx.user.id, input))
+    ),
+  validate: protectedProcedure
+    .input(draft)
+    .mutation(({ ctx, input }) =>
+      safe(() => validateGoogleDraft(ctx.user.id, input))
+    ),
+  publish: protectedProcedure
+    .input(
+      draft.extend({
+        reviewHash: z.string().regex(/^[a-f0-9]{64}$/),
+        confirm: z.literal(true),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      safe(() => publishGoogleDraft(ctx.user.id, input))
+    ),
+});
