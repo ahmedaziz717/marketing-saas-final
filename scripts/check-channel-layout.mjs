@@ -156,6 +156,7 @@ try {
   await page("Page.enable");
   await page("Runtime.enable");
   await mkdir("artifacts/channel-layout", { recursive: true });
+  await mkdir("artifacts/ad-copy-layout", { recursive: true });
   const results = [];
   const cases = [
     ...[
@@ -619,6 +620,34 @@ try {
       }
     }
     const name = `${item.page}-${item.width}x${item.height}-${item.role}-${item.theme}`;
+    if (["google-campaign-new", "studio-ad-copy"].includes(item.page)) {
+      // Actual product DOM and production CSS, not a reconstructed mockup.
+      // Reference inspected: EvokeLoop-Unified-Ad-Copy-Concept.png.
+      const copy = await page("Runtime.evaluate", {
+        expression: `(() => {
+          const root = document.querySelector('.ad-copy-workspace');
+          return root ? {fields: [...root.querySelectorAll('.ad-copy-field h4')].map(el => el.textContent),
+            background: getComputedStyle(root).backgroundColor, color: getComputedStyle(root).color,
+            theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light'} : null;
+        })()`,
+        returnByValue: true,
+      });
+      report.copyWorkspace = copy.result.value;
+      if (!copy.result.value || copy.result.value.theme !== item.theme) {
+        report.passed = false;
+        report.error = "Copy workspace must render in the requested appearance";
+      } else {
+        for (let fieldIndex = 0; fieldIndex < copy.result.value.fields.length; fieldIndex++) {
+          await page("Runtime.evaluate", {
+            expression: `document.querySelectorAll('.ad-copy-workspace .ad-copy-field')[${fieldIndex}].scrollIntoView({block:'center', behavior:'instant'})`,
+          });
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const screenshot = await page("Page.captureScreenshot", { format: "png" });
+          await writeFile(`artifacts/ad-copy-layout/${name}-field-${fieldIndex + 1}.png`, Buffer.from(screenshot.data, "base64"));
+        }
+      }
+      await writeFile(`artifacts/ad-copy-layout/${name}.json`, JSON.stringify({name, ...report}, null, 2));
+    }
     const image = await page("Page.captureScreenshot", { format: "png" });
     await writeFile(
       `artifacts/channel-layout/${name}.png`,

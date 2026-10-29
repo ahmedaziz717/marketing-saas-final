@@ -638,6 +638,17 @@ function respond(path: string, input: any) {
         conversionRate: 0.12,
       })),
     };
+  if (path === "googleAds.campaigns.merchantFeedLabels") return { labels: ["US", "GB"], limited: false };
+  if (path === "googleAds.campaigns.draftPmaxCopy") {
+    mutations.push(path);
+    copyRequests.push(input);
+    const n = copyRequests.length;
+    return {
+      headlines: [`Build your next PC ${n}`, `Play your way ${n}`, `Explore custom PCs ${n}`],
+      longHeadlines: [`Build a custom gaming PC for the way you play ${n}`],
+      descriptions: [`Explore custom gaming PCs and choose your next system ${n}.`, `Find performance made for your games ${n}.`],
+    };
+  }
   if (path === "googleAds.campaigns.resources")
     return input.kind === "assets"
       ? [
@@ -1038,6 +1049,7 @@ function respond(path: string, input: any) {
         };
   if (path === "brand.get")
     return {
+      organizationId: 1,
       name: "Learn Like This Brand",
       colors: ["#15141A"],
       fonts: ["Manrope"],
@@ -1812,6 +1824,39 @@ async function click(name: string) {
   b!.click();
   await pause();
 }
+async function selectMetaCopyField(label: string) {
+  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tablist"][aria-label="Meta copy fields"] [role="tab"]')).find(el => el.textContent?.trim() === label);
+  check(!!tab, `${label} copy tab exists`);
+  tab!.scrollIntoView({block: "center", behavior: "instant"});
+  await pause();
+  // Radix Tabs activates on primary mouse down (not a synthetic click alone).
+  tab!.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, button: 0, ctrlKey: false}));
+  tab!.click();
+  await pause();
+  check(tab!.getAttribute("aria-selected") === "true", `${label} copy tab activates`);
+}
+// Approved concept: AI suggestions left, protected editable draft right; stacked on mobile.
+function copyWorkspaceLayout() {
+  const root = document.querySelector<HTMLElement>('[aria-label="Ad copy workspace"]')!;
+  check(!!root, "Actual shared copy workspace is rendered");
+  check(root.textContent?.includes("AI suggestions") && root.textContent?.includes("Draft copy") && root.textContent?.includes("Manual edits protected"),
+    "Shared copy headings and manual-edit protection match approved concept");
+  for (const field of root.querySelectorAll<HTMLElement>('.ad-copy-field')) {
+    const proposal = field.querySelector<HTMLElement>('.ad-copy-proposals')!.getBoundingClientRect();
+    const draft = field.querySelector<HTMLElement>('.ad-copy-drafts')!.getBoundingClientRect();
+    check(innerWidth > 700 ? draft.left >= proposal.right - 1 : draft.top >= proposal.bottom - 1,
+      "Suggestions and draft are paired columns on desktop and stacked by field on mobile");
+    check(!!field.querySelector('.ad-copy-field-count') && (!field.querySelector('textarea') || !!field.querySelector('.ad-copy-character-count')),
+      "Draft occupancy and character counters remain visible");
+    check(field.scrollWidth <= field.clientWidth + 1, "Copy field has no horizontal overflow");
+    for (const control of field.querySelectorAll<HTMLElement>('textarea, button, input[type="checkbox"]')) {
+      if (!control.getClientRects().length) continue;
+      const box = control.getBoundingClientRect(), bounds = field.getBoundingClientRect();
+      check(box.left >= bounds.left - 1 && box.right <= bounds.right + 1, "Copy controls remain inside field boundaries");
+    }
+  }
+  layout();
+}
 function layout() {
   for (const surface of document.querySelectorAll<HTMLElement>(
     ".cfg-root, .create-workspace, [role=dialog]"
@@ -2260,12 +2305,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         await pause();
         await click("Continue to Copy →");
         check(!!document.querySelector('[aria-label="Headlines draft editor"]'), "Copy has separate editable Google text roles before review");
-        const proposed = document.querySelector<HTMLElement>(".google-copy-proposed")!;
-        const selected = document.querySelector<HTMLElement>(".google-copy-selected")!;
-        check(!!proposed && !!selected, "Proposed and selected copy have explicit comparison regions");
-        const proposedBox = proposed.getBoundingClientRect(), selectedBox = selected.getBoundingClientRect();
-        check(innerWidth > 767 ? selectedBox.left >= proposedBox.right : selectedBox.top >= proposedBox.bottom,
-          "Copy comparison is side by side on desktop and stacked on mobile");
+        copyWorkspaceLayout();
 
         await click("Review change →");
         for (let attempt = 0; attempt < 30 && googleActivationDraft?.state !== "validated"; attempt++) await pause();
@@ -2300,11 +2340,25 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.body.textContent?.includes("Daily budget"),
           "Campaign budget and bidding are editable"
         );
+        await studioSection("Copy");
+        await click("Create suggestions with AI");
+        const headline = () => document.querySelector<HTMLTextAreaElement>('[aria-label="Headlines 1"]')!;
+        check(!headline().value, "Generation proposes Google text without populating draft");
+        await fillControl('[aria-label="Headlines 1"]', "My own gaming headline");
+        const proposals = document.querySelector<HTMLElement>('[aria-label="Headlines AI suggestions"]')!;
+        proposals.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+        await pause();
+        await pressStudioControl(proposals.querySelector<HTMLButtonElement>('.ad-copy-add-selected')!, "Add selected Google suggestion");
+        check(headline().value === "My own gaming headline", "Accepting Google suggestions preserves manual draft text");
+        check(document.querySelectorAll('[aria-label="Headlines draft editor"] textarea').length >= 2, "Accepted Google headline is appended");
+        await click("Regenerate all suggestions");
+        check(headline().value === "My own gaming headline", "Regenerating Google proposals does not overwrite accepted draft");
+        copyWorkspaceLayout();
       }
       check(
         which === "google-campaigns"
           ? mutations.filter(path => path === "googleAds.campaigns.publish").length === 1 && mutations.every(path => ["googleAds.campaigns.save", "googleAds.campaigns.validate", "googleAds.campaigns.publish"].includes(path))
-          : mutations.length === 0,
+          : mutations.every(path => path === "googleAds.campaigns.draftPmaxCopy"),
         "Only the explicitly confirmed synthetic Google activation submits a change"
       );
       layout();
@@ -3832,65 +3886,52 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         "A collection of independent learning opportunities"
       );
       await click("Compose");
-      await clickPrefix("Create copy with AI");
-      const fields = () =>
-        ["Primary text", "Headline", "Description"].map(
-          label =>
-            document.querySelector<HTMLTextAreaElement>(
-              `textarea[aria-label="${label}"]`
-            )!.value
-        );
-      check(
-        fields().every(Boolean),
-        "Generated copy populates the three editable ad fields"
-      );
-      const original = fields();
-      await clickPrefix("Regenerate headline");
-      check(
-        copyRequests.at(-1).regeneration.field === "headline" &&
-          copyRequests.at(-1).regeneration.index === 0,
-        "Regenerate targets the current headline"
-      );
-      check(
-        fields()[1] !== original[1] &&
-          fields()[0] === original[0] &&
-          fields()[2] === original[2],
-        "Regenerating a headline preserves primary text and description"
-      );
-      await clickPrefix("Regenerate copy");
-      check(
-        fields().every((value, i) => value !== original[i]),
-        "Full generation replaces all three current fields"
-      );
-      const alternatives = Array.from(
-        document.querySelectorAll<HTMLDetailsElement>("details")
-      ).find(el =>
-        el
-          .querySelector("summary")
-          ?.textContent?.startsWith("Other AI versions")
-      )!;
-      alternatives.open = true;
-      await click("Apply this version");
-      const savedFields = fields();
+      await clickPrefix("Generate copy");
+      const fields = ["Primary text", "Headline", "Description"];
+      const draftValue = () => document.querySelector<HTMLTextAreaElement>('.ad-copy-drafts textarea')!.value;
+      const savedFields: string[] = [];
+      for (const label of fields) {
+        await selectMetaCopyField(label);
+        check(!draftValue(), `${label} generation remains a proposal until accepted`);
+        const proposal = document.querySelector<HTMLElement>('.ad-copy-proposals')!;
+        proposal.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+        await pause();
+        await click("Add selected (1)");
+        check(!!draftValue(), `${label} explicit acceptance fills the draft`);
+        savedFields.push(draftValue());
+      }
+      await selectMetaCopyField("Headline");
+      await fillControl('[aria-label="Headline 1"]', "My manual headline");
+      savedFields[1] = "My manual headline";
+      await click("Regenerate headline suggestion 1");
+      check(copyRequests.at(-1).regeneration.field === "headline" && copyRequests.at(-1).regeneration.index === 0,
+        "Single regeneration targets only the selected headline suggestion");
+      check(draftValue() === savedFields[1], "Single regeneration protects manual draft headline");
+      await clickPrefix("Regenerate");
+      for (const [index, label] of fields.entries()) {
+        await selectMetaCopyField(label);
+        check(draftValue() === savedFields[index], "Full regeneration preserves every accepted draft field");
+      }
+      await selectMetaCopyField("Primary text");
+      copyWorkspaceLayout();
       await click("Save draft");
-      const saved = posts.find(
-        p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-      )!;
-      check(
-        saved?.content.copyAlternatives.length === 4,
-        "Draft preserves the other AI versions"
-      );
-      check(
-        !!document.querySelector('[aria-label="Activation sections"]') &&
-          !document.querySelector('[role="dialog"]'),
-        "Saving stays in Activation Studio"
-      );
+      const saved = posts.find(p => p.id === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!;
+      check(!!saved && fields.every((_, index) => saved.content[["message", "headline", "description"][index]] === savedFields[index]),
+        "Only accepted and manually edited fields are saved, not new proposals");
+      check(!!document.querySelector('[aria-label="Activation sections"]') && !document.querySelector('[role="dialog"]'),
+        "Saving stays in Activation Studio");
       fixtureRouter.navigate(`/app/activate/studio?publication=${saved.id}`);
       await pause();
-      check(
-        JSON.stringify(fields()) === JSON.stringify(savedFields),
-        "Saved primary text, headline and description reopen in Compose"
-      );
+      await studioSection("Copy");
+      await click("Compose");
+      for (const [index, label] of fields.entries()) {
+        await selectMetaCopyField(label);
+        check(draftValue() === savedFields[index], "Saved copy reopens without reapplying generated proposals");
+      }
+      // Populate proposal columns again for visual evidence, without accepting them.
+      await clickPrefix("Generate copy");
+      await selectMetaCopyField("Primary text");
+      copyWorkspaceLayout();
       check(
         mutations.every(m =>
           ["channels.draftAssetCopy", "publishing.save"].includes(m)

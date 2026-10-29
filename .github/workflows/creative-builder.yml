@@ -61,6 +61,16 @@ jobs:
         run: node scripts/check-dialog-layout.mjs
       - name: Check additive Google image flow in Chrome
         run: LAYOUT_PAGES=google-campaigns node scripts/check-channel-layout.mjs
+      - name: Check shared Google and Meta copy workspace in desktop/mobile light/dark
+        run: LAYOUT_PAGES=google-campaign-new,studio-ad-copy node scripts/check-channel-layout.mjs
+      - name: Save shared ad copy workspace screenshots and assertions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ad-copy-layout
+          path: artifacts/ad-copy-layout/
+          if-no-files-found: error
+          retention-days: 7
       - name: Check channel pages and publishing workflow in Chrome
         run: node scripts/check-channel-layout.mjs
       - name: Check public website without authentication or JavaScript
