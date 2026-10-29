@@ -530,6 +530,7 @@ describe.sequential("Google OAuth and workspace isolation", () => {
       "campaigns.uploadVideo",
       "campaigns.inventory",
       "campaigns.assetMetrics",
+      "campaigns.merchantFeedLabels",
       "campaigns.resources",
       "campaigns.drafts",
       "campaigns.draft",

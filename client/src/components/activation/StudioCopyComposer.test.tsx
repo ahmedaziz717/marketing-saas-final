@@ -14,10 +14,17 @@ import { observable } from "@trpc/server/observable";
 import { trpc } from "@/lib/trpc";
 import { contentSchema, type Channel } from "@shared/channels";
 import { StudioCopyComposer } from "./StudioCopyComposer";
-vi.mock("@/hooks/useWorkspace", () => ({ useWorkspace: () => ({ organizationId: 1, membership: { role: "owner" } }) }));
+vi.mock("@/hooks/useWorkspace", () => ({
+  useWorkspace: () => ({ organizationId: 1, membership: { role: "owner" } }),
+}));
 vi.mock("@/hooks/usePromptDefaults", async () => {
   const { PROMPT_REGISTRY } = await import("@shared/promptRegistry");
-  const data = PROMPT_REGISTRY.map(p => ({ ...p, value: p.baseline, revision: 0, source: "system" }));
+  const data = PROMPT_REGISTRY.map(p => ({
+    ...p,
+    value: p.baseline,
+    revision: 0,
+    source: "system",
+  }));
   return { usePromptDefaults: () => ({ data }), announcePromptChange: vi.fn() };
 });
 vi.mock("../ActionCredits", () => ({ ActionCredits: () => null }));
@@ -116,7 +123,10 @@ async function respond(data = options) {
   );
 }
 it("fills social caption immediately, preserves links, saves alternatives and restores them after navigation", async () => {
-  setup("facebook", { message: "Old caption https://example.com", copyDefaultInstructions: "My saved copy task instructions" });
+  setup("facebook", {
+    message: "Old caption https://example.com",
+    copyDefaultInstructions: "My saved copy task instructions",
+  });
   await click("Regenerate copy");
   expect(requests[0].input).toMatchObject({
     channel: "facebook",
@@ -126,7 +136,9 @@ it("fills social caption immediately, preserves links, saves alternatives and re
     promotion: { offer: "Membership", audience: "Designers", goal: "Signups" },
   });
   await respond();
-  expect(current().copyDefaultInstructions).toBe("My saved copy task instructions");
+  expect(current().copyDefaultInstructions).toBe(
+    "My saved copy task instructions"
+  );
   expect(current().message).toContain("Caption 1");
   expect(current().message).toContain("https://example.com");
   expect(current().headline).toBe("");
@@ -145,26 +157,33 @@ it("fills social caption immediately, preserves links, saves alternatives and re
   expect(current().message).toContain("Caption 2");
   expect(current().message).toContain("https://example.com");
 });
-it("fills all ad fields together and regenerates only the requested field", async () => {
-  setup("meta_ads");
-  await click("Create copy with AI");
-  await respond();
-  expect(current()).toMatchObject(options[0]);
-  for (const label of ["Primary text", "Headline", "Description"])
-    expect(screen.getByLabelText(label)).toBeTruthy();
-  await click("Regenerate headline");
-  expect(requests.at(-1)!.input.regeneration).toEqual({
-    index: 0,
-    field: "headline",
+it("stages Meta suggestions in the unified editor and adds only explicitly selected copy", async () => {
+  setup("meta_ads", {
+    message: "Manual primary",
+    headline: "Manual headline",
+    description: "Manual description",
   });
-  await respond([
-    {
-      message: "Do not use",
-      headline: "New headline",
-      description: "Do not use",
-    },
-  ]);
-  expect(current()).toMatchObject({ ...options[0], headline: "New headline" });
+  await click("Generate copy");
+  await respond();
+  expect(current()).toMatchObject({
+    message: "Manual primary",
+    headline: "Manual headline",
+    description: "Manual description",
+  });
+  expect(
+    screen.getByRole("region", { name: "Primary text AI suggestions" })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Select primary text suggestion 1" })
+  );
+  await click("Add selected (1)");
+  expect(current()).toMatchObject({
+    message: "Manual primary",
+    headline: "Manual headline",
+    description: "Manual description",
+    textVariants: { messages: ["Caption 1"] },
+  });
+  expect(screen.getByDisplayValue("Manual primary")).toBeTruthy();
 });
 it("keeps text when directions change and shows the warning after reopening", async () => {
   setup();
@@ -196,7 +215,7 @@ it("rejects stale AI results after a manual edit and preserves copy on failure",
   expect(current().message).toBe("My edit");
   expect(toast.error).toHaveBeenCalled();
 });
-it("preserves saved Meta variants until the user explicitly replaces the complete copy", async () => {
+it("preserves saved Meta variants and only fills the remaining copy slots", async () => {
   setup("meta_ads", {
     message: "Saved text",
     textVariants: {
@@ -205,15 +224,52 @@ it("preserves saved Meta variants until the user explicitly replaces the complet
       descriptions: [],
     },
   });
-  fireEvent.click(screen.getByText("Additional saved ad text options"));
-  expect(screen.getByLabelText("Primary text option 2")).toHaveProperty(
-    "value",
-    "Alternative text"
-  );
-  await click("Regenerate primary text");
-  await respond([options[0]]);
-  expect(current().textVariants.messages).toEqual(["Alternative text"]);
-  await click("Regenerate copy");
+  expect(screen.getByDisplayValue("Alternative text")).toBeTruthy();
+  await click("Generate copy");
   await respond();
-  expect(current().textVariants).toBeUndefined();
+  expect(current().textVariants.messages).toEqual(["Alternative text"]);
+  await click("Add all that fit");
+  expect(current().message).toBe("Saved text");
+  expect(current().textVariants.messages).toEqual([
+    "Alternative text",
+    "Caption 1",
+    "Caption 2",
+    "Caption 3",
+  ]);
+});
+it("rejects stale Meta generation after editing the draft or direction", async () => {
+  setup("meta_ads", {
+    message: "Manual copy",
+    copyDefaultInstructions: "Use verified facts",
+  });
+  await click("Generate copy");
+  expect(requests.at(-1)!.input.defaultInstructions).toBe("Use verified facts");
+  fireEvent.change(screen.getByLabelText("Primary text 1"), {
+    target: { value: "Edited copy" },
+  });
+  await respond();
+  expect(current().message).toBe("Edited copy");
+  expect(screen.queryByLabelText("Primary text suggestion 1")).toBeNull();
+  await click("Generate copy");
+  await click("Edit choices");
+  await respond();
+  expect(current().message).toBe("Edited copy");
+  expect(screen.queryByLabelText("Primary text suggestion 1")).toBeNull();
+});
+
+it("retains saved Meta direction warnings and old alternatives as read-only reference", async () => {
+  setup("meta_ads", {
+    message: "Keep this",
+    copyGenerationContext: "older-context",
+    copyAlternatives: [options[0]],
+  });
+  expect(
+    screen.getByText(/Your directions changed since this draft/)
+  ).toBeTruthy();
+  fireEvent.click(screen.getByText("Previously saved AI alternatives"));
+  expect(screen.getByText("Caption 1")).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Apply this version" })
+  ).toBeNull();
+  expect(current().message).toBe("Keep this");
 });

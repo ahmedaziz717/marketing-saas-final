@@ -1,3 +1,4 @@
+import { googleBusinessDefaults } from "./googleBusinessDefaults";
 import {
   GoogleValidationProvider,
   GoogleFieldErrors,
@@ -80,7 +81,8 @@ const newCampaign = (): GoogleCampaignCreate => ({
   dailyBudget: 0,
   bidding: { strategy: "MAXIMIZE_CONVERSIONS" },
   politicalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
-  locationIds: [],
+  // Defaults belong only to a fresh setup, never to draft hydration or updates.
+  locationIds: ["2840"],
   languageIds: ["1000"],
   keywords: [],
   ad: emptyAd(),
@@ -96,7 +98,13 @@ export function GoogleCampaignComposer({
   organizationId: number;
   channelChoices: ReactNode;
 }) {
-  const { membership } = useWorkspace();
+  const { membership, organization } = useWorkspace();
+  const businessBrand = trpc.brand.get.useQuery({ organizationId });
+  const freshBusiness = useRef<{
+    organizationId: number;
+    businessName: boolean;
+    finalUrl: boolean;
+  } | null>(null);
   const { user } = useAuth();
   const params = new URLSearchParams(useSearch());
   const connections = trpc.googleAds.connections.useQuery({ organizationId });
@@ -170,6 +178,7 @@ export function GoogleCampaignComposer({
     },
     schema: googleDraftSchema,
     restore: value => {
+      freshBusiness.current = null;
       setChosen(value.chosen);
       setMode(value.mode);
       setFormat(value.format);
@@ -270,12 +279,75 @@ export function GoogleCampaignComposer({
   const canPublish = ["owner", "admin", "publisher"].includes(
     membership?.role ?? ""
   );
+  useEffect(() => {
+    const pending = freshBusiness.current;
+    if (
+      !pending ||
+      pending.organizationId !== organizationId ||
+      mode !== "new" ||
+      draft ||
+      businessBrand.isLoading ||
+      businessBrand.error ||
+      businessBrand.data === undefined
+    )
+      return;
+    const defaults = googleBusinessDefaults(
+      organizationId,
+      businessBrand.data,
+      organization
+    );
+    if (!defaults) return;
+    freshBusiness.current = null;
+    setChange(previous =>
+      previous.kind !== "campaign_create"
+        ? previous
+        : {
+            ...previous,
+            ad: {
+              ...previous.ad,
+              ...(pending.businessName &&
+              defaults.businessName.length <= 25 &&
+              ["DISPLAY", "PERFORMANCE_MAX", "DEMAND_GEN"].includes(
+                previous.type
+              )
+                ? { businessName: defaults.businessName }
+                : {}),
+              ...(pending.finalUrl &&
+              ["SEARCH", "DISPLAY", "PERFORMANCE_MAX", "DEMAND_GEN"].includes(
+                previous.type
+              )
+                ? { finalUrl: defaults.finalUrl }
+                : {}),
+            },
+          }
+    );
+  }, [
+    businessBrand.data,
+    businessBrand.isLoading,
+    businessBrand.error,
+    organizationId,
+    organization,
+    mode,
+    draft,
+    change,
+  ]);
   const edit = (next: GoogleChange) => {
+    const pending = freshBusiness.current;
+    if (
+      pending &&
+      change.kind === "campaign_create" &&
+      next.kind === "campaign_create"
+    ) {
+      if (next.ad.businessName !== change.ad.businessName)
+        pending.businessName = false;
+      if (next.ad.finalUrl !== change.ad.finalUrl) pending.finalUrl = false;
+    }
     setChange(next);
     setConfirmed(false);
     setError("");
   };
   const begin = (next: GoogleChange, target = "settings") => {
+    freshBusiness.current = null;
     if (retainedLibraryAssets.current.length) {
       const merge = (assets: GoogleAssetInput[]) => [
         ...assets,
@@ -785,7 +857,15 @@ export function GoogleCampaignComposer({
                       <li key={`${item.field}:${index}`}>
                         <Button
                           variant="link"
-                          onClick={() => goToIssue(issue.path, issue.message)}
+                          onClick={() => {
+                            if (
+                              /^Add .*square logos/.test(issue.message) &&
+                              choices.includes("logo")
+                            ) {
+                              setFormat("logo");
+                            }
+                            goToIssue(issue.path, issue.message);
+                          }}
                         >
                           {item.label}: {item.message}
                         </Button>
@@ -857,6 +937,7 @@ export function GoogleCampaignComposer({
                         setCampaignId("");
                         setPendingRestore(null);
                         setDraft(null);
+                        freshBusiness.current = null;
                         setChange(newCampaign());
                         setConfirmed(false);
                         setError("");
@@ -892,6 +973,7 @@ export function GoogleCampaignComposer({
                         setCampaignId("");
                         setPendingRestore(null);
                         setDraft(null);
+                        freshBusiness.current = null;
                         setChange(newCampaign());
                         setEditingSettings(false);
                         setConfirmed(false);
@@ -943,6 +1025,11 @@ export function GoogleCampaignComposer({
                                   : "MAXIMIZE_CONVERSIONS",
                             },
                           });
+                          freshBusiness.current = {
+                            organizationId,
+                            businessName: true,
+                            finalUrl: true,
+                          };
                         }}
                       />
                     ))}
@@ -1208,6 +1295,7 @@ export function GoogleCampaignComposer({
                           setChecking(false);
                           setDraft(d);
                           setCheckAttempt(value => value + 1);
+                          freshBusiness.current = null;
                           setChange(d.change);
                           setEditingSettings(
                             d.change.kind === "campaign_update"
@@ -1300,6 +1388,15 @@ export function GoogleCampaignComposer({
                   )}
                   {"ad" in change && (
                     <AdEditor
+                      businessNameSuggestion={
+                        change.kind === "campaign_create"
+                          ? googleBusinessDefaults(
+                              organizationId,
+                              businessBrand.data ?? null,
+                              organization
+                            )?.businessName
+                          : undefined
+                      }
                       {...scope}
                       part={section === "copy" ? "copy" : "creative"}
                       type={change.type}
@@ -1640,6 +1737,7 @@ export function GoogleCampaignComposer({
                             )
                           ) {
                             remembered.clear();
+                            freshBusiness.current = null;
                             setChange(newCampaign());
                             setPendingRestore(null);
                             setDraft(null);
@@ -1775,7 +1873,18 @@ export function GoogleCampaignComposer({
     </div>
   );
   return (
-    <GoogleValidationProvider issues={fieldIssues} change={change}>
+    <GoogleValidationProvider
+      issues={fieldIssues}
+      change={change}
+      onChooseLogos={
+        choices.includes("logo")
+          ? () => {
+              setFormat("logo");
+              setSection("creative");
+            }
+          : undefined
+      }
+    >
       {content}
     </GoogleValidationProvider>
   );

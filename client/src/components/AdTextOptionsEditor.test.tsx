@@ -110,34 +110,55 @@ async function tab(name: RegExp) {
     });
   });
 }
-it("applies all five sets, allows manual editing and undoes regeneration", async () => {
-  setup();
-  await click("Generate 5 copy sets");
+it("stages generated suggestions and adds selected copy without replacing manual fields", async () => {
+  const initial = {
+    message: "Manual primary",
+    headline: "Manual headline",
+    description: "Manual description",
+  };
+  setup(initial);
+  await click("Generate copy");
   await respond(options);
-  expect(current()).toEqual(copyContentFromSets(options));
+  expect(current()).toEqual(initial);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Select primary text suggestion 2" })
+  );
+  await click("Add selected (1)");
+  expect(current()).toMatchObject({
+    ...initial,
+    textVariants: { messages: ["Text 2"], headlines: [], descriptions: [] },
+  });
   expect(
-    screen.getAllByRole("textbox", { name: /Primary text option/ })
-  ).toHaveLength(5);
-  expect(
-    screen.queryByRole("button", { name: "Add primary text option" })
-  ).toBeNull();
-  await click("Regenerate all 5 sets");
-  const fresh = options.map(o => ({
-    message: o.message + " new",
-    headline: o.headline + " new",
-    description: o.description + " new",
-  }));
-  await respond(fresh);
-  expect(current()).toEqual(copyContentFromSets(fresh));
-  await click("Undo last generation");
-  expect(current()).toEqual(copyContentFromSets(options));
+    screen.getByRole("checkbox", { name: "Select primary text suggestion 2" })
+  ).toHaveProperty("checked", false);
 });
-it("regenerates one headline and retains the other 14 values", async () => {
+it("adds only remaining slots, skips duplicates, and preserves other Meta fields", async () => {
+  const initial = copyContentFromSets(options.slice(0, 4));
+  setup(initial);
+  await click("Generate copy");
+  await respond(options);
+  await click("Add all that fit");
+  expect(current().textVariants.messages).toEqual([
+    "Text 2",
+    "Text 3",
+    "Text 4",
+    "Text 5",
+  ]);
+  expect(current().headline).toBe(initial.headline);
+  expect(current().textVariants.headlines).toEqual(
+    initial.textVariants?.headlines
+  );
+  await click("Add all that fit");
+  expect(current().textVariants.messages).toHaveLength(4);
+});
+it("regenerates one proposed headline without changing any draft values", async () => {
   const initial = copyContentFromSets(options);
   setup(initial);
-  await tab(/Headlines/);
-  await click("Regenerate headline option 3");
-  expect(requests[0].input.regeneration).toEqual({
+  await click("Generate copy");
+  await respond(options);
+  await tab(/Headline/);
+  await click("Regenerate headline suggestion 3");
+  expect(requests.at(-1)!.input.regeneration).toEqual({
     index: 2,
     field: "headline",
   });
@@ -148,52 +169,55 @@ it("regenerates one headline and retains the other 14 values", async () => {
       headline: "Fresh third headline",
     },
   ]);
-  expect(current()).toEqual({
-    ...initial,
-    textVariants: {
-      ...initial.textVariants,
-      headlines: [
-        "Headline 2",
-        "Fresh third headline",
-        "Headline 4",
-        "Headline 5",
-      ],
-    },
-  });
-  await click("Undo last generation");
   expect(current()).toEqual(initial);
+  expect(screen.getByDisplayValue("Fresh third headline")).toBeTruthy();
 });
 it("discards delayed results after manual edits or image selection changes", async () => {
   const initial = copyContentFromSets(options);
   const view = setup(initial);
-  await click("Regenerate all 5 sets");
-  fireEvent.change(screen.getByLabelText("Primary text option 1"), {
+  await click("Generate copy");
+  fireEvent.change(screen.getByLabelText("Primary text 1"), {
     target: { value: "My manual edit" },
   });
   await respond(options);
   expect(current().message).toBe("My manual edit");
   expect(toast.info).toHaveBeenCalledOnce();
-  await click("Regenerate all 5 sets");
+  expect(screen.queryByLabelText("Primary text suggestion 1")).toBeNull();
+  await click("Generate copy");
   view.rerender(<view.Harness assetKey="asset:2" />);
   await respond(options);
   expect(current().message).toBe("My manual edit");
   expect(toast.info).toHaveBeenCalledTimes(2);
 });
+it("protects manual edits during a repeat generation with existing suggestions", async () => {
+  setup();
+  await click("Generate copy");
+  await respond(options);
+  await click("Regenerate");
+  fireEvent.change(screen.getByLabelText("Primary text 1"), {
+    target: { value: "My latest edit" },
+  });
+  await respond(options.map(o => ({ ...o, message: "New result" })));
+  expect(current().message).toBe("My latest edit");
+  expect(screen.queryByDisplayValue("New result")).toBeNull();
+  expect(
+    screen.getByText(/Your draft changed while copy was generating/)
+  ).toBeTruthy();
+});
 it("keeps copy on failure and prevents duplicate generation requests", async () => {
   const initial = copyContentFromSets(options);
   setup(initial);
-  const button = screen.getByRole("button", { name: "Regenerate all 5 sets" });
-  await click("Regenerate all 5 sets");
+  const button = screen.getByRole("button", { name: "Generate copy" });
+  await click("Generate copy");
   fireEvent.click(button);
   expect(requests).toHaveLength(1);
-  await act(async () => {
-    requests[0].observer.error(new Error("Provider failed"));
-  });
+  await act(async () =>
+    requests[0].observer.error(new Error("Provider failed"))
+  );
   expect(current()).toEqual(initial);
   expect(toast.error).toHaveBeenCalled();
 });
-
-it("passes the selected copy direction and setup without an image and discards results if that direction changes", async () => {
+it("passes selected direction and brief without an image and discards changed-context results", async () => {
   const view = setup();
   const promotion = {
     offer: "Directory membership",
@@ -207,7 +231,7 @@ it("passes the selected copy direction and setup without an image and discards r
       copyDirection={{ messaging_style: ["educational"] }}
     />
   );
-  await click("Generate 5 copy sets");
+  await click("Generate copy");
   expect(requests[0].input).toMatchObject({
     assetKeys: [],
     promotion,
@@ -223,10 +247,10 @@ it("passes the selected copy direction and setup without an image and discards r
   );
   await respond(options);
   expect(current().message).toBe("");
+  expect(screen.queryByLabelText("Primary text suggestion 1")).toBeNull();
   expect(toast.info).toHaveBeenCalledOnce();
 });
-
-it("uses one Studio generation control and includes brief instructions while retaining individual regeneration", async () => {
+it("uses one Studio generation control and retains individual suggestion regeneration", async () => {
   const view = setup();
   const toolbar = document.createElement("div");
   document.body.appendChild(toolbar);
@@ -237,12 +261,6 @@ it("uses one Studio generation control and includes brief instructions while ret
         generationTarget={toolbar}
         instructions="Only verified claims"
         onGenerated={onGenerated}
-        promotion={{
-          offer: "New collection",
-          audience: "Designers",
-          goal: "Sales",
-        }}
-        copyDirection={{ messaging_style: ["playful"] }}
       />
     );
     expect(
@@ -250,28 +268,40 @@ it("uses one Studio generation control and includes brief instructions while ret
     ).toHaveLength(1);
     expect(screen.queryByLabelText("AI copy direction")).toBeNull();
     await click("Generate copy");
-    expect(requests.at(-1)!.input).toMatchObject({
-      direction: "Only verified claims",
-      promotion: {
-        offer: "New collection",
-        audience: "Designers",
-        goal: "Sales",
-      },
-      copyDirection: { messaging_style: ["playful"] },
-      callToAction: "SIGN_UP",
-    });
+    expect(requests.at(-1)!.input.direction).toBe("Only verified claims");
     await respond(options);
     expect(onGenerated).toHaveBeenCalledTimes(1);
-    await click("Regenerate primary text option 1");
+    await click("Regenerate primary text suggestion 1");
     await respond([{ ...options[0], message: "Updated text" }]);
-    expect(current().message).toBe("Updated text");
-    expect(current().headline).toBe("Headline 1");
+    expect(current().message).toBe("");
+    expect(screen.getByDisplayValue("Updated text")).toBeTruthy();
     expect(onGenerated).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getAllByRole("button", { name: "Regenerate all" })
-    ).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Regenerate" })).toHaveLength(
+      1
+    );
   } finally {
     view.unmount();
     toolbar.remove();
   }
+});
+
+it("uses an accessible vertical field rail with keyboard navigation on desktop", async () => {
+  setup();
+  expect(
+    screen
+      .getByRole("tablist", { name: "Meta copy fields" })
+      .getAttribute("aria-orientation")
+  ).toBe("vertical");
+  const first = screen.getByRole("tab", { name: "Primary text" });
+  first.focus();
+  fireEvent.keyDown(first, { key: "ArrowDown" });
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("tab", { name: "Headline" })
+        .getAttribute("aria-selected")
+    ).toBe("true")
+  );
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  expect(screen.getByLabelText("Headline 1")).toBeTruthy();
 });

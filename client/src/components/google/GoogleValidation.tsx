@@ -1,5 +1,6 @@
 import { createContext, useContext, useId, type ReactNode } from "react";
 import "./googleValidation.css";
+import { Button } from "@/components/ui/button";
 import type { GoogleChange } from "@shared/googleCampaigns";
 
 export type GoogleIssue = { path: PropertyKey[]; message: string };
@@ -110,20 +111,25 @@ export function googleIssuePresentation(
   };
 }
 const Context = createContext<GoogleIssuePresentation[]>([]);
+const LogoActionContext = createContext<(() => void) | undefined>(undefined);
 export function GoogleValidationProvider({
   issues,
   change,
+  onChooseLogos,
   children,
 }: {
   issues: GoogleIssue[];
   change?: GoogleChange;
+  onChooseLogos?: () => void;
   children: ReactNode;
 }) {
   return (
     <Context.Provider
       value={issues.map(issue => googleIssuePresentation(issue, change))}
     >
-      {children}
+      <LogoActionContext.Provider value={onChooseLogos}>
+        {children}
+      </LogoActionContext.Provider>
     </Context.Provider>
   );
 }
@@ -144,11 +150,29 @@ export function useGoogleFieldValidation(path?: string) {
 }
 export function GoogleFieldErrors({ path }: { path: string }) {
   const { messages } = useGoogleFieldValidation(path);
+  const onChooseLogos = useContext(LogoActionContext);
+  const missingLogo = messages.some(message =>
+    /^Add .*square logos/.test(message)
+  );
   return messages.length ? (
     <div className="google-field-error" role="alert">
       {messages.map(message => (
         <p key={message}>{message}</p>
       ))}
+      {missingLogo && (
+        <div>
+          <p>
+            A square image is not automatically a logo. Choose Logos, then
+            Square logo · 1:1, and select your approved logo. 128 × 128 px is
+            the minimum, not an exact size; larger square logos are supported.
+          </p>
+          {onChooseLogos && (
+            <Button type="button" variant="outline" onClick={onChooseLogos}>
+              Choose Logos
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   ) : null;
 }

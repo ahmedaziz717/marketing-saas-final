@@ -1,3 +1,4 @@
+import { googleMerchantFeedLabels } from "../lib/googleMerchantFeedLabels";
 import { googleAssetMetrics } from "../lib/googleAssetMetrics";
 import { googleAssetMetricsDays } from "../../shared/googleAssetMetrics";
 import { googleLibraryVideo } from "../lib/googleVideoUploads";
@@ -20,7 +21,7 @@ import { generatePmaxCopy } from "../lib/googlePmaxAi";
 import { googleCopyContext } from "../lib/googleCopyContext";
 import { attachMarketingCategories } from "../lib/catalogCategories";
 import { selectProductFacts } from "../lib/productFacts";
-import { categorySelectionState } from "../../shared/catalogCategories";
+import { imageCategoryHandling } from "../../shared/catalogCategories";
 import {
   getGoogleDraft,
   googleCampaignInventory,
@@ -123,15 +124,6 @@ export const googleCampaignsRouter = router({
         input.organizationId,
         catalog
       );
-      if (
-        categorySelectionState(categorized).requiresChoice &&
-        !input.neutralCategories
-      )
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "Selected products have mixed or unmapped marketing categories. Confirm neutral wording or choose one confirmed category.",
-        });
       const context = {
         brand: {
           name: brand.name,
@@ -148,7 +140,13 @@ export const googleCampaignsRouter = router({
             includeDescription: true,
           })
         ),
-        neutralCategories: input.neutralCategories,
+        // Category setup is optional, as in Creative Builder and Meta copy.
+        // Keep confirmed guidance, but never guess unknown/mixed categories.
+        neutralCategories:
+          imageCategoryHandling(
+            categorized,
+            input.neutralCategories ? "neutral" : undefined
+          ) === "neutral",
         direction: input.direction,
         ...(selected.assets.length ? { assets: selected.assets } : {}),
       };
@@ -215,6 +213,19 @@ export const googleCampaignsRouter = router({
           input.campaignId,
           input.assetGroupId,
           input.days
+        );
+      })
+    ),
+  merchantFeedLabels: protectedProcedure
+    .input(account.extend({ merchantId: z.string().regex(/^\d{1,20}$/) }))
+    .query(({ ctx, input }) =>
+      safe(async () => {
+        await requireOrganizationRole(ctx.user.id, input.organizationId);
+        return googleMerchantFeedLabels(
+          await libraryDatabase(),
+          input.organizationId,
+          input.connectionId,
+          input.merchantId
         );
       })
     ),

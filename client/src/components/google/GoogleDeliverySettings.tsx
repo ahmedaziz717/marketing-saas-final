@@ -1,3 +1,4 @@
+import { GoogleMerchantFeedPicker } from "./GoogleMerchantFeedPicker";
 import {
   googleBiddingStrategies,
   type GoogleChange,
@@ -312,20 +313,12 @@ export function GoogleDeliverySettings({
                       ? "Optional product feed for retail campaigns"
                       : "Shopping product feed"}
                   </p>
-                  <ResourcePicker
+                  <GoogleMerchantFeedPicker
                     {...scope}
-                    kind="merchants"
-                    title="Merchant Center account"
-                    value={change.merchantId ? [change.merchantId] : []}
-                    onChange={v => patch({ merchantId: v[0] })}
+                    merchantId={change.merchantId}
+                    feedLabel={change.feedLabel}
+                    onChange={patch}
                   />
-                  <Field path="feedLabel" title="Feed label">
-                    <input
-                      value={change.feedLabel ?? ""}
-                      onChange={e => patch({ feedLabel: e.target.value })}
-                    />
-                  </Field>
-                  <p>This setup includes all products in the selected feed.</p>
                 </>
               )}
               {change.type === "DEMAND_GEN" && (
