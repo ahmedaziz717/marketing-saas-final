@@ -1849,6 +1849,14 @@ function copyWorkspaceLayout() {
     check(!!field.querySelector('.ad-copy-field-count') && (!field.querySelector('textarea') || !!field.querySelector('.ad-copy-character-count')),
       "Draft occupancy and character counters remain visible");
     check(field.scrollWidth <= field.clientWidth + 1, "Copy field has no horizontal overflow");
+    if (innerWidth <= 700) {
+      for (const control of field.querySelectorAll<HTMLElement>('.ad-copy-text-control')) {
+        const textarea = control.querySelector('textarea')!.getBoundingClientRect();
+        const counter = control.querySelector('.ad-copy-character-count')!.getBoundingClientRect();
+        check(textarea.width >= control.clientWidth - 2, "Mobile copy uses the full text-control width");
+        check(counter.top >= textarea.bottom - 1, "Mobile character counter sits below copy without overlap");
+      }
+    }
     for (const control of field.querySelectorAll<HTMLElement>('textarea, button, input[type="checkbox"]')) {
       if (!control.getClientRects().length) continue;
       const box = control.getBoundingClientRect(), bounds = field.getBoundingClientRect();

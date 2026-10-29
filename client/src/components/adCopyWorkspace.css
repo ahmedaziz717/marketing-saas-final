@@ -279,8 +279,19 @@
     width: 32px;
     height: 36px;
   }
+  /* Keep the complete line available for copy on narrow screens. The counter
+     remains associated through aria-describedby, but no longer steals a column. */
+  .ad-copy-workspace .ad-copy-text-control {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ad-copy-workspace .ad-copy-text-control textarea {
+    flex: none;
+    width: 100%;
+  }
   .ad-copy-workspace .ad-copy-character-count {
+    align-self: flex-end;
     font-size: 10px;
-    padding-right: 6px;
+    padding: 0 9px 6px;
   }
 }

@@ -637,13 +637,33 @@ try {
         report.passed = false;
         report.error = "Copy workspace must render in the requested appearance";
       } else {
-        for (let fieldIndex = 0; fieldIndex < copy.result.value.fields.length; fieldIndex++) {
+        // Wait for the real save notification to dismiss; never hide UI for evidence.
+        let toastVisible = true;
+        for (let attempt = 0; attempt < 80 && toastVisible; attempt++) {
+          const toast = await page("Runtime.evaluate", {
+            expression: `!!document.querySelector('[data-sonner-toast][data-visible="true"]:not([data-removed="true"])')`,
+            returnByValue: true,
+          });
+          toastVisible = toast.result.value;
+          if (toastVisible) await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (toastVisible) {
+          report.passed = false;
+          report.error = "Save toast did not dismiss before copy screenshots";
+        }
+        const captureCopy = async (selector, suffix) => {
           await page("Runtime.evaluate", {
-            expression: `document.querySelectorAll('.ad-copy-workspace .ad-copy-field')[${fieldIndex}].scrollIntoView({block:'center', behavior:'instant'})`,
+            expression: `document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center', behavior:'instant'})`,
           });
           await new Promise(resolve => setTimeout(resolve, 100));
           const screenshot = await page("Page.captureScreenshot", { format: "png" });
-          await writeFile(`artifacts/ad-copy-layout/${name}-field-${fieldIndex + 1}.png`, Buffer.from(screenshot.data, "base64"));
+          await writeFile(`artifacts/ad-copy-layout/${name}-${suffix}.png`, Buffer.from(screenshot.data, "base64"));
+        };
+        await captureCopy('.ad-copy-workspace-header', 'workspace-top');
+        for (let fieldIndex = 0; fieldIndex < copy.result.value.fields.length; fieldIndex++) {
+          const selector = `.ad-copy-workspace .ad-copy-field:nth-of-type(${fieldIndex + 1})`;
+          await captureCopy(selector, `field-${fieldIndex + 1}`);
+          await captureCopy(`${selector} .ad-copy-drafts`, `draft-${fieldIndex + 1}`);
         }
       }
       await writeFile(`artifacts/ad-copy-layout/${name}.json`, JSON.stringify({name, ...report}, null, 2));

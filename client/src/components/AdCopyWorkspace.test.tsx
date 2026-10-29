@@ -255,3 +255,26 @@ it("repeated acceptance cannot duplicate text once the adapter updates draft sta
   expect(screen.getByRole("status").textContent).toContain("0 headlines added");
   expect(screen.getByRole("status").textContent).toContain("3 duplicate");
 });
+
+it("keeps character counters associated with editable proposal and draft text when visually stacked", () => {
+  const handlers = props();
+  render(<AdCopyWorkspace {...handlers} fields={[field()]} />);
+  for (const label of ["Headlines suggestion 1", "Headlines 1"]) {
+    const textarea = screen.getByLabelText(label) as HTMLTextAreaElement;
+    const counter = document.getElementById(
+      textarea.getAttribute("aria-describedby")!
+    );
+    expect(counter?.classList.contains("ad-copy-character-count")).toBe(true);
+    expect(counter?.parentElement).toBe(textarea.parentElement);
+    expect(counter?.textContent).toContain("/ 30");
+    expect(textarea.readOnly).toBe(false);
+  }
+  fireEvent.change(screen.getByLabelText("Headlines 1"), {
+    target: { value: "Edited on mobile" },
+  });
+  expect(handlers.onEditDraft).toHaveBeenCalledWith(
+    "headlines",
+    "manual",
+    "Edited on mobile"
+  );
+});
