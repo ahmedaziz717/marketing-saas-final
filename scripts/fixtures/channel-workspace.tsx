@@ -4009,8 +4009,9 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       );
       await studioSection("Copy");
       await click("Compose");
+      if (!social) await selectMetaCopyField("Primary text");
       await fillControl(
-        social ? "#pub-message" : 'textarea[aria-label="Primary text"]',
+        social ? "#pub-message" : 'textarea[aria-label="Primary text 1"]',
         "Explore our latest collection."
       );
       check(
@@ -4026,6 +4027,8 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           saved.connectionId === (social ? secondPageId : adsId),
         "Draft saves the selected account"
       );
+      check(saved.content.message === "Explore our latest collection.",
+        "Manually written primary text is saved unchanged without generating suggestions");
       check(
         !!document.querySelector('[aria-label="Activation sections"]') &&
           !document.querySelector('[role="dialog"]'),

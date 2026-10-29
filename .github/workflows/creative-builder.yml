@@ -62,7 +62,7 @@ jobs:
       - name: Check additive Google image flow in Chrome
         run: LAYOUT_PAGES=google-campaigns node scripts/check-channel-layout.mjs
       - name: Check shared Google and Meta copy workspace in desktop/mobile light/dark
-        run: LAYOUT_PAGES=google-campaign-new,studio-ad-copy node scripts/check-channel-layout.mjs
+        run: LAYOUT_PAGES=google-campaign-new,studio-ad-copy,studio-ad node scripts/check-channel-layout.mjs
       - name: Save shared ad copy workspace screenshots and assertions
         if: always()
         uses: actions/upload-artifact@v4
