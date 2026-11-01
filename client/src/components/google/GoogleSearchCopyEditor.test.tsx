@@ -177,6 +177,29 @@ it("selects all without partial overwrite at capacity and explicitly replaces on
   expect(saved.headlines).toEqual(suggestions.headlines);
   expect(saved.descriptions).toEqual(initial.descriptions);
 });
+it("requires reviewing a replacement again after editing its suggestions", async () => {
+  render(<Harness />);
+  await generate();
+  fireEvent.click(screen.getByLabelText("Select display path 1 suggestion 1"));
+  fireEvent.click(
+    region("Display path 1 AI suggestions").getByRole("button", {
+      name: "Replace with selected",
+    })
+  );
+  fireEvent.change(screen.getByLabelText("Display path 1 suggestion 1"), {
+    target: { value: "edited-path" },
+  });
+  click("Confirm replacement");
+  expect(screen.getByLabelText("Display path 1 1")).toHaveProperty(
+    "value",
+    "manual"
+  );
+  expect(
+    screen.getByText(
+      "Draft or suggestions changed. Review your selection before replacing."
+    )
+  ).toBeTruthy();
+});
 it("invalidates suggestions and in-flight responses when the campaign URL changes", async () => {
   render(<Harness />);
   await generate();

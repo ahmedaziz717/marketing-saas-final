@@ -96,6 +96,7 @@ export function AdCopyWorkspace({
     field: string;
     texts: string[];
     draft: string;
+    suggestions: string;
   } | null>(null);
   const [selection, setSelection] = useState<{
     key: string;
@@ -391,6 +392,10 @@ export function AdCopyWorkspace({
                             field: field.id,
                             texts: plan.texts,
                             draft: JSON.stringify(field.drafts),
+                            suggestions: JSON.stringify([
+                              field.suggestions,
+                              checked,
+                            ]),
                           });
                         }}
                       >
@@ -415,11 +420,13 @@ export function AdCopyWorkspace({
                             onClick={() => {
                               if (
                                 JSON.stringify(field.drafts) !==
-                                replacement.draft
+                                  replacement.draft ||
+                                JSON.stringify([field.suggestions, checked]) !==
+                                  replacement.suggestions
                               )
                                 setNotice({
                                   key: generationKey,
-                                  text: "Draft changed. Review your selection before replacing.",
+                                  text: "Draft or suggestions changed. Review your selection before replacing.",
                                 });
                               else onReplace(field.id, replacement.texts);
                               setReplacement(null);
