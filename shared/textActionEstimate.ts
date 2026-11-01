@@ -29,6 +29,7 @@ export function textActionForOperation(operation?: string): TextAction {
       return "video_prompt";
     case "channels.draftAssetCopy":
     case "googleAds.campaigns.draftPmaxCopy":
+    case "googleAds.campaigns.draftSearchCopy":
     case "channels.draftCaptions":
       return "ad_copy";
     case "workflow.optimize_copy":

@@ -1,4 +1,5 @@
 import { googleCopyCapabilities } from "./googleCopy";
+import { searchCopyFields } from "./googleSearchCopy";
 import { googleDisplayRequiredImages } from "./googleImagePlacement";
 import { z } from "zod";
 
@@ -121,6 +122,20 @@ export const googleAdContentSchema = z.object({
   path1: z.string().trim().max(15).default(""),
   path2: z.string().trim().max(15).default(""),
 });
+function validateSearchCopy(ad: z.infer<typeof googleAdContentSchema>, ctx: z.RefinementCtx) {
+  for (const key of ["headlines", "descriptions"] as const) {
+    const spec = searchCopyFields[key];
+    const values = ad[key].filter(value => value.trim());
+    if (values.length < spec.minimum || values.length > spec.maximum)
+      ctx.addIssue({ code: "custom", path: ["ad", key], message: `Search needs ${spec.minimum}–${spec.maximum} ${spec.label.toLowerCase()}.` });
+    const seen = new Set<string>();
+    ad[key].forEach((value, index) => {
+      const normalized = value.trim().toLowerCase();
+      if (normalized && seen.has(normalized)) ctx.addIssue({ code: "custom", path: ["ad", key, index], message: `Use a different ${spec.singular}; this text is already in the draft.` });
+      seen.add(normalized);
+    });
+  }
+}
 const biddingSchema = z.object({
   strategy: z.enum([
     "MAXIMIZE_CONVERSIONS",
@@ -230,7 +245,7 @@ export const googleCampaignCreateSchema = z
     if (!["SHOPPING", "APP"].includes(v.type) && !v.ad.finalUrl)
       issue("Enter an HTTPS landing page.");
     if (
-      v.type !== "SHOPPING" &&
+      !["SHOPPING", "SEARCH"].includes(v.type) &&
       (!v.ad.headlines.length || !v.ad.descriptions.length)
     )
       issue("Add headlines and descriptions.");
@@ -241,16 +256,10 @@ export const googleCampaignCreateSchema = z
       issue("This ad type accepts up to 5 headlines.");
     if (v.type === "DEMAND_GEN" && !v.ad.assets.some(a => a.field === "LOGO"))
       issue("Demand Gen requires a square logo.");
-    if (
-      v.type === "SEARCH" &&
-      (!v.keywords.some(k => !k.negative) ||
-        v.ad.headlines.length < 3 ||
-        v.ad.descriptions.length < 2 ||
-        v.ad.descriptions.length > 4)
-    )
-      issue(
-        "Search needs at least one keyword, 3–15 headlines and 2–4 descriptions."
-      );
+    if (v.type === "SEARCH") {
+      validateSearchCopy(v.ad, ctx);
+      if (!v.keywords.some(k => !k.negative)) ctx.addIssue({ code: "custom", path: ["keywords"], message: "Search needs at least one keyword." });
+    }
     if (v.type === "SHOPPING" && (!v.merchantId || !v.feedLabel))
       issue("Choose a linked Merchant Center account and feed label.");
     if (
@@ -364,7 +373,9 @@ export const googleChangeSchema = z.discriminatedUnion("kind", [
     type: z.enum(["SEARCH", "DISPLAY", "DEMAND_GEN"]),
     ad: googleAdContentSchema,
   }),
-]);
+]).superRefine((change, ctx) => {
+  if (change.kind === "ad_create" && change.type === "SEARCH") validateSearchCopy(change.ad, ctx);
+});
 export type GoogleChange = z.infer<typeof googleChangeSchema>;
 export type GoogleCampaignCreate = z.infer<typeof googleCampaignCreateSchema>;
 export type GoogleAdContent = z.infer<typeof googleAdContentSchema>;

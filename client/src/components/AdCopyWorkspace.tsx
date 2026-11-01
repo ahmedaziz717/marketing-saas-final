@@ -36,6 +36,7 @@ export type AdCopyWorkspaceProps = {
   onEditDraft: (field: string, id: string, text: string) => void;
   onRemoveDraft: (field: string, id: string) => void;
   onWrite: (field: string) => void;
+  onReplace?: (field: string, texts: string[]) => void;
   onRegenerate?: (field: string, index: number) => void;
   headerAction?: ReactNode;
   renderSuggestionActions?: (field: string, index: number) => ReactNode;
@@ -84,11 +85,19 @@ export function AdCopyWorkspace({
   onEditDraft,
   onRemoveDraft,
   onWrite,
+  onReplace,
   onRegenerate,
   headerAction,
   renderSuggestionActions,
 }: AdCopyWorkspaceProps) {
   const uid = useId();
+  const [replacement, setReplacement] = useState<{
+    key: string;
+    field: string;
+    texts: string[];
+    draft: string;
+    suggestions: string;
+  } | null>(null);
   const [selection, setSelection] = useState<{
     key: string;
     fields: Record<string, number[]>;
@@ -103,9 +112,23 @@ export function AdCopyWorkspace({
     setSelection({ key: generationKey, fields: {} });
     setNotice({ key: generationKey, text: "" });
   }, [generationKey]);
-  function add(field: AdCopyWorkspaceField, indices: number[]) {
+  function add(
+    field: AdCopyWorkspaceField,
+    indices: number[],
+    allowPartial = false
+  ) {
     if (busy) return;
     const { texts, skipped } = planCopyAdditions(field, indices);
+    if (
+      !allowPartial &&
+      (skipped.full || skipped.invalid || skipped.duplicate)
+    ) {
+      setNotice({
+        key: generationKey,
+        text: "Selected suggestions could not all be added. Check empty, over-limit or duplicate text and available slots. Your draft is unchanged.",
+      });
+      return;
+    }
     if (texts.length) onAdd(field.id, texts);
     setSelection(previous => ({
       key: generationKey,
@@ -293,6 +316,30 @@ export function AdCopyWorkspace({
                     <Button
                       type="button"
                       size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        setSelection(previous => ({
+                          key: generationKey,
+                          fields: {
+                            ...(previous.key === generationKey
+                              ? previous.fields
+                              : {}),
+                            [field.id]:
+                              checked.length === field.suggestions.length
+                                ? []
+                                : field.suggestions.map((_, index) => index),
+                          },
+                        }))
+                      }
+                    >
+                      {checked.length === field.suggestions.length
+                        ? "Deselect all"
+                        : "Select all"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
                       className="ad-copy-add-selected"
                       disabled={busy || !checked.length}
                       onClick={() => add(field, checked)}
@@ -307,12 +354,95 @@ export function AdCopyWorkspace({
                       onClick={() =>
                         add(
                           field,
-                          field.suggestions.map((_, index) => index)
+                          field.suggestions.map((_, index) => index),
+                          true
                         )
                       }
                     >
                       Add all that fit
                     </Button>
+                    {onReplace && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          busy ||
+                          !checked.length ||
+                          field.drafts.some(d => d.readOnly)
+                        }
+                        onClick={() => {
+                          const plan = planCopyAdditions(
+                            { ...field, occupied: 0, drafts: [] },
+                            checked
+                          );
+                          if (
+                            plan.skipped.full ||
+                            plan.skipped.invalid ||
+                            plan.skipped.duplicate
+                          ) {
+                            setNotice({
+                              key: generationKey,
+                              text: "Check selected text and field capacity before replacing. Your draft is unchanged.",
+                            });
+                            return;
+                          }
+                          setReplacement({
+                            key: generationKey,
+                            field: field.id,
+                            texts: plan.texts,
+                            draft: JSON.stringify(field.drafts),
+                            suggestions: JSON.stringify([
+                              field.suggestions,
+                              checked,
+                            ]),
+                          });
+                        }}
+                      >
+                        Replace with selected
+                      </Button>
+                    )}
+                    {onReplace &&
+                      replacement?.key === generationKey &&
+                      replacement.field === field.id && (
+                        <div
+                          role="group"
+                          aria-label={`Confirm replacing ${field.label.toLowerCase()}`}
+                        >
+                          <p>
+                            Replace all {field.label.toLowerCase()} in this
+                            draft with {replacement.texts.length} selected
+                            suggestions?
+                          </p>
+                          <Button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (
+                                JSON.stringify(field.drafts) !==
+                                  replacement.draft ||
+                                JSON.stringify([field.suggestions, checked]) !==
+                                  replacement.suggestions
+                              )
+                                setNotice({
+                                  key: generationKey,
+                                  text: "Draft or suggestions changed. Review your selection before replacing.",
+                                });
+                              else onReplace(field.id, replacement.texts);
+                              setReplacement(null);
+                            }}
+                          >
+                            Confirm replacement
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setReplacement(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
                     <span className="ad-copy-slots">
                       {remaining} {remaining === 1 ? "slot" : "slots"} available
                     </span>

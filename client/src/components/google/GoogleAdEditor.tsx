@@ -1,3 +1,4 @@
+import { GoogleSearchCopyEditor } from "./GoogleSearchCopyEditor";
 import { GoogleFieldErrors } from "./GoogleValidation";
 import { googleCopyCapabilities } from "@shared/googleCopy";
 import { useEffect, useRef, useState } from "react";
@@ -914,7 +915,7 @@ export function AdEditor({
               />
             </>
           )}
-          {!["SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
+          {!["SEARCH", "SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <div aria-live="polite">
               {(
                 [
@@ -935,7 +936,7 @@ export function AdEditor({
               )}
             </div>
           )}
-          {!["SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
+          {!["SEARCH", "SHOPPING", "PERFORMANCE_MAX", "DISPLAY"].includes(type) && (
             <>
               <Field title="Headlines · one per line · 30 characters each">
                 <textarea
@@ -976,24 +977,7 @@ export function AdEditor({
               )}
             </Field>
           )}
-          {type === "SEARCH" && (
-            <div className="google-form-grid">
-              <Field path="ad.path1" title="Display path 1">
-                <input
-                  maxLength={15}
-                  value={ad.path1}
-                  onChange={e => patch({ path1: e.target.value })}
-                />
-              </Field>
-              <Field path="ad.path2" title="Display path 2">
-                <input
-                  maxLength={15}
-                  value={ad.path2}
-                  onChange={e => patch({ path2: e.target.value })}
-                />
-              </Field>
-            </div>
-          )}
+          {type === "SEARCH" && <GoogleSearchCopyEditor organizationId={organizationId} connectionId={connectionId} ad={ad} onChange={onChange} />}
           {type === "SHOPPING" && (
             <p>
               Shopping ads use titles and descriptions from the selected

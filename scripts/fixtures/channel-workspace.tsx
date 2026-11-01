@@ -639,6 +639,15 @@ function respond(path: string, input: any) {
       })),
     };
   if (path === "googleAds.campaigns.merchantFeedLabels") return { labels: ["US", "GB"], limited: false };
+  if (path === "googleAds.campaigns.draftSearchCopy") {
+    mutations.push(path);
+    copyRequests.push(input);
+    return {
+      headlines: Array.from({ length: 15 }, (_, i) => `Explore gaming PCs ${i + 1}`),
+      descriptions: Array.from({ length: 4 }, (_, i) => `Find the right gaming PC for your next game ${i + 1}.`),
+      path1: ["gaming"], path2: ["custom-pcs"],
+    };
+  }
   if (path === "googleAds.campaigns.draftPmaxCopy") {
     mutations.push(path);
     copyRequests.push(input);
@@ -721,7 +730,7 @@ function respond(path: string, input: any) {
     return {
       oauthConfigured: which.startsWith("google-"),
       livePublishingEnabled: true,
-      items: ["google-campaigns", "google-campaign-new"].includes(which)
+      items: ["google-campaigns", "google-campaign-new", "google-search-copy"].includes(which)
         ? [
             {
               id: googleFixtureId,
@@ -782,7 +791,7 @@ function respond(path: string, input: any) {
   if (path === "channels.connections") {
     if (
       input.includeGoogle &&
-      ["studio-channels", "google-campaigns", "google-campaign-new"].includes(
+      ["studio-channels", "google-campaigns", "google-campaign-new", "google-search-copy"].includes(
         which
       )
     )
@@ -1273,6 +1282,7 @@ const routeForPage: Record<string, string> = {
   "insights-studio": "/app/analytics/studio",
   "google-campaigns": "/app/activate/google",
   "google-campaign-new": "/app/activate/google",
+  "google-search-copy": "/app/activate/google",
   "optimization-studio": "/app/optimize/studio",
 
   "model-picker": "/app/model-picker",
@@ -2194,7 +2204,7 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
       );
       layout();
     }
-    if (which === "google-campaigns" || which === "google-campaign-new") {
+    if (["google-campaigns", "google-campaign-new", "google-search-copy"].includes(which)) {
       check(
         !!document.querySelector(".studio-journey"),
         "Google uses the shared studio"
@@ -2342,14 +2352,19 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
           document.querySelectorAll(".cfg-card-grid .cfg-card").length === 6,
           "Six supported campaign families are offered"
         );
-        await click("Select Performance Max");
+        await click(which === "google-search-copy" ? "Select Search" : "Select Performance Max");
         await studioSection("Delivery");
         check(
           document.body.textContent?.includes("Daily budget"),
           "Campaign budget and bidding are editable"
         );
         await studioSection("Copy");
-        await click("Create suggestions with AI");
+        if (which === "google-search-copy") {
+          await studioSection("Creative");
+          await fillControl('input[data-google-field="ad.finalUrl"]', "https://example.test/search");
+          await studioSection("Copy");
+        }
+        await click(which === "google-search-copy" ? "AI generate all copy" : "Create suggestions with AI");
         const headline = () => document.querySelector<HTMLTextAreaElement>('[aria-label="Headlines 1"]')!;
         check(!headline().value, "Generation proposes Google text without populating draft");
         await fillControl('[aria-label="Headlines 1"]', "My own gaming headline");
@@ -2359,14 +2374,14 @@ async function chooseVideoModel(mode: "create" | "edit" | "motion") {
         await pressStudioControl(proposals.querySelector<HTMLButtonElement>('.ad-copy-add-selected')!, "Add selected Google suggestion");
         check(headline().value === "My own gaming headline", "Accepting Google suggestions preserves manual draft text");
         check(document.querySelectorAll('[aria-label="Headlines draft editor"] textarea').length >= 2, "Accepted Google headline is appended");
-        await click("Regenerate all suggestions");
+        await click(which === "google-search-copy" ? "AI generate all copy" : "Regenerate all suggestions");
         check(headline().value === "My own gaming headline", "Regenerating Google proposals does not overwrite accepted draft");
         copyWorkspaceLayout();
       }
       check(
         which === "google-campaigns"
           ? mutations.filter(path => path === "googleAds.campaigns.publish").length === 1 && mutations.every(path => ["googleAds.campaigns.save", "googleAds.campaigns.validate", "googleAds.campaigns.publish"].includes(path))
-          : mutations.every(path => path === "googleAds.campaigns.draftPmaxCopy"),
+          : mutations.every(path => ["googleAds.campaigns.draftPmaxCopy", "googleAds.campaigns.draftSearchCopy"].includes(path)),
         "Only the explicitly confirmed synthetic Google activation submits a change"
       );
       layout();
