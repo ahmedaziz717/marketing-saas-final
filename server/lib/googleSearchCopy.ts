@@ -31,7 +31,8 @@ export async function generateSearchCopy(url: string, context: unknown) {
       },
       searchCopySuggestionsSchema
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
     throw new TRPCError({
       code: "BAD_GATEWAY",
       message:

@@ -94,8 +94,8 @@ export function GoogleSearchCopyEditor({
         optional.
       </p>
       <p>
-        AI uses your campaign landing page and Brand Kit. Review suggestions
-        before adding them.
+        AI uses your campaign landing page, Brand Kit and workspace AI credits.
+        Review suggestions before adding them.
       </p>
       <p className="activation-help">
         Landing page: {ad.finalUrl || "Not set — add it in Creative"}

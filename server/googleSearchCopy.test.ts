@@ -1,4 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { TRPCError } from "@trpc/server";
+import { textActionForOperation } from "../shared/textActionEstimate";
 const mocks = vi.hoisted(() => ({ page: vi.fn(), generate: vi.fn() }));
 vi.mock("./lib/marketingDrafts", () => ({
   websiteEvidence: mocks.page,
@@ -28,6 +30,7 @@ beforeEach(() => {
   );
 });
 it("reads the actual campaign page before requesting all Search fields with brand context", async () => {
+  expect(textActionForOperation("googleAds.campaigns.draftSearchCopy")).toBe("ad_copy");
   const context = {
     brand: { name: "Acme" },
     existingCopy: { headlines: ["Manual copy"] },
@@ -44,6 +47,10 @@ it("reads the actual campaign page before requesting all Search fields with bran
     },
   });
   expect(mocks.generate.mock.calls[0][0]).toContain("untrusted reference data");
+});
+it("preserves actionable credit-account errors from the existing metered provider", async () => {
+  mocks.generate.mockRejectedValue(new TRPCError({ code: "FORBIDDEN", message: "Insufficient AI credits." }));
+  await expect(generateSearchCopy("https://example.com", {})).rejects.toThrow("Insufficient AI credits.");
 });
 it.each(["https://example.com/unreadable", "https://localhost/private"])(
   "never generates when safe page reading fails: %s",
