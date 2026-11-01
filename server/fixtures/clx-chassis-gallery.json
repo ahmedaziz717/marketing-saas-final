@@ -1,0 +1,227 @@
+{
+  "code": "gmhorus00011mk",
+  "components": {
+    "chassis": {
+      "code": "cas-crs-3500cb",
+      "name": "Horus ICUE 3500X Black",
+      "enabledInKit": true,
+      "metadata": {
+        "benchmarkName": "",
+        "gallery": {
+          "size": 8
+        }
+      },
+      "upgrades": [
+        {
+          "code": "cas-crs-3500mb",
+          "name": "Horus ICUE 3500X White",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "cas-crs-5000xm",
+          "name": "HORUS ICUE 5000X Mid Tower White",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "cas-pha-nv5whac",
+          "name": "Horus NV5 Mid Tower White",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "cas-pha-nv5bkac",
+          "name": "Horus NV5 Mid Tower Black",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "cas-lia-pco11dk",
+          "name": "HORUS O11 Dynamic EVO Mid Tower White",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "cas-lia-pco11d3",
+          "name": "HORUS O11EVO MidTower White InvertedATX",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5crew",
+          "name": "HORUS NV5 WHITE CIRCUIT RUNNER EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5wsea",
+          "name": "HORUS NV5 White SAKURA EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 11
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5tpga",
+          "name": "HORUS NV5 BLACK TOPOGRAPHY EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 11
+            }
+          }
+        },
+        {
+          "code": "cas-lia-pco11ca",
+          "name": "HORUS O11D EVO RGB Mid Tower Black",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 9
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5bcfa",
+          "name": "Horus NV5 Celestial Flora Limited Ed",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 9
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5bkuv",
+          "name": "HORUS NV5 Black - Horus Edition",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5crea",
+          "name": "HORUS NV5 BLACK CIRCUIT RUNNER EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 11
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5stba",
+          "name": "HORUS NV5 BLACK TECHSNOW",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "code": "cas-lia-pco11d2",
+          "name": "HORUS O11 EVO MidTower Black InvertedATX",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 8
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5bgee",
+          "name": "HORUS NV5 BLACK GET EXCITED EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 11
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5osry",
+          "name": "CLX HORUS NV5 OSSUARY EDITION",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "code": "asm-cas-nv5votk",
+          "name": "CLX HORUS NV5 VALLEY OF THE KINGS",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "code": "asm-cas-pco11dv",
+          "name": "HORUS O11 EVO Black ATX - Horus Edition",
+          "enabledInKit": true,
+          "metadata": {
+            "benchmarkName": "",
+            "gallery": {
+              "size": 9
+            }
+          }
+        }
+      ]
+    }
+  }
+}

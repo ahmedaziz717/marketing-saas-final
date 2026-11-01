@@ -63,7 +63,7 @@ export async function renewBuilderJob(
         eq(creativeJobs.organizationId, organizationId),
         eq(creativeJobs.status, "running")
       )
-    );
-  if (!updated[0].affectedRows)
+    ).returning({ id: creativeJobs.id });
+  if (!updated.length)
     throw new Error("Generation attempt was interrupted");
 }

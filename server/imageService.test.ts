@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("./_core/env", () => ({
-  ENV: { forgeApiUrl: "https://forge.example.test/", forgeApiKey: "test-only" },
+  ENV: { openAiApiKey: "test-only" },
 }));
 vi.mock("./storage", () => ({
   storagePut: vi.fn(async () => ({
@@ -18,8 +18,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("image gateway compatibility", () => {
-  it("resolves the exact requested model through the advertised ID and stores correctly sized PNG output", async () => {
+describe("portable image service", () => {
+  it("uses the required image model directly and stores correctly sized PNG output", async () => {
     const png = await sharp({
       create: { width: 64, height: 64, channels: 3, background: "white" },
     })
@@ -30,16 +30,14 @@ describe("image gateway compatibility", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            models: [
-              { id: "gpt-image-2.5-sunburst", model: "opaque-service-enum" },
-            ],
+            id: "gpt-image-2.5-sunburst",
           })
         )
       )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            image: { b64Json: png.toString("base64"), mimeType: "image/png" },
+            data: [{ b64_json: png.toString("base64") }],
           })
         )
       );
@@ -52,9 +50,9 @@ describe("image gateway compatibility", () => {
     });
     const request = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(request).toMatchObject({
-      model: "opaque-service-enum",
+      model: "gpt-image-2.5-sunburst",
       quality: "medium",
-      original_images: [{ b64Json: "reference", mimeType: "image/png" }],
+      images: [{ image_url: "data:image/png;base64,reference" }],
     });
     const stored = vi.mocked(storagePut).mock.calls[0];
     expect(stored[0]).toMatch(/^org-1\/creatives\/4\//);

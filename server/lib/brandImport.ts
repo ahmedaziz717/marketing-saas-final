@@ -57,9 +57,9 @@ export function nextCrawlResumeStatus(cursor: number, discoveredCount: number) {
   return cursor < discoveredCount ? "crawling" as const : "analyzing" as const;
 }
 
-export function editedProductProvenance(previous: Record<string, string>, userId: number, now: number) {
+export function editedProductProvenance(previous: Record<string, string>, userId: number, now: number, fields = ["name", "sku", "category", "description", "price", "specifications"]) {
   const marker = `user:${userId}@${now}`;
-  return { ...previous, name: marker, sku: marker, category: marker, description: marker, price: marker, specifications: marker };
+  return { ...previous, ...Object.fromEntries(fields.map(field => [field, marker])) };
 }
 
 export function pruneDeletedProductIds(current: number[] | null | undefined, deletedIds: number[]) {

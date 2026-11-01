@@ -26,7 +26,8 @@ describe("creative generation source safety", () => {
       "GPT Image 2.5 Sunburst request failed (403): model_not_found: account detail"
     );
     expect(result.category).toBe("model_access");
-    expect(result.userMessage).toContain("GPT Image 2.5 Sunburst access");
+    expect(result.userMessage).toContain("AI generation");
+    expect(result.userMessage).not.toMatch(/GPT|Sunburst|OpenAI/i);
     expect(result.userMessage).toContain("owner");
     expect(result.userMessage).not.toContain("account detail");
   });

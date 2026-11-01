@@ -1,102 +1,94 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
+import { createClient } from '@supabase/supabase-js';
 
-import { ENV } from "./_core/env";
+export function storageClient() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key) throw new Error('Asset storage is not configured');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+export const assetBucket = () => process.env.SUPABASE_STORAGE_BUCKET || 'frame-assets';
 
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
+export function normalizeStorageKey(key: string): string {
+  if (!key || key.startsWith('/') || key.includes('\\') || /[\x00-\x1f?#]/.test(key) || key.split('/').some(part => !part || part === '.' || part === '..')) {
+    throw new Error('Invalid asset key');
   }
-
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
+  return key;
 }
 
-function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
+export function assetUrl(key: string) {
+  return '/media/' + normalizeStorageKey(key).split('/').map(encodeURIComponent).join('/');
 }
 
-function appendHashSuffix(relKey: string): string {
-  const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const lastDot = relKey.lastIndexOf(".");
-  if (lastDot === -1) return `${relKey}_${hash}`;
-  return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
+export async function storagePut(relKey: string, data: Buffer | Uint8Array | string, contentType = 'application/octet-stream') {
+  const base = normalizeStorageKey(relKey);
+  const dot = base.lastIndexOf('.');
+  const suffix = crypto.randomUUID();
+  const key = dot > base.lastIndexOf('/') ? `${base.slice(0, dot)}_${suffix}${base.slice(dot)}` : `${base}_${suffix}`;
+  const bytes = typeof data === 'string' ? Buffer.from(data) : data;
+  const { error } = await storageClient().storage.from(assetBucket()).upload(key, bytes, { contentType, upsert: false });
+  if (error) throw new Error('Asset upload failed');
+  return { key, url: assetUrl(key) };
 }
 
-export async function storagePut(
-  relKey: string,
-  data: Buffer | Uint8Array | string,
-  contentType = "application/octet-stream",
-): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
+export async function storageGet(relKey: string) {
+  const key = normalizeStorageKey(relKey);
+  return { key, url: assetUrl(key) };
+}
 
-  // 1. Get presigned PUT URL from Forge
-  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
-  presignUrl.searchParams.set("path", key);
+type SigningFailure = { category: 'transient' | 'access' | 'missing' | 'unknown'; status?: number; retryAfterMs?: number };
 
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
+// Never log the provider error: it can contain signed URLs, keys, or credentials.
+function signingFailure(error: unknown): SigningFailure {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const numericStatus = Number(value.status ?? value.statusCode);
+  const status = Number.isInteger(numericStatus) && numericStatus >= 100 && numericStatus <= 599 ? numericStatus : undefined;
+  const code = String(value.code ?? value.statusCode ?? '');
+  const message = typeof value.message === 'string' ? value.message : '';
+  if (status === 401 || status === 403 || /^(AccessDenied|Unauthorized|Forbidden)$/i.test(code)) return { category: 'access', status };
+  if (status === 404 || /^(NoSuchKey|NoSuchBucket|NotFound|ObjectNotFound)$/i.test(code) || /^Object not found$/i.test(message)) return { category: 'missing', status };
+  const transient = status === 429 || (status !== undefined && status >= 500) || code === '08P01' || (code === 'DatabaseError' && /\b08P01\b/.test(message));
+  if (!transient) return { category: 'unknown', status };
+  // Current storage SDK drops headers; respect Retry-After if a future version exposes it.
+  const headers = value.headers;
+  let retryAfter: unknown;
+  if (headers instanceof Headers) retryAfter = headers.get('retry-after');
+  else if (headers && typeof headers === 'object') retryAfter = (headers as Record<string, unknown>)['retry-after'] ?? (headers as Record<string, unknown>)['Retry-After'];
+  let retryAfterMs: number | undefined;
+  if (typeof retryAfter === 'string' || typeof retryAfter === 'number') {
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(String(retryAfter)) - Date.now();
+    if (Number.isFinite(delay)) retryAfterMs = Math.min(2000, Math.max(0, delay));
   }
-
-  const { url: s3Url } = (await presignResp.json()) as { url: string };
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
-
-  // 2. PUT file directly to S3
-  const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
-
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    signal: AbortSignal.timeout(60_000),
-    headers: { "Content-Type": contentType },
-    body: blob,
-  });
-
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
-  }
-
-  return { key, url: `/manus-storage/${key}` };
-}
-
-export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
-  const key = normalizeKey(relKey);
-  return { key, url: `/manus-storage/${key}` };
+  return { category: 'transient', status, retryAfterMs };
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = normalizeKey(relKey);
-
-  const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
-  getUrl.searchParams.set("path", key);
-
-  const resp = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!resp.ok) {
-    const msg = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Storage signed URL failed (${resp.status}): ${msg}`);
+  const key = normalizeStorageKey(relKey);
+  const bucket = storageClient().storage.from(assetBucket());
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let failure: SigningFailure;
+    try {
+      const { data, error } = await bucket.createSignedUrl(key, 120);
+      if (!error && data?.signedUrl) return data.signedUrl;
+      failure = signingFailure(error);
+    } catch (error) {
+      failure = signingFailure(error);
+    }
+    console.warn('Asset signing failed', { category: failure.category, status: failure.status, attempt });
+    if (failure.category === 'transient' && attempt < 3) {
+      const delay = Math.min(2000, failure.retryAfterMs ?? (250 * 2 ** (attempt - 1) + Math.random() * 250));
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue;
+    }
+    const detail = {
+      transient: 'Asset storage is temporarily busy. Please try again shortly.',
+      access: 'Access to this asset was denied. Check its permissions.',
+      missing: 'This asset could not be found. Choose another asset or restore it.',
+      unknown: 'The asset could not be read. Please try again or contact support.',
+    }[failure.category];
+    throw new Error(`Stored asset is unavailable. ${detail}`);
   }
-
-  const { url } = (await resp.json()) as { url: string };
-  return url;
+  throw new Error('Stored asset is unavailable');
 }
 
 export async function storageGetBase64(relKey: string, maxBytes = 15 * 1024 * 1024): Promise<string> {

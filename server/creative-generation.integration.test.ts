@@ -65,16 +65,16 @@ async function cleanup() {
 beforeAll(async () => {
   const db = await getDb();
   if (!db) throw new Error("Integration database unavailable");
-  const insertedUser = await db.insert(users).values({ openId: `creative-router-${suffix}`, email: `creative-router-${suffix}@example.test`, name: "Creative Router Test", loginMethod: "test", lastSignedIn: new Date() });
+  const insertedUser = await db.insert(users).values({ openId: `creative-router-${suffix}`, email: `creative-router-${suffix}@example.test`, name: "Creative Router Test", loginMethod: "test", lastSignedIn: new Date() }).returning({ insertId: users.id });
   userId = Number(insertedUser[0].insertId);
-  const insertedOrganization = await db.insert(organizations).values({ name: `Creative Router ${suffix}`, slug: `creative-router-${suffix}`, createdByUserId: userId, createdAtMs: Date.now() });
+  const insertedOrganization = await db.insert(organizations).values({ name: `Creative Router ${suffix}`, slug: `creative-router-${suffix}`, createdByUserId: userId, createdAtMs: Date.now() }).returning({ insertId: organizations.id });
   organizationId = Number(insertedOrganization[0].insertId);
-  await db.insert(organizationMemberships).values({ organizationId, userId, role: "owner", status: "active", createdAtMs: Date.now() });
-  const insertedKit = await db.insert(brandKits).values({ organizationId, name: "Test Brand", voice: "Clear", colors: ["#111111"], fonts: ["Inter"], requiredClaims: "", prohibitedContent: "", status: "active", updatedByUserId: userId, updatedAtMs: Date.now() });
+  await db.insert(organizationMemberships).values({ organizationId, userId, role: "owner", status: "active", createdAtMs: Date.now() }).returning({ insertId: organizationMemberships.id });
+  const insertedKit = await db.insert(brandKits).values({ organizationId, name: "Test Brand", voice: "Clear", colors: ["#111111"], fonts: ["Inter"], requiredClaims: "", prohibitedContent: "", status: "active", updatedByUserId: userId, updatedAtMs: Date.now() }).returning({ insertId: brandKits.id });
   const brandKitId = Number(insertedKit[0].insertId);
-  const insertedAsset = await db.insert(brandAssets).values({ organizationId, brandKitId, name: "Approved product image", type: "product", storageKey: `test/${suffix}.png`, url: `/manus-storage/test/${suffix}.png`, mimeType: "image/png", status: "approved", uploadedByUserId: userId, reviewedByUserId: userId, reviewedAtMs: Date.now(), createdAtMs: Date.now() });
+  const insertedAsset = await db.insert(brandAssets).values({ organizationId, brandKitId, name: "Approved product image", type: "product", storageKey: `test/${suffix}.png`, url: `/manus-storage/test/${suffix}.png`, mimeType: "image/png", status: "approved", uploadedByUserId: userId, reviewedByUserId: userId, reviewedAtMs: Date.now(), createdAtMs: Date.now() }).returning({ insertId: brandAssets.id });
   const assetId = Number(insertedAsset[0].insertId);
-  const insertedBrief = await db.insert(campaignBriefs).values({ organizationId, name: "Approved generation brief", audience: "Qualified buyers", offer: "Explore the product", placements: ["facebook_feed"], formats: ["square_1_1"], creativeDirection: "Premium product focus", destinationUrl: "https://example.test", requiredClaims: "", assetIds: [assetId], productIds: [], status: "approved", createdByUserId: userId, approvedByUserId: userId, approvedAtMs: Date.now(), createdAtMs: Date.now(), updatedAtMs: Date.now() });
+  const insertedBrief = await db.insert(campaignBriefs).values({ organizationId, name: "Approved generation brief", audience: "Qualified buyers", offer: "Explore the product", placements: ["facebook_feed"], formats: ["square_1_1"], creativeDirection: "Premium product focus", destinationUrl: "https://example.test", requiredClaims: "", assetIds: [assetId], productIds: [], status: "approved", createdByUserId: userId, approvedByUserId: userId, approvedAtMs: Date.now(), createdAtMs: Date.now(), updatedAtMs: Date.now() }).returning({ insertId: campaignBriefs.id });
   briefId = Number(insertedBrief[0].insertId);
   const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]!;
   caller = appRouter.createCaller({ user, req: { protocol: "https", headers: {} }, res: { clearCookie() {} } } as unknown as TrpcContext);

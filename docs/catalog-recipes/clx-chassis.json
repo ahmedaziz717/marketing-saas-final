@@ -1,0 +1,46 @@
+{
+  "detailUrlTemplate": "https://api.cybertron.com/v1/products/kits/{code}?configure=true",
+  "mediaGroupsFromDetails": true,
+  "mediaGroupRules": [
+    {
+      "role": "system",
+      "itemsPath": "components.chassis",
+      "idPath": "code",
+      "namePath": "name",
+      "referenceOnly": true,
+      "indexedGallery": {
+        "countPath": "metadata.gallery.size",
+        "urlTemplate": "https://static.cybertron.com/clx/components/{code}/gallery/{index}.png",
+        "startIndex": 1
+      },
+      "key": "system-reference"
+    },
+    {
+      "role": "base_component",
+      "itemsPath": "components.chassis",
+      "idPath": "code",
+      "namePath": "name",
+      "referenceOnly": true,
+      "indexedGallery": {
+        "countPath": "metadata.gallery.size",
+        "urlTemplate": "https://static.cybertron.com/clx/components/{code}/gallery/{index}.png",
+        "startIndex": 1
+      },
+      "key": "base-chassis"
+    },
+    {
+      "role": "optional_component",
+      "itemsPath": "components.chassis.upgrades",
+      "idPath": "code",
+      "namePath": "name",
+      "referenceOnly": true,
+      "indexedGallery": {
+        "countPath": "metadata.gallery.size",
+        "urlTemplate": "https://static.cybertron.com/clx/components/{code}/gallery/{index}.png",
+        "startIndex": 1
+      },
+      "key": "chassis-option",
+      "eligiblePath": "enabledInKit"
+    }
+  ]
+}

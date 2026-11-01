@@ -1,0 +1,67 @@
+/* Google-specific generation context; copy rows are shared with Meta. */
+.google-copy-workspace.google-pmax-ai {
+  padding: 0;
+  margin: 8px 0;
+  min-width: 0;
+  border: 0;
+}
+.google-copy-workspace > h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.google-copy-workspace > .google-copy-help,
+.google-copy-workspace > p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  margin: 4px 0 8px;
+}
+.google-copy-workspace .google-copy-counts {
+  gap: 8px;
+  margin: 8px 0;
+}
+.google-copy-workspace .google-copy-counts > .google-field {
+  flex: 1 1 135px;
+}
+.google-copy-workspace .google-copy-settings .google-field {
+  margin: 5px 0;
+  gap: 3px;
+}
+.google-copy-workspace .google-copy-settings .google-current-assets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.google-copy-workspace details {
+  margin: 6px 0;
+}
+.google-copy-workspace summary {
+  padding: 4px 0;
+  font-size: 12px;
+}
+.google-copy-workspace .google-copy-replacement {
+  margin: 2px 0 0 28px;
+  font-size: 11px;
+}
+.google-copy-workspace .google-copy-replacement select {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 6px;
+  text-overflow: ellipsis;
+}
+.google-copy-workspace .google-copy-replacement button {
+  font-size: 11px;
+  height: auto;
+  padding: 5px 8px;
+  white-space: normal;
+}
+.google-copy-workspace .ad-copy-header-action button {
+  font-size: 12px;
+  min-height: 32px;
+  height: auto;
+  padding: 6px 10px;
+  white-space: normal;
+}

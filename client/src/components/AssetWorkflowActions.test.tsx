@@ -1,0 +1,19 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AssetWorkflowActions, type AssetWorkflowActionsProps } from "./AssetWorkflowActions";
+afterEach(cleanup);
+const props = (changes: Partial<AssetWorkflowActionsProps> = {}): AssetWorkflowActionsProps => ({ surface: "studio", state: "draft", role: "creator", busy: false, note: "", onNoteChange: vi.fn(), onSubmit: vi.fn(), onApproveAndAdd: vi.fn(), onReview: vi.fn(), onComment: vi.fn(), onRevise: vi.fn(), onViewSubmission: vi.fn(), ...changes });
+const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+describe("separate creation handoff from library review", () => {
+  it("shows a creator only Submit for approval in Studio", () => { const p = props(); render(<AssetWorkflowActions {...p} />); fireEvent.click(button("Submit for approval")); expect(p.onSubmit).toHaveBeenCalledOnce(); expect(screen.queryByRole("button", { name: "Approve" })).toBeNull(); expect(screen.queryByRole("button", { name: "Approve & add to library" })).toBeNull(); });
+  it.each(["owner", "admin"])("offers %s an explicit direct approval shortcut", role => { const p = props({ role }); render(<AssetWorkflowActions {...p} />); fireEvent.click(button("Approve & add to library")); expect(p.onApproveAndAdd).toHaveBeenCalledOnce(); expect(p.onSubmit).not.toHaveBeenCalled(); });
+  it("shows awaiting approval after submission, not another Submit button", () => { render(<AssetWorkflowActions {...props({ state: "needs_review" })} />); expect(button("View submission")).toBeTruthy(); expect(screen.queryByRole("button", { name: "Submit for approval" })).toBeNull(); });
+  it("keeps Submit out of the library even for an owner", () => { render(<AssetWorkflowActions {...props({ surface: "library", state: "needs_review", role: "owner" })} />); expect(button("Approve").disabled).toBe(false); expect(screen.queryByRole("button", { name: /Submit|Resubmit/i })).toBeNull(); expect(screen.queryByRole("button", { name: "Approve & add to library" })).toBeNull(); });
+  it("permits a reviewer to approve a submitted version", () => { const p = props({ surface: "library", state: "needs_review", role: "reviewer" }); render(<AssetWorkflowActions {...p} />); fireEvent.click(button("Approve")); expect(p.onReview).toHaveBeenCalledWith("approved"); });
+  it.each(["creator", "publisher"])("does not give %s library approval controls", role => { render(<AssetWorkflowActions {...props({ surface: "library", state: "needs_review", role })} />); expect(screen.queryByRole("button", { name: "Approve" })).toBeNull(); expect(screen.queryByRole("button", { name: "Reject" })).toBeNull(); expect(screen.getByText(/cannot approve/)).toBeTruthy(); });
+  it("directs returned assets back to Studio without library resubmission", () => { const p = props({ surface: "library", state: "changes_requested", role: "owner" }); render(<AssetWorkflowActions {...p} />); fireEvent.click(button("Create revised version in Studio")); expect(p.onRevise).toHaveBeenCalledOnce(); expect(screen.queryByRole("button", { name: /Resubmit/ })).toBeNull(); });
+  it("allows resubmission in Studio", () => { render(<AssetWorkflowActions {...props({ state: "changes_requested" })} />); expect(button("Resubmit for approval").disabled).toBe(false); });
+  it("requires a note before requesting changes", () => { render(<AssetWorkflowActions {...props({ surface: "library", state: "needs_review", role: "reviewer" })} />); expect(button("Request changes").disabled).toBe(true); });
+  it("prevents double clicks while handoff is pending", () => { render(<AssetWorkflowActions {...props({ role: "owner", busy: true })} />); expect(button("Submit for approval").disabled).toBe(true); expect(button("Approve & add to library").disabled).toBe(true); });
+});

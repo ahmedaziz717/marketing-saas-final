@@ -1,21 +1,41 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { databasePoolOptions } from "./lib/databasePool";
 import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let connection: ReturnType<typeof postgres> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const url = new URL(process.env.DATABASE_URL);
+      if (!["postgres:", "postgresql:"].includes(url.protocol)) {
+        throw new Error(
+          "The migration build requires a PostgreSQL DATABASE_URL"
+        );
+      }
+      const pool = databasePoolOptions();
+      connection = postgres(process.env.DATABASE_URL, pool);
+      console.info(
+        `[Database] Pool ready: max=${pool.max}, idle_timeout=${pool.idle_timeout}s`
+      );
+      _db = drizzle(connection);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] PostgreSQL configuration is invalid");
       _db = null;
     }
   }
   return _db;
+}
+
+export async function closeDb() {
+  await connection?.end({ timeout: 10 });
+  connection = null;
+  _db = null;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -56,8 +76,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -68,9 +88,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    await db
+      .insert(users)
+      .values(values)
+      .returning({ insertId: users.id })
+      .onConflictDoUpdate({ target: [users.openId], set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -84,7 +106,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
