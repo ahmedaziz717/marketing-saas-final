@@ -266,6 +266,7 @@ try {
       "google-manage",
       "google-campaigns",
       "google-campaign-new",
+      "google-search-copy",
       "studio-ad-copy",
       "campaign-plans",
       "asset-library",
@@ -310,6 +311,7 @@ try {
       "google-manage",
       "google-campaigns",
       "google-campaign-new",
+      "google-search-copy",
     ].flatMap(page => [
       { width: 1366, height: 768, role: "owner", page },
       { width: 375, height: 600, role: "owner", page },
@@ -620,7 +622,7 @@ try {
       }
     }
     const name = `${item.page}-${item.width}x${item.height}-${item.role}-${item.theme}`;
-    if (["google-campaign-new", "studio-ad-copy"].includes(item.page)) {
+    if (["google-campaign-new", "google-search-copy", "studio-ad-copy"].includes(item.page)) {
       // Actual product DOM and production CSS, not a reconstructed mockup.
       // Reference inspected: EvokeLoop-Unified-Ad-Copy-Concept.png.
       const copy = await page("Runtime.evaluate", {

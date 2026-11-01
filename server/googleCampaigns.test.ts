@@ -11,8 +11,10 @@ const f = vi.hoisted(() => ({
   mutate: vi.fn(),
   videoUpload: vi.fn(),
   generate: vi.fn(),
+  searchGenerate: vi.fn(),
   storage: vi.fn(),
 }));
+vi.mock("./lib/googleSearchCopy", () => ({ generateSearchCopy: (...args: unknown[]) => f.searchGenerate(...args) }));
 vi.mock("./lib/googlePmaxAi", () => ({
   generatePmaxCopy: (...args: unknown[]) => f.generate(...args),
 }));
@@ -190,6 +192,7 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 beforeEach(() => {
+  f.searchGenerate.mockReset().mockResolvedValue({ headlines: ["Search suggestion"] });
   f.storage
     .mockReset()
     .mockResolvedValue(Buffer.from("synthetic-video").toString("base64"));
@@ -206,6 +209,17 @@ beforeEach(() => {
           ),
       requestId: "test-request",
     }));
+});
+
+it("authorizes Search generation before URL reading and uses only the selected workspace brand", async () => {
+  await f.db.insert(brandKits).values({ organizationId: org, name: "Test brand", colors: [], fonts: [], updatedByUserId: owner, updatedAtMs: 1 }).onConflictDoNothing();
+  const caller = googleCampaignsRouter.createCaller({ user: { id: creator } } as any);
+  const input = { organizationId: org, url: ad.finalUrl, existingCopy: { headlines: ad.headlines, descriptions: ad.descriptions, path1: "", path2: "" } };
+  await expect(caller.draftSearchCopy({ ...input, organizationId: org2 })).rejects.toThrow();
+  expect(f.searchGenerate).not.toHaveBeenCalled();
+  await caller.draftSearchCopy(input);
+  expect(f.searchGenerate).toHaveBeenCalledWith(ad.finalUrl, expect.objectContaining({ brand: expect.objectContaining({ name: "Test brand" }), existingCopy: input.existingCopy }));
+  expect(f.mutate).not.toHaveBeenCalled();
 });
 
 it("scopes Google AI products server-side and automatically handles unmapped categories", async () => {
@@ -460,6 +474,14 @@ async function reviewed(change = search()) {
     revision: draft.revision,
   });
 }
+it.each(["campaign_create", "ad_create"] as const)("roundtrips %s Search copy and both paths without activating a campaign", async kind => {
+  const copy = { ...ad, headlines: ["Manual first", "Accepted suggestion", "Edited third"], descriptions: ["Manual description", "Edited suggestion"], path1: "collection", path2: "details" };
+  const change = kind === "campaign_create" ? { ...search(), ad: copy } : { kind, type: "SEARCH" as const, campaignId: "11", adGroupId: "22", ad: copy };
+  const saved = await saveGoogleDraft(owner, { organizationId: org, connectionId, change: change as GoogleChange });
+  const loaded = await getGoogleDraft(f.db, org, saved.id);
+  expect(loaded.change).toMatchObject({ ad: copy });
+  expect(f.mutate).not.toHaveBeenCalled();
+});
 const approval = (d: Awaited<ReturnType<typeof reviewed>>) => ({
   organizationId: org,
   id: d.id,

@@ -68,7 +68,7 @@ export function googleIssuePresentation(
     "ad.finalUrl": "Landing page",
     finalUrl: "Landing page",
     "ad.businessName": "Business name",
-    "ad.headlines": "Short headlines",
+    "ad.headlines": change && "type" in change && change.type === "SEARCH" ? "Headlines" : "Short headlines",
     "ad.longHeadline": "Long headlines",
     "ad.descriptions": "Descriptions",
     "ad.assets": "Creative assets",

@@ -1,4 +1,6 @@
 import { googleMerchantFeedLabels } from "../lib/googleMerchantFeedLabels";
+import { generateSearchCopy } from "../lib/googleSearchCopy";
+import { searchCopyUrlSchema } from "../../shared/googleSearchCopy";
 import { googleAssetMetrics } from "../lib/googleAssetMetrics";
 import { googleAssetMetricsDays } from "../../shared/googleAssetMetrics";
 import { googleLibraryVideo } from "../lib/googleVideoUploads";
@@ -56,6 +58,26 @@ const libraryVideo = account.extend({
   revision: z.string().min(1).max(200),
 });
 export const googleCampaignsRouter = router({
+  draftSearchCopy: protectedProcedure
+    .input(scopeSchema.extend({
+      url: searchCopyUrlSchema,
+      existingCopy: z.object({
+        headlines: z.array(z.string().max(2000)).max(15),
+        descriptions: z.array(z.string().max(2000)).max(5),
+        path1: z.string().max(2000),
+        path2: z.string().max(2000),
+      }),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrganizationRole(ctx.user.id, input.organizationId, ["owner", "admin", "creator", "publisher"]);
+      const db = await libraryDatabase();
+      const [brand] = await db.select().from(brandKits).where(eq(brandKits.organizationId, input.organizationId)).limit(1);
+      if (!brand) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Set up your Brand Kit before generating Google ad copy." });
+      return generateSearchCopy(input.url, {
+        brand: { name: brand.name, businessProfile: brand.businessProfile, voice: brand.voice, requiredClaims: brand.requiredClaims, prohibitedContent: brand.prohibitedContent },
+        existingCopy: input.existingCopy,
+      });
+    }),
   draftPmaxCopy: protectedProcedure
     .input(
       scopeSchema.extend({
